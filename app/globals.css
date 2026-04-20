@@ -1,0 +1,104 @@
+@import "tailwindcss";
+
+:root {
+  --theme-palette-color-1: #5b5bf6;
+  --theme-palette-color-2: #e5e7eb;
+  --theme-palette-color-3: #111827;
+  --theme-palette-color-4: #6b7280;
+  --theme-palette-color-5: #f7f8fc;
+  --theme-palette-color-6: #ffffff;
+  --theme-palette-color-7: #fafbfc;
+  --theme-palette-color-8: #ffffff;
+}
+
+@theme inline {
+  --font-sans: var(--font-body);
+  --font-display: var(--font-display);
+
+  --color-page: var(--theme-palette-color-5);
+  --color-surface: var(--theme-palette-color-6);
+  --color-muted-surface: var(--theme-palette-color-7);
+  --color-border: var(--theme-palette-color-2);
+  --color-ink: var(--theme-palette-color-3);
+  --color-muted-ink: var(--theme-palette-color-4);
+
+  --color-brand-50: #efefff;
+  --color-brand-100: #e4e4ff;
+  --color-brand-200: #cfcfff;
+  --color-brand-300: #adadff;
+  --color-brand-400: #8383fb;
+  --color-brand-500: #5b5bf6;
+  --color-brand-600: #4c4ce8;
+  --color-brand-700: #4040cb;
+  --color-brand-800: #3737a6;
+  --color-brand-900: #303080;
+}
+
+* {
+  border-color: var(--theme-palette-color-2);
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  font-family: var(--font-body), sans-serif;
+  color: var(--theme-palette-color-3);
+  background:
+    radial-gradient(circle at 12% 0%, rgba(91, 91, 246, 0.08), transparent 33%),
+    radial-gradient(circle at 88% 10%, rgba(91, 91, 246, 0.06), transparent 40%),
+    linear-gradient(to bottom, #f9faff, var(--theme-palette-color-5));
+}
+
+.font-display {
+  font-family: var(--font-display), serif;
+}
+
+input,
+textarea,
+select,
+button {
+  font: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid rgba(91, 91, 246, 0.35);
+  outline-offset: 2px;
+}
+
+.animate-toast-in {
+  animation: toastIn 180ms ease-out;
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-fade-up {
+  animation: fadeUp 360ms ease-out;
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db transparent;
+}

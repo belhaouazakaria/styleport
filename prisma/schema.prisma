@@ -1,0 +1,337 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  EDITOR
+  USER
+}
+
+enum TranslationStatus {
+  SUCCESS
+  FAILURE
+  BLOCKED
+}
+
+enum AdPageType {
+  ALL
+  HOMEPAGE
+  TRANSLATOR
+  CATEGORY
+}
+
+enum AdDeviceType {
+  ALL
+  DESKTOP
+  MOBILE
+}
+
+enum AdPlacementType {
+  HOMEPAGE_TOP
+  HOMEPAGE_BETWEEN_SECTIONS
+  TRANSLATOR_ABOVE_TOOL
+  TRANSLATOR_BELOW_TOOL
+  SIDEBAR_SLOT
+  FOOTER_SLOT
+  MOBILE_STICKY_SLOT
+  CUSTOM
+}
+
+enum AdProviderType {
+  ADSENSE
+  CUSTOM_HTML
+}
+
+enum TranslatorRequestStatus {
+  NEW
+  REVIEWING
+  DRAFT_GENERATED
+  APPROVED
+  REJECTED
+  COMPLETED
+}
+
+enum UsageProtectionEventType {
+  EMERGENCY_SHUTDOWN
+  MANUAL_REENABLE
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  passwordHash  String
+  role          Role      @default(USER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  accounts      Account[]
+  sessions      Session[]
+}
+
+model Account {
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([provider, providerAccountId])
+}
+
+model Session {
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([sessionToken])
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@id([identifier, token])
+}
+
+model Translator {
+  id                  String               @id @default(cuid())
+  name                String
+  slug                String               @unique
+  title               String
+  subtitle            String
+  shortDescription    String
+  sourceLabel         String
+  targetLabel         String
+  category            String?
+  iconName            String?
+  promptSystem        String
+  promptInstructions  String
+  modelOverride       String?
+  seoTitle            String?
+  seoDescription      String?
+  showModeSelector    Boolean              @default(false)
+  showSwap            Boolean              @default(false)
+  showExamples        Boolean              @default(false)
+  isActive            Boolean              @default(true)
+  isFeatured          Boolean              @default(false)
+  sortOrder           Int                  @default(0)
+  archivedAt          DateTime?
+  primaryCategoryId   String?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  modes               TranslationMode[]
+  examples            TranslatorExample[]
+  logs                TranslationLog[]
+  categories          TranslatorCategory[]
+  primaryCategory     Category?            @relation("PrimaryTranslatorCategory", fields: [primaryCategoryId], references: [id], onDelete: SetNull)
+  fulfilledRequests   TranslatorRequest[]  @relation("RequestCreatedTranslator")
+
+  @@index([isActive, isFeatured, sortOrder])
+  @@index([updatedAt])
+  @@index([primaryCategoryId])
+}
+
+model Category {
+  id             String               @id @default(cuid())
+  name           String
+  slug           String               @unique
+  description    String?
+  sortOrder      Int                  @default(0)
+  isActive       Boolean              @default(true)
+  iconKey        String?
+  seoTitle       String?
+  seoDescription String?
+  archivedAt     DateTime?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  translators    TranslatorCategory[]
+  primaryFor     Translator[]         @relation("PrimaryTranslatorCategory")
+  adPlacements   AdPlacement[]
+
+  @@index([isActive, sortOrder])
+}
+
+model TranslatorCategory {
+  id           String     @id @default(cuid())
+  translatorId String
+  categoryId   String
+  sortOrder    Int        @default(0)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  translator   Translator @relation(fields: [translatorId], references: [id], onDelete: Cascade)
+  category     Category   @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([translatorId, categoryId])
+  @@index([translatorId, sortOrder])
+  @@index([categoryId, sortOrder])
+}
+
+model TranslationMode {
+  id           String     @id @default(cuid())
+  translatorId String
+  key          String
+  label        String
+  description  String?
+  instruction  String
+  sortOrder    Int        @default(0)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  translator   Translator @relation(fields: [translatorId], references: [id], onDelete: Cascade)
+
+  @@unique([translatorId, key])
+  @@index([translatorId, sortOrder])
+}
+
+model TranslatorExample {
+  id           String     @id @default(cuid())
+  translatorId String
+  label        String
+  value        String
+  sortOrder    Int        @default(0)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  translator   Translator @relation(fields: [translatorId], references: [id], onDelete: Cascade)
+
+  @@index([translatorId, sortOrder])
+}
+
+model TranslationLog {
+  id               String            @id @default(cuid())
+  translatorId     String
+  inputText        String
+  outputText       String?
+  modeUsed         String?
+  status           TranslationStatus @default(SUCCESS)
+  inputLength      Int               @default(0)
+  outputLength     Int               @default(0)
+  model            String?
+  promptTokens     Int?
+  completionTokens Int?
+  totalTokens      Int?
+  estimatedCost    Decimal?          @db.Decimal(12, 6)
+  errorCode        String?
+  latencyMs        Int?
+  ipHash           String?
+  userAgent        String?
+  createdAt        DateTime          @default(now())
+  translator       Translator        @relation(fields: [translatorId], references: [id], onDelete: Cascade)
+
+  @@index([translatorId, createdAt])
+  @@index([createdAt])
+  @@index([status, createdAt])
+  @@index([ipHash, createdAt])
+  @@index([errorCode, createdAt])
+}
+
+model UsageProtectionState {
+  id                           String                 @id @default("global")
+  usageProtectionEnabled       Boolean                @default(true)
+  ipLimitPerMinute             Int                    @default(5)
+  ipLimitPerHour               Int                    @default(50)
+  ipLimitPerDay                Int                    @default(200)
+  globalDailyTokenCap          Int                    @default(200000)
+  autoEmergencyShutdownEnabled Boolean                @default(true)
+  translationsEnabled          Boolean                @default(true)
+  shutdownReason               String?
+  shutdownTriggeredAt          DateTime?
+  alertEmail                   String?
+  lastShutdownEventId          String?
+  createdAt                    DateTime               @default(now())
+  updatedAt                    DateTime               @updatedAt
+  events                       UsageProtectionEvent[] @relation("UsageProtectionStateEvents")
+  lastShutdownEvent            UsageProtectionEvent?  @relation("LastShutdownEvent", fields: [lastShutdownEventId], references: [id], onDelete: SetNull)
+}
+
+model UsageProtectionEvent {
+  id                  String                   @id @default(cuid())
+  stateId             String
+  type                UsageProtectionEventType
+  reason              String
+  tokenUsageAtTrigger Int?
+  tokenCapAtTrigger   Int?
+  alertEmail          String?
+  alertSentAt         DateTime?
+  alertError          String?
+  createdBy           String?
+  createdAt           DateTime                 @default(now())
+  state               UsageProtectionState     @relation("UsageProtectionStateEvents", fields: [stateId], references: [id], onDelete: Cascade)
+  lastForStates       UsageProtectionState[]   @relation("LastShutdownEvent")
+
+  @@index([stateId, createdAt])
+  @@index([type, createdAt])
+}
+
+model TranslatorRequest {
+  id                  String                  @id @default(cuid())
+  requesterEmail      String?
+  requestedName       String
+  description         String
+  exampleInput        String?
+  desiredStyle        String?
+  suggestedCategory   String?
+  audience            String?
+  notes               String?
+  adminNotes          String?
+  status              TranslatorRequestStatus @default(NEW)
+  aiDraftJson         Json?
+  aiDraftGeneratedAt  DateTime?
+  createdTranslatorId String?
+  createdTranslator   Translator?             @relation("RequestCreatedTranslator", fields: [createdTranslatorId], references: [id], onDelete: SetNull)
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+
+  @@index([status, createdAt])
+  @@index([createdAt])
+  @@index([createdTranslatorId])
+}
+
+model AdPlacement {
+  id            String          @id @default(cuid())
+  name          String
+  key           String          @unique
+  description   String?
+  pageType      AdPageType      @default(ALL)
+  deviceType    AdDeviceType    @default(ALL)
+  placementType AdPlacementType @default(CUSTOM)
+  providerType  AdProviderType  @default(ADSENSE)
+  adSenseSlot   String?
+  codeSnippet   String?
+  categoryId    String?
+  isActive      Boolean         @default(false)
+  sortOrder     Int             @default(0)
+  archivedAt    DateTime?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  category      Category?       @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@index([pageType, deviceType, isActive, sortOrder])
+  @@index([categoryId, isActive])
+}
+
+model AppSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Json
+  updatedAt DateTime @updatedAt
+}

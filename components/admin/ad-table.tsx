@@ -1,0 +1,177 @@
+"use client";
+
+import Link from "next/link";
+import { Pencil, Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+
+import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/admin/confirm-dialog";
+import { useToast } from "@/components/providers/toast-provider";
+
+interface AdRow {
+  id: string;
+  name: string;
+  key: string;
+  pageType: string;
+  deviceType: string;
+  providerType: string;
+  isActive: boolean;
+  archivedAt: string | null;
+  category: { id: string; name: string; slug: string } | null;
+}
+
+interface AdTableProps {
+  ads: AdRow[];
+}
+
+type ConfirmState =
+  | { type: "archive"; id: string }
+  | { type: "unarchive"; id: string }
+  | { type: "hard-delete"; id: string }
+  | null;
+
+export function AdTable({ ads }: AdTableProps) {
+  const router = useRouter();
+  const { toast } = useToast();
+  const [confirm, setConfirm] = useState<ConfirmState>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const current = confirm ? ads.find((item) => item.id === confirm.id) : null;
+
+  async function run(mode: "archive" | "unarchive" | "hard") {
+    if (!confirm) return;
+
+    setBusyId(confirm.id);
+    const response = await fetch(`/api/admin/ads/${confirm.id}?mode=${mode}`, {
+      method: "DELETE",
+    });
+    const payload = await response.json();
+    setBusyId(null);
+    setConfirm(null);
+
+    if (!response.ok || !payload.ok) {
+      toast({ title: "Action failed", description: payload?.error?.message || "Please retry.", variant: "error" });
+      return;
+    }
+
+    router.refresh();
+  }
+
+  if (!ads.length) {
+    return (
+      <div className="rounded-2xl border border-border bg-white p-10 text-center text-sm text-muted-ink">
+        No ad placements found.
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="overflow-x-auto rounded-2xl border border-border bg-white">
+        <table className="min-w-full text-sm">
+          <thead className="bg-muted-surface text-left text-muted-ink">
+            <tr>
+              <th className="px-4 py-3 font-medium">Name</th>
+              <th className="px-4 py-3 font-medium">Key</th>
+              <th className="px-4 py-3 font-medium">Targeting</th>
+              <th className="px-4 py-3 font-medium">Provider</th>
+              <th className="px-4 py-3 font-medium">Status</th>
+              <th className="px-4 py-3 font-medium">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {ads.map((row) => {
+              const archived = Boolean(row.archivedAt);
+              const busy = busyId === row.id;
+
+              return (
+                <tr key={row.id}>
+                  <td className="px-4 py-3 font-medium text-ink">{row.name}</td>
+                  <td className="px-4 py-3 text-muted-ink">{row.key}</td>
+                  <td className="px-4 py-3 text-muted-ink">
+                    {row.pageType} / {row.deviceType}
+                    {row.category ? ` / ${row.category.name}` : ""}
+                  </td>
+                  <td className="px-4 py-3 text-muted-ink">{row.providerType}</td>
+                  <td className="px-4 py-3">
+                    {archived ? (
+                      <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-700">
+                        Archived
+                      </span>
+                    ) : row.isActive ? (
+                      <span className="rounded-full bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-700">
+                        Active
+                      </span>
+                    ) : (
+                      <span className="rounded-full bg-muted-surface px-2 py-1 text-xs font-medium text-muted-ink">
+                        Inactive
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-wrap gap-2">
+                      <Link
+                        href={`/admin/ads/${row.id}`}
+                        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border px-3 text-xs font-medium text-ink hover:bg-muted-surface"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                        Edit
+                      </Link>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() => setConfirm({ type: archived ? "unarchive" : "archive", id: row.id })}
+                      >
+                        {archived ? "Unarchive" : "Archive"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-red-300 text-red-700 hover:bg-red-50"
+                        disabled={busy}
+                        onClick={() => setConfirm({ type: "hard-delete", id: row.id })}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Delete
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <ConfirmDialog
+        open={Boolean(confirm)}
+        title={
+          confirm?.type === "hard-delete"
+            ? "Permanently delete ad placement?"
+            : confirm?.type === "archive"
+              ? "Archive ad placement?"
+              : "Unarchive ad placement?"
+        }
+        description={
+          confirm?.type === "hard-delete"
+            ? `Delete ${current?.name || "this placement"} forever?`
+            : confirm?.type === "archive"
+              ? `Archive ${current?.name || "this placement"}?`
+              : `Unarchive ${current?.name || "this placement"}?`
+        }
+        confirmLabel={
+          confirm?.type === "hard-delete"
+            ? "Delete forever"
+            : confirm?.type === "archive"
+              ? "Archive"
+              : "Unarchive"
+        }
+        onCancel={() => setConfirm(null)}
+        onConfirm={() => void run(confirm?.type === "hard-delete" ? "hard" : confirm?.type || "archive")}
+        variant={confirm?.type === "hard-delete" ? "danger" : "default"}
+      />
+    </>
+  );
+}
