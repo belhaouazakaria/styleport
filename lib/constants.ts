@@ -1,5 +1,6 @@
 export const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || "StylePort";
 export const DEFAULT_MODEL = process.env.OPENAI_MODEL || "gpt-4.1-mini";
+export const TRANSLATE_TIMEOUT_MS = 45_000;
 
 export const MAX_INPUT_CHARS = 5000;
 export const OCR_MAX_FILE_SIZE_MB = 8;
