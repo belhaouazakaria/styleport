@@ -12,6 +12,7 @@ import { getAppSettings } from "@/lib/settings";
 
 const SHARE_IMAGE_WIDTH = 1000;
 const SHARE_IMAGE_HEIGHT = 1500;
+const SHARE_IMAGE_STYLE_VERSION = "v2";
 
 const publicPathPrefix = (() => {
   const raw = (process.env.SHARE_IMAGE_PUBLIC_PATH_PREFIX || "/generated/pins").trim();
@@ -43,6 +44,24 @@ interface EnsureShareImageOptions {
   force?: boolean;
 }
 
+interface ShareImageTheme {
+  background: string;
+  textFill: string;
+  accent: string;
+  border: string;
+}
+
+const SHARE_IMAGE_THEMES: ShareImageTheme[] = [
+  { background: "#EADAF2", textFill: "#7EDC96", accent: "#20242A", border: "#101214" },
+  { background: "#FDE7D9", textFill: "#3185FC", accent: "#20242A", border: "#101214" },
+  { background: "#DDF3EC", textFill: "#FF7A59", accent: "#20242A", border: "#101214" },
+  { background: "#E2E8FF", textFill: "#FFB703", accent: "#20242A", border: "#101214" },
+  { background: "#FFE3EE", textFill: "#00A896", accent: "#20242A", border: "#101214" },
+  { background: "#EAF7D8", textFill: "#8F5CF7", accent: "#20242A", border: "#101214" },
+  { background: "#DFF4FF", textFill: "#FF5D8F", accent: "#20242A", border: "#101214" },
+  { background: "#FFEFD5", textFill: "#0096C7", accent: "#20242A", border: "#101214" },
+];
+
 function clampText(value: string, maxLength: number) {
   if (value.length <= maxLength) {
     return value;
@@ -53,6 +72,7 @@ function clampText(value: string, maxLength: number) {
 
 function buildShareImageHash(snapshot: ShareImageSnapshot, platformName: string) {
   const payload = JSON.stringify({
+    styleVersion: SHARE_IMAGE_STYLE_VERSION,
     platformName,
     slug: snapshot.slug,
     name: snapshot.name,
@@ -67,6 +87,19 @@ function buildShareImageHash(snapshot: ShareImageSnapshot, platformName: string)
 
 function buildPublicPath(slug: string, hash: string) {
   return `${publicPathPrefix}/${slug}-${hash}.png`;
+}
+
+function hashToIndex(value: string, modulo: number) {
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
+  }
+  return hash % modulo;
+}
+
+function pickTheme(snapshot: ShareImageSnapshot) {
+  const key = `${snapshot.slug}:${snapshot.sourceLabel}:${snapshot.targetLabel}`;
+  return SHARE_IMAGE_THEMES[hashToIndex(key, SHARE_IMAGE_THEMES.length)];
 }
 
 function toStoragePath(publicPath: string) {
@@ -84,9 +117,10 @@ async function fileExists(filePath: string) {
 }
 
 async function renderShareImageBuffer(snapshot: ShareImageSnapshot, platformName: string) {
-  const headline = clampText(snapshot.name, 84);
-  const subtitle = clampText(snapshot.subtitle, 140);
-  const description = clampText(snapshot.shortDescription, 180);
+  const theme = pickTheme(snapshot);
+  const routeLabel = clampText(`${snapshot.sourceLabel} to ${snapshot.targetLabel}`, 96);
+  const ctaText = clampText(`Click Here To Translate Your Text To ${snapshot.targetLabel}!`, 120);
+  const secondaryText = clampText(snapshot.subtitle || snapshot.name, 80);
 
   const response = new ImageResponse(
     (
@@ -97,10 +131,10 @@ async function renderShareImageBuffer(snapshot: ShareImageSnapshot, platformName
           display: "flex",
           flexDirection: "column",
           justifyContent: "space-between",
-          background:
-            "radial-gradient(circle at 15% 0%, rgba(91,91,246,0.18), transparent 36%), radial-gradient(circle at 85% 12%, rgba(91,91,246,0.14), transparent 40%), linear-gradient(180deg, #FAFBFC 0%, #F7F8FC 100%)",
-          padding: "72px 68px",
-          border: "10px solid #E5E7EB",
+          alignItems: "center",
+          background: theme.background,
+          padding: "56px 52px",
+          border: `12px solid ${theme.border}`,
           boxSizing: "border-box",
         }}
       >
@@ -108,66 +142,61 @@ async function renderShareImageBuffer(snapshot: ShareImageSnapshot, platformName
           style={{
             display: "flex",
             alignItems: "center",
-            justifyContent: "space-between",
-            color: "#6B7280",
-            fontSize: 30,
-            fontWeight: 600,
-            letterSpacing: 1.4,
+            justifyContent: "center",
+            flexWrap: "wrap",
+            gap: 18,
+            color: theme.accent,
+            fontSize: 28,
+            fontWeight: 800,
+            letterSpacing: 0.8,
             textTransform: "uppercase",
+            textAlign: "center",
           }}
         >
           <span>{platformName}</span>
-          <span>Translator</span>
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 34 }}>
-          <p
-            style={{
-              margin: 0,
-              fontSize: 36,
-              lineHeight: 1.3,
-              color: "#5B5BF6",
-              fontWeight: 700,
-              letterSpacing: 0.2,
-              textTransform: "uppercase",
-            }}
-          >
-            {snapshot.sourceLabel} to {snapshot.targetLabel}
-          </p>
-
-          <h1
-            style={{
-              margin: 0,
-              color: "#ffffff",
-              fontSize: 104,
-              lineHeight: 0.95,
-              fontWeight: 900,
-              letterSpacing: -1.4,
-              textTransform: "uppercase",
-              textShadow:
-                "-2px -2px 0 #111827, 2px -2px 0 #111827, -2px 2px 0 #111827, 2px 2px 0 #111827, 0 4px 0 rgba(17,24,39,0.22)",
-            }}
-          >
-            {headline}
-          </h1>
+          <span>•</span>
+          <span>{routeLabel}</span>
         </div>
 
         <div
           style={{
             display: "flex",
-            flexDirection: "column",
-            gap: 16,
-            borderTop: "2px solid #E5E7EB",
-            paddingTop: 28,
+            flex: 1,
+            width: "100%",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "26px 10px",
           }}
         >
-          <p style={{ margin: 0, color: "#111827", fontSize: 38, lineHeight: 1.3, fontWeight: 600 }}>
-            {subtitle}
-          </p>
-          <p style={{ margin: 0, color: "#6B7280", fontSize: 30, lineHeight: 1.45, fontWeight: 500 }}>
-            {description}
-          </p>
+          <h1
+            style={{
+              margin: 0,
+              color: theme.textFill,
+              fontSize: 128,
+              lineHeight: 1.04,
+              fontWeight: 900,
+              letterSpacing: -1.2,
+              textAlign: "center",
+              textTransform: "capitalize",
+              textShadow: `-4px -4px 0 ${theme.border}, 4px -4px 0 ${theme.border}, -4px 4px 0 ${theme.border}, 4px 4px 0 ${theme.border}, 0 6px 0 rgba(16,18,20,0.24)`,
+            }}
+          >
+            {ctaText}
+          </h1>
         </div>
+
+        <p
+          style={{
+            margin: 0,
+            color: theme.accent,
+            fontSize: 34,
+            fontWeight: 800,
+            lineHeight: 1.25,
+            textAlign: "center",
+          }}
+        >
+          {secondaryText}
+        </p>
       </div>
     ),
     {
