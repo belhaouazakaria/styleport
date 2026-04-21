@@ -3,12 +3,13 @@ import { getAppSettings, updateAppSettings } from "@/lib/settings";
 import { adminRouteGuard } from "@/lib/permissions";
 import { apiError, apiOk } from "@/lib/api-response";
 import { settingsSchema } from "@/lib/validators";
+import { getAutoFeaturedSummary, recalculateAutoFeaturedTranslators } from "@/lib/data/translators";
 
 export async function GET() {
   const guard = await adminRouteGuard();
   if (guard) return guard;
 
-  const [settings, translators] = await Promise.all([
+  const [settings, translators, autoFeatured] = await Promise.all([
     getAppSettings(),
     prisma.translator.findMany({
       where: { archivedAt: null },
@@ -20,9 +21,10 @@ export async function GET() {
       },
       orderBy: [{ sortOrder: "asc" }, { updatedAt: "desc" }],
     }),
+    getAutoFeaturedSummary(),
   ]);
 
-  return apiOk({ settings, translators });
+  return apiOk({ settings, translators, autoFeatured });
 }
 
 export async function PUT(request: Request) {
@@ -46,7 +48,18 @@ export async function PUT(request: Request) {
     ...parsed.data,
     defaultModelOverride: parsed.data.defaultModelOverride || "",
     adSenseClientId: parsed.data.adSenseClientId || "",
+    autoFeaturedLastRecalculatedAt: parsed.data.autoFeaturedEnabled
+      ? new Date().toISOString()
+      : "",
   });
+
+  if (parsed.data.autoFeaturedEnabled) {
+    await recalculateAutoFeaturedTranslators({
+      force: true,
+      windowDays: parsed.data.autoFeaturedWindowDays,
+      source: "manual",
+    });
+  }
 
   return apiOk({ saved: true });
 }

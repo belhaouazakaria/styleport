@@ -24,6 +24,8 @@ const translator: PublicTranslator = {
   showModeSelector: false,
   showSwap: true,
   showExamples: false,
+  shareImagePath: null,
+  shareImageUpdatedAt: null,
   primaryCategory: null,
   categories: [],
   modes: [

@@ -75,12 +75,14 @@ export default async function HomePage({ searchParams }: PageProps) {
       <main className="pb-10">
         <Hero title={settings.homepageTitle} subtitle={settings.homepageSubtitle} />
 
-        <section className="mx-auto mt-2 w-full max-w-7xl space-y-4 px-4 sm:px-6 lg:px-8">
+        <section id="search-translators" className="mx-auto mt-2 w-full max-w-7xl space-y-4 px-4 sm:px-6 lg:px-8">
           <p className="text-sm text-muted-ink">{settings.catalogIntro}</p>
           <div className="min-w-0">
             <DiscoverySearch q={q || ""} category={category} />
           </div>
-          <CategoryNav categories={discovery.categories} activeCategory={category} q={q} />
+          <div id="categories">
+            <CategoryNav categories={discovery.categories} activeCategory={category} q={q} />
+          </div>
         </section>
 
         {desktopAds.length ? (

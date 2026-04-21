@@ -17,9 +17,19 @@ const LOADING_COPY = "Composing your translation...";
 
 interface TranslatorCardProps {
   translator: PublicTranslator;
+  shareUrl?: string;
+  pinImageUrl?: string;
 }
 
-export function TranslatorCard({ translator }: TranslatorCardProps) {
+function PinterestIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className={className} fill="currentColor">
+      <path d="M12 2a10 10 0 0 0-3.64 19.31c-.05-.82-.1-2.08.02-2.98l1.27-5.4s-.32-.65-.32-1.61c0-1.51.88-2.64 1.97-2.64.93 0 1.38.7 1.38 1.53 0 .93-.59 2.33-.9 3.63-.26 1.09.55 1.97 1.64 1.97 1.96 0 3.47-2.06 3.47-5.03 0-2.63-1.89-4.48-4.59-4.48-3.13 0-4.97 2.35-4.97 4.78 0 .95.37 1.97.82 2.53a.33.33 0 0 1 .08.31l-.33 1.36c-.05.21-.17.26-.4.16-1.5-.7-2.43-2.9-2.43-4.67 0-3.8 2.76-7.29 7.97-7.29 4.18 0 7.44 2.98 7.44 6.96 0 4.15-2.61 7.49-6.24 7.49-1.22 0-2.37-.63-2.76-1.38l-.75 2.85c-.27 1.03-1.01 2.33-1.51 3.12A10 10 0 1 0 12 2Z" />
+    </svg>
+  );
+}
+
+export function TranslatorCard({ translator, shareUrl, pinImageUrl }: TranslatorCardProps) {
   const initialMode = translator.modes[0]?.key || "";
   const storagePrefix = useMemo(() => `styleport:${translator.slug}`, [translator.slug]);
 
@@ -156,6 +166,26 @@ export function TranslatorCard({ translator }: TranslatorCardProps) {
     window.speechSynthesis.speak(utterance);
   }
 
+  function handlePinterestShare() {
+    const pageUrl =
+      shareUrl || (typeof window !== "undefined" ? window.location.href : "");
+    const mediaUrl =
+      pinImageUrl ||
+      (typeof window !== "undefined" ? `${window.location.origin}/translators/${translator.slug}/pin-image` : "");
+
+    if (!pageUrl || !mediaUrl) {
+      return;
+    }
+
+    const description = `${translator.name} — ${translator.shortDescription}`;
+    const intentUrl = new URL("https://www.pinterest.com/pin/create/button/");
+    intentUrl.searchParams.set("url", pageUrl);
+    intentUrl.searchParams.set("media", mediaUrl);
+    intentUrl.searchParams.set("description", description);
+
+    window.open(intentUrl.toString(), "_blank", "noopener,noreferrer");
+  }
+
   return (
     <section className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
       <Card className="overflow-hidden border-border bg-surface">
@@ -277,7 +307,7 @@ export function TranslatorCard({ translator }: TranslatorCardProps) {
 
         <div className="flex flex-col gap-3 border-t border-border bg-muted-surface p-4 sm:p-5">
           <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" onClick={() => void translate()} disabled={isLoading}>
+            <Button type="button" onClick={() => void translate()} disabled={isLoading} className="hidden md:inline-flex">
               {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
               Translate
             </Button>
@@ -293,6 +323,10 @@ export function TranslatorCard({ translator }: TranslatorCardProps) {
             <Button type="button" variant="ghost" onClick={handleClear} disabled={isLoading}>
               <Trash2 className="h-4 w-4" />
               Clear
+            </Button>
+            <Button type="button" variant="outline" onClick={handlePinterestShare} disabled={isLoading}>
+              <PinterestIcon className="h-4 w-4" />
+              Share on Pinterest
             </Button>
           </div>
 

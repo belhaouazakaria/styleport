@@ -191,6 +191,8 @@ export const settingsSchema = z.object({
   footerDisclaimer: z.string().trim().min(2).max(420),
   defaultTranslatorSlug: translatorSlugSchema,
   featuredTranslatorsEnabled: z.boolean(),
+  autoFeaturedEnabled: z.boolean(),
+  autoFeaturedWindowDays: z.number().int().min(1).max(180),
   defaultModelOverride: z.string().trim().max(120).optional().or(z.literal("")),
   discoveryPageSize: z.number().int().min(1).max(24),
   adsEnabled: z.boolean(),

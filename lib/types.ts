@@ -82,6 +82,8 @@ export interface PublicTranslator {
   showModeSelector: boolean;
   showSwap: boolean;
   showExamples: boolean;
+  shareImagePath: string | null;
+  shareImageUpdatedAt: string | null;
   primaryCategory: Pick<PublicCategory, "id" | "name" | "slug"> | null;
   categories: Array<Pick<PublicCategory, "id" | "name" | "slug">>;
   modes: PublicMode[];
@@ -151,6 +153,10 @@ export interface TranslatorListItem {
   archivedAt: string | null;
   updatedAt: string;
   sortOrder: number;
+  featuredRank: number | null;
+  featuredSource: "AUTO" | "MANUAL";
+  shareImagePath: string | null;
+  shareImageUpdatedAt: string | null;
   categories: Array<{ id: string; name: string; slug: string }>;
 }
 
@@ -205,10 +211,23 @@ export interface AppSettings {
   catalogIntro: string;
   defaultTranslatorSlug: string;
   featuredTranslatorsEnabled: boolean;
+  autoFeaturedEnabled: boolean;
+  autoFeaturedWindowDays: number;
+  autoFeaturedLastRecalculatedAt: string | null;
   defaultModelOverride: string;
   discoveryPageSize: number;
   adsEnabled: boolean;
   adSenseClientId: string;
+}
+
+export interface AutoFeaturedTranslatorSummary {
+  translatorId: string;
+  name: string;
+  slug: string;
+  rank: number;
+  successCount: number;
+  recentSuccessCount: number;
+  totalTokens: number;
 }
 
 export interface DiscoveryQuery {

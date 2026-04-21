@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Copy, Eye, EyeOff, Pencil, Trash2 } from "lucide-react";
+import { Copy, Eye, EyeOff, Image as ImageIcon, Pencil, RefreshCcw, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
@@ -72,6 +72,15 @@ export function TranslatorTable({ translators }: TranslatorTableProps) {
     );
   }
 
+  async function regenerateShareImage(id: string) {
+    await runAction(id, () =>
+      fetch(`/api/admin/translators/${id}/regenerate-share-image`, {
+        method: "POST",
+      }),
+    );
+    toast({ title: "Share image regenerated" });
+  }
+
   async function runConfirm() {
     if (!confirm) {
       return;
@@ -107,6 +116,7 @@ export function TranslatorTable({ translators }: TranslatorTableProps) {
               <th className="px-4 py-3 font-medium">Categories</th>
               <th className="px-4 py-3 font-medium">Status</th>
               <th className="px-4 py-3 font-medium">Featured</th>
+              <th className="px-4 py-3 font-medium">Share Image</th>
               <th className="px-4 py-3 font-medium">Updated</th>
               <th className="px-4 py-3 font-medium">Actions</th>
             </tr>
@@ -154,10 +164,27 @@ export function TranslatorTable({ translators }: TranslatorTableProps) {
                   <td className="px-4 py-3">
                     {row.isFeatured ? (
                       <span className="rounded-full bg-brand-100 px-2 py-1 text-xs font-medium text-brand-700">
-                        Featured
+                        {row.featuredSource === "AUTO" && row.featuredRank
+                          ? `Auto #${row.featuredRank}`
+                          : "Featured"}
                       </span>
                     ) : (
                       <span className="text-muted-ink">No</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    {row.shareImagePath ? (
+                      <a
+                        href={row.shareImagePath}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 rounded-lg border border-border bg-muted-surface px-2 py-1 text-xs font-medium text-ink hover:border-brand-300 hover:text-brand-700"
+                      >
+                        <ImageIcon className="h-3.5 w-3.5" />
+                        Ready
+                      </a>
+                    ) : (
+                      <span className="text-xs text-muted-ink">Missing</span>
                     )}
                   </td>
                   <td className="px-4 py-3 text-muted-ink">{formatDateTime(row.updatedAt)}</td>
@@ -173,6 +200,15 @@ export function TranslatorTable({ translators }: TranslatorTableProps) {
                       <Button size="sm" variant="outline" onClick={() => duplicate(row.id)} disabled={isBusy}>
                         <Copy className="h-3.5 w-3.5" />
                         Duplicate
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => regenerateShareImage(row.id)}
+                        disabled={isBusy}
+                      >
+                        <RefreshCcw className="h-3.5 w-3.5" />
+                        Regen image
                       </Button>
                       {!isArchived ? (
                         <Button size="sm" variant="outline" onClick={() => toggleActive(row.id)} disabled={isBusy}>

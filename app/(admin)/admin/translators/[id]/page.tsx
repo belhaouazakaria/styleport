@@ -5,6 +5,7 @@ import { TranslatorForm } from "@/components/admin/translator-form";
 import { getCategoryChoices } from "@/lib/data/categories";
 import { getAdminTranslatorById } from "@/lib/data/translators";
 import { getAvailableModels } from "@/lib/model-catalog";
+import { getAppSettings } from "@/lib/settings";
 
 export const dynamic = "force-dynamic";
 
@@ -14,10 +15,11 @@ interface PageProps {
 
 export default async function AdminTranslatorEditPage({ params }: PageProps) {
   const { id } = await params;
-  const [translator, categories, modelOptions] = await Promise.all([
+  const [translator, categories, modelOptions, settings] = await Promise.all([
     getAdminTranslatorById(id),
     getCategoryChoices(),
     getAvailableModels(),
+    getAppSettings(),
   ]);
 
   if (!translator) {
@@ -35,6 +37,7 @@ export default async function AdminTranslatorEditPage({ params }: PageProps) {
           mode="edit"
           categories={categories}
           modelOptions={modelOptions}
+          autoFeaturedEnabled={settings.autoFeaturedEnabled}
           initial={{
             id: translator.id,
             name: translator.name,
@@ -56,6 +59,12 @@ export default async function AdminTranslatorEditPage({ params }: PageProps) {
             showSwap: translator.showSwap,
             showExamples: translator.showExamples,
             sortOrder: translator.sortOrder,
+            featuredRank: translator.featuredRank,
+            featuredSource: translator.featuredSource,
+            shareImagePath: translator.shareImagePath,
+            shareImageUpdatedAt: translator.shareImageUpdatedAt
+              ? translator.shareImageUpdatedAt.toISOString()
+              : null,
             archivedAt: translator.archivedAt ? translator.archivedAt.toISOString() : null,
             primaryCategoryId: translator.primaryCategoryId,
             categoryIds: translator.categories.map((item) => item.categoryId),

@@ -9,6 +9,7 @@ import { logError, logWarn } from "@/lib/logger";
 import {
   createTranslationLog,
   getDefaultRuntimeTranslator,
+  maybeRecalculateAutoFeaturedTranslators,
   getRuntimeTranslatorBySlug,
 } from "@/lib/data/translators";
 import { prisma } from "@/lib/prisma";
@@ -146,6 +147,8 @@ export async function POST(request: Request) {
     } catch {
       // Non-blocking guardrail evaluation path.
     }
+
+    void maybeRecalculateAutoFeaturedTranslators("translation-success");
 
     return apiOk({ result: generated.text });
   } catch {

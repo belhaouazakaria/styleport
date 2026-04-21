@@ -36,6 +36,8 @@ const envSchema = z.object({
   EMAIL_FROM: z.string().optional(),
   RESEND_API_KEY: z.string().min(1).optional(),
   IP_HASH_SECRET: z.string().optional(),
+  SHARE_IMAGE_STORAGE_DIR: z.string().optional(),
+  SHARE_IMAGE_PUBLIC_PATH_PREFIX: z.string().optional(),
   TRUST_PROXY_HEADERS: booleanParser,
   USAGE_PROTECTION_ENABLED: booleanParser,
   IP_RATE_LIMIT_PER_MINUTE: integerParser,

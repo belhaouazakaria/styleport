@@ -4,6 +4,7 @@ const mockTranslate = vi.fn();
 const mockGetRuntime = vi.fn();
 const mockGetDefaultRuntime = vi.fn();
 const mockCreateLog = vi.fn();
+const mockMaybeRecalculateAutoFeatured = vi.fn();
 const mockSettings = vi.fn();
 const mockGetRequestIdentity = vi.fn();
 const mockUsagePrecheck = vi.fn();
@@ -23,6 +24,8 @@ vi.mock("@/lib/data/translators", () => ({
   getRuntimeTranslatorBySlug: (...args: unknown[]) => mockGetRuntime(...args),
   getDefaultRuntimeTranslator: (...args: unknown[]) => mockGetDefaultRuntime(...args),
   createTranslationLog: (...args: unknown[]) => mockCreateLog(...args),
+  maybeRecalculateAutoFeaturedTranslators: (...args: unknown[]) =>
+    mockMaybeRecalculateAutoFeatured(...args),
 }));
 
 vi.mock("@/lib/settings", () => ({
@@ -49,6 +52,7 @@ describe("POST /api/translate", () => {
     mockGetRequestIdentity.mockReset();
     mockUsagePrecheck.mockReset();
     mockEvaluateTokenCap.mockReset();
+    mockMaybeRecalculateAutoFeatured.mockReset();
 
     mockSettings.mockResolvedValue({ defaultModelOverride: "" });
     mockCreateLog.mockResolvedValue(undefined);
@@ -64,6 +68,7 @@ describe("POST /api/translate", () => {
       ipCounts: { minute: 1, hour: 1, day: 1 },
     });
     mockEvaluateTokenCap.mockResolvedValue({ triggered: false });
+    mockMaybeRecalculateAutoFeatured.mockResolvedValue(undefined);
   });
 
   it("returns 400 for empty text", async () => {

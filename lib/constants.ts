@@ -27,6 +27,9 @@ export const APP_SETTING_KEYS = {
   FOOTER_DISCLAIMER: "footerDisclaimer",
   DEFAULT_TRANSLATOR_SLUG: "defaultTranslatorSlug",
   FEATURED_TRANSLATORS_ENABLED: "featuredTranslatorsEnabled",
+  AUTO_FEATURED_ENABLED: "autoFeaturedEnabled",
+  AUTO_FEATURED_WINDOW_DAYS: "autoFeaturedWindowDays",
+  AUTO_FEATURED_LAST_RECALCULATED_AT: "autoFeaturedLastRecalculatedAt",
   DEFAULT_MODEL_OVERRIDE: "defaultModelOverride",
   DISCOVERY_PAGE_SIZE: "discoveryPageSize",
   ADS_ENABLED: "adsEnabled",
@@ -69,3 +72,6 @@ export const DEFAULT_IP_LIMIT_PER_MINUTE = 5;
 export const DEFAULT_IP_LIMIT_PER_HOUR = 50;
 export const DEFAULT_IP_LIMIT_PER_DAY = 200;
 export const DEFAULT_GLOBAL_DAILY_TOKEN_CAP = 200_000;
+export const DEFAULT_AUTO_FEATURED_WINDOW_DAYS = 30;
+export const AUTO_FEATURED_LIMIT = 3;
+export const AUTO_FEATURED_RECALC_MIN_INTERVAL_MS = 15 * 60 * 1000;

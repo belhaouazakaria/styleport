@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import { PrismaClient, Role } from "@prisma/client";
+import { FeaturedSource, PrismaClient, Role } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
@@ -228,6 +228,11 @@ async function upsertTranslators() {
         modelOverride: item.modelOverride || null,
         isActive: item.isActive,
         isFeatured: item.isFeatured,
+        featuredRank: null,
+        featuredSource: FeaturedSource.MANUAL,
+        shareImagePath: null,
+        shareImageHash: null,
+        shareImageUpdatedAt: null,
         showModeSelector: item.showModeSelector,
         showSwap: item.showSwap,
         showExamples: item.showExamples,
@@ -251,6 +256,11 @@ async function upsertTranslators() {
         modelOverride: item.modelOverride || null,
         isActive: item.isActive,
         isFeatured: item.isFeatured,
+        featuredRank: null,
+        featuredSource: FeaturedSource.MANUAL,
+        shareImagePath: null,
+        shareImageHash: null,
+        shareImageUpdatedAt: null,
         showModeSelector: item.showModeSelector,
         showSwap: item.showSwap,
         showExamples: item.showExamples,
@@ -409,6 +419,9 @@ async function seedSettings() {
     },
     { key: "defaultTranslatorSlug", value: "regal-rewrite" },
     { key: "featuredTranslatorsEnabled", value: true },
+    { key: "autoFeaturedEnabled", value: true },
+    { key: "autoFeaturedWindowDays", value: 30 },
+    { key: "autoFeaturedLastRecalculatedAt", value: "" },
     { key: "defaultModelOverride", value: "" },
     { key: "discoveryPageSize", value: 12 },
     { key: "adsEnabled", value: false },

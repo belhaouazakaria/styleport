@@ -23,6 +23,8 @@ const translators: PublicTranslator[] = [
     showModeSelector: false,
     showSwap: false,
     showExamples: false,
+    shareImagePath: null,
+    shareImageUpdatedAt: null,
     primaryCategory: null,
     categories: [
       {

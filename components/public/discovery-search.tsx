@@ -83,9 +83,11 @@ export function DiscoverySearch({ q, category }: DiscoverySearchProps) {
         />
         <button
           type="submit"
-          className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-600"
+          className="absolute right-2 top-1/2 inline-flex h-8 -translate-y-1/2 items-center gap-1 rounded-lg bg-brand-500 px-3 text-xs font-semibold text-white transition hover:bg-brand-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60 active:scale-[0.99] sm:h-9 sm:text-sm"
         >
-          Search
+          <Search className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">Find translator</span>
+          <span className="sm:hidden">Find</span>
         </button>
         {category ? <input type="hidden" name="category" value={category} /> : null}
         <input type="hidden" name="page" value="1" />

@@ -57,6 +57,11 @@ enum TranslatorRequestStatus {
   COMPLETED
 }
 
+enum FeaturedSource {
+  MANUAL
+  AUTO
+}
+
 enum UsageProtectionEventType {
   EMERGENCY_SHUTDOWN
   MANUAL_REENABLE
@@ -135,6 +140,11 @@ model Translator {
   showExamples        Boolean              @default(false)
   isActive            Boolean              @default(true)
   isFeatured          Boolean              @default(false)
+  featuredRank        Int?
+  featuredSource      FeaturedSource       @default(MANUAL)
+  shareImagePath      String?
+  shareImageHash      String?
+  shareImageUpdatedAt DateTime?
   sortOrder           Int                  @default(0)
   archivedAt          DateTime?
   primaryCategoryId   String?
@@ -148,6 +158,7 @@ model Translator {
   fulfilledRequests   TranslatorRequest[]  @relation("RequestCreatedTranslator")
 
   @@index([isActive, isFeatured, sortOrder])
+  @@index([isFeatured, featuredRank])
   @@index([updatedAt])
   @@index([primaryCategoryId])
 }

@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { Copy, Plus, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -44,6 +45,10 @@ interface TranslatorFormInitial {
   showSwap: boolean;
   showExamples: boolean;
   sortOrder: number;
+  featuredRank: number | null;
+  featuredSource: "AUTO" | "MANUAL";
+  shareImagePath: string | null;
+  shareImageUpdatedAt: string | null;
   archivedAt: string | null;
   primaryCategoryId: string | null;
   categoryIds: string[];
@@ -56,9 +61,13 @@ interface TranslatorFormProps {
   initial?: TranslatorFormInitial;
   categories: Array<{ id: string; name: string }>;
   modelOptions: string[];
+  autoFeaturedEnabled: boolean;
 }
 
-function createDefaultState(): Omit<TranslatorFormInitial, "id" | "archivedAt"> {
+function createDefaultState(): Omit<
+  TranslatorFormInitial,
+  "id" | "archivedAt" | "featuredRank" | "featuredSource" | "shareImagePath" | "shareImageUpdatedAt"
+> {
   return {
     name: "",
     slug: "",
@@ -100,7 +109,13 @@ function createDefaultState(): Omit<TranslatorFormInitial, "id" | "archivedAt"> 
   };
 }
 
-export function TranslatorForm({ mode, initial, categories, modelOptions }: TranslatorFormProps) {
+export function TranslatorForm({
+  mode,
+  initial,
+  categories,
+  modelOptions,
+  autoFeaturedEnabled,
+}: TranslatorFormProps) {
   const router = useRouter();
   const { toast } = useToast();
 
@@ -109,6 +124,10 @@ export function TranslatorForm({ mode, initial, categories, modelOptions }: Tran
   const [slugTouched, setSlugTouched] = useState(Boolean(initial?.slug));
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [shareImagePath, setShareImagePath] = useState<string | null>(initial?.shareImagePath || null);
+  const [shareImageUpdatedAt, setShareImageUpdatedAt] = useState<string | null>(
+    initial?.shareImageUpdatedAt || null,
+  );
 
   const [form, setForm] = useState({
     name: initial?.name ?? defaults.name,
@@ -283,6 +302,34 @@ export function TranslatorForm({ mode, initial, categories, modelOptions }: Tran
     }
 
     toast({ title: initial.archivedAt ? "Translator restored" : "Translator archived" });
+    router.refresh();
+  }
+
+  async function regenerateShareImage() {
+    if (!initial?.id) return;
+
+    setBusy(true);
+    const response = await fetch(`/api/admin/translators/${initial.id}/regenerate-share-image`, {
+      method: "POST",
+    });
+    const result = await response.json();
+    setBusy(false);
+
+    if (!response.ok || !result.ok) {
+      toast({
+        title: "Regeneration failed",
+        description: result?.error?.message || "Unable to regenerate share image.",
+        variant: "error",
+      });
+      return;
+    }
+
+    setShareImagePath(result.shareImagePath || null);
+    setShareImageUpdatedAt(result.shareImageUpdatedAt || null);
+    toast({
+      title: "Share image regenerated",
+      description: "Pinterest share image is up to date.",
+    });
     router.refresh();
   }
 
@@ -626,6 +673,44 @@ export function TranslatorForm({ mode, initial, categories, modelOptions }: Tran
       </section>
 
       <section className="rounded-2xl border border-border bg-white p-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="font-display text-2xl font-semibold text-ink">Pinterest Share Image</h2>
+            <p className="mt-1 text-sm text-muted-ink">
+              Stored, pre-generated image used for Pinterest sharing.
+            </p>
+            {shareImageUpdatedAt ? (
+              <p className="mt-1 text-xs text-muted-ink">Last generated: {shareImageUpdatedAt}</p>
+            ) : null}
+          </div>
+          {mode === "edit" ? (
+            <Button type="button" variant="outline" onClick={() => void regenerateShareImage()} disabled={busy}>
+              Regenerate share image
+            </Button>
+          ) : null}
+        </div>
+
+        <div className="mt-4 rounded-xl border border-border bg-muted-surface p-3">
+          {shareImagePath ? (
+            <div className="space-y-3">
+              <Image
+                src={shareImagePath}
+                alt="Stored Pinterest share preview"
+                width={300}
+                height={450}
+                className="w-full max-w-xs rounded-lg border border-border bg-white object-cover"
+              />
+              <p className="text-xs text-muted-ink">{shareImagePath}</p>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-ink">
+              No stored share image yet. It will be generated automatically when the translator is saved.
+            </p>
+          )}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-border bg-white p-6">
         <h2 className="font-display text-2xl font-semibold text-ink">SEO & Visibility</h2>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           <label className="space-y-1 text-sm md:col-span-2">
@@ -658,10 +743,17 @@ export function TranslatorForm({ mode, initial, categories, modelOptions }: Tran
             <input
               type="checkbox"
               checked={form.isFeatured}
+              disabled={autoFeaturedEnabled}
               onChange={(event) => setField("isFeatured", event.target.checked)}
             />
             Featured
           </label>
+
+          {autoFeaturedEnabled ? (
+            <p className="text-xs text-muted-ink md:col-span-2">
+              Auto-featured mode is enabled globally. Top 3 featured slots are assigned by performance.
+            </p>
+          ) : null}
 
           <label className="space-y-1 text-sm">
             <span className="font-medium text-muted-ink">Sort Order</span>

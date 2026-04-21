@@ -4,11 +4,16 @@ import { AdminTopbar } from "@/components/admin/admin-topbar";
 import { TranslatorForm } from "@/components/admin/translator-form";
 import { getCategoryChoices } from "@/lib/data/categories";
 import { getAvailableModels } from "@/lib/model-catalog";
+import { getAppSettings } from "@/lib/settings";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminTranslatorCreatePage() {
-  const [categories, modelOptions] = await Promise.all([getCategoryChoices(), getAvailableModels()]);
+  const [categories, modelOptions, settings] = await Promise.all([
+    getCategoryChoices(),
+    getAvailableModels(),
+    getAppSettings(),
+  ]);
 
   return (
     <>
@@ -22,7 +27,12 @@ export default async function AdminTranslatorCreatePage() {
             Create with AI instead
           </Link>
         </div>
-        <TranslatorForm mode="create" categories={categories} modelOptions={modelOptions} />
+        <TranslatorForm
+          mode="create"
+          categories={categories}
+          modelOptions={modelOptions}
+          autoFeaturedEnabled={settings.autoFeaturedEnabled}
+        />
       </main>
     </>
   );

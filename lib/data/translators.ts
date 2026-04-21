@@ -1,9 +1,18 @@
-import { Prisma, TranslationStatus } from "@prisma/client";
+import { FeaturedSource, Prisma, TranslationStatus } from "@prisma/client";
 
+import {
+  AUTO_FEATURED_LIMIT,
+  AUTO_FEATURED_RECALC_MIN_INTERVAL_MS,
+  DEFAULT_AUTO_FEATURED_WINDOW_DAYS,
+  APP_SETTING_KEYS,
+} from "@/lib/constants";
+import { logWarn } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
+import { deleteStoredShareImage, ensureTranslatorShareImageById } from "@/lib/share-images";
 import { ensureUniqueTranslatorSlug } from "@/lib/slug";
 import { getAppSettings } from "@/lib/settings";
 import type {
+  AutoFeaturedTranslatorSummary,
   DiscoveryQuery,
   DiscoveryResult,
   PublicTranslator,
@@ -73,6 +82,10 @@ function mapPublicTranslator(
     showModeSelector: translator.showModeSelector,
     showSwap: translator.showSwap,
     showExamples: translator.showExamples,
+    shareImagePath: translator.shareImagePath,
+    shareImageUpdatedAt: translator.shareImageUpdatedAt
+      ? translator.shareImageUpdatedAt.toISOString()
+      : null,
     primaryCategory: translator.primaryCategory,
     categories: translator.categories.map((item) => item.category),
     modes: translator.modes,
@@ -116,6 +129,262 @@ function discoveryWhere(query: Pick<DiscoveryQuery, "q" | "category">): Prisma.T
   }
 
   return where;
+}
+
+interface AutoFeaturedCandidate {
+  translatorId: string;
+  name: string;
+  slug: string;
+  sortOrder: number;
+  successCount: number;
+  recentSuccessCount: number;
+  totalTokens: number;
+  lastSuccessAt: Date | null;
+}
+
+async function getAutoFeaturedCandidates(
+  windowDays: number,
+  limit = AUTO_FEATURED_LIMIT,
+): Promise<AutoFeaturedCandidate[]> {
+  const now = Date.now();
+  const from = new Date(now - windowDays * 24 * 60 * 60 * 1000);
+  const recentDays = Math.min(7, Math.max(1, windowDays));
+  const recentFrom = new Date(now - recentDays * 24 * 60 * 60 * 1000);
+
+  const [translators, successUsage, recentUsage] = await Promise.all([
+    prisma.translator.findMany({
+      where: {
+        isActive: true,
+        archivedAt: null,
+      },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        sortOrder: true,
+      },
+    }),
+    prisma.translationLog.groupBy({
+      by: ["translatorId"],
+      where: {
+        status: TranslationStatus.SUCCESS,
+        createdAt: { gte: from },
+      },
+      _count: { _all: true },
+      _sum: { totalTokens: true },
+      _max: { createdAt: true },
+    }),
+    prisma.translationLog.groupBy({
+      by: ["translatorId"],
+      where: {
+        status: TranslationStatus.SUCCESS,
+        createdAt: { gte: recentFrom },
+      },
+      _count: { _all: true },
+    }),
+  ]);
+
+  const usageMap = new Map(
+    successUsage.map((item) => [
+      item.translatorId,
+      {
+        successCount: item._count._all,
+        totalTokens: item._sum.totalTokens || 0,
+        lastSuccessAt: item._max.createdAt || null,
+      },
+    ]),
+  );
+
+  const recentMap = new Map(recentUsage.map((item) => [item.translatorId, item._count._all]));
+
+  const ranked = translators
+    .map((translator) => {
+      const usage = usageMap.get(translator.id);
+      return {
+        translatorId: translator.id,
+        name: translator.name,
+        slug: translator.slug,
+        sortOrder: translator.sortOrder,
+        successCount: usage?.successCount || 0,
+        recentSuccessCount: recentMap.get(translator.id) || 0,
+        totalTokens: usage?.totalTokens || 0,
+        lastSuccessAt: usage?.lastSuccessAt || null,
+      };
+    })
+    .sort((a, b) => {
+      if (b.successCount !== a.successCount) return b.successCount - a.successCount;
+      if (b.recentSuccessCount !== a.recentSuccessCount) return b.recentSuccessCount - a.recentSuccessCount;
+      if (b.totalTokens !== a.totalTokens) return b.totalTokens - a.totalTokens;
+      if (a.lastSuccessAt && b.lastSuccessAt) {
+        const diff = b.lastSuccessAt.getTime() - a.lastSuccessAt.getTime();
+        if (diff !== 0) return diff;
+      } else if (a.lastSuccessAt || b.lastSuccessAt) {
+        return a.lastSuccessAt ? -1 : 1;
+      }
+      if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+      return a.slug.localeCompare(b.slug);
+    });
+
+  return ranked.slice(0, limit);
+}
+
+export async function recalculateAutoFeaturedTranslators(options?: {
+  windowDays?: number;
+  force?: boolean;
+  source?: "manual" | "automatic";
+}) {
+  const settings = await getAppSettings();
+  const autoEnabled = settings.autoFeaturedEnabled;
+
+  if (!autoEnabled && !options?.force) {
+    return {
+      updated: false,
+      reason: "AUTO_DISABLED",
+      windowDays: settings.autoFeaturedWindowDays,
+      featured: [] as AutoFeaturedTranslatorSummary[],
+    };
+  }
+
+  const windowDays = Math.max(1, options?.windowDays || settings.autoFeaturedWindowDays);
+  const candidates = await getAutoFeaturedCandidates(windowDays, AUTO_FEATURED_LIMIT);
+  const now = new Date();
+
+  await prisma.$transaction(async (tx) => {
+    await tx.translator.updateMany({
+      where: {
+        archivedAt: null,
+      },
+      data: {
+        isFeatured: false,
+        featuredRank: null,
+      },
+    });
+
+    for (const [index, candidate] of candidates.entries()) {
+      await tx.translator.update({
+        where: { id: candidate.translatorId },
+        data: {
+          isFeatured: true,
+          featuredRank: index + 1,
+          featuredSource: FeaturedSource.AUTO,
+        },
+      });
+    }
+
+    await tx.appSetting.upsert({
+      where: { key: APP_SETTING_KEYS.AUTO_FEATURED_LAST_RECALCULATED_AT },
+      update: { value: now.toISOString() },
+      create: { key: APP_SETTING_KEYS.AUTO_FEATURED_LAST_RECALCULATED_AT, value: now.toISOString() },
+    });
+  });
+
+  return {
+    updated: true,
+    windowDays,
+    featured: candidates.map((candidate, index) => ({
+      translatorId: candidate.translatorId,
+      name: candidate.name,
+      slug: candidate.slug,
+      rank: index + 1,
+      successCount: candidate.successCount,
+      recentSuccessCount: candidate.recentSuccessCount,
+      totalTokens: candidate.totalTokens,
+    })),
+  };
+}
+
+export async function maybeRecalculateAutoFeaturedTranslators(source: "translation-success" | "settings-save") {
+  const settings = await getAppSettings();
+  if (!settings.autoFeaturedEnabled) {
+    return;
+  }
+
+  const lastTimestamp = settings.autoFeaturedLastRecalculatedAt
+    ? Date.parse(settings.autoFeaturedLastRecalculatedAt)
+    : NaN;
+
+  if (Number.isFinite(lastTimestamp) && Date.now() - lastTimestamp < AUTO_FEATURED_RECALC_MIN_INTERVAL_MS) {
+    return;
+  }
+
+  try {
+    await recalculateAutoFeaturedTranslators({
+      source: source === "settings-save" ? "manual" : "automatic",
+      windowDays: settings.autoFeaturedWindowDays || DEFAULT_AUTO_FEATURED_WINDOW_DAYS,
+      force: true,
+    });
+  } catch (error) {
+    logWarn("auto_featured_recalc_failed", "Auto-featured recalculation failed.", {
+      source,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+export async function getAutoFeaturedSummary(windowDays?: number): Promise<AutoFeaturedTranslatorSummary[]> {
+  const settings = await getAppSettings();
+  const effectiveWindow = Math.max(1, windowDays || settings.autoFeaturedWindowDays);
+  const current = await prisma.translator.findMany({
+    where: {
+      archivedAt: null,
+      isActive: true,
+      isFeatured: true,
+      featuredSource: FeaturedSource.AUTO,
+    },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      featuredRank: true,
+    },
+    orderBy: [{ featuredRank: "asc" }, { sortOrder: "asc" }, { updatedAt: "desc" }],
+    take: AUTO_FEATURED_LIMIT,
+  });
+
+  if (!current.length) {
+    return [];
+  }
+
+  const from = new Date(Date.now() - effectiveWindow * 24 * 60 * 60 * 1000);
+  const recentFrom = new Date(Date.now() - Math.min(7, effectiveWindow) * 24 * 60 * 60 * 1000);
+  const ids = current.map((item) => item.id);
+
+  const [usage, recent] = await Promise.all([
+    prisma.translationLog.groupBy({
+      by: ["translatorId"],
+      where: {
+        translatorId: { in: ids },
+        status: TranslationStatus.SUCCESS,
+        createdAt: { gte: from },
+      },
+      _count: { _all: true },
+      _sum: { totalTokens: true },
+    }),
+    prisma.translationLog.groupBy({
+      by: ["translatorId"],
+      where: {
+        translatorId: { in: ids },
+        status: TranslationStatus.SUCCESS,
+        createdAt: { gte: recentFrom },
+      },
+      _count: { _all: true },
+    }),
+  ]);
+
+  const usageMap = new Map(
+    usage.map((item) => [item.translatorId, { count: item._count._all, tokens: item._sum.totalTokens || 0 }]),
+  );
+  const recentMap = new Map(recent.map((item) => [item.translatorId, item._count._all]));
+
+  return current.map((item, index) => ({
+    translatorId: item.id,
+    name: item.name,
+    slug: item.slug,
+    rank: item.featuredRank || index + 1,
+    successCount: usageMap.get(item.id)?.count || 0,
+    recentSuccessCount: recentMap.get(item.id) || 0,
+    totalTokens: usageMap.get(item.id)?.tokens || 0,
+  }));
 }
 
 export async function getPublicCategories() {
@@ -218,6 +487,10 @@ export async function getSearchSuggestions(query: string, limit = 8) {
 }
 
 export async function getFeaturedPublicTranslators(limit = 6): Promise<PublicTranslator[]> {
+  const settings = await getAppSettings();
+  if (settings.autoFeaturedEnabled) {
+    await maybeRecalculateAutoFeaturedTranslators("settings-save");
+  }
   const translators = await prisma.translator.findMany({
     where: {
       isActive: true,
@@ -225,7 +498,9 @@ export async function getFeaturedPublicTranslators(limit = 6): Promise<PublicTra
       archivedAt: null,
     },
     include: publicTranslatorInclude,
-    orderBy: [{ sortOrder: "asc" }, { updatedAt: "desc" }],
+    orderBy: settings.autoFeaturedEnabled
+      ? [{ featuredRank: "asc" }, { sortOrder: "asc" }, { updatedAt: "desc" }]
+      : [{ sortOrder: "asc" }, { updatedAt: "desc" }],
     take: limit,
   });
 
@@ -233,7 +508,7 @@ export async function getFeaturedPublicTranslators(limit = 6): Promise<PublicTra
 }
 
 export async function getPublicTranslatorBySlug(slug: string): Promise<PublicTranslator | null> {
-  const translator = await prisma.translator.findFirst({
+  let translator = await prisma.translator.findFirst({
     where: {
       slug,
       archivedAt: null,
@@ -241,6 +516,24 @@ export async function getPublicTranslatorBySlug(slug: string): Promise<PublicTra
     },
     include: publicTranslatorInclude,
   });
+
+  if (translator) {
+    const ensured = await ensureTranslatorShareImageById(translator.id);
+    if (
+      ensured?.shareImagePath &&
+      (ensured.shareImagePath !== translator.shareImagePath ||
+        ensured.shareImageHash !== translator.shareImageHash)
+    ) {
+      translator = await prisma.translator.findFirst({
+        where: {
+          slug,
+          archivedAt: null,
+          isActive: true,
+        },
+        include: publicTranslatorInclude,
+      });
+    }
+  }
 
   return translator ? mapPublicTranslator(translator) : null;
 }
@@ -367,6 +660,19 @@ export async function getAdminTranslatorById(id: string) {
   });
 }
 
+export async function regenerateTranslatorShareImage(id: string) {
+  const translator = await prisma.translator.findUnique({
+    where: { id },
+    select: { id: true },
+  });
+
+  if (!translator) {
+    return null;
+  }
+
+  return ensureTranslatorShareImageById(id, { force: true });
+}
+
 export async function listAdminTranslators(filters: {
   q?: string;
   status?: "all" | "active" | "inactive" | "archived";
@@ -416,6 +722,10 @@ export async function listAdminTranslators(filters: {
       slug: true,
       isActive: true,
       isFeatured: true,
+      featuredRank: true,
+      featuredSource: true,
+      shareImagePath: true,
+      shareImageUpdatedAt: true,
       archivedAt: true,
       updatedAt: true,
       sortOrder: true,
@@ -439,6 +749,7 @@ export async function listAdminTranslators(filters: {
     categories: row.categories.map((item) => item.category),
     archivedAt: row.archivedAt ? row.archivedAt.toISOString() : null,
     updatedAt: row.updatedAt.toISOString(),
+    shareImageUpdatedAt: row.shareImageUpdatedAt ? row.shareImageUpdatedAt.toISOString() : null,
   }));
 }
 
@@ -468,8 +779,10 @@ function normalizeTranslatorInput(input: TranslatorUpsertInput) {
 export async function createTranslator(input: TranslatorUpsertInput) {
   const slug = await ensureUniqueTranslatorSlug(input.slug);
   const normalized = normalizeTranslatorInput(input);
+  const settings = await getAppSettings();
+  const allowManualFeatured = !settings.autoFeaturedEnabled;
 
-  return prisma.translator.create({
+  const created = await prisma.translator.create({
     data: {
       name: normalized.name,
       slug,
@@ -485,7 +798,12 @@ export async function createTranslator(input: TranslatorUpsertInput) {
       seoDescription: normalized.seoDescription,
       modelOverride: normalized.modelOverride,
       isActive: normalized.isActive,
-      isFeatured: normalized.isFeatured,
+      isFeatured: allowManualFeatured ? normalized.isFeatured : false,
+      featuredRank: null,
+      featuredSource: FeaturedSource.MANUAL,
+      shareImagePath: null,
+      shareImageHash: null,
+      shareImageUpdatedAt: null,
       showModeSelector: normalized.showModeSelector,
       showSwap: normalized.showSwap,
       showExamples: normalized.showExamples,
@@ -518,13 +836,34 @@ export async function createTranslator(input: TranslatorUpsertInput) {
       },
     },
   });
+
+  await ensureTranslatorShareImageById(created.id);
+
+  if (settings.autoFeaturedEnabled) {
+    await maybeRecalculateAutoFeaturedTranslators("settings-save");
+  }
+
+  return created;
 }
 
 export async function updateTranslator(id: string, input: TranslatorUpsertInput) {
   const slug = await ensureUniqueTranslatorSlug(input.slug, { excludeId: id });
   const normalized = normalizeTranslatorInput(input);
+  const settings = await getAppSettings();
+  const allowManualFeatured = !settings.autoFeaturedEnabled;
+  const existing = await prisma.translator.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      name: true,
+      subtitle: true,
+      shortDescription: true,
+      sourceLabel: true,
+      targetLabel: true,
+    },
+  });
 
-  return prisma.$transaction(async (tx) => {
+  const updated = await prisma.$transaction(async (tx) => {
     await tx.translationMode.deleteMany({ where: { translatorId: id } });
     await tx.translatorExample.deleteMany({ where: { translatorId: id } });
     await tx.translatorCategory.deleteMany({ where: { translatorId: id } });
@@ -546,7 +885,9 @@ export async function updateTranslator(id: string, input: TranslatorUpsertInput)
         seoDescription: normalized.seoDescription,
         modelOverride: normalized.modelOverride,
         isActive: normalized.isActive,
-        isFeatured: normalized.isFeatured,
+        isFeatured: allowManualFeatured ? normalized.isFeatured : false,
+        featuredRank: allowManualFeatured ? null : undefined,
+        featuredSource: FeaturedSource.MANUAL,
         showModeSelector: normalized.showModeSelector,
         showSwap: normalized.showSwap,
         showExamples: normalized.showExamples,
@@ -581,6 +922,24 @@ export async function updateTranslator(id: string, input: TranslatorUpsertInput)
       },
     });
   });
+
+  const shareFieldsChanged =
+    !existing ||
+    existing.name !== updated.name ||
+    existing.subtitle !== updated.subtitle ||
+    existing.shortDescription !== updated.shortDescription ||
+    existing.sourceLabel !== updated.sourceLabel ||
+    existing.targetLabel !== updated.targetLabel;
+
+  if (shareFieldsChanged || !updated.shareImagePath) {
+    await ensureTranslatorShareImageById(updated.id, { force: shareFieldsChanged });
+  }
+
+  if (settings.autoFeaturedEnabled) {
+    await maybeRecalculateAutoFeaturedTranslators("settings-save");
+  }
+
+  return updated;
 }
 
 export async function duplicateTranslator(id: string) {
@@ -599,7 +958,7 @@ export async function duplicateTranslator(id: string) {
 
   const slug = await ensureUniqueTranslatorSlug(`${translator.slug}-copy`);
 
-  return prisma.translator.create({
+  const duplicated = await prisma.translator.create({
     data: {
       name: `${translator.name} Copy`,
       slug,
@@ -619,6 +978,11 @@ export async function duplicateTranslator(id: string) {
       showExamples: translator.showExamples,
       isActive: false,
       isFeatured: false,
+      featuredRank: null,
+      featuredSource: FeaturedSource.MANUAL,
+      shareImagePath: null,
+      shareImageHash: null,
+      shareImageUpdatedAt: null,
       sortOrder: translator.sortOrder + 1,
       primaryCategoryId: translator.primaryCategoryId,
       modes: {
@@ -649,6 +1013,10 @@ export async function duplicateTranslator(id: string) {
       },
     },
   });
+
+  await ensureTranslatorShareImageById(duplicated.id);
+
+  return duplicated;
 }
 
 export async function toggleTranslatorActive(id: string, active?: boolean) {
@@ -659,37 +1027,57 @@ export async function toggleTranslatorActive(id: string, active?: boolean) {
 
   const next = active ?? !current.isActive;
 
-  return prisma.translator.update({
+  const updated = await prisma.translator.update({
     where: { id },
     data: {
       isActive: next,
       archivedAt: next ? null : current.archivedAt,
     },
   });
+
+  await maybeRecalculateAutoFeaturedTranslators("settings-save");
+  return updated;
 }
 
 export async function archiveTranslator(id: string) {
-  return prisma.translator.update({
+  const updated = await prisma.translator.update({
     where: { id },
     data: {
       archivedAt: new Date(),
       isActive: false,
+      isFeatured: false,
+      featuredRank: null,
     },
   });
+
+  await maybeRecalculateAutoFeaturedTranslators("settings-save");
+  return updated;
 }
 
 export async function unarchiveTranslator(id: string) {
-  return prisma.translator.update({
+  const updated = await prisma.translator.update({
     where: { id },
     data: {
       archivedAt: null,
       isActive: true,
     },
   });
+
+  await maybeRecalculateAutoFeaturedTranslators("settings-save");
+  return updated;
 }
 
 export async function hardDeleteTranslator(id: string) {
-  return prisma.translator.delete({ where: { id } });
+  const existing = await prisma.translator.findUnique({
+    where: { id },
+    select: { shareImagePath: true },
+  });
+  const deleted = await prisma.translator.delete({ where: { id } });
+
+  await deleteStoredShareImage(existing?.shareImagePath || null);
+
+  await maybeRecalculateAutoFeaturedTranslators("settings-save");
+  return deleted;
 }
 
 export async function createTranslationLog(data: {

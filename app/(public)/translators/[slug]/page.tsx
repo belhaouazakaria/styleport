@@ -9,6 +9,8 @@ import { TranslatorCard } from "@/components/translator/translator-card";
 import { AdSlot } from "@/components/shared/ad-slot";
 import { getRenderableAdPlacements } from "@/lib/data/ads";
 import { getPublicTranslatorBySlug } from "@/lib/data/translators";
+import { getAppBaseUrl } from "@/lib/env";
+import { getShareImageAbsoluteUrl } from "@/lib/share-images";
 import { getAppSettings } from "@/lib/settings";
 
 interface PageProps {
@@ -27,9 +29,33 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     };
   }
 
+  const description = translator.seoDescription || translator.shortDescription;
+  const title = translator.seoTitle || `${translator.name} Translator`;
+  const imageUrl = translator.shareImagePath || `/translators/${translator.slug}/pin-image`;
+
   return {
-    title: translator.seoTitle || `${translator.name} Translator`,
-    description: translator.seoDescription || translator.shortDescription,
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      type: "article",
+      url: `/translators/${translator.slug}`,
+      images: [
+        {
+          url: imageUrl,
+          width: 1000,
+          height: 1500,
+          alt: `${translator.name} Pinterest share image`,
+        },
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: [imageUrl],
+    },
   };
 }
 
@@ -49,6 +75,11 @@ export default async function TranslatorSlugPage({ params }: PageProps) {
       categorySlug: translator.primaryCategory?.slug,
     }),
   ]);
+  const baseUrl = getAppBaseUrl();
+  const shareUrl = new URL(`/translators/${translator.slug}`, baseUrl).toString();
+  const pinImageUrl =
+    getShareImageAbsoluteUrl(translator.shareImagePath) ||
+    new URL(`/translators/${translator.slug}/pin-image`, baseUrl).toString();
 
   return (
     <div className="relative overflow-x-hidden">
@@ -76,7 +107,7 @@ export default async function TranslatorSlugPage({ params }: PageProps) {
           </section>
         ) : null}
 
-        <TranslatorCard translator={translator} />
+        <TranslatorCard translator={translator} shareUrl={shareUrl} pinImageUrl={pinImageUrl} />
 
         {ads.length > 1 ? (
           <section className="mx-auto mt-6 w-full max-w-7xl px-4 sm:px-6 lg:px-8">

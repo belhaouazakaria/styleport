@@ -1,4 +1,9 @@
-import { APP_NAME, APP_SETTING_KEYS, DISCOVERY_DEFAULT_PAGE_SIZE } from "@/lib/constants";
+import {
+  APP_NAME,
+  APP_SETTING_KEYS,
+  DEFAULT_AUTO_FEATURED_WINDOW_DAYS,
+  DISCOVERY_DEFAULT_PAGE_SIZE,
+} from "@/lib/constants";
 import { prisma } from "@/lib/prisma";
 import type { AppSettings } from "@/lib/types";
 
@@ -13,6 +18,9 @@ const defaultSettings: AppSettings = {
     "StylePort provides AI-assisted rewriting for drafting purposes. Always review outputs before critical use.",
   defaultTranslatorSlug: "regal-rewrite",
   featuredTranslatorsEnabled: true,
+  autoFeaturedEnabled: true,
+  autoFeaturedWindowDays: DEFAULT_AUTO_FEATURED_WINDOW_DAYS,
+  autoFeaturedLastRecalculatedAt: null,
   defaultModelOverride: "",
   discoveryPageSize: DISCOVERY_DEFAULT_PAGE_SIZE,
   adsEnabled: false,
@@ -39,6 +47,18 @@ export async function getAppSettings(): Promise<AppSettings> {
       typeof map.get(APP_SETTING_KEYS.FEATURED_TRANSLATORS_ENABLED) === "boolean"
         ? (map.get(APP_SETTING_KEYS.FEATURED_TRANSLATORS_ENABLED) as boolean)
         : defaultSettings.featuredTranslatorsEnabled,
+    autoFeaturedEnabled:
+      typeof map.get(APP_SETTING_KEYS.AUTO_FEATURED_ENABLED) === "boolean"
+        ? (map.get(APP_SETTING_KEYS.AUTO_FEATURED_ENABLED) as boolean)
+        : defaultSettings.autoFeaturedEnabled,
+    autoFeaturedWindowDays:
+      typeof map.get(APP_SETTING_KEYS.AUTO_FEATURED_WINDOW_DAYS) === "number"
+        ? (map.get(APP_SETTING_KEYS.AUTO_FEATURED_WINDOW_DAYS) as number)
+        : defaultSettings.autoFeaturedWindowDays,
+    autoFeaturedLastRecalculatedAt:
+      typeof map.get(APP_SETTING_KEYS.AUTO_FEATURED_LAST_RECALCULATED_AT) === "string"
+        ? (map.get(APP_SETTING_KEYS.AUTO_FEATURED_LAST_RECALCULATED_AT) as string)
+        : defaultSettings.autoFeaturedLastRecalculatedAt,
     defaultModelOverride:
       (map.get(APP_SETTING_KEYS.DEFAULT_MODEL_OVERRIDE) as string) ||
       defaultSettings.defaultModelOverride,
@@ -64,6 +84,12 @@ export async function updateAppSettings(settings: AppSettings): Promise<void> {
     [APP_SETTING_KEYS.FOOTER_DISCLAIMER, settings.footerDisclaimer],
     [APP_SETTING_KEYS.DEFAULT_TRANSLATOR_SLUG, settings.defaultTranslatorSlug],
     [APP_SETTING_KEYS.FEATURED_TRANSLATORS_ENABLED, settings.featuredTranslatorsEnabled],
+    [APP_SETTING_KEYS.AUTO_FEATURED_ENABLED, settings.autoFeaturedEnabled],
+    [APP_SETTING_KEYS.AUTO_FEATURED_WINDOW_DAYS, settings.autoFeaturedWindowDays],
+    [
+      APP_SETTING_KEYS.AUTO_FEATURED_LAST_RECALCULATED_AT,
+      settings.autoFeaturedLastRecalculatedAt || "",
+    ],
     [APP_SETTING_KEYS.DEFAULT_MODEL_OVERRIDE, settings.defaultModelOverride],
     [APP_SETTING_KEYS.DISCOVERY_PAGE_SIZE, settings.discoveryPageSize],
     [APP_SETTING_KEYS.ADS_ENABLED, settings.adsEnabled],

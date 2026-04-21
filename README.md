@@ -4,6 +4,7 @@ StylePort is a production-grade multi-translator discovery platform with:
 - public translator discovery + translator runtime pages
 - secure admin dashboard (CRUD for translators/categories/requests/ads/settings)
 - OpenAI translation + AI draft generation
+- translator page quick-share to Pinterest with **pre-generated stored pin images per translator**
 - quota protection + emergency shutdown + alert email flow
 - request intake with captcha + anti-spam controls
 
@@ -206,6 +207,31 @@ npm run prisma:seed
 - Standard API no-store response headers.
 - Structured server logging for critical failures and external integration errors.
 - Proxy-based route protection for `/admin/**` and `/login`.
+
+---
+
+## Pinterest Sharing
+
+- Translator pages include a **Share on Pinterest** action.
+- Pinterest intent uses:
+  - translator page URL
+  - stored pre-generated image at `/generated/pins/...`
+  - translator summary text
+- Make sure `APP_BASE_URL` (or `NEXTAUTH_URL`) is set correctly in production so share URLs resolve to the public domain.
+- Pin images are generated server-side when translators are created/updated and can be manually regenerated from admin translator edit/list screens.
+
+## Auto-Featured Translators
+
+- StylePort can auto-assign the top 3 featured translators from performance analytics.
+- Ranking logic:
+  1. highest successful translation usage count (selected window)
+  2. highest recent success count (last 7 days)
+  3. highest token usage as tiebreaker
+- Configure in **Admin → Settings**:
+  - `Auto-assign top 3 featured translators`
+  - ranking window days
+  - manual `Recalculate now`
+- When auto-featured is enabled, featured slots are managed automatically and manual featured toggles are informational only.
 
 ---
 
