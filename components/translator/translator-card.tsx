@@ -5,7 +5,7 @@ import { ArrowRightLeft, Copy, Loader2, RefreshCcw, Sparkles, Square, Trash2, Vo
 
 import { useAutoResizeTextarea } from "@/hooks/use-auto-resize";
 import { useLocalStorage } from "@/hooks/use-local-storage";
-import { MAX_INPUT_CHARS, TRANSLATE_TIMEOUT_MS } from "@/lib/constants";
+import { MAX_INPUT_CHARS } from "@/lib/constants";
 import type { PublicTranslator, TranslateResponse } from "@/lib/types";
 import { ModeSelector } from "@/components/translator/mode-selector";
 import { useToast } from "@/components/providers/toast-provider";
@@ -76,23 +76,19 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
     setError(null);
     setIsLoading(true);
 
-    let timeoutId: number | null = null;
     try {
-      const controller = new AbortController();
-      timeoutId = window.setTimeout(() => controller.abort(), TRANSLATE_TIMEOUT_MS);
-
       const response = await fetch("/api/translate", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        signal: controller.signal,
         body: JSON.stringify({
           text: inputText,
           translatorSlug: translator.slug,
           modeKey: translator.showModeSelector ? modeKey : undefined,
         }),
       });
+
       const payload = (await response.json()) as TranslateResponse;
 
       if (!response.ok || !payload.ok) {
@@ -101,16 +97,9 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
       }
 
       setOutputText(payload.result);
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") {
-        setError("Request timed out. Please try again in a few seconds.");
-      } else {
-        setError("We couldn't refine that text just now.");
-      }
+    } catch {
+      setError("We couldn't refine that text just now.");
     } finally {
-      if (timeoutId !== null) {
-        window.clearTimeout(timeoutId);
-      }
       setIsLoading(false);
     }
   }

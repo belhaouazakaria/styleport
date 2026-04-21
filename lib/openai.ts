@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 
-import { DEFAULT_MODEL, TRANSLATE_TIMEOUT_MS } from "@/lib/constants";
+import { DEFAULT_MODEL } from "@/lib/constants";
 import { getServerEnv } from "@/lib/env";
 import { logError } from "@/lib/logger";
 import { toPlainText } from "@/lib/utils";
@@ -52,25 +52,6 @@ function extractUsage(response: OpenAI.Responses.Response) {
   };
 }
 
-async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
-  let timer: NodeJS.Timeout | null = null;
-
-  try {
-    return await new Promise<T>((resolve, reject) => {
-      timer = setTimeout(() => {
-        reject(new Error(`${label} timed out after ${timeoutMs}ms.`));
-      }, timeoutMs);
-      timer.unref?.();
-
-      promise.then(resolve).catch(reject);
-    });
-  } finally {
-    if (timer) {
-      clearTimeout(timer);
-    }
-  }
-}
-
 async function tryGenerate(params: {
   client: OpenAI;
   model: string;
@@ -80,25 +61,21 @@ async function tryGenerate(params: {
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const temperature = attempt === 0 ? 0.7 : 0.45;
 
-    const response = await withTimeout(
-      params.client.responses.create({
-        model: params.model,
-        input: [
-          {
-            role: "system",
-            content: [{ type: "input_text", text: params.systemPrompt }],
-          },
-          {
-            role: "user",
-            content: [{ type: "input_text", text: params.userPrompt }],
-          },
-        ],
-        temperature,
-        max_output_tokens: 1000,
-      }),
-      TRANSLATE_TIMEOUT_MS,
-      "OpenAI response",
-    );
+    const response = await params.client.responses.create({
+      model: params.model,
+      input: [
+        {
+          role: "system",
+          content: [{ type: "input_text", text: params.systemPrompt }],
+        },
+        {
+          role: "user",
+          content: [{ type: "input_text", text: params.userPrompt }],
+        },
+      ],
+      temperature,
+      max_output_tokens: 1000,
+    });
 
     const result = toPlainText(extractTextFromResponse(response));
     if (result) {
