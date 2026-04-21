@@ -323,6 +323,15 @@ export function TranslatorForm({
       });
       return;
     }
+    if (!result.shareImagePath) {
+      toast({
+        title: "Regeneration failed",
+        description:
+          "Share image path is missing. Check SHARE_IMAGE_STORAGE_DIR and server write permissions.",
+        variant: "error",
+      });
+      return;
+    }
 
     setShareImagePath(result.shareImagePath || null);
     setShareImageUpdatedAt(result.shareImageUpdatedAt || null);

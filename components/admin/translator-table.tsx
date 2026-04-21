@@ -21,6 +21,18 @@ type ConfirmState =
   | { type: "hard-delete"; id: string }
   | null;
 
+function getErrorMessage(payload: Record<string, unknown> | null) {
+  const maybeError = payload?.error;
+  if (maybeError && typeof maybeError === "object" && "message" in maybeError) {
+    const message = (maybeError as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim()) {
+      return message;
+    }
+  }
+
+  return "Please try again.";
+}
+
 export function TranslatorTable({ translators }: TranslatorTableProps) {
   const router = useRouter();
   const { toast } = useToast();
@@ -32,34 +44,40 @@ export function TranslatorTable({ translators }: TranslatorTableProps) {
     [confirm, translators],
   );
 
-  async function runAction(id: string, action: () => Promise<Response>) {
+  async function runAction(
+    id: string,
+    action: () => Promise<Response>,
+  ): Promise<{ ok: boolean; payload: Record<string, unknown> | null }> {
     setBusyId(id);
     try {
       const response = await action();
-      const payload = await response.json();
+      const payload = (await response.json()) as Record<string, unknown>;
 
       if (!response.ok || !payload.ok) {
         toast({
           title: "Action failed",
-          description: payload?.error?.message || "Please try again.",
+          description: getErrorMessage(payload),
           variant: "error",
         });
-        return;
+        return { ok: false, payload };
       }
 
       router.refresh();
+      return { ok: true, payload };
     } finally {
       setBusyId(null);
     }
   }
 
   async function duplicate(id: string) {
-    await runAction(id, () =>
+    const result = await runAction(id, () =>
       fetch(`/api/admin/translators/${id}/duplicate`, {
         method: "POST",
       }),
     );
-    toast({ title: "Translator duplicated", description: "A draft copy has been created." });
+    if (result.ok) {
+      toast({ title: "Translator duplicated", description: "A draft copy has been created." });
+    }
   }
 
   async function toggleActive(id: string) {
@@ -73,11 +91,25 @@ export function TranslatorTable({ translators }: TranslatorTableProps) {
   }
 
   async function regenerateShareImage(id: string) {
-    await runAction(id, () =>
+    const result = await runAction(id, () =>
       fetch(`/api/admin/translators/${id}/regenerate-share-image`, {
         method: "POST",
       }),
     );
+    if (!result.ok) {
+      return;
+    }
+
+    if (typeof result.payload?.shareImagePath !== "string" || !result.payload.shareImagePath) {
+      toast({
+        title: "Regeneration failed",
+        description:
+          "Share image path is missing. Check SHARE_IMAGE_STORAGE_DIR and server write permissions.",
+        variant: "error",
+      });
+      return;
+    }
+
     toast({ title: "Share image regenerated" });
   }
 

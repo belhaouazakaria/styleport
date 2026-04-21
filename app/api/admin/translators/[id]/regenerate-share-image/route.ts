@@ -18,6 +18,13 @@ export async function POST(_: Request, context: RouteContext) {
     if (!result) {
       return apiError(404, "NOT_FOUND", "Translator not found.");
     }
+    if (!result.shareImagePath) {
+      return apiError(
+        500,
+        "BAD_REQUEST",
+        "Share image generation failed. Check SHARE_IMAGE_STORAGE_DIR path, SHARE_IMAGE_PUBLIC_PATH_PREFIX, and write permissions.",
+      );
+    }
 
     return apiOk({
       regenerated: true,
