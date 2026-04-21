@@ -1,16 +1,17 @@
 import OpenAI from "openai";
 
 import { DEFAULT_MODEL } from "@/lib/constants";
+import { getServerEnv } from "@/lib/env";
+import { logError } from "@/lib/logger";
 import { toPlainText } from "@/lib/utils";
 
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-
 function getClient(): OpenAI {
-  if (!OPENAI_API_KEY) {
+  const env = getServerEnv();
+  if (!env.OPENAI_API_KEY) {
     throw new Error("OPENAI_API_KEY is missing. Add it to your environment variables.");
   }
 
-  return new OpenAI({ apiKey: OPENAI_API_KEY });
+  return new OpenAI({ apiKey: env.OPENAI_API_KEY });
 }
 
 function extractTextFromResponse(response: OpenAI.Responses.Response): string {
@@ -99,8 +100,9 @@ export async function translateWithOpenAI(params: {
   completionTokens: number | null;
   totalTokens: number | null;
 }> {
+  const env = getServerEnv();
   const client = getClient();
-  const envModel = process.env.OPENAI_MODEL || DEFAULT_MODEL;
+  const envModel = env.OPENAI_MODEL || DEFAULT_MODEL;
   const modelCandidates = Array.from(new Set([params.model, envModel, DEFAULT_MODEL].filter(Boolean))) as string[];
 
   let lastError: unknown;
@@ -124,6 +126,12 @@ export async function translateWithOpenAI(params: {
         ...generated.usage,
       };
     } catch (error) {
+      logError(
+        "openai_translate_error",
+        "Translation attempt failed for model candidate.",
+        { model },
+        error,
+      );
       lastError = error;
     }
   }

@@ -9,6 +9,7 @@ import {
   USAGE_PROTECTION_STATE_ID,
 } from "@/lib/constants";
 import { sendEmergencyShutdownAlertEmail } from "@/lib/email-alerts";
+import { getServerEnv } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
 import type { ApiErrorCode, UsageProtectionDashboardData, UsageProtectionSettingsInput } from "@/lib/types";
 import { extractClientIp, hashIp } from "@/lib/utils";
@@ -72,18 +73,47 @@ function parseInteger(value: string | undefined, fallback: number, min = 1): num
 }
 
 function getDefaultStateValues() {
+  const env = getServerEnv();
+
   return {
-    usageProtectionEnabled: parseBoolean(process.env.USAGE_PROTECTION_ENABLED, true),
-    ipLimitPerMinute: parseInteger(process.env.IP_RATE_LIMIT_PER_MINUTE, DEFAULT_IP_LIMIT_PER_MINUTE),
-    ipLimitPerHour: parseInteger(process.env.IP_RATE_LIMIT_PER_HOUR, DEFAULT_IP_LIMIT_PER_HOUR),
-    ipLimitPerDay: parseInteger(process.env.IP_RATE_LIMIT_PER_DAY, DEFAULT_IP_LIMIT_PER_DAY),
+    usageProtectionEnabled: parseBoolean(
+      typeof env.USAGE_PROTECTION_ENABLED === "boolean"
+        ? String(env.USAGE_PROTECTION_ENABLED)
+        : process.env.USAGE_PROTECTION_ENABLED,
+      true,
+    ),
+    ipLimitPerMinute: parseInteger(
+      typeof env.IP_RATE_LIMIT_PER_MINUTE === "number"
+        ? String(env.IP_RATE_LIMIT_PER_MINUTE)
+        : process.env.IP_RATE_LIMIT_PER_MINUTE,
+      DEFAULT_IP_LIMIT_PER_MINUTE,
+    ),
+    ipLimitPerHour: parseInteger(
+      typeof env.IP_RATE_LIMIT_PER_HOUR === "number"
+        ? String(env.IP_RATE_LIMIT_PER_HOUR)
+        : process.env.IP_RATE_LIMIT_PER_HOUR,
+      DEFAULT_IP_LIMIT_PER_HOUR,
+    ),
+    ipLimitPerDay: parseInteger(
+      typeof env.IP_RATE_LIMIT_PER_DAY === "number"
+        ? String(env.IP_RATE_LIMIT_PER_DAY)
+        : process.env.IP_RATE_LIMIT_PER_DAY,
+      DEFAULT_IP_LIMIT_PER_DAY,
+    ),
     globalDailyTokenCap: parseInteger(
-      process.env.GLOBAL_DAILY_TOKEN_CAP,
+      typeof env.GLOBAL_DAILY_TOKEN_CAP === "number"
+        ? String(env.GLOBAL_DAILY_TOKEN_CAP)
+        : process.env.GLOBAL_DAILY_TOKEN_CAP,
       DEFAULT_GLOBAL_DAILY_TOKEN_CAP,
       1_000,
     ),
-    autoEmergencyShutdownEnabled: parseBoolean(process.env.AUTO_EMERGENCY_SHUTDOWN_ENABLED, true),
-    alertEmail: process.env.ALERT_ADMIN_EMAIL?.trim() || null,
+    autoEmergencyShutdownEnabled: parseBoolean(
+      typeof env.AUTO_EMERGENCY_SHUTDOWN_ENABLED === "boolean"
+        ? String(env.AUTO_EMERGENCY_SHUTDOWN_ENABLED)
+        : process.env.AUTO_EMERGENCY_SHUTDOWN_ENABLED,
+      true,
+    ),
+    alertEmail: env.ALERT_ADMIN_EMAIL?.trim() || null,
   };
 }
 

@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  validate:
+    name: Lint, Typecheck, Test, Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      APP_BASE_URL: https://translators.example.com
+      NEXTAUTH_SECRET: test_nextauth_secret_please_replace
+      NEXTAUTH_URL: https://translators.example.com
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/styleport
+      OPENAI_API_KEY: test_key
+      OPENAI_MODEL: gpt-4.1-mini
+      NEXT_PUBLIC_APP_NAME: StylePort
+      NEXT_PUBLIC_TURNSTILE_SITE_KEY: test_site_key
+      TURNSTILE_SECRET_KEY: test_turnstile_secret
+      IP_HASH_SECRET: test_ip_hash_secret_value_123456
+      ALERT_ADMIN_EMAIL: alerts@example.com
+      EMAIL_FROM: StylePort Alerts <alerts@example.com>
+      RESEND_API_KEY: test_resend_key
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prisma generate
+        run: npm run prisma:generate
+
+      - name: Validate production env contract
+        run: npm run validate:env:production
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm run test
+
+      - name: Build
+        run: npm run build

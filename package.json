@@ -5,16 +5,24 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "next start -p ${PORT:-3000}",
+    "start:hostinger": "next start -p ${PORT:-3000}",
     "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run lint && npm run typecheck && npm run test",
     "test": "vitest run",
     "test:watch": "vitest",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
+    "prisma:status": "prisma migrate status",
     "prisma:seed": "prisma db seed",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "validate:env:production": "tsx scripts/validate-production-env.ts",
+    "prepare:production": "npm run validate:env:production && npm run prisma:generate && npm run prisma:deploy && npm run build",
+    "deploy:hostinger": "sh ./scripts/hostinger-deploy.sh"
   },
+  "postinstall": "prisma generate",
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.0",
     "@prisma/client": "^6.17.1",

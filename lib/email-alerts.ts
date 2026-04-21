@@ -1,3 +1,6 @@
+import { getServerEnv } from "@/lib/env";
+import { logError, logWarn } from "@/lib/logger";
+
 const RESEND_API_URL = "https://api.resend.com/emails";
 
 export interface EmergencyAlertPayload {
@@ -107,14 +110,17 @@ function buildHtmlBody(payload: EmergencyAlertPayload): string {
 export async function sendEmergencyShutdownAlertEmail(
   payload: EmergencyAlertPayload,
 ): Promise<EmailSendResult> {
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.EMAIL_FROM;
+  const env = getServerEnv();
+  const apiKey = env.RESEND_API_KEY;
+  const from = env.EMAIL_FROM;
 
   if (!apiKey) {
+    logWarn("email_alert_missing_key", "RESEND_API_KEY is missing; alert email was not sent.");
     return { sent: false, error: "Missing RESEND_API_KEY." };
   }
 
   if (!from) {
+    logWarn("email_alert_missing_from", "EMAIL_FROM is missing; alert email was not sent.");
     return { sent: false, error: "Missing EMAIL_FROM." };
   }
 
@@ -136,6 +142,9 @@ export async function sendEmergencyShutdownAlertEmail(
 
     if (!response.ok) {
       const body = await response.text().catch(() => "");
+      logWarn("email_alert_http_error", "Resend returned a non-OK response.", {
+        status: response.status,
+      });
       return {
         sent: false,
         error: body || `Resend request failed with status ${response.status}.`,
@@ -144,6 +153,7 @@ export async function sendEmergencyShutdownAlertEmail(
 
     return { sent: true };
   } catch (error) {
+    logError("email_alert_send_error", "Unexpected error while sending shutdown alert email.", undefined, error);
     return {
       sent: false,
       error: error instanceof Error ? error.message : "Unknown email error.",

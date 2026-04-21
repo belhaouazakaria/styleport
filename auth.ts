@@ -5,6 +5,7 @@ import { Role } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 
+import { getServerEnv } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
 
 const credentialSchema = z.object({
@@ -12,12 +13,18 @@ const credentialSchema = z.object({
   password: z.string().min(8),
 });
 
+const env = getServerEnv();
+const isProduction = env.NODE_ENV === "production";
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
+  trustHost: true,
   session: {
     strategy: "jwt",
+    maxAge: 60 * 60 * 24 * 7,
   },
-  secret: process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET,
+  secret: env.NEXTAUTH_SECRET || process.env.AUTH_SECRET,
+  useSecureCookies: isProduction,
   pages: {
     signIn: "/login",
   },

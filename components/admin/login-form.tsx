@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/providers/toast-provider";
 
 export function LoginForm() {
-  const [email, setEmail] = useState("admin@example.com");
-  const [password, setPassword] = useState("ChangeMe123!");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const searchParams = useSearchParams();
@@ -54,6 +54,7 @@ export function LoginForm() {
           value={email}
           onChange={(event) => setEmail(event.target.value)}
           className="h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60"
+          placeholder="admin@yourdomain.com"
           required
         />
       </div>
@@ -68,6 +69,7 @@ export function LoginForm() {
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           className="h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60"
+          placeholder="Enter your password"
           required
         />
       </div>

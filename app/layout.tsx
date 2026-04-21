@@ -4,6 +4,7 @@ import { Cormorant_Garamond, Manrope } from "next/font/google";
 import { RequestTranslatorProvider } from "@/components/providers/request-translator-provider";
 import { ToastProvider } from "@/components/providers/toast-provider";
 import { APP_NAME, SEO_DESCRIPTION } from "@/lib/constants";
+import { getAppBaseUrl } from "@/lib/env";
 
 import "./globals.css";
 
@@ -21,7 +22,7 @@ const displayFont = Cormorant_Garamond({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://example.com"),
+  metadataBase: getAppBaseUrl(),
   title: {
     default: `${APP_NAME} | Style Translator Platform`,
     template: `%s | ${APP_NAME}`,
@@ -38,7 +39,7 @@ export const metadata: Metadata = {
     title: `${APP_NAME} | Style Translator Platform`,
     description: SEO_DESCRIPTION,
     type: "website",
-    url: "https://example.com",
+    url: getAppBaseUrl().toString(),
     siteName: APP_NAME,
     images: [
       {

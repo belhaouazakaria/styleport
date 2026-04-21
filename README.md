@@ -1,326 +1,265 @@
 # StylePort Platform
 
-StylePort is a production-ready multi-translator discovery platform.
+StylePort is a production-grade multi-translator discovery platform with:
+- public translator discovery + translator runtime pages
+- secure admin dashboard (CRUD for translators/categories/requests/ads/settings)
+- OpenAI translation + AI draft generation
+- quota protection + emergency shutdown + alert email flow
+- request intake with captcha + anti-spam controls
 
-It includes:
-- Public translator catalog with category filters, search autosuggest, featured modules, and pagination
-- Public “Request a translator” flow with anti-spam protection
-- Dynamic translator pages driven by database configuration
-- Secure admin dashboard for translators, categories, requests, settings, analytics, and monetization placements
-- Auth.js credentials auth with admin route protection
-- Prisma + PostgreSQL data layer
-- Server-side OpenAI translation pipeline with usage/cost logging
-- Server-side usage protection guardrails with emergency shutdown + alerting
+This repository is **feature-complete** and this hardening pass is focused on **deployment and operational readiness**.
 
-## Core Features
+## Production Architecture (Hostinger target)
 
-### Public Experience
-- `/` as primary discovery homepage
-- Search + autosuggest (`name`, `slug`, `description`, `category`)
-- Category chips and query-param filters (`q`, `category`, `page`)
-- Featured translators section
-- Paginated translator cards (mobile-first)
-- Translator detail pages at `/translators/[slug]`
-- Public request modal for submitting new translator ideas
-- No-results request handoff from search/autosuggest with prefilled idea
-- Server-side captcha verification and honeypot anti-spam checks
-- Simplified translator UX:
-  - two-panel layout
-  - copy action in source panel
-  - copy action in output panel
-  - speak translated output (browser TTS when supported)
-  - translate / regenerate / clear controls
-  - optional swap and optional mode selector from translator config
-  - keyboard shortcut (`Ctrl/Cmd + Enter`)
+Recommended runtime for this project:
+1. **Hostinger Node.js Web App** in hPanel
+2. **Subdomain** on existing domain (example: `translators.yourdomain.com`)
+3. **External managed PostgreSQL** (Supabase, Neon, Prisma Postgres, or equivalent)
+4. Existing app stack unchanged (Next.js + Prisma + Auth.js + OpenAI)
 
-### Admin Experience
-- `/login`, `/admin` with role-protected access
-- `/admin/translators` CRUD + duplicate + archive/unarchive + hard delete
-- `/admin/translators/ai/new` one-prompt AI translator creation flow
-- `/admin/categories` CRUD + archive/unarchive + hard delete
-- `/admin/requests` review queue with filters, status updates, AI draft generation, and create-from-draft action
-- `/admin/ads` CRUD + targeting and provider controls
-- `/admin/settings` for branding, discovery, model defaults, monetization toggles
-- `/admin/logs` and `/admin` overview analytics
+Important:
+- Do **not** host PostgreSQL inside Hostinger shared hosting.
+- Keep `DATABASE_URL` pointed at managed Postgres.
+- App features and behavior are unchanged; only infrastructure/config are hardened.
 
-### Analytics + Cost Tracking
-Each translation log captures:
-- translator, status, mode
-- input/output lengths
-- model used
-- prompt/completion/total tokens when available
-- estimated cost via centralized pricing config
-- latency and timestamp
+---
 
-### Usage Protection + Emergency Guardrails
-- Per-IP quotas enforced on translation calls only:
-  - requests per minute
-  - requests per hour
-  - requests per UTC day
-- Global daily token cap (UTC-day aggregate across all translators)
-- Automatic emergency shutdown when cap is reached (fail-closed)
-- One alert email per shutdown event via Resend
-- Admin recovery flow with manual re-enable (no automatic midnight unlock)
-- Blocked attempts logged as `TranslationStatus.BLOCKED` with reason codes:
-  - `IP_MINUTE_LIMIT`
-  - `IP_HOUR_LIMIT`
-  - `IP_DAY_LIMIT`
-  - `EMERGENCY_SHUTDOWN`
-  - `GLOBAL_TOKEN_CAP_REACHED`
+## Environment Files
 
-### Monetization Readiness
-- Ad placement model + admin management
-- Global ads on/off setting
-- Placement targeting by page/device/category
-- AdSense slot and custom snippet support
-- Reusable ad slot renderer
+### Local development
+- Use `.env.example` as template for `.env.local`.
+- Local URLs remain localhost-based.
 
-## Stack
-- Next.js 16 App Router + TypeScript
-- Tailwind CSS v4
-- Auth.js (`next-auth`) + Prisma Adapter
-- Prisma ORM + PostgreSQL
-- OpenAI Node SDK (server-side)
-- Zod validation
-- Vitest + Testing Library
+### Production (Hostinger)
+- Use `.env.production.example` as template for `.env.production`.
+- Must use your HTTPS subdomain URL (no localhost values).
 
-## Environment Variables
+### Public vs server env vars
+- Public-safe (client-exposed): `NEXT_PUBLIC_*`
+- Server-only secrets: all others (`DATABASE_URL`, `OPENAI_API_KEY`, `NEXTAUTH_SECRET`, etc.)
 
-Use `.env.example`:
+---
 
-```env
-DATABASE_URL=
-NEXTAUTH_SECRET=
-NEXTAUTH_URL=http://localhost:3000
-OPENAI_API_KEY=
-OPENAI_MODEL=gpt-4.1-mini
-NEXT_PUBLIC_APP_NAME=StylePort
-ADMIN_SEED_EMAIL=admin@example.com
-ADMIN_SEED_PASSWORD=ChangeMe123!
-NEXT_PUBLIC_TURNSTILE_SITE_KEY=
-TURNSTILE_SECRET_KEY=
-USAGE_PROTECTION_ENABLED=true
-IP_RATE_LIMIT_PER_MINUTE=5
-IP_RATE_LIMIT_PER_HOUR=50
-IP_RATE_LIMIT_PER_DAY=200
-GLOBAL_DAILY_TOKEN_CAP=200000
-AUTO_EMERGENCY_SHUTDOWN_ENABLED=true
-TRUST_PROXY_HEADERS=true
-IP_HASH_SECRET=
-ALERT_ADMIN_EMAIL=
-EMAIL_FROM=
-RESEND_API_KEY=
-```
+## `.env.production` Setup (Required)
 
-Notes:
-- Keep `OPENAI_API_KEY` server-side only.
-- Set a strong `NEXTAUTH_SECRET`.
-- Change seeded admin credentials after first login.
-- For production request submissions, configure both Turnstile keys.
-- Set `IP_HASH_SECRET` in production so stored IP identifiers are salted hashes.
-- Set `EMAIL_FROM` and `RESEND_API_KEY` to enable shutdown alert delivery.
+Copy `.env.production.example` to `.env.production` and fill values:
 
-## Local Setup
+- `APP_BASE_URL=https://translators.yourdomain.com`
+- `NEXTAUTH_URL=https://translators.yourdomain.com`
+- `NEXTAUTH_SECRET=<strong-random-secret>`
+- `DATABASE_URL=<managed-postgres-connection>`
+- `OPENAI_API_KEY=<openai-key>`
+- `OPENAI_MODEL=<model>`
+- `NEXT_PUBLIC_APP_NAME=StylePort`
+- `NEXT_PUBLIC_TURNSTILE_SITE_KEY=<turnstile-site-key>`
+- `TURNSTILE_SECRET_KEY=<turnstile-secret>`
+- `IP_HASH_SECRET=<random-secret>`
+- `ALERT_ADMIN_EMAIL=<ops-email>`
+- `EMAIL_FROM=<resend-from-address>`
+- `RESEND_API_KEY=<resend-key>`
+
+Production validation is fail-fast for critical vars, so missing required values will stop startup.
+
+---
+
+## Scripts
+
+Core scripts:
+- `npm run dev` — local development
+- `npm run build` — production build
+- `npm run start` — production start (`next start -p ${PORT:-3000}`)
+- `npm run check` — lint + typecheck + tests
+- `npm run prisma:generate`
+- `npm run prisma:migrate` (dev)
+- `npm run prisma:deploy` (production-safe migration apply)
+- `npm run prisma:seed`
+- `npm run prisma:status`
+- `npm run validate:env:production`
+- `npm run deploy:hostinger` (helper build pipeline script)
+
+---
+
+## Local Development
 
 1. Install:
-
 ```bash
-npm install
+npm ci
 ```
 
-2. Generate Prisma client:
+2. Create local env:
+```bash
+cp .env.example .env.local
+```
 
+3. Generate Prisma client:
 ```bash
 npm run prisma:generate
 ```
 
-3. Run migrations:
-
+4. Run migrations:
 ```bash
 npm run prisma:migrate
 ```
 
-4. Seed database:
-
+5. Seed:
 ```bash
 npm run prisma:seed
 ```
 
-5. Start dev server:
-
+6. Start dev:
 ```bash
 npm run dev
 ```
 
-App: [http://localhost:3000](http://localhost:3000)
+---
 
-## Admin Bootstrap
-- Email: `admin@example.com` (or `ADMIN_SEED_EMAIL`)
-- Password: `ChangeMe123!` (or `ADMIN_SEED_PASSWORD`)
-- Login URL: `/login`
+## Hostinger Deployment Guide (Node.js Web App + Subdomain)
 
-## Prisma Models
-- `User`, `Account`, `Session`, `VerificationToken`
-- `Translator`, `TranslationMode`, `TranslatorExample`
-- `Category`, `TranslatorCategory`
-- `TranslationLog`
-- `TranslatorRequest`
-- `AdPlacement`
-- `AppSetting`
-- `UsageProtectionState`
-- `UsageProtectionEvent`
+### 1. Prepare managed Postgres
+1. Create a managed PostgreSQL project (Supabase/Neon/etc.).
+2. Copy the SSL-enabled `DATABASE_URL`.
+3. Verify connectivity from your app environment.
 
-## API Contracts
+### 2. Create subdomain
+1. In Hostinger hPanel, open your existing domain.
+2. Create subdomain, e.g. `translators.yourdomain.com`.
+3. Point subdomain to your Node.js app location in hPanel.
 
-### `POST /api/translate`
-
-Request:
-
-```json
-{
-  "text": "Rewrite this sentence",
-  "translatorSlug": "regal-rewrite",
-  "modeKey": "classic"
-}
-```
-
-### `POST /api/translator-requests`
-
-Request:
-
-```json
-{
-  "requestedName": "Startup Pitch Polisher",
-  "description": "Rewrite rough startup pitches into concise investor-ready language.",
-  "exampleInput": "we build ai for stores",
-  "requesterEmail": "founder@example.com",
-  "honeypot": "",
-  "turnstileToken": "token"
-}
-```
-
-### `POST /api/admin/translators/ai-draft`
-
-Request:
-
-```json
-{
-  "brief": "A translator that turns rough support replies into calm and professional responses while preserving intent."
-}
-```
-
-Success:
-
-```json
-{
-  "ok": true,
-  "requestId": "..."
-}
-```
-
-Success:
-
-```json
-{
-  "ok": true,
-  "result": "..."
-}
-```
-
-Error:
-
-```json
-{
-  "ok": false,
-  "error": {
-    "code": "VALIDATION_ERROR|TOO_LONG|RATE_LIMITED|NOT_FOUND|INACTIVE_TRANSLATOR|UPSTREAM_ERROR|BAD_REQUEST|MODEL_UNAVAILABLE",
-    "message": "..."
-  }
-}
-```
-
-Protection-related error responses:
-- `RATE_LIMITED` with user-facing minute/hour/day limit messages
-- `TRANSLATION_UNAVAILABLE` when emergency shutdown is active
-
-### Admin APIs
-- `GET/POST /api/admin/translators`
-- `GET/PATCH/DELETE /api/admin/translators/[id]`
-- `POST /api/admin/translators/[id]/duplicate`
-- `POST /api/admin/translators/[id]/toggle-active`
-- `POST /api/admin/translators/ai-draft`
-- `GET/POST /api/admin/categories`
-- `GET/PATCH/DELETE /api/admin/categories/[id]`
-- `GET /api/admin/requests`
-- `GET/PATCH /api/admin/requests/[id]`
-- `POST /api/admin/requests/[id]/generate-draft`
-- `POST /api/admin/requests/[id]/create-translator`
-- `GET/POST /api/admin/ads`
-- `GET/PATCH/DELETE /api/admin/ads/[id]`
-- `GET /api/admin/models`
-- `GET /api/admin/analytics`
-- `GET/PUT /api/admin/settings`
-- `GET/PUT /api/admin/usage-protection`
-- `POST /api/admin/usage-protection/re-enable`
-
-All admin endpoints require authenticated `ADMIN` role.
-
-## Scripts
-- `npm run dev`
-- `npm run build`
-- `npm run start`
-- `npm run lint`
-- `npm run test`
-- `npm run prisma:generate`
-- `npm run prisma:migrate`
-- `npm run prisma:deploy`
-- `npm run prisma:seed`
-- `npm run prisma:studio`
-
-## Deployment
-
-### Vercel + Postgres (Neon/Supabase/Vercel Postgres)
-1. Provision PostgreSQL and set `DATABASE_URL`.
-2. Set all environment variables.
-3. Run deploy migrations:
-
+### 3. Create Node.js Web App in hPanel
+1. Select Node.js app (Node 20+ recommended).
+2. Set app root to this project.
+3. Set startup command to:
 ```bash
+npm run start:hostinger
+```
+4. Ensure build step is run before startup.
+
+### 4. Configure production env in Hostinger
+Set all variables from `.env.production.example` in hPanel environment settings.
+
+Critical for auth/subdomain:
+- `APP_BASE_URL=https://translators.yourdomain.com`
+- `NEXTAUTH_URL=https://translators.yourdomain.com`
+- `NEXTAUTH_SECRET=<strong random value>`
+
+### 5. Deploy sequence
+Run this order on production host:
+```bash
+npm ci
+npm run validate:env:production
+npm run prisma:generate
 npm run prisma:deploy
+npm run build
+```
+Then (or via app restart in hPanel):
+```bash
+npm run start:hostinger
 ```
 
-4. Seed once:
+If your Hostinger runtime uses restart files, run:
+```bash
+touch tmp/restart.txt
+```
 
+### 6. Post-deploy verification
+Check:
+1. `/api/healthz` returns ok
+2. `/api/readyz` returns ready
+3. public homepage `/` loads and search works
+4. `/translators/[slug]` translates successfully
+5. `/login` and `/admin` auth flow works
+6. request form submission + captcha works
+7. usage protection dashboard reflects expected state
+
+---
+
+## Prisma Production Safety
+
+- Use `npm run prisma:deploy` in production (not `prisma migrate dev`).
+- Run migrations before app startup.
+- Seed only when explicitly needed:
 ```bash
 npm run prisma:seed
 ```
+- Keep backups/snapshots enabled at your DB provider.
 
-5. Deploy app.
+---
 
-## Security Notes
-- Server-side OpenAI calls only
-- Auth.js middleware + server permission checks
-- Password hashing with bcrypt
-- Zod validation on all mutation endpoints
-- Archive-first deletion flow + explicit hard delete
-- Translation abuse protection is server-side only (no captcha on translate flow)
-- IP usage tracking is stored as salted hash (`ipHash`) rather than raw address
+## Auth and Subdomain Hardening Notes
 
-## Usage Protection Operations
+- Auth is configured for trusted host deployments (`trustHost`) and secure cookies in production.
+- Use HTTPS in production for proper secure session behavior.
+- `NEXTAUTH_URL` must exactly match your production subdomain URL.
+- Admin and login routes are `noindex` to prevent indexing.
 
-### Daily Counter Policy
-- Quotas and token cap use UTC-day boundaries.
-- Emergency state does not auto-clear at day rollover.
-- Admin must manually re-enable translation from `/admin/usage-protection`.
+---
 
-### Alert Flow
-1. Global token cap is reached.
-2. Platform enters emergency shutdown (`translationsEnabled=false`).
-3. `UsageProtectionEvent` is created.
-4. Alert email is sent once for that event (deduped by `alertSentAt`).
+## Security and Runtime Hardening Included
 
-### Recovery
-1. Open `/admin/usage-protection`.
-2. Review reason, counters, and alert status.
-3. Click `Manually Re-enable`.
-4. System logs a `MANUAL_REENABLE` event and resumes translation.
-# styleport
+- Security headers via Next config:
+  - CSP
+  - HSTS
+  - X-Frame-Options
+  - X-Content-Type-Options
+  - Referrer-Policy
+  - Permissions-Policy
+- Standard API no-store response headers.
+- Structured server logging for critical failures and external integration errors.
+- Proxy-based route protection for `/admin/**` and `/login`.
+
+---
+
+## Health Endpoints
+
+- `GET /api/healthz` — liveness (process-level)
+- `GET /api/readyz` — readiness (database connectivity)
+
+Use these for deployment checks and uptime monitors.
+
+---
+
+## CI/CD
+
+GitHub Actions included:
+- `.github/workflows/ci.yml`: lint, typecheck, test, build
+- `.github/workflows/deploy-hostinger.yml`: validated deployment scaffold using SSH + migration + build
+
+Required GitHub secrets for deploy workflow:
+- `HOSTINGER_SSH_HOST`
+- `HOSTINGER_SSH_USER`
+- `HOSTINGER_SSH_PRIVATE_KEY`
+- `HOSTINGER_SSH_PORT`
+- `HOSTINGER_APP_PATH`
+
+---
+
+## Troubleshooting (Hostinger + Managed DB)
+
+### App starts but auth fails
+- Check `NEXTAUTH_URL` exactly matches production URL.
+- Check `NEXTAUTH_SECRET` is present and stable.
+- Ensure HTTPS is active on subdomain.
+
+### Prisma connection errors
+- Verify `DATABASE_URL` with SSL options.
+- Confirm managed DB network rules allow Hostinger egress.
+- Run `npm run prisma:status` and `npm run prisma:deploy`.
+
+### Translation unavailable
+- Check usage-protection state in `/admin/usage-protection`.
+- Review `GLOBAL_DAILY_TOKEN_CAP` and emergency flags.
+- Confirm `OPENAI_API_KEY` is valid.
+
+### Request form blocked
+- Validate Turnstile site/secret pair.
+- Confirm production domain is registered in Turnstile config.
+
+### Alert emails not sent
+- Verify `RESEND_API_KEY`, `EMAIL_FROM`, `ALERT_ADMIN_EMAIL`.
+- Check server logs for structured `email_alert_*` events.
+
+---
+
+## Operational Note
+
+This pass keeps all existing business logic and UX behavior intact and focuses on production deployment hardening only.

@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 
 import { DEFAULT_MODEL, MODEL_LIST_FALLBACK } from "@/lib/constants";
+import { getServerEnv } from "@/lib/env";
 
 const CACHE_TTL_MS = 5 * 60_000;
 
@@ -10,7 +11,8 @@ let cache: {
 } | null = null;
 
 function getClient() {
-  const apiKey = process.env.OPENAI_API_KEY;
+  const env = getServerEnv();
+  const apiKey = env.OPENAI_API_KEY;
   if (!apiKey) {
     return null;
   }

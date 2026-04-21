@@ -5,6 +5,7 @@ import { translateWithOpenAI } from "@/lib/openai";
 import { estimateCost } from "@/lib/pricing";
 import { validateTranslateInput } from "@/lib/validators";
 import { apiError, apiOk } from "@/lib/api-response";
+import { logError, logWarn } from "@/lib/logger";
 import {
   createTranslationLog,
   getDefaultRuntimeTranslator,
@@ -27,11 +28,16 @@ export async function POST(request: Request) {
   try {
     payload = await request.json();
   } catch {
+    logWarn("translate_bad_json", "Translate endpoint received invalid JSON payload.");
     return apiError(400, "BAD_REQUEST", "Invalid JSON payload.");
   }
 
   const validation = validateTranslateInput(payload);
   if (!validation.ok) {
+    logWarn("translate_validation_failed", "Translate request failed validation.", {
+      status: validation.status,
+      code: validation.error.code,
+    });
     return apiError(validation.status, validation.error.code, validation.error.message);
   }
 
@@ -52,6 +58,9 @@ export async function POST(request: Request) {
       }
     }
 
+    logWarn("translate_translator_not_found", "Requested translator could not be resolved.", {
+      requestedSlug,
+    });
     return apiError(404, "NOT_FOUND", "Translator not found.");
   }
 
@@ -69,6 +78,11 @@ export async function POST(request: Request) {
   });
 
   if (precheck.blocked) {
+    logWarn("translate_blocked", "Translate request blocked by usage protection guard.", {
+      reason: precheck.reason,
+      ipHash: identity.ipHash,
+      translatorId: translator.id,
+    });
     try {
       await createTranslationLog({
         translatorId: translator.id,
@@ -135,6 +149,10 @@ export async function POST(request: Request) {
 
     return apiOk({ result: generated.text });
   } catch {
+    logError("translate_upstream_failure", "Translation generation failed in upstream call.", {
+      translatorId: translator.id,
+      requestedSlug,
+    });
     try {
       await createTranslationLog({
         translatorId: translator.id,

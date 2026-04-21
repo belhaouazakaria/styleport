@@ -1,0 +1,65 @@
+name: Deploy to Hostinger
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Production Deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate project
+        env:
+          APP_BASE_URL: https://translators.example.com
+          NEXTAUTH_SECRET: test_nextauth_secret_please_replace
+          NEXTAUTH_URL: https://translators.example.com
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/styleport
+          OPENAI_API_KEY: test_key
+          OPENAI_MODEL: gpt-4.1-mini
+          NEXT_PUBLIC_APP_NAME: StylePort
+          NEXT_PUBLIC_TURNSTILE_SITE_KEY: test_site_key
+          TURNSTILE_SECRET_KEY: test_turnstile_secret
+          IP_HASH_SECRET: test_ip_hash_secret_value_123456
+          ALERT_ADMIN_EMAIL: alerts@example.com
+          EMAIL_FROM: StylePort Alerts <alerts@example.com>
+          RESEND_API_KEY: test_resend_key
+        run: npm run validate:env:production && npm run check && npm run build
+
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.HOSTINGER_SSH_HOST }}
+          username: ${{ secrets.HOSTINGER_SSH_USER }}
+          key: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
+          port: ${{ secrets.HOSTINGER_SSH_PORT }}
+          script: |
+            set -eu
+            cd ${{ secrets.HOSTINGER_APP_PATH }}
+            git fetch --all
+            git reset --hard origin/main
+            npm ci
+            npm run validate:env:production
+            npm run prisma:generate
+            npm run prisma:deploy
+            npm run build
+            if [ -f tmp/restart.txt ]; then
+              touch tmp/restart.txt
+            fi
