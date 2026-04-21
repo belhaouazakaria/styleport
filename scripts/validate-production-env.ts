@@ -23,4 +23,46 @@ if (missing.length) {
   process.exit(1);
 }
 
+const baseUrl = env.APP_BASE_URL || env.NEXTAUTH_URL;
+if (baseUrl) {
+  try {
+    const parsed = new URL(baseUrl);
+    if (!["http:", "https:"].includes(parsed.protocol)) {
+      throw new Error("Unsupported protocol");
+    }
+  } catch {
+    console.error("[env] APP_BASE_URL/NEXTAUTH_URL must be a valid absolute URL.");
+    process.exit(1);
+  }
+}
+
+if (env.ALERT_ADMIN_EMAIL) {
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailPattern.test(env.ALERT_ADMIN_EMAIL)) {
+    console.error("[env] ALERT_ADMIN_EMAIL must be a valid email address.");
+    process.exit(1);
+  }
+}
+
+if (env.EMAIL_FROM) {
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const fromPattern = /^.+<\s*[^\s@]+@[^\s@]+\.[^\s@]+\s*>$/;
+  if (!emailPattern.test(env.EMAIL_FROM) && !fromPattern.test(env.EMAIL_FROM)) {
+    console.error(
+      "[env] EMAIL_FROM must be a valid email or display format like 'StylePort Alerts <alerts@yourdomain.com>'.",
+    );
+    process.exit(1);
+  }
+}
+
+if (env.NEXTAUTH_SECRET && env.NEXTAUTH_SECRET.length < 24) {
+  console.error("[env] NEXTAUTH_SECRET must be at least 24 characters.");
+  process.exit(1);
+}
+
+if (env.IP_HASH_SECRET && env.IP_HASH_SECRET.length < 16) {
+  console.error("[env] IP_HASH_SECRET must be at least 16 characters.");
+  process.exit(1);
+}
+
 console.info("[env] Production environment validation passed.");
