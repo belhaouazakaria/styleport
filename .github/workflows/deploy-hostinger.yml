@@ -43,16 +43,36 @@ jobs:
           RESEND_API_KEY: test_resend_key
         run: npm run validate:env:production && npm run check && npm run build
 
+      - name: Validate deploy configuration
+        env:
+          SSH_HOST: ${{ secrets.HOSTINGER_SSH_HOST || vars.HOSTINGER_SSH_HOST }}
+          SSH_USER: ${{ secrets.HOSTINGER_SSH_USER || vars.HOSTINGER_SSH_USER }}
+          SSH_PORT: ${{ secrets.HOSTINGER_SSH_PORT || vars.HOSTINGER_SSH_PORT }}
+          SSH_KEY: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
+          APP_PATH: ${{ secrets.HOSTINGER_APP_PATH || vars.HOSTINGER_APP_PATH }}
+        run: |
+          set -eu
+          missing=""
+          [ -n "$SSH_HOST" ] || missing="$missing HOSTINGER_SSH_HOST"
+          [ -n "$SSH_USER" ] || missing="$missing HOSTINGER_SSH_USER"
+          [ -n "$SSH_PORT" ] || missing="$missing HOSTINGER_SSH_PORT"
+          [ -n "$SSH_KEY" ] || missing="$missing HOSTINGER_SSH_PRIVATE_KEY"
+          [ -n "$APP_PATH" ] || missing="$missing HOSTINGER_APP_PATH"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing deploy configuration:$missing"
+            exit 1
+          fi
+
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.HOSTINGER_SSH_HOST }}
-          username: ${{ secrets.HOSTINGER_SSH_USER }}
+          host: ${{ secrets.HOSTINGER_SSH_HOST || vars.HOSTINGER_SSH_HOST }}
+          username: ${{ secrets.HOSTINGER_SSH_USER || vars.HOSTINGER_SSH_USER }}
           key: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
-          port: ${{ secrets.HOSTINGER_SSH_PORT }}
+          port: ${{ secrets.HOSTINGER_SSH_PORT || vars.HOSTINGER_SSH_PORT }}
           script: |
             set -eu
-            cd ${{ secrets.HOSTINGER_APP_PATH }}
+            cd ${{ secrets.HOSTINGER_APP_PATH || vars.HOSTINGER_APP_PATH }}
             git fetch --all
             git reset --hard origin/main
             npm ci
