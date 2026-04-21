@@ -143,6 +143,11 @@ Critical for auth/subdomain:
 - `NEXTAUTH_URL=https://translators.yourdomain.com`
 - `NEXTAUTH_SECRET=<strong random value>`
 
+If Hostinger auto-detects your app as `Other` and leaves build settings as `null`, set:
+- Output directory: `.next`
+- Entry file: `server.js`
+- Startup command: `npm run start:hostinger`
+
 ### 5. Deploy sequence
 Run this order on production host:
 ```bash
