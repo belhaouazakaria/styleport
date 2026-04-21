@@ -175,10 +175,11 @@ async function renderShareImageBuffer(snapshot: ShareImageSnapshot, platformName
               fontSize: 128,
               lineHeight: 1.04,
               fontWeight: 900,
+              fontFamily: '"Arial Black", Impact, "Segoe UI Black", sans-serif',
               letterSpacing: -1.2,
               textAlign: "center",
               textTransform: "capitalize",
-              textShadow: `-4px -4px 0 ${theme.border}, 4px -4px 0 ${theme.border}, -4px 4px 0 ${theme.border}, 4px 4px 0 ${theme.border}, 0 6px 0 rgba(16,18,20,0.24)`,
+              textShadow: `-6px -6px 0 ${theme.border}, 6px -6px 0 ${theme.border}, -6px 6px 0 ${theme.border}, 6px 6px 0 ${theme.border}, -3px 0 0 ${theme.border}, 3px 0 0 ${theme.border}, 0 -3px 0 ${theme.border}, 0 3px 0 ${theme.border}, 0 8px 0 rgba(16,18,20,0.24)`,
             }}
           >
             {ctaText}
