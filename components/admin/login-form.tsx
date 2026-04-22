@@ -1,58 +1,32 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { signIn } from "next-auth/react";
+import { useActionState } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/components/providers/toast-provider";
+import { loginAction } from "@/lib/actions/auth-actions";
+
+const initialLoginActionState = {
+  error: null as string | null,
+};
 
 export function LoginForm() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [state, formAction, isPending] = useActionState(loginAction, initialLoginActionState);
   const searchParams = useSearchParams();
-  const router = useRouter();
-  const { toast } = useToast();
-
   const callbackUrl = searchParams.get("callbackUrl") || "/admin";
 
-  async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setLoading(true);
-    setError(null);
-
-    const result = await signIn("credentials", {
-      email,
-      password,
-      redirect: false,
-      callbackUrl,
-    });
-
-    setLoading(false);
-
-    if (!result || result.error) {
-      setError("Invalid credentials. Please try again.");
-      return;
-    }
-
-    toast({ title: "Welcome back", description: "Redirecting to admin dashboard." });
-    router.push(result.url || callbackUrl);
-    router.refresh();
-  }
-
   return (
-    <form onSubmit={onSubmit} className="space-y-4">
+    <form action={formAction} className="space-y-4">
+      <input type="hidden" name="callbackUrl" value={callbackUrl} />
+
       <div>
         <label htmlFor="email" className="mb-1 block text-sm font-medium text-muted-ink">
           Email
         </label>
         <input
           id="email"
+          name="email"
           type="email"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
           className="h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60"
           placeholder="admin@yourdomain.com"
           required
@@ -65,19 +39,18 @@ export function LoginForm() {
         </label>
         <input
           id="password"
+          name="password"
           type="password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
           className="h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60"
           placeholder="Enter your password"
           required
         />
       </div>
 
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {state.error ? <p className="text-sm text-red-600">{state.error}</p> : null}
 
-      <Button type="submit" disabled={loading} className="w-full">
-        {loading ? "Signing in..." : "Sign in"}
+      <Button type="submit" disabled={isPending} className="w-full">
+        {isPending ? "Signing in..." : "Connect"}
       </Button>
     </form>
   );
