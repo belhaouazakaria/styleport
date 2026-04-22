@@ -46,45 +46,48 @@ load_profile_if_exists() {
 
 prepend_path_if_dir_exists() {
   local dir_path="$1"
-  if [[ -d "$dir_path" ]]; then
+  if [ -d "$dir_path" ]; then
     case ":$PATH:" in
       *":$dir_path:"*) return 0 ;;
     esac
     PATH="$dir_path:$PATH"
     export PATH
     log "Added PATH candidate: $dir_path"
-  fi
-}
-
-prepend_paths_from_glob() {
-  local pattern="$1"
-  local matched_dir
-  local -a matched_dirs=()
-
-  # compgen returns non-zero when nothing matches; this is expected for optional candidates.
-  while IFS= read -r matched_dir; do
-    matched_dirs+=("$matched_dir")
-  done < <(compgen -G "$pattern" || true)
-
-  if [[ ${#matched_dirs[@]} -eq 0 ]]; then
-    log "No PATH candidates matched optional pattern: $pattern"
     return 0
   fi
-
-  for matched_dir in "${matched_dirs[@]}"; do
-    prepend_path_if_dir_exists "$matched_dir"
-  done
+  log "Skipping missing PATH candidate: $dir_path"
 }
 
 bootstrap_runtime_path_candidates() {
-  prepend_path_if_dir_exists "/usr/local/bin"
-  prepend_path_if_dir_exists "/usr/bin"
-  prepend_path_if_dir_exists "/bin"
-  prepend_path_if_dir_exists "$HOME/bin"
-  prepend_path_if_dir_exists "$HOME/.local/bin"
-  prepend_path_if_dir_exists "$HOME/.npm-global/bin"
-  prepend_paths_from_glob "/opt/alt/alt-nodejs*/root/usr/bin"
-  prepend_paths_from_glob "/opt/nodejs*/bin"
+  local candidate
+
+  for candidate in \
+    "/usr/local/bin" \
+    "/usr/bin" \
+    "/bin" \
+    "$HOME/bin" \
+    "$HOME/.local/bin" \
+    "$HOME/.npm-global/bin"; do
+    prepend_path_if_dir_exists "$candidate"
+  done
+
+  # Hostinger/cPanel alt-node locations (explicit, shell-portable checks).
+  for candidate in \
+    "/opt/alt/alt-nodejs18/root/usr/bin" \
+    "/opt/alt/alt-nodejs20/root/usr/bin" \
+    "/opt/alt/alt-nodejs22/root/usr/bin" \
+    "/opt/alt/alt-nodejs24/root/usr/bin"; do
+    prepend_path_if_dir_exists "$candidate"
+  done
+
+  # Optional common alternatives.
+  for candidate in \
+    "/opt/nodejs18/bin" \
+    "/opt/nodejs20/bin" \
+    "/opt/nodejs22/bin" \
+    "/opt/nodejs24/bin"; do
+    prepend_path_if_dir_exists "$candidate"
+  done
 }
 
 print_runtime_diagnostics() {
@@ -150,17 +153,13 @@ validate_environment() {
   log "App path: $APP_PATH"
   print_runtime_diagnostics
 
-  if command -v node >/dev/null 2>&1; then
-    log "node version: $(node -v 2>/dev/null || echo unknown)"
-  else
-    warn "node not found in this non-interactive shell. Deploy script can continue without local node execution."
-  fi
+  ensure_command_exists node
+  ensure_command_exists npm
 
-  if command -v npm >/dev/null 2>&1; then
-    log "npm version: $(npm -v 2>/dev/null || echo unknown)"
-  else
-    warn "npm not found in this non-interactive shell. Deploy script can continue without npm."
-  fi
+  log "which node: $(command -v node)"
+  log "which npm: $(command -v npm)"
+  log "node version: $(node -v 2>/dev/null || echo unknown)"
+  log "npm version: $(npm -v 2>/dev/null || echo unknown)"
 }
 
 validate_archive() {
