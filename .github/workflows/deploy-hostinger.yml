@@ -61,6 +61,12 @@ jobs:
       - name: Prune dev dependencies for production release
         run: npm prune --omit=dev --ignore-scripts
 
+      - name: Verify Prisma runtime engines for release
+        run: |
+          set -eu
+          test -f node_modules/.prisma/client/libquery_engine-debian-openssl-1.1.x.so.node
+          test -f node_modules/.prisma/client/libquery_engine-debian-openssl-3.0.x.so.node
+
       - name: Create deploy bundle
         run: |
           set -eu
