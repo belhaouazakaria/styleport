@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { access, mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -137,8 +137,13 @@ function buildShareImageHash(snapshot: ShareImageSnapshot, platformName: string)
   return createHash("sha256").update(payload).digest("hex").slice(0, 16);
 }
 
-function buildPublicPath(slug: string, hash: string) {
-  return `${publicPathPrefix}/${slug}-${hash}.png`;
+function buildPublicPath(slug: string, hash: string, version?: string) {
+  const suffix = version ? `-${version}` : "";
+  return `${publicPathPrefix}/${slug}-${hash}${suffix}.png`;
+}
+
+function createForcedRegenerationVersion() {
+  return `${Date.now().toString(36)}-${randomBytes(3).toString("hex")}`;
 }
 
 function hashToIndex(value: string, modulo: number) {
@@ -520,8 +525,8 @@ async function renderShareImageBuffer(snapshot: ShareImageSnapshot, platformName
   return Buffer.from(arrayBuffer);
 }
 
-async function removeOldShareImageIfNeeded(oldPublicPath: string | null, nextPublicPath: string) {
-  if (!oldPublicPath || oldPublicPath === nextPublicPath) {
+async function removeOldShareImageIfNeeded(oldPublicPath: string | null, nextPublicPath: string | null) {
+  if (!oldPublicPath || !nextPublicPath || oldPublicPath === nextPublicPath) {
     return;
   }
 
@@ -598,28 +603,37 @@ async function ensureTranslatorShareImageByIdOnce(
   const settings = await getAppSettings();
   const platformName = settings.platformName || APP_NAME;
   const hash = buildShareImageHash(snapshot, platformName);
-  const nextPublicPath = buildPublicPath(snapshot.slug, hash);
-  const nextStoragePath = toStoragePath(nextPublicPath);
+  const currentPublicPath = snapshot.shareImagePath;
+  const currentStoragePath = currentPublicPath ? toStoragePath(currentPublicPath) : null;
 
   const hasCurrentAsset =
-    snapshot.shareImagePath === nextPublicPath &&
     snapshot.shareImageHash === hash &&
-    (await fileExists(nextStoragePath));
+    Boolean(currentPublicPath) &&
+    Boolean(currentStoragePath) &&
+    (currentStoragePath ? await fileExists(currentStoragePath) : false);
 
   if (!options.force && hasCurrentAsset) {
     return {
       translatorId: snapshot.id,
-      shareImagePath: nextPublicPath,
+      shareImagePath: currentPublicPath,
       shareImageHash: hash,
       shareImageUpdatedAt: snapshot.shareImageUpdatedAt,
     };
   }
 
+  const nextPublicPath =
+    options.force
+      ? buildPublicPath(snapshot.slug, hash, createForcedRegenerationVersion())
+      : buildPublicPath(snapshot.slug, hash);
+  const nextStoragePath = toStoragePath(nextPublicPath);
+  const shouldCleanupNewFileOnFailure = Boolean(currentPublicPath && currentPublicPath !== nextPublicPath);
+  let wroteNewFile = false;
+
   try {
     const imageBuffer = await renderShareImageBuffer(snapshot, platformName);
     await mkdir(storageDirectory, { recursive: true });
     await writeFile(nextStoragePath, imageBuffer);
-    await removeOldShareImageIfNeeded(snapshot.shareImagePath, nextPublicPath);
+    wroteNewFile = true;
 
     const updated = await prisma.translator.update({
       where: { id: snapshot.id },
@@ -635,6 +649,7 @@ async function ensureTranslatorShareImageByIdOnce(
         shareImageUpdatedAt: true,
       },
     });
+    await removeOldShareImageIfNeeded(snapshot.shareImagePath, updated.shareImagePath);
 
     logInfo("share_image_generated", "Translator share image generated and stored.", {
       translatorId: snapshot.id,
@@ -660,6 +675,14 @@ async function ensureTranslatorShareImageByIdOnce(
       },
       error,
     );
+
+    if (wroteNewFile && shouldCleanupNewFileOnFailure) {
+      try {
+        await rm(nextStoragePath, { force: true });
+      } catch {
+        // Best-effort rollback only.
+      }
+    }
 
     if (options.throwOnError) {
       throw error instanceof Error ? error : new Error(String(error));

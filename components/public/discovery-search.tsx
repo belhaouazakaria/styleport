@@ -44,8 +44,6 @@ export function DiscoverySearch({ q, category }: DiscoverySearchProps) {
 
   useEffect(() => {
     if (query.length < 2) {
-      setSuggestions([]);
-      setOpen(false);
       return;
     }
 
@@ -56,7 +54,6 @@ export function DiscoverySearch({ q, category }: DiscoverySearchProps) {
         const payload = await response.json();
         if (response.ok && payload.ok) {
           setSuggestions(payload.suggestions || []);
-          setOpen(true);
         }
       } finally {
         setLoading(false);
@@ -75,13 +72,17 @@ export function DiscoverySearch({ q, category }: DiscoverySearchProps) {
           value={value}
           onChange={(event) => {
             const nextValue = event.target.value;
+            const nextQuery = nextValue.trim();
             setValue(nextValue);
-            if (!nextValue.trim()) {
+            if (nextQuery.length < 2) {
               setSuggestions([]);
+              setLoading(false);
               setOpen(false);
+              return;
             }
+            setOpen(true);
           }}
-          onFocus={() => setOpen(Boolean(query))}
+          onFocus={() => setOpen(query.length >= 2)}
           placeholder="Search translators, categories, or slugs"
           className="h-12 w-full rounded-xl border border-border bg-surface pl-10 pr-24 text-sm text-ink shadow-sm"
         />
@@ -97,7 +98,7 @@ export function DiscoverySearch({ q, category }: DiscoverySearchProps) {
         <input type="hidden" name="page" value="1" />
       </form>
 
-      {open ? (
+      {open && query.length >= 2 ? (
         <div className="absolute z-30 mt-2 w-full overflow-hidden rounded-xl border border-border bg-surface shadow-lg">
           {loading ? (
             <p className="px-3 py-2 text-sm text-muted-ink">Searching…</p>
