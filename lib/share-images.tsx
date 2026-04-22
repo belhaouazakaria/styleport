@@ -12,7 +12,6 @@ import { getAppSettings } from "@/lib/settings";
 
 const SHARE_IMAGE_WIDTH = 1000;
 const SHARE_IMAGE_HEIGHT = 1500;
-const SHARE_IMAGE_STYLE_VERSION = "v2";
 
 const publicPathPrefix = (() => {
   const raw = (process.env.SHARE_IMAGE_PUBLIC_PATH_PREFIX || "/generated/pins").trim();
@@ -44,12 +43,24 @@ interface EnsureShareImageOptions {
   force?: boolean;
 }
 
+interface EnsureTranslatorShareImageResult {
+  translatorId: string;
+  shareImagePath: string | null;
+  shareImageHash: string | null;
+  shareImageUpdatedAt: Date | null;
+}
+
 interface ShareImageTheme {
   background: string;
   textFill: string;
   accent: string;
   border: string;
 }
+
+const inFlightShareImageGeneration = new Map<
+  string,
+  Promise<EnsureTranslatorShareImageResult | null>
+>();
 
 const SHARE_IMAGE_THEMES: ShareImageTheme[] = [
   { background: "#EADAF2", textFill: "#7EDC96", accent: "#20242A", border: "#101214" },
@@ -72,7 +83,6 @@ function clampText(value: string, maxLength: number) {
 
 function buildShareImageHash(snapshot: ShareImageSnapshot, platformName: string) {
   const payload = JSON.stringify({
-    styleVersion: SHARE_IMAGE_STYLE_VERSION,
     platformName,
     slug: snapshot.slug,
     name: snapshot.name,
@@ -248,6 +258,16 @@ export function getShareImageAbsoluteUrl(shareImagePath: string | null) {
   return new URL(shareImagePath, getAppBaseUrl()).toString();
 }
 
+export async function getStoredTranslatorShareImageBySlug(slug: string) {
+  return prisma.translator.findUnique({
+    where: { slug },
+    select: {
+      id: true,
+      shareImagePath: true,
+    },
+  });
+}
+
 async function loadTranslatorSnapshotById(id: string): Promise<ShareImageSnapshot | null> {
   return prisma.translator.findUnique({
     where: { id },
@@ -266,7 +286,7 @@ async function loadTranslatorSnapshotById(id: string): Promise<ShareImageSnapsho
   });
 }
 
-export async function ensureTranslatorShareImageById(
+async function ensureTranslatorShareImageByIdOnce(
   translatorId: string,
   options: EnsureShareImageOptions = {},
 ) {
@@ -347,6 +367,31 @@ export async function ensureTranslatorShareImageById(
       shareImageUpdatedAt: snapshot.shareImageUpdatedAt,
     };
   }
+}
+
+export async function ensureTranslatorShareImageById(
+  translatorId: string,
+  options: EnsureShareImageOptions = {},
+) {
+  if (options.force) {
+    const inFlight = inFlightShareImageGeneration.get(translatorId);
+    if (inFlight) {
+      await inFlight;
+    }
+    return ensureTranslatorShareImageByIdOnce(translatorId, options);
+  }
+
+  const existing = inFlightShareImageGeneration.get(translatorId);
+  if (existing) {
+    return existing;
+  }
+
+  const task = ensureTranslatorShareImageByIdOnce(translatorId, options).finally(() => {
+    inFlightShareImageGeneration.delete(translatorId);
+  });
+  inFlightShareImageGeneration.set(translatorId, task);
+
+  return task;
 }
 
 export async function ensureTranslatorShareImageBySlug(

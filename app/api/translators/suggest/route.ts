@@ -10,6 +10,10 @@ export async function GET(request: Request) {
     return apiOk({ suggestions: [] });
   }
 
+  if (q.length < 2) {
+    return apiOk({ suggestions: [] });
+  }
+
   if (q.length > 120) {
     return apiError(400, "VALIDATION_ERROR", "Search query is too long.");
   }

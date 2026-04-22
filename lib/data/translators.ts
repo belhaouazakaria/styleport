@@ -22,6 +22,12 @@ import type {
   UsageSeriesPoint,
 } from "@/lib/types";
 
+const TRANSLATION_SUCCESS_RECALC_THROTTLE_MS = 60_000;
+
+let autoFeaturedRecalcInFlight: Promise<void> | null = null;
+let lastTranslationSuccessRecalcAttemptAt = 0;
+let canUseFeaturedRankOrder = true;
+
 const publicTranslatorInclude = {
   modes: {
     select: {
@@ -140,6 +146,14 @@ interface AutoFeaturedCandidate {
   recentSuccessCount: number;
   totalTokens: number;
   lastSuccessAt: Date | null;
+}
+
+function isMissingFeaturedRankError(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return /featuredrank/i.test(error.message) && /(does not exist|unknown column|P2022)/i.test(error.message);
 }
 
 async function getAutoFeaturedCandidates(
@@ -294,52 +308,95 @@ export async function recalculateAutoFeaturedTranslators(options?: {
 }
 
 export async function maybeRecalculateAutoFeaturedTranslators(source: "translation-success" | "settings-save") {
-  const settings = await getAppSettings();
-  if (!settings.autoFeaturedEnabled) {
+  const now = Date.now();
+  if (
+    source === "translation-success" &&
+    now - lastTranslationSuccessRecalcAttemptAt < TRANSLATION_SUCCESS_RECALC_THROTTLE_MS
+  ) {
     return;
   }
 
-  const lastTimestamp = settings.autoFeaturedLastRecalculatedAt
-    ? Date.parse(settings.autoFeaturedLastRecalculatedAt)
-    : NaN;
+  if (source === "translation-success") {
+    lastTranslationSuccessRecalcAttemptAt = now;
+  }
 
-  if (Number.isFinite(lastTimestamp) && Date.now() - lastTimestamp < AUTO_FEATURED_RECALC_MIN_INTERVAL_MS) {
+  if (autoFeaturedRecalcInFlight) {
+    await autoFeaturedRecalcInFlight;
     return;
   }
+
+  autoFeaturedRecalcInFlight = (async () => {
+    const settings = await getAppSettings();
+    if (!settings.autoFeaturedEnabled) {
+      return;
+    }
+
+    const lastTimestamp = settings.autoFeaturedLastRecalculatedAt
+      ? Date.parse(settings.autoFeaturedLastRecalculatedAt)
+      : NaN;
+
+    if (Number.isFinite(lastTimestamp) && Date.now() - lastTimestamp < AUTO_FEATURED_RECALC_MIN_INTERVAL_MS) {
+      return;
+    }
+
+    try {
+      await recalculateAutoFeaturedTranslators({
+        source: source === "settings-save" ? "manual" : "automatic",
+        windowDays: settings.autoFeaturedWindowDays || DEFAULT_AUTO_FEATURED_WINDOW_DAYS,
+        force: true,
+      });
+    } catch (error) {
+      logWarn("auto_featured_recalc_failed", "Auto-featured recalculation failed.", {
+        source,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  })();
 
   try {
-    await recalculateAutoFeaturedTranslators({
-      source: source === "settings-save" ? "manual" : "automatic",
-      windowDays: settings.autoFeaturedWindowDays || DEFAULT_AUTO_FEATURED_WINDOW_DAYS,
-      force: true,
-    });
-  } catch (error) {
-    logWarn("auto_featured_recalc_failed", "Auto-featured recalculation failed.", {
-      source,
-      error: error instanceof Error ? error.message : String(error),
-    });
+    await autoFeaturedRecalcInFlight;
+  } finally {
+    autoFeaturedRecalcInFlight = null;
   }
 }
 
 export async function getAutoFeaturedSummary(windowDays?: number): Promise<AutoFeaturedTranslatorSummary[]> {
   const settings = await getAppSettings();
   const effectiveWindow = Math.max(1, windowDays || settings.autoFeaturedWindowDays);
-  const current = await prisma.translator.findMany({
-    where: {
-      archivedAt: null,
-      isActive: true,
-      isFeatured: true,
-      featuredSource: FeaturedSource.AUTO,
-    },
-    select: {
-      id: true,
-      name: true,
-      slug: true,
-      featuredRank: true,
-    },
-    orderBy: [{ featuredRank: "asc" }, { sortOrder: "asc" }, { updatedAt: "desc" }],
-    take: AUTO_FEATURED_LIMIT,
-  });
+  let current: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    featuredRank: number | null;
+  }> = [];
+
+  try {
+    current = await prisma.translator.findMany({
+      where: {
+        archivedAt: null,
+        isActive: true,
+        isFeatured: true,
+        featuredSource: FeaturedSource.AUTO,
+      },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        featuredRank: true,
+      },
+      orderBy: [{ featuredRank: "asc" }, { sortOrder: "asc" }, { updatedAt: "desc" }],
+      take: AUTO_FEATURED_LIMIT,
+    });
+  } catch (error) {
+    if (isMissingFeaturedRankError(error)) {
+      canUseFeaturedRankOrder = false;
+      logWarn("auto_featured_summary_disabled", "Falling back because featuredRank is unavailable.", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return [];
+    }
+    throw error;
+  }
 
   if (!current.length) {
     return [];
@@ -488,27 +545,52 @@ export async function getSearchSuggestions(query: string, limit = 8) {
 
 export async function getFeaturedPublicTranslators(limit = 6): Promise<PublicTranslator[]> {
   const settings = await getAppSettings();
-  if (settings.autoFeaturedEnabled) {
-    await maybeRecalculateAutoFeaturedTranslators("settings-save");
+  const fallbackOrder: Prisma.TranslatorOrderByWithRelationInput[] = [{ sortOrder: "asc" }, { updatedAt: "desc" }];
+  const preferredOrder: Prisma.TranslatorOrderByWithRelationInput[] =
+    settings.autoFeaturedEnabled && canUseFeaturedRankOrder
+      ? [{ featuredRank: "asc" }, ...fallbackOrder]
+      : fallbackOrder;
+
+  let translators: Prisma.TranslatorGetPayload<{ include: typeof publicTranslatorInclude }>[] = [];
+  try {
+    translators = await prisma.translator.findMany({
+      where: {
+        isActive: true,
+        isFeatured: true,
+        archivedAt: null,
+      },
+      include: publicTranslatorInclude,
+      orderBy: preferredOrder,
+      take: limit,
+    });
+  } catch (error) {
+    if (settings.autoFeaturedEnabled && canUseFeaturedRankOrder && isMissingFeaturedRankError(error)) {
+      canUseFeaturedRankOrder = false;
+      logWarn(
+        "featured_rank_order_unavailable",
+        "Public featured ordering fallback activated because featuredRank is unavailable.",
+        { error: error instanceof Error ? error.message : String(error) },
+      );
+      translators = await prisma.translator.findMany({
+        where: {
+          isActive: true,
+          isFeatured: true,
+          archivedAt: null,
+        },
+        include: publicTranslatorInclude,
+        orderBy: fallbackOrder,
+        take: limit,
+      });
+    } else {
+      throw error;
+    }
   }
-  const translators = await prisma.translator.findMany({
-    where: {
-      isActive: true,
-      isFeatured: true,
-      archivedAt: null,
-    },
-    include: publicTranslatorInclude,
-    orderBy: settings.autoFeaturedEnabled
-      ? [{ featuredRank: "asc" }, { sortOrder: "asc" }, { updatedAt: "desc" }]
-      : [{ sortOrder: "asc" }, { updatedAt: "desc" }],
-    take: limit,
-  });
 
   return translators.map(mapPublicTranslator);
 }
 
 export async function getPublicTranslatorBySlug(slug: string): Promise<PublicTranslator | null> {
-  let translator = await prisma.translator.findFirst({
+  const translator = await prisma.translator.findFirst({
     where: {
       slug,
       archivedAt: null,
@@ -516,24 +598,6 @@ export async function getPublicTranslatorBySlug(slug: string): Promise<PublicTra
     },
     include: publicTranslatorInclude,
   });
-
-  if (translator) {
-    const ensured = await ensureTranslatorShareImageById(translator.id);
-    if (
-      ensured?.shareImagePath &&
-      (ensured.shareImagePath !== translator.shareImagePath ||
-        ensured.shareImageHash !== translator.shareImageHash)
-    ) {
-      translator = await prisma.translator.findFirst({
-        where: {
-          slug,
-          archivedAt: null,
-          isActive: true,
-        },
-        include: publicTranslatorInclude,
-      });
-    }
-  }
 
   return translator ? mapPublicTranslator(translator) : null;
 }

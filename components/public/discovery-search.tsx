@@ -43,7 +43,11 @@ export function DiscoverySearch({ q, category }: DiscoverySearchProps) {
   }, []);
 
   useEffect(() => {
-    if (!query) return;
+    if (query.length < 2) {
+      setSuggestions([]);
+      setOpen(false);
+      return;
+    }
 
     const timer = setTimeout(async () => {
       setLoading(true);
