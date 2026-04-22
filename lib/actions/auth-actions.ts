@@ -24,6 +24,22 @@ function normalizeCallbackUrl(callbackUrl: string | undefined) {
   return callbackUrl;
 }
 
+function isNextRedirectError(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  if ("digest" in error && typeof (error as { digest?: unknown }).digest === "string") {
+    return (error as { digest: string }).digest.startsWith("NEXT_REDIRECT");
+  }
+
+  if ("message" in error && typeof (error as { message?: unknown }).message === "string") {
+    return (error as { message: string }).message === "NEXT_REDIRECT";
+  }
+
+  return false;
+}
+
 export async function loginAction(
   _previousState: { error: string | null },
   formData: FormData,
@@ -47,6 +63,10 @@ export async function loginAction(
       redirectTo: normalizeCallbackUrl(parsed.data.callbackUrl),
     });
   } catch (error) {
+    if (isNextRedirectError(error)) {
+      throw error;
+    }
+
     if (error instanceof AuthError) {
       if (error.type === "CredentialsSignin") {
         logWarn("admin_login_failed", "Admin login rejected due to invalid credentials.", {
