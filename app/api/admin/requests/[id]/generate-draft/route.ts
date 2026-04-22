@@ -19,6 +19,14 @@ export async function POST(_: Request, context: RouteContext) {
     return apiError(404, "NOT_FOUND", "Request not found.");
   }
 
+  if (translatorRequest.requesterEmail && !translatorRequest.emailVerifiedAt) {
+    return apiError(
+      409,
+      "CONFLICT",
+      "This submission is awaiting email verification and cannot be reviewed yet.",
+    );
+  }
+
   try {
     const settings = await getAppSettings();
     const brief = buildTranslatorDraftBriefFromRequest({

@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { Prisma, TranslatorRequestStatus } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
@@ -10,8 +11,16 @@ import type {
 } from "@/lib/types";
 import { translatorDraftSchema } from "@/lib/validators";
 
+const REQUEST_VERIFICATION_TOKEN_BYTES = 32;
+const REQUEST_VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
+const REQUEST_VERIFICATION_RESEND_MIN_INTERVAL_MS = 60 * 1000;
+
 function normalizeOptional(value?: string | null) {
   return value?.trim() || null;
+}
+
+function normalizeEmail(value: string) {
+  return value.trim().toLowerCase();
 }
 
 function mapDraft(value: Prisma.JsonValue | null): TranslatorDraft | null {
@@ -23,10 +32,37 @@ function mapDraft(value: Prisma.JsonValue | null): TranslatorDraft | null {
   return parsed.success ? parsed.data : null;
 }
 
+function isEligibleForReview(input: { requesterEmail: string | null; emailVerifiedAt: Date | null }) {
+  if (!input.requesterEmail) {
+    return true;
+  }
+
+  return Boolean(input.emailVerifiedAt);
+}
+
+function hashVerificationToken(token: string) {
+  return crypto.createHash("sha256").update(token).digest("hex");
+}
+
+function buildVerificationTokenPayload() {
+  const token = crypto.randomBytes(REQUEST_VERIFICATION_TOKEN_BYTES).toString("hex");
+  const tokenHash = hashVerificationToken(token);
+  const expiresAt = new Date(Date.now() + REQUEST_VERIFICATION_TTL_MS);
+
+  return {
+    token,
+    tokenHash,
+    expiresAt,
+  };
+}
+
 export async function createPublicTranslatorRequest(input: TranslatorRequestInput) {
-  return prisma.translatorRequest.create({
+  const verification = buildVerificationTokenPayload();
+  const requesterEmail = normalizeEmail(input.requesterEmail);
+
+  const created = await prisma.translatorRequest.create({
     data: {
-      requesterEmail: normalizeOptional(input.requesterEmail),
+      requesterEmail,
       requestedName: input.requestedName.trim(),
       description: input.description.trim(),
       exampleInput: normalizeOptional(input.exampleInput),
@@ -34,10 +70,30 @@ export async function createPublicTranslatorRequest(input: TranslatorRequestInpu
       suggestedCategory: normalizeOptional(input.suggestedCategory),
       audience: normalizeOptional(input.audience),
       notes: normalizeOptional(input.notes),
-      status: TranslatorRequestStatus.NEW,
+      status: TranslatorRequestStatus.PENDING_EMAIL_VERIFICATION,
+      verificationTokenHash: verification.tokenHash,
+      verificationTokenExpiresAt: verification.expiresAt,
     },
     select: {
       id: true,
+      requesterEmail: true,
+      requestedName: true,
+    },
+  });
+
+  return {
+    id: created.id,
+    requesterEmail: created.requesterEmail || requesterEmail,
+    requestedName: created.requestedName,
+    verificationToken: verification.token,
+  };
+}
+
+export async function markTranslatorRequestVerificationEmailSent(id: string) {
+  await prisma.translatorRequest.update({
+    where: { id },
+    data: {
+      verificationEmailSentAt: new Date(),
     },
   });
 }
@@ -83,6 +139,7 @@ export async function listAdminTranslatorRequests(
     select: {
       id: true,
       requesterEmail: true,
+      emailVerifiedAt: true,
       requestedName: true,
       suggestedCategory: true,
       status: true,
@@ -92,6 +149,8 @@ export async function listAdminTranslatorRequests(
 
   return rows.map((row) => ({
     ...row,
+    emailVerifiedAt: row.emailVerifiedAt ? row.emailVerifiedAt.toISOString() : null,
+    isEligibleForReview: isEligibleForReview(row),
     createdAt: row.createdAt.toISOString(),
   }));
 }
@@ -117,6 +176,12 @@ export async function getAdminTranslatorRequestById(id: string): Promise<AdminTr
   return {
     id: row.id,
     requesterEmail: row.requesterEmail,
+    emailVerifiedAt: row.emailVerifiedAt ? row.emailVerifiedAt.toISOString() : null,
+    verificationEmailSentAt: row.verificationEmailSentAt ? row.verificationEmailSentAt.toISOString() : null,
+    publishedNotificationSentAt: row.publishedNotificationSentAt
+      ? row.publishedNotificationSentAt.toISOString()
+      : null,
+    isEligibleForReview: isEligibleForReview(row),
     requestedName: row.requestedName,
     description: row.description,
     exampleInput: row.exampleInput,
@@ -167,7 +232,184 @@ export async function linkRequestToTranslator(
     where: { id },
     data: {
       createdTranslatorId: payload.translatorId,
-      status: payload.status || TranslatorRequestStatus.COMPLETED,
+      status: payload.status || TranslatorRequestStatus.APPROVED,
+    },
+  });
+}
+
+export type RequestEmailVerificationResult =
+  | { outcome: "VERIFIED"; requestId: string; requesterEmail: string | null; requestedName: string }
+  | { outcome: "ALREADY_VERIFIED"; requestId: string; requesterEmail: string | null; requestedName: string }
+  | { outcome: "EXPIRED"; requestId: string; requesterEmail: string | null; requestedName: string }
+  | { outcome: "INVALID" };
+
+export async function verifyTranslatorRequestEmailToken(token: string): Promise<RequestEmailVerificationResult> {
+  const normalizedToken = token.trim();
+  if (!normalizedToken) {
+    return { outcome: "INVALID" };
+  }
+
+  const tokenHash = hashVerificationToken(normalizedToken);
+  const row = await prisma.translatorRequest.findFirst({
+    where: {
+      verificationTokenHash: tokenHash,
+    },
+    select: {
+      id: true,
+      requesterEmail: true,
+      requestedName: true,
+      emailVerifiedAt: true,
+      verificationTokenExpiresAt: true,
+    },
+  });
+
+  if (!row) {
+    return { outcome: "INVALID" };
+  }
+
+  if (row.emailVerifiedAt) {
+    return {
+      outcome: "ALREADY_VERIFIED",
+      requestId: row.id,
+      requesterEmail: row.requesterEmail,
+      requestedName: row.requestedName,
+    };
+  }
+
+  if (!row.verificationTokenExpiresAt || row.verificationTokenExpiresAt.getTime() < Date.now()) {
+    return {
+      outcome: "EXPIRED",
+      requestId: row.id,
+      requesterEmail: row.requesterEmail,
+      requestedName: row.requestedName,
+    };
+  }
+
+  const result = await prisma.translatorRequest.updateMany({
+    where: {
+      id: row.id,
+      verificationTokenHash: tokenHash,
+      emailVerifiedAt: null,
+    },
+    data: {
+      emailVerifiedAt: new Date(),
+      verificationTokenHash: null,
+      verificationTokenExpiresAt: null,
+      status: TranslatorRequestStatus.PENDING_REVIEW,
+    },
+  });
+
+  if (result.count === 0) {
+    return {
+      outcome: "ALREADY_VERIFIED",
+      requestId: row.id,
+      requesterEmail: row.requesterEmail,
+      requestedName: row.requestedName,
+    };
+  }
+
+  return {
+    outcome: "VERIFIED",
+    requestId: row.id,
+    requesterEmail: row.requesterEmail,
+    requestedName: row.requestedName,
+  };
+}
+
+export type ResendRequestVerificationResult =
+  | {
+      outcome: "SENT";
+      requestId: string;
+      requesterEmail: string;
+      requestedName: string;
+      verificationToken: string;
+    }
+  | { outcome: "NOT_FOUND" }
+  | { outcome: "ALREADY_VERIFIED" }
+  | { outcome: "TOO_MANY_REQUESTS" };
+
+export async function resendTranslatorRequestVerificationToken(input: {
+  requestId: string;
+  requesterEmail: string;
+}): Promise<ResendRequestVerificationResult> {
+  const requestId = input.requestId.trim();
+  const requesterEmail = normalizeEmail(input.requesterEmail);
+
+  const row = await prisma.translatorRequest.findUnique({
+    where: { id: requestId },
+    select: {
+      id: true,
+      requesterEmail: true,
+      requestedName: true,
+      emailVerifiedAt: true,
+      status: true,
+      verificationEmailSentAt: true,
+    },
+  });
+
+  if (!row || !row.requesterEmail || normalizeEmail(row.requesterEmail) !== requesterEmail) {
+    return { outcome: "NOT_FOUND" };
+  }
+
+  if (row.emailVerifiedAt || row.status !== TranslatorRequestStatus.PENDING_EMAIL_VERIFICATION) {
+    return { outcome: "ALREADY_VERIFIED" };
+  }
+
+  if (
+    row.verificationEmailSentAt &&
+    Date.now() - row.verificationEmailSentAt.getTime() < REQUEST_VERIFICATION_RESEND_MIN_INTERVAL_MS
+  ) {
+    return { outcome: "TOO_MANY_REQUESTS" };
+  }
+
+  const verification = buildVerificationTokenPayload();
+
+  await prisma.translatorRequest.update({
+    where: { id: row.id },
+    data: {
+      verificationTokenHash: verification.tokenHash,
+      verificationTokenExpiresAt: verification.expiresAt,
+    },
+  });
+
+  return {
+    outcome: "SENT",
+    requestId: row.id,
+    requesterEmail: row.requesterEmail,
+    requestedName: row.requestedName,
+    verificationToken: verification.token,
+  };
+}
+
+export async function getTranslatorRequestByCreatedTranslatorId(translatorId: string) {
+  return prisma.translatorRequest.findFirst({
+    where: { createdTranslatorId: translatorId },
+    select: {
+      id: true,
+      requesterEmail: true,
+      requestedName: true,
+      emailVerifiedAt: true,
+      publishedNotificationSentAt: true,
+      status: true,
+    },
+  });
+}
+
+export async function markTranslatorRequestPublished(id: string) {
+  await prisma.translatorRequest.update({
+    where: { id },
+    data: {
+      status: TranslatorRequestStatus.PUBLISHED,
+    },
+  });
+}
+
+export async function markTranslatorRequestPublishedNotificationSent(id: string) {
+  await prisma.translatorRequest.update({
+    where: { id },
+    data: {
+      status: TranslatorRequestStatus.PUBLISHED,
+      publishedNotificationSentAt: new Date(),
     },
   });
 }

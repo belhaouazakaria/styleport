@@ -25,12 +25,14 @@ interface RequestTranslatorContextValue {
 const RequestTranslatorContext = createContext<RequestTranslatorContextValue | null>(null);
 
 interface RequestFormState {
+  requesterEmail: string;
   requestedName: string;
   description: string;
 }
 
 function createDefaultFormState(initialIdea?: string): RequestFormState {
   return {
+    requesterEmail: "",
     requestedName: initialIdea?.trim() || "",
     description: "",
   };
@@ -117,8 +119,9 @@ export function RequestTranslatorProvider({ children }: { children: ReactNode })
     }
 
     toast({
-      title: "Create request sent",
-      description: "Thanks. Our admin team can now review and generate this translator with AI.",
+      title: "Check your inbox",
+      description:
+        "We sent a verification link so we can notify you if your translator gets approved and goes live. Check spam/junk too.",
     });
 
     setForm(createDefaultFormState());
@@ -169,6 +172,30 @@ export function RequestTranslatorProvider({ children }: { children: ReactNode })
                     className="hidden"
                     aria-hidden="true"
                   />
+
+                  <label className="block space-y-1 text-sm">
+                    <span className="font-medium text-ink">Your email</span>
+                    <input
+                      name="requesterEmail"
+                      type="email"
+                      value={form.requesterEmail}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          requesterEmail: event.target.value,
+                        }))
+                      }
+                      required
+                      className="h-11 w-full rounded-xl border border-border bg-surface px-3 text-ink placeholder:text-muted-ink/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60"
+                      placeholder="you@example.com"
+                    />
+                  </label>
+
+                  <p className="rounded-xl border border-border bg-muted-surface px-3 py-2 text-xs leading-5 text-muted-ink">
+                    We ask for your email so we can let you know if your translator idea gets approved and goes live.
+                    After submitting, please confirm your email address through the verification email we send. If
+                    you don&apos;t see it, check your spam/junk folder.
+                  </p>
 
                   <label className="block space-y-1 text-sm">
                     <span className="font-medium text-ink">Translator name</span>

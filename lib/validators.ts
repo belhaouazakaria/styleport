@@ -205,9 +205,7 @@ export const translatorRequestSchema = z.object({
     .string()
     .trim()
     .email("Please enter a valid email.")
-    .max(160)
-    .optional()
-    .or(z.literal("")),
+    .max(160),
   requestedName: z.string().trim().min(2).max(140),
   description: z.string().trim().min(8).max(1400),
   exampleInput: z.string().trim().max(1200).optional().or(z.literal("")),
@@ -217,6 +215,11 @@ export const translatorRequestSchema = z.object({
   notes: z.string().trim().max(2000).optional().or(z.literal("")),
   honeypot: z.string().max(0).optional().or(z.literal("")),
   turnstileToken: z.string().trim().optional().or(z.literal("")),
+});
+
+export const translatorRequestResendSchema = z.object({
+  requestId: z.string().trim().min(1).max(64),
+  requesterEmail: z.string().trim().email("Please enter a valid email.").max(160),
 });
 
 export const adminRequestFilterSchema = z.object({

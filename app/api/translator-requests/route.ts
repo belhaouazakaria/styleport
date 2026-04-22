@@ -1,5 +1,10 @@
 import { apiError, apiOk } from "@/lib/api-response";
-import { createPublicTranslatorRequest } from "@/lib/data/requests";
+import {
+  createPublicTranslatorRequest,
+  markTranslatorRequestVerificationEmailSent,
+} from "@/lib/data/requests";
+import { sendTranslatorRequestVerificationEmail } from "@/lib/email-alerts";
+import { getAppBaseUrl } from "@/lib/env";
 import { logError, logWarn } from "@/lib/logger";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { verifyTurnstileToken } from "@/lib/turnstile";
@@ -51,8 +56,48 @@ export async function POST(request: Request) {
 
   try {
     const created = await createPublicTranslatorRequest(parsed.data);
+    const verificationUrl = new URL("/api/translator-requests/verify", getAppBaseUrl());
+    verificationUrl.searchParams.set("token", created.verificationToken);
+    verificationUrl.searchParams.set("requestId", created.id);
 
-    return apiOk({ requestId: created.id }, 201);
+    const emailResult = await sendTranslatorRequestVerificationEmail({
+      to: created.requesterEmail,
+      requestedName: created.requestedName,
+      verificationUrl: verificationUrl.toString(),
+    });
+
+    if (!emailResult.sent) {
+      logError(
+        "translator_request_verification_email_failed",
+        "Translator request created but verification email could not be sent.",
+        {
+          requestId: created.id,
+          reason: emailResult.error || "unknown",
+        },
+      );
+      return apiError(
+        502,
+        "UPSTREAM_ERROR",
+        "Your idea was received, but we could not send the verification email right now. Please try again in a moment.",
+      );
+    }
+
+    try {
+      await markTranslatorRequestVerificationEmailSent(created.id);
+    } catch (error) {
+      logWarn("translator_request_mark_sent_failed", "Verification email sent but sentAt update failed.", {
+        requestId: created.id,
+        error: error instanceof Error ? error.message : "unknown",
+      });
+    }
+
+    return apiOk(
+      {
+        requestId: created.id,
+        verificationRequired: true,
+      },
+      201,
+    );
   } catch (error) {
     logError("translator_request_create_failed", "Failed to persist translator request.", undefined, error);
     return apiError(500, "UPSTREAM_ERROR", "Unable to submit request right now.");

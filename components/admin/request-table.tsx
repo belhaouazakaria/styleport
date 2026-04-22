@@ -10,6 +10,10 @@ interface RequestTableProps {
 
 function statusClasses(status: TranslatorRequestStatus) {
   switch (status) {
+    case "PENDING_EMAIL_VERIFICATION":
+      return "bg-orange-100 text-orange-700";
+    case "PENDING_REVIEW":
+      return "bg-brand-100 text-brand-700";
     case "NEW":
       return "bg-brand-100 text-brand-700";
     case "REVIEWING":
@@ -17,8 +21,10 @@ function statusClasses(status: TranslatorRequestStatus) {
     case "DRAFT_GENERATED":
       return "bg-indigo-100 text-indigo-700";
     case "APPROVED":
-    case "COMPLETED":
       return "bg-emerald-100 text-emerald-700";
+    case "PUBLISHED":
+    case "COMPLETED":
+      return "bg-teal-100 text-teal-700";
     case "REJECTED":
       return "bg-red-100 text-red-700";
     default:
@@ -43,6 +49,7 @@ export function RequestTable({ requests }: RequestTableProps) {
             <th className="px-4 py-3 font-medium">Translator Name</th>
             <th className="px-4 py-3 font-medium">Category</th>
             <th className="px-4 py-3 font-medium">Email</th>
+            <th className="px-4 py-3 font-medium">Verified</th>
             <th className="px-4 py-3 font-medium">Status</th>
             <th className="px-4 py-3 font-medium">Created</th>
             <th className="px-4 py-3 font-medium">Action</th>
@@ -54,6 +61,17 @@ export function RequestTable({ requests }: RequestTableProps) {
               <td className="px-4 py-3 font-medium text-ink">{request.requestedName}</td>
               <td className="px-4 py-3 text-muted-ink">{request.suggestedCategory || "-"}</td>
               <td className="px-4 py-3 text-muted-ink">{request.requesterEmail || "-"}</td>
+              <td className="px-4 py-3">
+                <span
+                  className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                    request.emailVerifiedAt || !request.requesterEmail
+                      ? "bg-emerald-100 text-emerald-700"
+                      : "bg-amber-100 text-amber-700"
+                  }`}
+                >
+                  {request.emailVerifiedAt || !request.requesterEmail ? "Yes" : "Pending"}
+                </span>
+              </td>
               <td className="px-4 py-3">
                 <span className={`rounded-full px-2 py-1 text-xs font-semibold ${statusClasses(request.status)}`}>
                   {request.status}

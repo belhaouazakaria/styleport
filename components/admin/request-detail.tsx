@@ -15,12 +15,15 @@ interface RequestDetailProps {
 }
 
 const statusOptions: TranslatorRequestStatus[] = [
+  "PENDING_EMAIL_VERIFICATION",
+  "PENDING_REVIEW",
   "NEW",
   "REVIEWING",
   "DRAFT_GENERATED",
   "APPROVED",
   "REJECTED",
   "COMPLETED",
+  "PUBLISHED",
 ];
 
 export function RequestDetail({ request }: RequestDetailProps) {
@@ -33,6 +36,7 @@ export function RequestDetail({ request }: RequestDetailProps) {
   const router = useRouter();
 
   const isLinked = useMemo(() => Boolean(request.createdTranslatorId), [request.createdTranslatorId]);
+  const canCreateTranslator = request.isEligibleForReview;
 
   async function saveMeta(nextStatus?: TranslatorRequestStatus) {
     setBusy("save");
@@ -121,12 +125,30 @@ export function RequestDetail({ request }: RequestDetailProps) {
           <p className="mt-1 text-sm text-ink">{request.requesterEmail || "Not provided"}</p>
         </article>
         <article>
+          <p className="text-xs font-medium uppercase text-muted-ink">Email Verified</p>
+          <p className="mt-1 text-sm text-ink">
+            {request.emailVerifiedAt ? `Yes • ${formatDateTime(request.emailVerifiedAt)}` : "No"}
+          </p>
+        </article>
+        <article>
           <p className="text-xs font-medium uppercase text-muted-ink">Suggested Category</p>
           <p className="mt-1 text-sm text-ink">{request.suggestedCategory || "Unspecified"}</p>
         </article>
         <article>
           <p className="text-xs font-medium uppercase text-muted-ink">Created</p>
           <p className="mt-1 text-sm text-ink">{formatDateTime(request.createdAt)}</p>
+        </article>
+        <article>
+          <p className="text-xs font-medium uppercase text-muted-ink">Verification Email Sent</p>
+          <p className="mt-1 text-sm text-ink">
+            {request.verificationEmailSentAt ? formatDateTime(request.verificationEmailSentAt) : "Not yet"}
+          </p>
+        </article>
+        <article>
+          <p className="text-xs font-medium uppercase text-muted-ink">Published Notification</p>
+          <p className="mt-1 text-sm text-ink">
+            {request.publishedNotificationSentAt ? formatDateTime(request.publishedNotificationSentAt) : "Not sent"}
+          </p>
         </article>
       </section>
 
@@ -200,10 +222,20 @@ export function RequestDetail({ request }: RequestDetailProps) {
           <Button type="button" variant="outline" onClick={() => void saveMeta("REJECTED")}>
             Decline
           </Button>
-          <Button type="button" variant="outline" onClick={() => void createFromDraft()} disabled={busy === "create" || isLinked}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void createFromDraft()}
+            disabled={busy === "create" || isLinked || !canCreateTranslator}
+          >
             {busy === "create" ? "Approving..." : "Approve and create translator"}
           </Button>
         </div>
+        {!canCreateTranslator ? (
+          <p className="mt-3 text-sm text-amber-700">
+            This submission is not eligible for review yet. The submitter must verify their email first.
+          </p>
+        ) : null}
       </section>
 
       <section className="rounded-2xl border border-border bg-surface p-5">
@@ -217,7 +249,7 @@ export function RequestDetail({ request }: RequestDetailProps) {
             <Button
               type="button"
               onClick={() => void createFromDraft()}
-              disabled={isLinked || busy === "create"}
+              disabled={isLinked || busy === "create" || !canCreateTranslator}
             >
               <Sparkles className="h-4 w-4" />
               {busy === "create" ? "Creating..." : "Create translator now"}

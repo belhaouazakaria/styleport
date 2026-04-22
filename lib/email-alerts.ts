@@ -28,6 +28,19 @@ export interface ContactMessagePayload {
   message: string;
 }
 
+export interface TranslatorRequestVerificationEmailPayload {
+  to: string;
+  requestedName: string;
+  verificationUrl: string;
+}
+
+export interface TranslatorPublishedEmailPayload {
+  to: string;
+  requestedName: string;
+  translatorName: string;
+  translatorUrl: string;
+}
+
 function escapeHtml(value: string): string {
   return value
     .replaceAll("&", "&amp;")
@@ -242,6 +255,178 @@ export async function sendContactMessageEmail(payload: ContactMessagePayload): P
     return {
       sent: false,
       error: error instanceof Error ? error.message : "Unknown contact email error.",
+    };
+  }
+}
+
+export async function sendTranslatorRequestVerificationEmail(
+  payload: TranslatorRequestVerificationEmailPayload,
+): Promise<EmailSendResult> {
+  const env = getServerEnv();
+  const apiKey = env.RESEND_API_KEY;
+  const from = env.EMAIL_FROM;
+
+  if (!apiKey) {
+    logWarn("request_verify_email_missing_key", "RESEND_API_KEY is missing; verification email was not sent.");
+    return { sent: false, error: "Missing RESEND_API_KEY." };
+  }
+
+  if (!from) {
+    logWarn("request_verify_email_missing_from", "EMAIL_FROM is missing; verification email was not sent.");
+    return { sent: false, error: "Missing EMAIL_FROM." };
+  }
+
+  const safeName = escapeHtml(payload.requestedName);
+  const safeUrl = escapeHtml(payload.verificationUrl);
+
+  try {
+    const response = await fetch(RESEND_API_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from,
+        to: [payload.to],
+        subject: "Confirm your StylePort translator idea",
+        text: [
+          `Thanks for submitting your translator idea: ${payload.requestedName}`,
+          "",
+          "Please confirm your email by clicking this one-time link:",
+          payload.verificationUrl,
+          "",
+          "This link expires in 24 hours.",
+          "If you do not see future updates from us, please check your spam/junk folder.",
+        ].join("\n"),
+        html: `
+          <div style="font-family:Inter,Segoe UI,Arial,sans-serif;color:#111827;max-width:640px;margin:0 auto;">
+            <h1 style="margin:0 0 12px;font-size:20px;">Confirm your email</h1>
+            <p style="margin:0 0 10px;line-height:1.6;">
+              Thanks for sharing your translator idea:
+              <strong>${safeName}</strong>
+            </p>
+            <p style="margin:0 0 14px;line-height:1.6;">
+              Please confirm your email address so we can notify you if this translator is approved and goes live.
+            </p>
+            <p style="margin:0 0 16px;">
+              <a href="${safeUrl}" style="display:inline-block;background:#4F46E5;color:#fff;text-decoration:none;padding:10px 14px;border-radius:10px;font-weight:600;">
+                Verify Email
+              </a>
+            </p>
+            <p style="margin:0 0 8px;line-height:1.6;color:#4B5563;">
+              If the button does not work, copy this link into your browser:
+            </p>
+            <p style="margin:0;word-break:break-all;color:#374151;">${safeUrl}</p>
+            <p style="margin:16px 0 0;color:#6B7280;">This link expires in 24 hours.</p>
+          </div>
+        `,
+      }),
+    });
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => "");
+      logWarn("request_verify_email_http_error", "Resend returned non-OK for verification email.", {
+        status: response.status,
+      });
+      return {
+        sent: false,
+        error: body || `Resend request failed with status ${response.status}.`,
+      };
+    }
+
+    return { sent: true };
+  } catch (error) {
+    logError(
+      "request_verify_email_send_error",
+      "Unexpected error while sending verification email.",
+      undefined,
+      error,
+    );
+    return {
+      sent: false,
+      error: error instanceof Error ? error.message : "Unknown verification email error.",
+    };
+  }
+}
+
+export async function sendTranslatorPublishedEmail(
+  payload: TranslatorPublishedEmailPayload,
+): Promise<EmailSendResult> {
+  const env = getServerEnv();
+  const apiKey = env.RESEND_API_KEY;
+  const from = env.EMAIL_FROM;
+
+  if (!apiKey) {
+    logWarn("request_publish_email_missing_key", "RESEND_API_KEY is missing; publish email was not sent.");
+    return { sent: false, error: "Missing RESEND_API_KEY." };
+  }
+
+  if (!from) {
+    logWarn("request_publish_email_missing_from", "EMAIL_FROM is missing; publish email was not sent.");
+    return { sent: false, error: "Missing EMAIL_FROM." };
+  }
+
+  const safeRequestedName = escapeHtml(payload.requestedName);
+  const safeTranslatorName = escapeHtml(payload.translatorName);
+  const safeUrl = escapeHtml(payload.translatorUrl);
+
+  try {
+    const response = await fetch(RESEND_API_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from,
+        to: [payload.to],
+        subject: `Your translator idea is now live: ${payload.translatorName}`,
+        text: [
+          "Great news, your translator idea is now live on StylePort.",
+          "",
+          `Your idea: ${payload.requestedName}`,
+          `Live translator: ${payload.translatorName}`,
+          `Open it: ${payload.translatorUrl}`,
+          "",
+          "Thanks for helping us improve the platform.",
+        ].join("\n"),
+        html: `
+          <div style="font-family:Inter,Segoe UI,Arial,sans-serif;color:#111827;max-width:640px;margin:0 auto;">
+            <h1 style="margin:0 0 12px;font-size:20px;">Your translator is live</h1>
+            <p style="margin:0 0 10px;line-height:1.6;">
+              Thanks again for your idea: <strong>${safeRequestedName}</strong>
+            </p>
+            <p style="margin:0 0 14px;line-height:1.6;">
+              We published it as <strong>${safeTranslatorName}</strong>.
+            </p>
+            <p style="margin:0;">
+              <a href="${safeUrl}" style="display:inline-block;background:#4F46E5;color:#fff;text-decoration:none;padding:10px 14px;border-radius:10px;font-weight:600;">
+                Try this translator
+              </a>
+            </p>
+          </div>
+        `,
+      }),
+    });
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => "");
+      logWarn("request_publish_email_http_error", "Resend returned non-OK for publish email.", {
+        status: response.status,
+      });
+      return {
+        sent: false,
+        error: body || `Resend request failed with status ${response.status}.`,
+      };
+    }
+
+    return { sent: true };
+  } catch (error) {
+    logError("request_publish_email_send_error", "Unexpected error while sending publish email.", undefined, error);
+    return {
+      sent: false,
+      error: error instanceof Error ? error.message : "Unknown publish email error.",
     };
   }
 }

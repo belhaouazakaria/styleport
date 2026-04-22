@@ -65,6 +65,14 @@ export async function POST(_: Request, context: RouteContext) {
     return apiError(409, "CONFLICT", "A translator was already created for this submission.");
   }
 
+  if (translatorRequest.requesterEmail && !translatorRequest.emailVerifiedAt) {
+    return apiError(
+      409,
+      "CONFLICT",
+      "This submission is awaiting email verification and cannot be approved yet.",
+    );
+  }
+
   if (!categories.length) {
     return apiError(400, "BAD_REQUEST", "Create at least one category before creating translators.");
   }
@@ -112,7 +120,7 @@ export async function POST(_: Request, context: RouteContext) {
 
     await linkRequestToTranslator(id, {
       translatorId: translator.id,
-      status: TranslatorRequestStatus.COMPLETED,
+      status: TranslatorRequestStatus.APPROVED,
     });
 
     return apiOk({ translator }, 201);

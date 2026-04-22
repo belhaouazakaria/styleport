@@ -257,7 +257,7 @@ export interface UsageSeriesPoint {
 }
 
 export interface TranslatorRequestInput {
-  requesterEmail?: string;
+  requesterEmail: string;
   requestedName: string;
   description: string;
   exampleInput?: string;
@@ -303,15 +303,21 @@ export interface TranslatorDraft {
 export interface AdminTranslatorRequestListItem {
   id: string;
   requesterEmail: string | null;
+  emailVerifiedAt: string | null;
   requestedName: string;
   suggestedCategory: string | null;
   status: TranslatorRequestStatus;
+  isEligibleForReview: boolean;
   createdAt: string;
 }
 
 export interface AdminTranslatorRequestDetail {
   id: string;
   requesterEmail: string | null;
+  emailVerifiedAt: string | null;
+  verificationEmailSentAt: string | null;
+  publishedNotificationSentAt: string | null;
+  isEligibleForReview: boolean;
   requestedName: string;
   description: string;
   exampleInput: string | null;

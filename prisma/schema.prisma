@@ -50,12 +50,15 @@ enum AdProviderType {
 }
 
 enum TranslatorRequestStatus {
+  PENDING_EMAIL_VERIFICATION
+  PENDING_REVIEW
   NEW
   REVIEWING
   DRAFT_GENERATED
   APPROVED
   REJECTED
   COMPLETED
+  PUBLISHED
 }
 
 enum FeaturedSource {
@@ -297,6 +300,11 @@ model UsageProtectionEvent {
 model TranslatorRequest {
   id                  String                  @id @default(cuid())
   requesterEmail      String?
+  emailVerifiedAt     DateTime?
+  verificationTokenHash String?
+  verificationTokenExpiresAt DateTime?
+  verificationEmailSentAt DateTime?
+  publishedNotificationSentAt DateTime?
   requestedName       String
   description         String
   exampleInput        String?
@@ -305,7 +313,7 @@ model TranslatorRequest {
   audience            String?
   notes               String?
   adminNotes          String?
-  status              TranslatorRequestStatus @default(NEW)
+  status              TranslatorRequestStatus @default(PENDING_EMAIL_VERIFICATION)
   aiDraftJson         Json?
   aiDraftGeneratedAt  DateTime?
   createdTranslatorId String?
@@ -316,6 +324,8 @@ model TranslatorRequest {
   @@index([status, createdAt])
   @@index([createdAt])
   @@index([createdTranslatorId])
+  @@index([verificationTokenHash])
+  @@index([requesterEmail, status])
 }
 
 model AdPlacement {

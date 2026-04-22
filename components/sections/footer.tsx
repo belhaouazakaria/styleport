@@ -68,11 +68,6 @@ export function Footer({ platformName }: FooterProps) {
                   Contact
                 </Link>
               </li>
-              <li>
-                <Link href="/admin" className="text-ink transition hover:text-brand-700">
-                  Admin
-                </Link>
-              </li>
             </ul>
           </div>
         </div>
