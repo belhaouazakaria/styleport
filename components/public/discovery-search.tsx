@@ -47,20 +47,32 @@ export function DiscoverySearch({ q, category }: DiscoverySearchProps) {
       return;
     }
 
+    const abortController = new AbortController();
     const timer = setTimeout(async () => {
       setLoading(true);
       try {
-        const response = await fetch(`/api/translators/suggest?q=${encodeURIComponent(query)}`);
+        const response = await fetch(`/api/translators/suggest?q=${encodeURIComponent(query)}`, {
+          signal: abortController.signal,
+        });
         const payload = await response.json();
         if (response.ok && payload.ok) {
           setSuggestions(payload.suggestions || []);
         }
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
       } finally {
-        setLoading(false);
+        if (!abortController.signal.aborted) {
+          setLoading(false);
+        }
       }
     }, 180);
 
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      abortController.abort();
+    };
   }, [query]);
 
   return (

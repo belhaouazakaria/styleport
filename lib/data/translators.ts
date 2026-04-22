@@ -23,10 +23,78 @@ import type {
 } from "@/lib/types";
 
 const TRANSLATION_SUCCESS_RECALC_THROTTLE_MS = 60_000;
+const PUBLIC_CATEGORY_CACHE_TTL_MS = 60_000;
+const FEATURED_TRANSLATOR_CACHE_TTL_MS = 30_000;
+const SEARCH_SUGGESTION_CACHE_TTL_MS = 15_000;
+const SEARCH_SUGGESTION_CACHE_MAX_ENTRIES = 120;
+const RUNTIME_TRANSLATOR_CACHE_TTL_MS = 20_000;
 
 let autoFeaturedRecalcInFlight: Promise<void> | null = null;
 let lastTranslationSuccessRecalcAttemptAt = 0;
 let canUseFeaturedRankOrder = true;
+let publicCategoriesCache:
+  | {
+      expiresAt: number;
+      value: Awaited<ReturnType<typeof fetchPublicCategoriesFromDb>>;
+    }
+  | null = null;
+let publicCategoriesInFlight: Promise<Awaited<ReturnType<typeof fetchPublicCategoriesFromDb>>> | null = null;
+const featuredTranslatorCache = new Map<
+  string,
+  {
+    expiresAt: number;
+    value: PublicTranslator[];
+  }
+>();
+const featuredTranslatorInFlight = new Map<string, Promise<PublicTranslator[]>>();
+const searchSuggestionCache = new Map<
+  string,
+  {
+    expiresAt: number;
+    value: Awaited<ReturnType<typeof querySearchSuggestionsFromDb>>;
+  }
+>();
+const searchSuggestionInFlight = new Map<
+  string,
+  Promise<Awaited<ReturnType<typeof querySearchSuggestionsFromDb>>>
+>();
+const runtimeTranslatorCache = new Map<
+  string,
+  {
+    expiresAt: number;
+    value: RuntimeTranslator | null;
+  }
+>();
+const runtimeTranslatorInFlight = new Map<string, Promise<RuntimeTranslator | null>>();
+
+function invalidatePublicTranslatorCaches() {
+  publicCategoriesCache = null;
+  publicCategoriesInFlight = null;
+  featuredTranslatorCache.clear();
+  featuredTranslatorInFlight.clear();
+  searchSuggestionCache.clear();
+  searchSuggestionInFlight.clear();
+  runtimeTranslatorCache.clear();
+  runtimeTranslatorInFlight.clear();
+}
+
+function pruneExpiringMap<T>(map: Map<string, { expiresAt: number; value: T }>, now: number) {
+  for (const [key, entry] of map.entries()) {
+    if (entry.expiresAt <= now) {
+      map.delete(key);
+    }
+  }
+}
+
+function pruneSuggestionCacheSize() {
+  while (searchSuggestionCache.size > SEARCH_SUGGESTION_CACHE_MAX_ENTRIES) {
+    const oldestKey = searchSuggestionCache.keys().next().value;
+    if (!oldestKey) {
+      break;
+    }
+    searchSuggestionCache.delete(oldestKey);
+  }
+}
 
 const publicTranslatorInclude = {
   modes: {
@@ -292,6 +360,8 @@ export async function recalculateAutoFeaturedTranslators(options?: {
     });
   });
 
+  invalidatePublicTranslatorCaches();
+
   return {
     updated: true,
     windowDays,
@@ -444,7 +514,7 @@ export async function getAutoFeaturedSummary(windowDays?: number): Promise<AutoF
   }));
 }
 
-export async function getPublicCategories() {
+async function fetchPublicCategoriesFromDb() {
   return prisma.category.findMany({
     where: {
       isActive: true,
@@ -462,6 +532,34 @@ export async function getPublicCategories() {
       seoDescription: true,
     },
   });
+}
+
+export async function getPublicCategories() {
+  const now = Date.now();
+  if (publicCategoriesCache && publicCategoriesCache.expiresAt > now) {
+    return publicCategoriesCache.value;
+  }
+
+  if (publicCategoriesInFlight) {
+    return publicCategoriesInFlight;
+  }
+
+  const task = fetchPublicCategoriesFromDb()
+    .then((rows) => {
+      publicCategoriesCache = {
+        value: rows,
+        expiresAt: Date.now() + PUBLIC_CATEGORY_CACHE_TTL_MS,
+      };
+      return rows;
+    })
+    .finally(() => {
+      if (publicCategoriesInFlight === task) {
+        publicCategoriesInFlight = null;
+      }
+    });
+
+  publicCategoriesInFlight = task;
+  return task;
 }
 
 export async function getDiscoveryResult(query: DiscoveryQuery): Promise<DiscoveryResult> {
@@ -493,11 +591,7 @@ export async function getDiscoveryResult(query: DiscoveryQuery): Promise<Discove
   };
 }
 
-export async function getSearchSuggestions(query: string, limit = 8) {
-  if (!query.trim()) {
-    return [];
-  }
-
+async function querySearchSuggestionsFromDb(query: string, limit: number) {
   const rows = await prisma.translator.findMany({
     where: {
       isActive: true,
@@ -543,8 +637,58 @@ export async function getSearchSuggestions(query: string, limit = 8) {
   }));
 }
 
+export async function getSearchSuggestions(query: string, limit = 8) {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) {
+    return [];
+  }
+
+  const cacheKey = `${limit}:${normalizedQuery}`;
+  const now = Date.now();
+
+  pruneExpiringMap(searchSuggestionCache, now);
+  const cached = searchSuggestionCache.get(cacheKey);
+  if (cached && cached.expiresAt > now) {
+    return cached.value;
+  }
+
+  const inFlight = searchSuggestionInFlight.get(cacheKey);
+  if (inFlight) {
+    return inFlight;
+  }
+
+  const task = querySearchSuggestionsFromDb(normalizedQuery, limit)
+    .then((rows) => {
+      searchSuggestionCache.set(cacheKey, {
+        value: rows,
+        expiresAt: Date.now() + SEARCH_SUGGESTION_CACHE_TTL_MS,
+      });
+      pruneSuggestionCacheSize();
+      return rows;
+    })
+    .finally(() => {
+      searchSuggestionInFlight.delete(cacheKey);
+    });
+
+  searchSuggestionInFlight.set(cacheKey, task);
+  return task;
+}
+
 export async function getFeaturedPublicTranslators(limit = 6): Promise<PublicTranslator[]> {
   const settings = await getAppSettings();
+  const cacheKey = `${limit}:${settings.autoFeaturedEnabled ? "auto" : "manual"}:${canUseFeaturedRankOrder ? "rank" : "fallback"}`;
+  const now = Date.now();
+  const cached = featuredTranslatorCache.get(cacheKey);
+  if (cached && cached.expiresAt > now) {
+    return cached.value;
+  }
+
+  const existingTask = featuredTranslatorInFlight.get(cacheKey);
+  if (existingTask) {
+    return existingTask;
+  }
+
+  const task = (async () => {
   const fallbackOrder: Prisma.TranslatorOrderByWithRelationInput[] = [{ sortOrder: "asc" }, { updatedAt: "desc" }];
   const preferredOrder: Prisma.TranslatorOrderByWithRelationInput[] =
     settings.autoFeaturedEnabled && canUseFeaturedRankOrder
@@ -586,7 +730,18 @@ export async function getFeaturedPublicTranslators(limit = 6): Promise<PublicTra
     }
   }
 
-  return translators.map(mapPublicTranslator);
+    const mapped = translators.map(mapPublicTranslator);
+    featuredTranslatorCache.set(cacheKey, {
+      value: mapped,
+      expiresAt: Date.now() + FEATURED_TRANSLATOR_CACHE_TTL_MS,
+    });
+    return mapped;
+  })().finally(() => {
+    featuredTranslatorInFlight.delete(cacheKey);
+  });
+
+  featuredTranslatorInFlight.set(cacheKey, task);
+  return task;
 }
 
 export async function getPublicTranslatorBySlug(slug: string): Promise<PublicTranslator | null> {
@@ -622,7 +777,7 @@ export async function getDefaultPublicTranslator(): Promise<PublicTranslator | n
   return fallback ? mapPublicTranslator(fallback) : null;
 }
 
-export async function getRuntimeTranslatorBySlug(slug: string): Promise<RuntimeTranslator | null> {
+async function queryRuntimeTranslatorBySlug(slug: string): Promise<RuntimeTranslator | null> {
   const translator = await prisma.translator.findUnique({
     where: { slug },
     select: {
@@ -658,6 +813,39 @@ export async function getRuntimeTranslatorBySlug(slug: string): Promise<RuntimeT
     showModeSelector: translator.showModeSelector,
     modes: translator.modes,
   };
+}
+
+export async function getRuntimeTranslatorBySlug(slug: string): Promise<RuntimeTranslator | null> {
+  const normalizedSlug = slug.trim().toLowerCase();
+  if (!normalizedSlug) {
+    return null;
+  }
+
+  const now = Date.now();
+  const cached = runtimeTranslatorCache.get(normalizedSlug);
+  if (cached && cached.expiresAt > now) {
+    return cached.value;
+  }
+
+  const existingTask = runtimeTranslatorInFlight.get(normalizedSlug);
+  if (existingTask) {
+    return existingTask;
+  }
+
+  const task = queryRuntimeTranslatorBySlug(normalizedSlug)
+    .then((translator) => {
+      runtimeTranslatorCache.set(normalizedSlug, {
+        value: translator,
+        expiresAt: Date.now() + RUNTIME_TRANSLATOR_CACHE_TTL_MS,
+      });
+      return translator;
+    })
+    .finally(() => {
+      runtimeTranslatorInFlight.delete(normalizedSlug);
+    });
+
+  runtimeTranslatorInFlight.set(normalizedSlug, task);
+  return task;
 }
 
 export async function getDefaultRuntimeTranslator(): Promise<RuntimeTranslator | null> {
@@ -907,6 +1095,7 @@ export async function createTranslator(input: TranslatorUpsertInput) {
     await maybeRecalculateAutoFeaturedTranslators("settings-save");
   }
 
+  invalidatePublicTranslatorCaches();
   return created;
 }
 
@@ -1003,6 +1192,7 @@ export async function updateTranslator(id: string, input: TranslatorUpsertInput)
     await maybeRecalculateAutoFeaturedTranslators("settings-save");
   }
 
+  invalidatePublicTranslatorCaches();
   return updated;
 }
 
@@ -1080,6 +1270,7 @@ export async function duplicateTranslator(id: string) {
 
   await ensureTranslatorShareImageById(duplicated.id);
 
+  invalidatePublicTranslatorCaches();
   return duplicated;
 }
 
@@ -1100,6 +1291,7 @@ export async function toggleTranslatorActive(id: string, active?: boolean) {
   });
 
   await maybeRecalculateAutoFeaturedTranslators("settings-save");
+  invalidatePublicTranslatorCaches();
   return updated;
 }
 
@@ -1115,6 +1307,7 @@ export async function archiveTranslator(id: string) {
   });
 
   await maybeRecalculateAutoFeaturedTranslators("settings-save");
+  invalidatePublicTranslatorCaches();
   return updated;
 }
 
@@ -1128,6 +1321,7 @@ export async function unarchiveTranslator(id: string) {
   });
 
   await maybeRecalculateAutoFeaturedTranslators("settings-save");
+  invalidatePublicTranslatorCaches();
   return updated;
 }
 
@@ -1141,6 +1335,7 @@ export async function hardDeleteTranslator(id: string) {
   await deleteStoredShareImage(existing?.shareImagePath || null);
 
   await maybeRecalculateAutoFeaturedTranslators("settings-save");
+  invalidatePublicTranslatorCaches();
   return deleted;
 }
 

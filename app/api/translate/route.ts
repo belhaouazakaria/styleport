@@ -17,6 +17,7 @@ import { getAppSettings } from "@/lib/settings";
 import {
   evaluatePostSuccessTokenCap,
   getRequestIdentity,
+  registerSuccessfulTokenUsage,
   runUsageProtectionPrecheck,
 } from "@/lib/usage-protection";
 
@@ -138,6 +139,7 @@ export async function POST(request: Request) {
         ipHash: identity.ipHash,
         userAgent: identity.userAgent,
       });
+      registerSuccessfulTokenUsage(generated.totalTokens);
     } catch {
       // Non-blocking log path.
     }

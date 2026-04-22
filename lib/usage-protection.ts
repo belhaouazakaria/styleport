@@ -1,4 +1,4 @@
-import { TranslationStatus, UsageProtectionEventType } from "@prisma/client";
+import { TranslationStatus, UsageProtectionEventType, type UsageProtectionState } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
 
 import {
@@ -15,6 +15,9 @@ import type { ApiErrorCode, UsageProtectionDashboardData, UsageProtectionSetting
 import { extractClientIp, hashIp } from "@/lib/utils";
 
 type DbClient = Prisma.TransactionClient | typeof prisma;
+
+const USAGE_STATE_CACHE_TTL_MS = 5_000;
+const DAILY_TOKEN_USAGE_CACHE_TTL_MS = 5_000;
 
 export type UsageBlockReason =
   | "IP_MINUTE_LIMIT"
@@ -52,6 +55,21 @@ const IP_MINUTE_MESSAGE = "Too many requests right now. Please try again shortly
 const IP_HOUR_MESSAGE = "You've reached the hourly limit for this tool. Please try again later.";
 const IP_DAY_MESSAGE = "You've reached the daily usage limit for this tool. Please try again tomorrow.";
 const EMERGENCY_MESSAGE = "Translation is temporarily unavailable while we review system usage.";
+
+let usageProtectionStateCache:
+  | {
+      expiresAt: number;
+      value: UsageProtectionState;
+    }
+  | null = null;
+let usageProtectionStateInFlight: Promise<UsageProtectionState> | null = null;
+let globalDailyTokenUsageCache:
+  | {
+      dayKey: string;
+      expiresAt: number;
+      value: number;
+    }
+  | null = null;
 
 function parseBoolean(value: string | undefined, fallback: boolean): boolean {
   if (typeof value !== "string") {
@@ -132,24 +150,68 @@ async function resolveAlertEmail(db: DbClient, stateAlertEmail?: string | null):
   return admin?.email || null;
 }
 
-export async function getOrCreateUsageProtectionState(db: DbClient = prisma) {
-  const defaults = getDefaultStateValues();
+function toUtcDayKey(referenceDate = new Date()) {
+  return referenceDate.toISOString().slice(0, 10);
+}
 
-  return db.usageProtectionState.upsert({
-    where: { id: USAGE_PROTECTION_STATE_ID },
-    update: {},
-    create: {
-      id: USAGE_PROTECTION_STATE_ID,
-      usageProtectionEnabled: defaults.usageProtectionEnabled,
-      ipLimitPerMinute: defaults.ipLimitPerMinute,
-      ipLimitPerHour: defaults.ipLimitPerHour,
-      ipLimitPerDay: defaults.ipLimitPerDay,
-      globalDailyTokenCap: defaults.globalDailyTokenCap,
-      autoEmergencyShutdownEnabled: defaults.autoEmergencyShutdownEnabled,
-      translationsEnabled: true,
-      alertEmail: defaults.alertEmail,
-    },
-  });
+function setUsageProtectionStateCache(state: UsageProtectionState) {
+  usageProtectionStateCache = {
+    value: state,
+    expiresAt: Date.now() + USAGE_STATE_CACHE_TTL_MS,
+  };
+}
+
+function invalidateGlobalDailyTokenUsageCache() {
+  globalDailyTokenUsageCache = null;
+}
+
+export async function getOrCreateUsageProtectionState(db: DbClient = prisma) {
+  const isDefaultClient = db === prisma;
+  const now = Date.now();
+
+  if (isDefaultClient && usageProtectionStateCache && usageProtectionStateCache.expiresAt > now) {
+    return usageProtectionStateCache.value;
+  }
+
+  if (isDefaultClient && usageProtectionStateInFlight) {
+    return usageProtectionStateInFlight;
+  }
+
+  const defaults = getDefaultStateValues();
+  const runUpsert = async () =>
+    db.usageProtectionState.upsert({
+      where: { id: USAGE_PROTECTION_STATE_ID },
+      update: {},
+      create: {
+        id: USAGE_PROTECTION_STATE_ID,
+        usageProtectionEnabled: defaults.usageProtectionEnabled,
+        ipLimitPerMinute: defaults.ipLimitPerMinute,
+        ipLimitPerHour: defaults.ipLimitPerHour,
+        ipLimitPerDay: defaults.ipLimitPerDay,
+        globalDailyTokenCap: defaults.globalDailyTokenCap,
+        autoEmergencyShutdownEnabled: defaults.autoEmergencyShutdownEnabled,
+        translationsEnabled: true,
+        alertEmail: defaults.alertEmail,
+      },
+    });
+
+  if (!isDefaultClient) {
+    return runUpsert();
+  }
+
+  const task = runUpsert()
+    .then((state) => {
+      setUsageProtectionStateCache(state);
+      return state;
+    })
+    .finally(() => {
+      if (usageProtectionStateInFlight === task) {
+        usageProtectionStateInFlight = null;
+      }
+    });
+
+  usageProtectionStateInFlight = task;
+  return task;
 }
 
 export function getUtcDayWindow(referenceDate = new Date()): { start: Date; endExclusive: Date } {
@@ -202,7 +264,23 @@ async function getIpUsageCounts(ipHash: string, now = new Date()): Promise<Usage
   return { minute, hour, day };
 }
 
-export async function getGlobalDailyTokenUsage(referenceDate = new Date()): Promise<number> {
+export async function getGlobalDailyTokenUsage(
+  referenceDate = new Date(),
+  options?: { forceRefresh?: boolean },
+): Promise<number> {
+  const forceRefresh = options?.forceRefresh === true;
+  const dayKey = toUtcDayKey(referenceDate);
+  const now = Date.now();
+
+  if (
+    !forceRefresh &&
+    globalDailyTokenUsageCache &&
+    globalDailyTokenUsageCache.dayKey === dayKey &&
+    globalDailyTokenUsageCache.expiresAt > now
+  ) {
+    return globalDailyTokenUsageCache.value;
+  }
+
   const { start, endExclusive } = getUtcDayWindow(referenceDate);
   const aggregate = await prisma.translationLog.aggregate({
     where: {
@@ -217,7 +295,30 @@ export async function getGlobalDailyTokenUsage(referenceDate = new Date()): Prom
     },
   });
 
-  return aggregate._sum.totalTokens || 0;
+  const total = aggregate._sum.totalTokens || 0;
+  globalDailyTokenUsageCache = {
+    dayKey,
+    value: total,
+    expiresAt: now + DAILY_TOKEN_USAGE_CACHE_TTL_MS,
+  };
+  return total;
+}
+
+export function registerSuccessfulTokenUsage(totalTokens: number | null | undefined, recordedAt = new Date()) {
+  if (typeof totalTokens !== "number" || !Number.isFinite(totalTokens) || totalTokens <= 0 || !globalDailyTokenUsageCache) {
+    return;
+  }
+
+  const dayKey = toUtcDayKey(recordedAt);
+  if (globalDailyTokenUsageCache.dayKey !== dayKey) {
+    return;
+  }
+
+  globalDailyTokenUsageCache = {
+    ...globalDailyTokenUsageCache,
+    value: globalDailyTokenUsageCache.value + totalTokens,
+    expiresAt: Date.now() + DAILY_TOKEN_USAGE_CACHE_TTL_MS,
+  };
 }
 
 function blockResponse(
@@ -337,6 +438,8 @@ export async function triggerEmergencyShutdown(params: {
     await sendEmergencyAlertIfNeeded(result.eventId);
   }
 
+  setUsageProtectionStateCache(result.state);
+
   return result;
 }
 
@@ -444,49 +547,59 @@ export async function sendEmergencyAlertIfNeeded(eventId: string) {
 
 export async function runUsageProtectionPrecheck(params: { ipHash: string }): Promise<UsagePrecheckResult> {
   const state = await getOrCreateUsageProtectionState();
-  const dailyTokenUsage = await getGlobalDailyTokenUsage();
   const tokenCap = state.globalDailyTokenCap;
+  let dailyTokenUsageCache: number | null = null;
+
+  const resolveDailyTokenUsage = async () => {
+    if (dailyTokenUsageCache == null) {
+      dailyTokenUsageCache = await getGlobalDailyTokenUsage();
+    }
+    return dailyTokenUsageCache;
+  };
 
   if (!state.translationsEnabled) {
-    return blockResponse("EMERGENCY_SHUTDOWN", dailyTokenUsage, tokenCap);
+    return blockResponse("EMERGENCY_SHUTDOWN", await resolveDailyTokenUsage(), tokenCap);
   }
 
   if (!state.usageProtectionEnabled) {
     return {
       blocked: false,
-      dailyTokenUsage,
+      dailyTokenUsage: 0,
       tokenCap,
       ipCounts: { minute: 0, hour: 0, day: 0 },
     };
   }
 
-  if (state.autoEmergencyShutdownEnabled && dailyTokenUsage >= tokenCap) {
-    await triggerEmergencyShutdown({
-      reason: "Global daily token cap reached.",
-      tokenUsageAtTrigger: dailyTokenUsage,
-      tokenCapAtTrigger: tokenCap,
-    });
+  if (state.autoEmergencyShutdownEnabled) {
+    const dailyTokenUsage = await resolveDailyTokenUsage();
+    if (dailyTokenUsage >= tokenCap) {
+      await triggerEmergencyShutdown({
+        reason: "Global daily token cap reached.",
+        tokenUsageAtTrigger: dailyTokenUsage,
+        tokenCapAtTrigger: tokenCap,
+      });
 
-    return blockResponse("GLOBAL_TOKEN_CAP_REACHED", dailyTokenUsage, tokenCap);
+      return blockResponse("GLOBAL_TOKEN_CAP_REACHED", dailyTokenUsage, tokenCap);
+    }
   }
 
   const ipCounts = await getIpUsageCounts(params.ipHash);
 
   if (ipCounts.minute >= state.ipLimitPerMinute) {
-    return blockResponse("IP_MINUTE_LIMIT", dailyTokenUsage, tokenCap);
+    return blockResponse("IP_MINUTE_LIMIT", await resolveDailyTokenUsage(), tokenCap);
   }
 
   if (ipCounts.hour >= state.ipLimitPerHour) {
-    return blockResponse("IP_HOUR_LIMIT", dailyTokenUsage, tokenCap);
+    return blockResponse("IP_HOUR_LIMIT", await resolveDailyTokenUsage(), tokenCap);
   }
 
   if (ipCounts.day >= state.ipLimitPerDay) {
-    return blockResponse("IP_DAY_LIMIT", dailyTokenUsage, tokenCap);
+    return blockResponse("IP_DAY_LIMIT", await resolveDailyTokenUsage(), tokenCap);
   }
 
   return {
     blocked: false,
-    dailyTokenUsage,
+    dailyTokenUsage: dailyTokenUsageCache ?? 0,
     tokenCap,
     ipCounts,
   };
@@ -676,6 +789,9 @@ export async function updateUsageProtectionSettings(input: UsageProtectionSettin
     },
   });
 
+  setUsageProtectionStateCache(updated);
+  invalidateGlobalDailyTokenUsageCache();
+
   return mapStateDto(updated);
 }
 
@@ -728,6 +844,9 @@ export async function manuallyReenableTranslations(params?: { actorId?: string; 
       state: updated,
     };
   });
+
+  setUsageProtectionStateCache(result.state);
+  invalidateGlobalDailyTokenUsageCache();
 
   return {
     reenabled: result.reenabled,

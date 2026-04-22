@@ -7,6 +7,8 @@ import {
 import { prisma } from "@/lib/prisma";
 import type { AppSettings } from "@/lib/types";
 
+const SETTINGS_CACHE_TTL_MS = 15_000;
+
 const defaultSettings: AppSettings = {
   platformName: APP_NAME,
   homepageTitle: "Discover Translators for Every Style",
@@ -27,8 +29,15 @@ const defaultSettings: AppSettings = {
   adSenseClientId: "",
 };
 
-export async function getAppSettings(): Promise<AppSettings> {
-  const rows = await prisma.appSetting.findMany();
+let appSettingsCache:
+  | {
+      expiresAt: number;
+      value: AppSettings;
+    }
+  | null = null;
+let appSettingsInFlight: Promise<AppSettings> | null = null;
+
+function mapRowsToSettings(rows: Array<{ key: string; value: unknown }>): AppSettings {
   const map = new Map(rows.map((row) => [row.key, row.value]));
 
   return {
@@ -75,6 +84,42 @@ export async function getAppSettings(): Promise<AppSettings> {
   };
 }
 
+export function invalidateAppSettingsCache() {
+  appSettingsCache = null;
+}
+
+export async function getAppSettings(options?: { forceRefresh?: boolean }): Promise<AppSettings> {
+  const forceRefresh = options?.forceRefresh === true;
+  const now = Date.now();
+
+  if (!forceRefresh && appSettingsCache && appSettingsCache.expiresAt > now) {
+    return appSettingsCache.value;
+  }
+
+  if (!forceRefresh && appSettingsInFlight) {
+    return appSettingsInFlight;
+  }
+
+  const task = prisma.appSetting
+    .findMany()
+    .then((rows) => {
+      const value = mapRowsToSettings(rows);
+      appSettingsCache = {
+        value,
+        expiresAt: Date.now() + SETTINGS_CACHE_TTL_MS,
+      };
+      return value;
+    })
+    .finally(() => {
+      if (appSettingsInFlight === task) {
+        appSettingsInFlight = null;
+      }
+    });
+
+  appSettingsInFlight = task;
+  return task;
+}
+
 export async function updateAppSettings(settings: AppSettings): Promise<void> {
   const entries = [
     [APP_SETTING_KEYS.PLATFORM_NAME, settings.platformName],
@@ -105,4 +150,6 @@ export async function updateAppSettings(settings: AppSettings): Promise<void> {
       }),
     ),
   );
+
+  invalidateAppSettingsCache();
 }

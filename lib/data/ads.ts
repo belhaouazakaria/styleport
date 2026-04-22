@@ -5,10 +5,26 @@ import { ensureUniqueSlug } from "@/lib/slug";
 import { getAppSettings } from "@/lib/settings";
 import type { AdPlacementUpsertInput } from "@/lib/types";
 
+const RENDERABLE_AD_CACHE_TTL_MS = 30_000;
+
 export interface AdRenderContext {
   pageType: AdPageType;
   deviceType: AdDeviceType;
   categorySlug?: string;
+}
+
+const renderableAdCache = new Map<
+  string,
+  {
+    expiresAt: number;
+    value: Awaited<ReturnType<typeof queryRenderableAdPlacements>>;
+  }
+>();
+const renderableAdInFlight = new Map<string, Promise<Awaited<ReturnType<typeof queryRenderableAdPlacements>>>>();
+
+function invalidateRenderableAdCache() {
+  renderableAdCache.clear();
+  renderableAdInFlight.clear();
 }
 
 export async function listAdminAds() {
@@ -56,7 +72,7 @@ export async function createAdPlacement(input: AdPlacementUpsertInput) {
     field: "key",
   });
 
-  return prisma.adPlacement.create({
+  const created = await prisma.adPlacement.create({
     data: {
       name: input.name,
       key,
@@ -72,6 +88,9 @@ export async function createAdPlacement(input: AdPlacementUpsertInput) {
       sortOrder: input.sortOrder,
     },
   });
+
+  invalidateRenderableAdCache();
+  return created;
 }
 
 export async function updateAdPlacement(id: string, input: AdPlacementUpsertInput) {
@@ -82,7 +101,7 @@ export async function updateAdPlacement(id: string, input: AdPlacementUpsertInpu
     excludeId: id,
   });
 
-  return prisma.adPlacement.update({
+  const updated = await prisma.adPlacement.update({
     where: { id },
     data: {
       name: input.name,
@@ -100,33 +119,44 @@ export async function updateAdPlacement(id: string, input: AdPlacementUpsertInpu
       archivedAt: input.isActive ? null : undefined,
     },
   });
+
+  invalidateRenderableAdCache();
+  return updated;
 }
 
 export async function archiveAdPlacement(id: string) {
-  return prisma.adPlacement.update({
+  const updated = await prisma.adPlacement.update({
     where: { id },
     data: {
       archivedAt: new Date(),
       isActive: false,
     },
   });
+
+  invalidateRenderableAdCache();
+  return updated;
 }
 
 export async function unarchiveAdPlacement(id: string) {
-  return prisma.adPlacement.update({
+  const updated = await prisma.adPlacement.update({
     where: { id },
     data: {
       archivedAt: null,
       isActive: true,
     },
   });
+
+  invalidateRenderableAdCache();
+  return updated;
 }
 
 export async function hardDeleteAdPlacement(id: string) {
-  return prisma.adPlacement.delete({ where: { id } });
+  const deleted = await prisma.adPlacement.delete({ where: { id } });
+  invalidateRenderableAdCache();
+  return deleted;
 }
 
-export async function getRenderableAdPlacements(context: AdRenderContext) {
+async function queryRenderableAdPlacements(context: AdRenderContext) {
   const settings = await getAppSettings();
   if (!settings.adsEnabled) {
     return [];
@@ -162,4 +192,33 @@ export async function getRenderableAdPlacements(context: AdRenderContext) {
     if (!context.categorySlug) return false;
     return !item.category || item.category.slug === context.categorySlug;
   });
+}
+
+export async function getRenderableAdPlacements(context: AdRenderContext) {
+  const cacheKey = `${context.pageType}:${context.deviceType}:${context.categorySlug || "-"}`;
+  const now = Date.now();
+  const cached = renderableAdCache.get(cacheKey);
+  if (cached && cached.expiresAt > now) {
+    return cached.value;
+  }
+
+  const existingTask = renderableAdInFlight.get(cacheKey);
+  if (existingTask) {
+    return existingTask;
+  }
+
+  const task = queryRenderableAdPlacements(context)
+    .then((placements) => {
+      renderableAdCache.set(cacheKey, {
+        value: placements,
+        expiresAt: Date.now() + RENDERABLE_AD_CACHE_TTL_MS,
+      });
+      return placements;
+    })
+    .finally(() => {
+      renderableAdInFlight.delete(cacheKey);
+    });
+
+  renderableAdInFlight.set(cacheKey, task);
+  return task;
 }

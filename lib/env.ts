@@ -49,17 +49,24 @@ const envSchema = z.object({
 
 export type ServerEnv = z.infer<typeof envSchema>;
 
+let cachedServerEnv: ServerEnv | null = null;
+
 function formatIssues(issues: z.ZodIssue[]) {
   return issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join("; ");
 }
 
 export function getServerEnv(): ServerEnv {
+  if (cachedServerEnv) {
+    return cachedServerEnv;
+  }
+
   const parsed = envSchema.safeParse(process.env);
   if (!parsed.success) {
     throw new Error(`Invalid environment configuration: ${formatIssues(parsed.error.issues)}`);
   }
 
-  return parsed.data;
+  cachedServerEnv = parsed.data;
+  return cachedServerEnv;
 }
 
 export function getAppBaseUrl() {

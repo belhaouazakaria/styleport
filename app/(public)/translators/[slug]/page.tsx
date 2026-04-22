@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { AdDeviceType, AdPageType } from "@prisma/client";
+import { cache } from "react";
 
 import { Breadcrumbs } from "@/components/public/breadcrumbs";
 import { Footer } from "@/components/sections/footer";
@@ -19,9 +20,11 @@ interface PageProps {
 
 export const dynamic = "force-dynamic";
 
+const loadPublicTranslatorBySlug = cache(async (slug: string) => getPublicTranslatorBySlug(slug));
+
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const translator = await getPublicTranslatorBySlug(slug);
+  const translator = await loadPublicTranslatorBySlug(slug);
 
   if (!translator) {
     return {
@@ -61,7 +64,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function TranslatorSlugPage({ params }: PageProps) {
   const { slug } = await params;
-  const translator = await getPublicTranslatorBySlug(slug);
+  const translator = await loadPublicTranslatorBySlug(slug);
 
   if (!translator) {
     notFound();
