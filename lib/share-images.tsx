@@ -12,12 +12,25 @@ import { getAppSettings } from "@/lib/settings";
 
 const SHARE_IMAGE_WIDTH = 1000;
 const SHARE_IMAGE_HEIGHT = 1500;
-const SHARE_IMAGE_FONT_NAME = "SharePosterMontserrat";
-const SHARE_IMAGE_FONT_FAMILY = `"${SHARE_IMAGE_FONT_NAME}", "Arial Black", "Segoe UI Black", Impact, Haettenschweiler, "Franklin Gothic Heavy", sans-serif`;
-const MONTSERRAT_EXTRABOLD_URL =
-  "https://raw.githubusercontent.com/google/fonts/main/ofl/montserrat/Montserrat-ExtraBold.ttf";
-const MONTSERRAT_BLACK_URL =
-  "https://raw.githubusercontent.com/google/fonts/main/ofl/montserrat/Montserrat-Black.ttf";
+const SHARE_IMAGE_HEADLINE_FONT_NAME = "SharePosterAnton";
+const SHARE_IMAGE_SUPPORT_FONT_NAME = "SharePosterMontserrat";
+const SHARE_IMAGE_HEADLINE_FONT_FAMILY = `"${SHARE_IMAGE_HEADLINE_FONT_NAME}", "${SHARE_IMAGE_SUPPORT_FONT_NAME}", "Arial Black", "Segoe UI Black", Impact, Haettenschweiler, "Franklin Gothic Heavy", sans-serif`;
+const SHARE_IMAGE_SUPPORT_FONT_FAMILY = `"${SHARE_IMAGE_SUPPORT_FONT_NAME}", "${SHARE_IMAGE_HEADLINE_FONT_NAME}", "Arial Black", "Segoe UI Black", Impact, Haettenschweiler, "Franklin Gothic Heavy", sans-serif`;
+
+const ANTON_FONT_URLS = [
+  "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/anton/Anton-Regular.ttf",
+  "https://raw.githubusercontent.com/google/fonts/main/ofl/anton/Anton-Regular.ttf",
+];
+
+const MONTSERRAT_EXTRABOLD_FONT_URLS = [
+  "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/montserrat/Montserrat-ExtraBold.ttf",
+  "https://raw.githubusercontent.com/google/fonts/main/ofl/montserrat/Montserrat-ExtraBold.ttf",
+];
+
+const MONTSERRAT_BLACK_FONT_URLS = [
+  "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/montserrat/Montserrat-Black.ttf",
+  "https://raw.githubusercontent.com/google/fonts/main/ofl/montserrat/Montserrat-Black.ttf",
+];
 
 const publicPathPrefix = (() => {
   const raw = (process.env.SHARE_IMAGE_PUBLIC_PATH_PREFIX || "/generated/pins").trim();
@@ -299,6 +312,20 @@ async function fetchFont(url: string) {
   return response.arrayBuffer();
 }
 
+async function fetchFirstAvailableFont(urls: string[], fontLabel: string) {
+  const errors: string[] = [];
+
+  for (const url of urls) {
+    try {
+      return await fetchFont(url);
+    } catch (error) {
+      errors.push(`${url}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  throw new Error(`${fontLabel} could not be loaded. Attempts: ${errors.join(" | ")}`);
+}
+
 async function getShareImageFonts() {
   if (shareImageFontsPromise) {
     return shareImageFontsPromise;
@@ -306,23 +333,43 @@ async function getShareImageFonts() {
 
   shareImageFontsPromise = (async () => {
     try {
-      const [extraBoldResult, blackResult] = await Promise.allSettled([
-        fetchFont(MONTSERRAT_EXTRABOLD_URL),
-        fetchFont(MONTSERRAT_BLACK_URL),
+      const [antonResult, extraBoldResult, blackResult] = await Promise.allSettled([
+        fetchFirstAvailableFont(ANTON_FONT_URLS, "Anton"),
+        fetchFirstAvailableFont(MONTSERRAT_EXTRABOLD_FONT_URLS, "Montserrat ExtraBold"),
+        fetchFirstAvailableFont(MONTSERRAT_BLACK_FONT_URLS, "Montserrat Black"),
       ]);
 
       const fonts: ShareImageFont[] = [];
 
+      if (antonResult.status === "fulfilled") {
+        fonts.push({
+          name: SHARE_IMAGE_HEADLINE_FONT_NAME,
+          data: antonResult.value,
+          weight: 900,
+          style: "normal",
+        });
+      }
+
       if (extraBoldResult.status === "fulfilled") {
-        fonts.push({ name: SHARE_IMAGE_FONT_NAME, data: extraBoldResult.value, weight: 800, style: "normal" });
+        fonts.push({
+          name: SHARE_IMAGE_SUPPORT_FONT_NAME,
+          data: extraBoldResult.value,
+          weight: 800,
+          style: "normal",
+        });
       }
 
       if (blackResult.status === "fulfilled") {
-        fonts.push({ name: SHARE_IMAGE_FONT_NAME, data: blackResult.value, weight: 900, style: "normal" });
+        fonts.push({
+          name: SHARE_IMAGE_SUPPORT_FONT_NAME,
+          data: blackResult.value,
+          weight: 900,
+          style: "normal",
+        });
       }
 
       if (fonts.length === 0) {
-        const reasons = [extraBoldResult, blackResult]
+        const reasons = [antonResult, extraBoldResult, blackResult]
           .filter((result): result is PromiseRejectedResult => result.status === "rejected")
           .map((result) => (result.reason instanceof Error ? result.reason.message : String(result.reason)))
           .join("; ");
@@ -381,11 +428,12 @@ async function renderShareImageBuffer(snapshot: ShareImageSnapshot, platformName
   } else if (maxLineLength > 16) {
     headlineSize -= 8;
   }
-  headlineSize = Math.max(94, Math.min(142, headlineSize));
+  headlineSize = Math.max(96, Math.min(144, headlineSize));
 
-  const lineGap = headlineSize >= 126 ? 14 : 12;
+  const lineGap = headlineSize >= 126 ? 16 : 14;
   const footerLabel = clampText(`${platformName} • ${snapshot.sourceLabel} to ${snapshot.targetLabel}`, 72);
-  const stroke = `-7px -7px 0 ${theme.border}, 7px -7px 0 ${theme.border}, -7px 7px 0 ${theme.border}, 7px 7px 0 ${theme.border}, -4px 0 0 ${theme.border}, 4px 0 0 ${theme.border}, 0 -4px 0 ${theme.border}, 0 4px 0 ${theme.border}, 0 10px 0 rgba(16,18,20,0.20)`;
+  const headlineStroke = `-8px 0 0 ${theme.border}, 8px 0 0 ${theme.border}, 0 -8px 0 ${theme.border}, 0 8px 0 ${theme.border}, -8px -8px 0 ${theme.border}, 8px -8px 0 ${theme.border}, -8px 8px 0 ${theme.border}, 8px 8px 0 ${theme.border}, 0 12px 0 rgba(16,18,20,0.24)`;
+  const fallbackWeightBoost = `0 0 0 ${theme.textFill}, 1px 0 0 ${theme.textFill}, -1px 0 0 ${theme.textFill}`;
 
   const response = new ImageResponse(
     (
@@ -395,16 +443,17 @@ async function renderShareImageBuffer(snapshot: ShareImageSnapshot, platformName
           height: "100%",
           display: "flex",
           flexDirection: "column",
-          justifyContent: "center",
+          justifyContent: "space-between",
           alignItems: "center",
           background: theme.background,
-          padding: "58px 52px",
+          padding: "56px 52px 42px",
           border: `10px solid ${theme.border}`,
           boxSizing: "border-box",
         }}
       >
         <div
           style={{
+            flex: "1 1 auto",
             display: "flex",
             flexDirection: "column",
             justifyContent: "center",
@@ -412,6 +461,8 @@ async function renderShareImageBuffer(snapshot: ShareImageSnapshot, platformName
             alignItems: "center",
             gap: lineGap,
             textAlign: "center",
+            paddingTop: "14px",
+            paddingBottom: "28px",
           }}
         >
           {posterLines.map((line, index) => (
@@ -421,12 +472,12 @@ async function renderShareImageBuffer(snapshot: ShareImageSnapshot, platformName
                 margin: 0,
                 color: theme.textFill,
                 fontSize: headlineSize,
-                lineHeight: 1.02,
-                fontWeight: index >= 3 ? 900 : 800,
-                fontFamily: SHARE_IMAGE_FONT_FAMILY,
-                letterSpacing: -1.2,
+                lineHeight: 1.01,
+                fontWeight: index >= 2 ? 900 : 800,
+                fontFamily: SHARE_IMAGE_HEADLINE_FONT_FAMILY,
+                letterSpacing: -0.9,
                 textAlign: "center",
-                textShadow: stroke,
+                textShadow: `${headlineStroke}, ${fallbackWeightBoost}`,
               }}
             >
               {line}
@@ -436,16 +487,17 @@ async function renderShareImageBuffer(snapshot: ShareImageSnapshot, platformName
 
         <p
           style={{
-            margin: "36px 0 0",
+            margin: 0,
             color: theme.accent,
             fontSize: 24,
             fontWeight: 800,
-            fontFamily: SHARE_IMAGE_FONT_FAMILY,
+            fontFamily: SHARE_IMAGE_SUPPORT_FONT_FAMILY,
             lineHeight: 1.2,
             letterSpacing: 0.4,
             textAlign: "center",
             textTransform: "uppercase",
-            opacity: 0.9,
+            opacity: 0.88,
+            width: "100%",
           }}
         >
           {footerLabel}
