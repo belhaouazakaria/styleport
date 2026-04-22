@@ -324,8 +324,17 @@ export function TranslatorForm({
       return;
     }
 
-    setShareImagePath(result.shareImagePath || null);
-    setShareImageUpdatedAt(result.shareImageUpdatedAt || null);
+    if (!result.shareImagePath || !result.shareImageUrl || !result.shareImageUpdatedAt) {
+      toast({
+        title: "Regeneration failed",
+        description: "Share image generation did not return a usable image.",
+        variant: "error",
+      });
+      return;
+    }
+
+    setShareImagePath(result.shareImagePath);
+    setShareImageUpdatedAt(result.shareImageUpdatedAt);
     toast({
       title: "Share image regenerated",
       description: "Pinterest share image is up to date.",

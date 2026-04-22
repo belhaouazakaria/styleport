@@ -47,6 +47,7 @@ interface ShareImageSnapshot {
 
 interface EnsureShareImageOptions {
   force?: boolean;
+  throwOnError?: boolean;
 }
 
 interface EnsureTranslatorShareImageResult {
@@ -578,6 +579,11 @@ async function ensureTranslatorShareImageByIdOnce(
       },
       error,
     );
+
+    if (options.throwOnError) {
+      throw error instanceof Error ? error : new Error(String(error));
+    }
+
     return {
       translatorId: snapshot.id,
       shareImagePath: snapshot.shareImagePath,

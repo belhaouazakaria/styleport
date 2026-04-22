@@ -73,12 +73,36 @@ export function TranslatorTable({ translators }: TranslatorTableProps) {
   }
 
   async function regenerateShareImage(id: string) {
-    await runAction(id, () =>
-      fetch(`/api/admin/translators/${id}/regenerate-share-image`, {
+    setBusyId(id);
+    try {
+      const response = await fetch(`/api/admin/translators/${id}/regenerate-share-image`, {
         method: "POST",
-      }),
-    );
-    toast({ title: "Share image regenerated" });
+      });
+      const payload = await response.json();
+
+      if (!response.ok || !payload.ok) {
+        toast({
+          title: "Regeneration failed",
+          description: payload?.error?.message || "Unable to regenerate share image.",
+          variant: "error",
+        });
+        return;
+      }
+
+      if (!payload.shareImagePath || !payload.shareImageUrl || !payload.shareImageUpdatedAt) {
+        toast({
+          title: "Regeneration failed",
+          description: "Share image generation did not return a usable image.",
+          variant: "error",
+        });
+        return;
+      }
+
+      toast({ title: "Share image regenerated" });
+      router.refresh();
+    } finally {
+      setBusyId(null);
+    }
   }
 
   async function runConfirm() {
