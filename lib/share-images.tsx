@@ -306,17 +306,41 @@ async function getShareImageFonts() {
 
   shareImageFontsPromise = (async () => {
     try {
-      const [extraBold, black] = await Promise.all([
+      const [extraBoldResult, blackResult] = await Promise.allSettled([
         fetchFont(MONTSERRAT_EXTRABOLD_URL),
         fetchFont(MONTSERRAT_BLACK_URL),
       ]);
 
-      return [
-        { name: SHARE_IMAGE_FONT_NAME, data: extraBold, weight: 800, style: "normal" },
-        { name: SHARE_IMAGE_FONT_NAME, data: black, weight: 900, style: "normal" },
-      ] satisfies ShareImageFont[];
+      const fonts: ShareImageFont[] = [];
+
+      if (extraBoldResult.status === "fulfilled") {
+        fonts.push({ name: SHARE_IMAGE_FONT_NAME, data: extraBoldResult.value, weight: 800, style: "normal" });
+      }
+
+      if (blackResult.status === "fulfilled") {
+        fonts.push({ name: SHARE_IMAGE_FONT_NAME, data: blackResult.value, weight: 900, style: "normal" });
+      }
+
+      if (fonts.length === 0) {
+        const reasons = [extraBoldResult, blackResult]
+          .filter((result): result is PromiseRejectedResult => result.status === "rejected")
+          .map((result) => (result.reason instanceof Error ? result.reason.message : String(result.reason)))
+          .join("; ");
+        logWarn("share_image_font_load_failed", "Falling back to default OG font for share image rendering.", {
+          error: reasons || "Unknown font download error",
+        });
+        return [];
+      }
+
+      if (fonts.length < 2) {
+        logWarn("share_image_font_partial_load", "Loaded partial custom fonts for share image rendering.", {
+          loadedWeights: fonts.map((font) => font.weight),
+        });
+      }
+
+      return fonts;
     } catch (error) {
-      logWarn("share_image_font_load_failed", "Falling back to system fonts for share image rendering.", {
+      logWarn("share_image_font_load_failed", "Falling back to default OG font for share image rendering.", {
         error: error instanceof Error ? error.message : String(error),
       });
       return [];
@@ -428,11 +452,16 @@ async function renderShareImageBuffer(snapshot: ShareImageSnapshot, platformName
         </p>
       </div>
     ),
-    {
-      width: SHARE_IMAGE_WIDTH,
-      height: SHARE_IMAGE_HEIGHT,
-      fonts: embeddedFonts,
-    },
+    embeddedFonts.length > 0
+      ? {
+          width: SHARE_IMAGE_WIDTH,
+          height: SHARE_IMAGE_HEIGHT,
+          fonts: embeddedFonts,
+        }
+      : {
+          width: SHARE_IMAGE_WIDTH,
+          height: SHARE_IMAGE_HEIGHT,
+        },
   );
 
   const arrayBuffer = await response.arrayBuffer();
