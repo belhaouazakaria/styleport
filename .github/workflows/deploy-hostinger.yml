@@ -73,8 +73,16 @@ jobs:
           script: |
             set -eu
             cd ${{ secrets.HOSTINGER_APP_PATH || vars.HOSTINGER_APP_PATH }}
-            git fetch --all
-            git reset --hard origin/main
+            if [ ! -f package.json ]; then
+              echo "package.json not found in HOSTINGER_APP_PATH: $(pwd)"
+              exit 1
+            fi
+            if [ -d .git ]; then
+              git fetch --all --prune
+              git reset --hard origin/main
+            else
+              echo "No .git directory found in $(pwd). Skipping git sync and deploying current files."
+            fi
             npm ci
             npm run validate:env:production
             npm run prisma:generate
