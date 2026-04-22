@@ -16,7 +16,7 @@ jobs:
       APP_BASE_URL: https://translators.example.com
       NEXTAUTH_SECRET: test_nextauth_secret_please_replace
       NEXTAUTH_URL: https://translators.example.com
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/styleport
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
       OPENAI_API_KEY: test_key
       OPENAI_MODEL: gpt-4.1-mini
       NEXT_PUBLIC_APP_NAME: StylePort
