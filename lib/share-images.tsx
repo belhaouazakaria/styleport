@@ -12,8 +12,12 @@ import { getAppSettings } from "@/lib/settings";
 
 const SHARE_IMAGE_WIDTH = 1000;
 const SHARE_IMAGE_HEIGHT = 1500;
-const HEAVY_SHARE_IMAGE_FONT_FAMILY =
-  '"Arial Black", "Segoe UI Black", Impact, Haettenschweiler, "Franklin Gothic Heavy", sans-serif';
+const SHARE_IMAGE_FONT_NAME = "SharePosterMontserrat";
+const SHARE_IMAGE_FONT_FAMILY = `"${SHARE_IMAGE_FONT_NAME}", "Arial Black", "Segoe UI Black", Impact, Haettenschweiler, "Franklin Gothic Heavy", sans-serif`;
+const MONTSERRAT_EXTRABOLD_URL =
+  "https://raw.githubusercontent.com/google/fonts/main/ofl/montserrat/Montserrat-ExtraBold.ttf";
+const MONTSERRAT_BLACK_URL =
+  "https://raw.githubusercontent.com/google/fonts/main/ofl/montserrat/Montserrat-Black.ttf";
 
 const publicPathPrefix = (() => {
   const raw = (process.env.SHARE_IMAGE_PUBLIC_PATH_PREFIX || "/generated/pins").trim();
@@ -63,6 +67,16 @@ const inFlightShareImageGeneration = new Map<
   string,
   Promise<EnsureTranslatorShareImageResult | null>
 >();
+type ShareImageFontWeight = 100 | 200 | 300 | 400 | 500 | 600 | 700 | 800 | 900;
+interface ShareImageFont {
+  name: string;
+  data: ArrayBuffer;
+  weight: ShareImageFontWeight;
+  style: "normal";
+}
+let shareImageFontsPromise:
+  | Promise<ShareImageFont[]>
+  | null = null;
 
 const MIN_TEXT_BG_CONTRAST = 2.2;
 const MIN_ACCENT_BG_CONTRAST = 7;
@@ -272,6 +286,45 @@ function composePosterLines(snapshot: ShareImageSnapshot) {
   return ["Click Here To", "Translate", "Your Text to", ...styleLines, "Style!"];
 }
 
+async function fetchFont(url: string) {
+  const response = await fetch(url, {
+    cache: "force-cache",
+    next: { revalidate: 60 * 60 * 24 * 30 },
+  });
+  if (!response.ok) {
+    throw new Error(`Font download failed (${response.status}) for ${url}`);
+  }
+
+  return response.arrayBuffer();
+}
+
+async function getShareImageFonts() {
+  if (shareImageFontsPromise) {
+    return shareImageFontsPromise;
+  }
+
+  shareImageFontsPromise = (async () => {
+    try {
+      const [extraBold, black] = await Promise.all([
+        fetchFont(MONTSERRAT_EXTRABOLD_URL),
+        fetchFont(MONTSERRAT_BLACK_URL),
+      ]);
+
+      return [
+        { name: SHARE_IMAGE_FONT_NAME, data: extraBold, weight: 800, style: "normal" },
+        { name: SHARE_IMAGE_FONT_NAME, data: black, weight: 900, style: "normal" },
+      ] satisfies ShareImageFont[];
+    } catch (error) {
+      logWarn("share_image_font_load_failed", "Falling back to system fonts for share image rendering.", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return [];
+    }
+  })();
+
+  return shareImageFontsPromise;
+}
+
 function toStoragePath(publicPath: string) {
   const fileName = path.basename(publicPath);
   return path.join(storageDirectory, fileName);
@@ -290,6 +343,7 @@ async function renderShareImageBuffer(snapshot: ShareImageSnapshot, platformName
   const theme = pickTheme(snapshot);
   const posterLines = composePosterLines(snapshot);
   const maxLineLength = Math.max(...posterLines.map((line) => line.length), 0);
+  const embeddedFonts = await getShareImageFonts();
 
   let headlineSize = 138;
   if (posterLines.length >= 7) {
@@ -343,8 +397,8 @@ async function renderShareImageBuffer(snapshot: ShareImageSnapshot, platformName
                 color: theme.textFill,
                 fontSize: headlineSize,
                 lineHeight: 1.02,
-                fontWeight: 900,
-                fontFamily: HEAVY_SHARE_IMAGE_FONT_FAMILY,
+                fontWeight: index >= 3 ? 900 : 800,
+                fontFamily: SHARE_IMAGE_FONT_FAMILY,
                 letterSpacing: -1.2,
                 textAlign: "center",
                 textShadow: stroke,
@@ -361,7 +415,7 @@ async function renderShareImageBuffer(snapshot: ShareImageSnapshot, platformName
             color: theme.accent,
             fontSize: 24,
             fontWeight: 800,
-            fontFamily: HEAVY_SHARE_IMAGE_FONT_FAMILY,
+            fontFamily: SHARE_IMAGE_FONT_FAMILY,
             lineHeight: 1.2,
             letterSpacing: 0.4,
             textAlign: "center",
@@ -376,6 +430,7 @@ async function renderShareImageBuffer(snapshot: ShareImageSnapshot, platformName
     {
       width: SHARE_IMAGE_WIDTH,
       height: SHARE_IMAGE_HEIGHT,
+      fonts: embeddedFonts,
     },
   );
 
