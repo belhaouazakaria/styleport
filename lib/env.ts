@@ -56,7 +56,9 @@ function formatIssues(issues: z.ZodIssue[]) {
 }
 
 export function getServerEnv(): ServerEnv {
-  if (cachedServerEnv) {
+  const shouldUseCache = process.env.NODE_ENV === "production";
+
+  if (shouldUseCache && cachedServerEnv) {
     return cachedServerEnv;
   }
 
@@ -65,8 +67,12 @@ export function getServerEnv(): ServerEnv {
     throw new Error(`Invalid environment configuration: ${formatIssues(parsed.error.issues)}`);
   }
 
-  cachedServerEnv = parsed.data;
-  return cachedServerEnv;
+  if (shouldUseCache) {
+    cachedServerEnv = parsed.data;
+    return cachedServerEnv;
+  }
+
+  return parsed.data;
 }
 
 export function getAppBaseUrl() {
