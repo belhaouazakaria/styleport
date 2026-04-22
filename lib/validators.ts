@@ -197,6 +197,7 @@ export const settingsSchema = z.object({
   discoveryPageSize: z.number().int().min(1).max(24),
   adsEnabled: z.boolean(),
   adSenseClientId: z.string().trim().max(180).optional().or(z.literal("")),
+  customHeadCode: z.string().max(50_000).optional().or(z.literal("")),
 });
 
 export const translatorRequestSchema = z.object({
@@ -283,4 +284,11 @@ export const usageProtectionSettingsSchema = z.object({
 
 export const usageProtectionReenableSchema = z.object({
   reason: z.string().trim().max(280).optional().or(z.literal("")),
+});
+
+export const contactMessageSchema = z.object({
+  name: z.string().trim().min(2).max(120),
+  email: z.string().trim().email("Please enter a valid email address.").max(160),
+  message: z.string().trim().min(12).max(4_000),
+  honeypot: z.string().max(0).optional().or(z.literal("")),
 });

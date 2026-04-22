@@ -12,7 +12,7 @@ import {
   useRef,
   type ReactNode,
 } from "react";
-import { Mail, Sparkles, X } from "lucide-react";
+import { Sparkles, X } from "lucide-react";
 
 import { useToast } from "@/components/providers/toast-provider";
 import { Button } from "@/components/ui/button";
@@ -27,16 +27,12 @@ const RequestTranslatorContext = createContext<RequestTranslatorContextValue | n
 interface RequestFormState {
   requestedName: string;
   description: string;
-  exampleInput: string;
-  requesterEmail: string;
 }
 
 function createDefaultFormState(initialIdea?: string): RequestFormState {
   return {
     requestedName: initialIdea?.trim() || "",
     description: "",
-    exampleInput: "",
-    requesterEmail: "",
   };
 }
 
@@ -116,13 +112,13 @@ export function RequestTranslatorProvider({ children }: { children: ReactNode })
     setSubmitting(false);
 
     if (!response.ok || !result.ok) {
-      setError(result?.error?.message || "Unable to submit your request right now.");
+      setError(result?.error?.message || "Unable to submit your create request right now.");
       return;
     }
 
     toast({
-      title: "Request sent",
-      description: "Thanks. We will review this translator idea and consider adding it.",
+      title: "Create request sent",
+      description: "Thanks. Our admin team can now review and generate this translator with AI.",
     });
 
     setForm(createDefaultFormState());
@@ -147,11 +143,11 @@ export function RequestTranslatorProvider({ children }: { children: ReactNode })
                   <div>
                     <p className="inline-flex items-center gap-1 rounded-full border border-brand-300 bg-brand-50 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-brand-700">
                       <Sparkles className="h-3.5 w-3.5" />
-                      Request a translator
+                      Create translator
                     </p>
-                    <h2 className="mt-2 font-display text-2xl font-semibold text-ink">Tell Us What You Need</h2>
+                    <h2 className="mt-2 font-display text-2xl font-semibold text-ink">Create a Translator Idea</h2>
                     <p className="mt-1 text-sm text-muted-ink">
-                      Share a quick idea and we can turn it into a new style translator.
+                      Share a name and description. We&apos;ll review it and generate the translator with AI.
                     </p>
                   </div>
                   <button
@@ -175,7 +171,7 @@ export function RequestTranslatorProvider({ children }: { children: ReactNode })
                   />
 
                   <label className="block space-y-1 text-sm">
-                    <span className="font-medium text-ink">Translator idea</span>
+                    <span className="font-medium text-ink">Translator name</span>
                     <input
                       ref={firstInputRef}
                       name="requestedName"
@@ -188,12 +184,12 @@ export function RequestTranslatorProvider({ children }: { children: ReactNode })
                       }
                       required
                       className="h-11 w-full rounded-xl border border-border bg-surface px-3 text-ink placeholder:text-muted-ink/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60"
-                      placeholder="Ex: Pirate social caption translator"
+                      placeholder="Ex: Pirate Captain Translator"
                     />
                   </label>
 
                   <label className="block space-y-1 text-sm">
-                    <span className="font-medium text-ink">What should it do?</span>
+                    <span className="font-medium text-ink">Translator description</span>
                     <textarea
                       name="description"
                       value={form.description}
@@ -205,44 +201,8 @@ export function RequestTranslatorProvider({ children }: { children: ReactNode })
                       }
                       required
                       className="min-h-28 w-full rounded-xl border border-border bg-surface px-3 py-2 text-ink placeholder:text-muted-ink/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60"
-                      placeholder="Describe the transformation in one or two sentences."
+                      placeholder="Describe what this translator should transform and the style it should produce."
                     />
-                  </label>
-
-                  <label className="block space-y-1 text-sm">
-                    <span className="font-medium text-ink">Example input (optional)</span>
-                    <textarea
-                      name="exampleInput"
-                      value={form.exampleInput}
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          exampleInput: event.target.value,
-                        }))
-                      }
-                      className="min-h-20 w-full rounded-xl border border-border bg-surface px-3 py-2 text-ink placeholder:text-muted-ink/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60"
-                      placeholder="Paste a line you would run through this translator."
-                    />
-                  </label>
-
-                  <label className="block space-y-1 text-sm">
-                    <span className="font-medium text-ink">Email for follow-up (optional)</span>
-                    <div className="relative">
-                      <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-ink" />
-                      <input
-                        name="requesterEmail"
-                        type="email"
-                        value={form.requesterEmail}
-                        onChange={(event) =>
-                          setForm((current) => ({
-                            ...current,
-                            requesterEmail: event.target.value,
-                          }))
-                        }
-                        className="h-11 w-full rounded-xl border border-border bg-surface pl-10 pr-3 text-ink placeholder:text-muted-ink/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60"
-                        placeholder="you@example.com"
-                      />
-                    </div>
                   </label>
 
                   {showTurnstile ? (
@@ -264,7 +224,7 @@ export function RequestTranslatorProvider({ children }: { children: ReactNode })
                       Cancel
                     </Button>
                     <Button type="submit" disabled={submitting}>
-                      {submitting ? "Sending..." : "Send request"}
+                      {submitting ? "Sending..." : "Create translator"}
                     </Button>
                   </div>
                 </form>

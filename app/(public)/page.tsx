@@ -123,7 +123,7 @@ export default async function HomePage({ searchParams }: PageProps) {
           </section>
         ) : null}
       </main>
-      <Footer platformName={settings.platformName} disclaimer={settings.footerDisclaimer} />
+      <Footer platformName={settings.platformName} />
     </div>
   );
 }

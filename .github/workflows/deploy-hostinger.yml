@@ -7,11 +7,25 @@ on:
       - main
 
 jobs:
-  deploy:
-    name: Production Deploy
+  ci:
+    name: CI Gate
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    environment: production
+    timeout-minutes: 25
+
+    env:
+      APP_BASE_URL: https://translators.example.com
+      NEXTAUTH_SECRET: test_nextauth_secret_please_replace
+      NEXTAUTH_URL: https://translators.example.com
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/styleport
+      OPENAI_API_KEY: test_key
+      OPENAI_MODEL: gpt-4.1-mini
+      NEXT_PUBLIC_APP_NAME: StylePort
+      NEXT_PUBLIC_TURNSTILE_SITE_KEY: test_site_key
+      TURNSTILE_SECRET_KEY: test_turnstile_secret
+      IP_HASH_SECRET: test_ip_hash_secret_value_123456
+      ALERT_ADMIN_EMAIL: alerts@example.com
+      EMAIL_FROM: StylePort Alerts <alerts@example.com>
+      RESEND_API_KEY: test_resend_key
 
     steps:
       - name: Checkout
@@ -26,22 +40,31 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Validate project
-        env:
-          APP_BASE_URL: https://translators.example.com
-          NEXTAUTH_SECRET: test_nextauth_secret_please_replace
-          NEXTAUTH_URL: https://translators.example.com
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/styleport
-          OPENAI_API_KEY: test_key
-          OPENAI_MODEL: gpt-4.1-mini
-          NEXT_PUBLIC_APP_NAME: StylePort
-          NEXT_PUBLIC_TURNSTILE_SITE_KEY: test_site_key
-          TURNSTILE_SECRET_KEY: test_turnstile_secret
-          IP_HASH_SECRET: test_ip_hash_secret_value_123456
-          ALERT_ADMIN_EMAIL: alerts@example.com
-          EMAIL_FROM: StylePort Alerts <alerts@example.com>
-          RESEND_API_KEY: test_resend_key
-        run: npm run validate:env:production && npm run check && npm run build
+      - name: Validate production env contract
+        run: npm run validate:env:production
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm run test
+
+      - name: Build
+        run: npm run build
+
+  deploy:
+    name: Production Deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    environment: production
+    needs: ci
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
 
       - name: Validate deploy configuration
         env:
@@ -63,6 +86,18 @@ jobs:
             exit 1
           fi
 
+      - name: Upload application files to Hostinger
+        uses: appleboy/scp-action@v1.0.0
+        with:
+          host: ${{ secrets.HOSTINGER_SSH_HOST || vars.HOSTINGER_SSH_HOST }}
+          username: ${{ secrets.HOSTINGER_SSH_USER || vars.HOSTINGER_SSH_USER }}
+          key: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
+          port: ${{ secrets.HOSTINGER_SSH_PORT || vars.HOSTINGER_SSH_PORT }}
+          source: >-
+            app,components,hooks,lib,prisma,public,scripts,types,auth.ts,proxy.ts,server.js,package.json,package-lock.json,next.config.ts,postcss.config.mjs,tsconfig.json,next-env.d.ts
+          target: ${{ secrets.HOSTINGER_APP_PATH || vars.HOSTINGER_APP_PATH }}
+          overwrite: true
+
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -70,24 +105,10 @@ jobs:
           username: ${{ secrets.HOSTINGER_SSH_USER || vars.HOSTINGER_SSH_USER }}
           key: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
           port: ${{ secrets.HOSTINGER_SSH_PORT || vars.HOSTINGER_SSH_PORT }}
+          script_stop: true
+          command_timeout: 40m
           script: |
             set -eu
             cd ${{ secrets.HOSTINGER_APP_PATH || vars.HOSTINGER_APP_PATH }}
-            if [ ! -f package.json ]; then
-              echo "package.json not found in HOSTINGER_APP_PATH: $(pwd)"
-              exit 1
-            fi
-            if [ -d .git ]; then
-              git fetch --all --prune
-              git reset --hard origin/main
-            else
-              echo "No .git directory found in $(pwd). Skipping git sync and deploying current files."
-            fi
-            npm ci
-            npm run validate:env:production
-            npm run prisma:generate
-            npm run prisma:deploy
-            npm run build
-            if [ -f tmp/restart.txt ]; then
-              touch tmp/restart.txt
-            fi
+            chmod +x ./scripts/hostinger-deploy.sh
+            ./scripts/hostinger-deploy.sh

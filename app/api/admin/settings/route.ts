@@ -48,6 +48,7 @@ export async function PUT(request: Request) {
     ...parsed.data,
     defaultModelOverride: parsed.data.defaultModelOverride || "",
     adSenseClientId: parsed.data.adSenseClientId || "",
+    customHeadCode: parsed.data.customHeadCode || "",
     autoFeaturedLastRecalculatedAt: parsed.data.autoFeaturedEnabled
       ? new Date().toISOString()
       : "",

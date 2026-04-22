@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowUpRight, MessageSquarePlus } from "lucide-react";
+import { ArrowUpRight, MessageSquarePlus, Sparkles } from "lucide-react";
 
 import type { PublicTranslator } from "@/lib/types";
 import { useRequestTranslatorModal } from "@/components/providers/request-translator-provider";
@@ -21,7 +21,7 @@ export function TranslatorDirectory({ translators, searchQuery }: TranslatorDire
         <p className="mt-1 text-sm text-muted-ink">
           {searchQuery?.trim()
             ? `Couldn’t find “${searchQuery.trim()}”.`
-            : "Try a different query or request a translator idea."}
+            : "Try a different query or create a translator idea."}
         </p>
         <button
           type="button"
@@ -29,7 +29,7 @@ export function TranslatorDirectory({ translators, searchQuery }: TranslatorDire
           className="mt-4 inline-flex items-center gap-1 rounded-lg border border-brand-300 bg-brand-50 px-3 py-2 text-sm font-semibold text-brand-700 transition hover:border-brand-500 hover:bg-brand-100 hover:text-brand-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60"
         >
           <MessageSquarePlus className="h-4 w-4" />
-          Request a translator
+          Create translator
         </button>
       </div>
     );
@@ -77,6 +77,14 @@ export function TranslatorDirectory({ translators, searchQuery }: TranslatorDire
           <p className="mt-4 text-xs text-muted-ink">
             {translator.sourceLabel} to {translator.targetLabel}
           </p>
+
+          <Link
+            href={`/translators/${translator.slug}`}
+            className="mt-4 inline-flex h-10 items-center gap-2 rounded-xl border border-brand-300 bg-brand-50 px-3 text-sm font-semibold text-brand-700 transition hover:border-brand-500 hover:bg-brand-100 hover:text-brand-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60"
+          >
+            <Sparkles className="h-4 w-4" />
+            Try this translator
+          </Link>
         </article>
       ))}
     </div>

@@ -61,7 +61,7 @@ export function RequestDetail({ request }: RequestDetailProps) {
       setStatus(nextStatus);
     }
 
-    toast({ title: "Request updated" });
+    toast({ title: "Submission updated" });
     router.refresh();
   }
 
@@ -108,7 +108,7 @@ export function RequestDetail({ request }: RequestDetailProps) {
       return;
     }
 
-    toast({ title: "Translator created from request" });
+    toast({ title: "Translator created from submission" });
     router.push(`/admin/translators/${payload.translator.id}`);
     router.refresh();
   }
@@ -117,7 +117,7 @@ export function RequestDetail({ request }: RequestDetailProps) {
     <div className="space-y-6">
       <section className="grid gap-4 rounded-2xl border border-border bg-surface p-5 sm:grid-cols-2 lg:grid-cols-3">
         <article>
-          <p className="text-xs font-medium uppercase text-muted-ink">Requester Email</p>
+          <p className="text-xs font-medium uppercase text-muted-ink">Submitter Email</p>
           <p className="mt-1 text-sm text-ink">{request.requesterEmail || "Not provided"}</p>
         </article>
         <article>
@@ -131,14 +131,14 @@ export function RequestDetail({ request }: RequestDetailProps) {
       </section>
 
       <section className="rounded-2xl border border-border bg-surface p-5">
-        <h2 className="font-display text-2xl font-semibold text-ink">Request Details</h2>
+        <h2 className="font-display text-2xl font-semibold text-ink">Create Submission Details</h2>
         <dl className="mt-4 space-y-4 text-sm">
           <div>
-            <dt className="font-medium text-muted-ink">Requested Translator Name</dt>
+            <dt className="font-medium text-muted-ink">Translator Name</dt>
             <dd className="mt-1 text-ink">{request.requestedName}</dd>
           </div>
           <div>
-            <dt className="font-medium text-muted-ink">What it should do</dt>
+            <dt className="font-medium text-muted-ink">Translator Description</dt>
             <dd className="mt-1 whitespace-pre-wrap text-ink">{request.description}</dd>
           </div>
           <div>
@@ -198,10 +198,10 @@ export function RequestDetail({ request }: RequestDetailProps) {
             Mark Reviewing
           </Button>
           <Button type="button" variant="outline" onClick={() => void saveMeta("REJECTED")}>
-            Reject
+            Decline
           </Button>
-          <Button type="button" variant="outline" onClick={() => void saveMeta("APPROVED")}>
-            Approve
+          <Button type="button" variant="outline" onClick={() => void createFromDraft()} disabled={busy === "create" || isLinked}>
+            {busy === "create" ? "Approving..." : "Approve and create translator"}
           </Button>
         </div>
       </section>
@@ -217,10 +217,10 @@ export function RequestDetail({ request }: RequestDetailProps) {
             <Button
               type="button"
               onClick={() => void createFromDraft()}
-              disabled={!draft || isLinked || busy === "create"}
+              disabled={isLinked || busy === "create"}
             >
               <Sparkles className="h-4 w-4" />
-              {busy === "create" ? "Creating..." : "Create translator from draft"}
+              {busy === "create" ? "Creating..." : "Create translator now"}
             </Button>
           </div>
         </div>

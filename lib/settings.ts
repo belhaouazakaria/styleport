@@ -27,6 +27,7 @@ const defaultSettings: AppSettings = {
   discoveryPageSize: DISCOVERY_DEFAULT_PAGE_SIZE,
   adsEnabled: false,
   adSenseClientId: "",
+  customHeadCode: "",
 };
 
 let appSettingsCache:
@@ -81,6 +82,8 @@ function mapRowsToSettings(rows: Array<{ key: string; value: unknown }>): AppSet
         : defaultSettings.adsEnabled,
     adSenseClientId:
       (map.get(APP_SETTING_KEYS.ADSENSE_CLIENT_ID) as string) || defaultSettings.adSenseClientId,
+    customHeadCode:
+      (map.get(APP_SETTING_KEYS.CUSTOM_HEAD_CODE) as string) || defaultSettings.customHeadCode,
   };
 }
 
@@ -139,6 +142,7 @@ export async function updateAppSettings(settings: AppSettings): Promise<void> {
     [APP_SETTING_KEYS.DISCOVERY_PAGE_SIZE, settings.discoveryPageSize],
     [APP_SETTING_KEYS.ADS_ENABLED, settings.adsEnabled],
     [APP_SETTING_KEYS.ADSENSE_CLIENT_ID, settings.adSenseClientId],
+    [APP_SETTING_KEYS.CUSTOM_HEAD_CODE, settings.customHeadCode],
   ] as const;
 
   await prisma.$transaction(

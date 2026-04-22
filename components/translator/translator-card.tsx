@@ -189,7 +189,7 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
   return (
     <section className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
       <Card className="overflow-hidden border-border bg-surface">
-        <div className="border-b border-border px-4 py-3 sm:px-6">
+        <div className="hidden border-b border-border px-4 py-3 sm:px-6 md:block">
           <div className="grid items-center gap-3 md:grid-cols-[1fr_auto_1fr]">
             <div className="flex items-center justify-between gap-2 text-sm font-semibold uppercase tracking-wide text-muted-ink md:justify-start">
               <span>{translator.sourceLabel}</span>
@@ -223,7 +223,7 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
         <div className="grid grid-cols-1 divide-y divide-border md:grid-cols-2 md:divide-x md:divide-y-0">
           <div className="p-4 sm:p-6">
             <div className="mb-2 flex items-center justify-between">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-ink">Original text</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-ink">{translator.sourceLabel}</p>
               <Button type="button" variant="ghost" size="sm" onClick={() => void handleCopy(inputText, "Input")}>
                 <Copy className="h-4 w-4" />
                 Copy
@@ -261,7 +261,7 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
 
           <div className="p-4 sm:p-6">
             <div className="mb-2 flex items-center justify-between">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-ink">Translated result</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-ink">{translator.targetLabel}</p>
               <div className="flex items-center gap-1">
                 <Button
                   type="button"
@@ -320,6 +320,12 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
               <RefreshCcw className="h-4 w-4" />
               Regenerate
             </Button>
+            {translator.showSwap ? (
+              <Button type="button" variant="ghost" onClick={handleSwap} disabled={isLoading}>
+                <ArrowRightLeft className="h-4 w-4" />
+                Swap
+              </Button>
+            ) : null}
             <Button type="button" variant="ghost" onClick={handleClear} disabled={isLoading}>
               <Trash2 className="h-4 w-4" />
               Clear

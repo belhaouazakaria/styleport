@@ -35,6 +35,7 @@ export const APP_SETTING_KEYS = {
   ADS_ENABLED: "adsEnabled",
   ADSENSE_CLIENT_ID: "adSenseClientId",
   CATALOG_INTRO: "catalogIntro",
+  CUSTOM_HEAD_CODE: "customHeadCode",
 } as const;
 
 export const DEFAULT_CATEGORY_SLUGS = [

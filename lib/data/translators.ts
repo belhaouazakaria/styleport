@@ -744,6 +744,56 @@ export async function getFeaturedPublicTranslators(limit = 6): Promise<PublicTra
   return task;
 }
 
+export async function getRelatedPublicTranslators(params: {
+  currentTranslatorId: string;
+  categorySlug?: string | null;
+  limit?: number;
+}): Promise<PublicTranslator[]> {
+  const limit = Math.max(1, params.limit || 3);
+  const where: Prisma.TranslatorWhereInput = {
+    id: { not: params.currentTranslatorId },
+    isActive: true,
+    archivedAt: null,
+  };
+
+  if (params.categorySlug) {
+    where.categories = {
+      some: {
+        category: {
+          slug: params.categorySlug,
+          isActive: true,
+          archivedAt: null,
+        },
+      },
+    };
+  }
+
+  const relatedRows = await prisma.translator.findMany({
+    where,
+    include: publicTranslatorInclude,
+    orderBy: [{ isFeatured: "desc" }, { sortOrder: "asc" }, { updatedAt: "desc" }],
+    take: limit,
+  });
+
+  if (relatedRows.length >= limit) {
+    return relatedRows.map(mapPublicTranslator);
+  }
+
+  const existingIds = new Set<string>([params.currentTranslatorId, ...relatedRows.map((item) => item.id)]);
+  const fallbackRows = await prisma.translator.findMany({
+    where: {
+      id: { notIn: Array.from(existingIds) },
+      isActive: true,
+      archivedAt: null,
+    },
+    include: publicTranslatorInclude,
+    orderBy: [{ isFeatured: "desc" }, { sortOrder: "asc" }, { updatedAt: "desc" }],
+    take: limit - relatedRows.length,
+  });
+
+  return [...relatedRows, ...fallbackRows].map(mapPublicTranslator);
+}
+
 export async function getPublicTranslatorBySlug(slug: string): Promise<PublicTranslator | null> {
   const translator = await prisma.translator.findFirst({
     where: {

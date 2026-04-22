@@ -6,7 +6,7 @@ StylePort is a production-grade multi-translator discovery platform with:
 - OpenAI translation + AI draft generation
 - translator page quick-share to Pinterest with **pre-generated stored pin images per translator**
 - quota protection + emergency shutdown + alert email flow
-- request intake with captcha + anti-spam controls
+- create-translator intake flow with captcha + anti-spam controls
 
 This repository is **feature-complete** and this hardening pass is focused on **deployment and operational readiness**.
 
@@ -167,6 +167,11 @@ If your Hostinger runtime uses restart files, run:
 touch tmp/restart.txt
 ```
 
+GitHub deploy workflow notes:
+- `deploy-hostinger.yml` now runs a CI gate first (lint, typecheck, tests, build).
+- Deployment uploads current repository files to `HOSTINGER_APP_PATH` (no `.git` dependency on server).
+- Remote script `scripts/hostinger-deploy.sh` bootstraps non-interactive shell PATH/profile and hard-fails with clear diagnostics if `node`/`npm` are unavailable.
+
 ### 6. Post-deploy verification
 Check:
 1. `/api/healthz` returns ok
@@ -176,6 +181,7 @@ Check:
 5. `/login` and `/admin` auth flow works
 6. request form submission + captcha works
 7. usage protection dashboard reflects expected state
+8. legal/contact pages load (`/privacy`, `/terms`, `/disclaimer`, `/cookies`, `/contact`)
 
 ---
 
@@ -224,6 +230,20 @@ npm run prisma:seed
   - translator summary text
 - Make sure `APP_BASE_URL` (or `NEXTAUTH_URL`) is set correctly in production so share URLs resolve to the public domain.
 - Pin images are generated server-side when translators are created/updated and can be manually regenerated from admin translator edit/list screens.
+
+## Public Create-Translator Flow
+
+- Public UX uses a low-friction **Create translator** modal with only:
+  - translator name
+  - translator description
+- Submissions are reviewed in **Admin → Create Submissions**.
+- Approving a submission can generate the AI draft and create the translator in one flow.
+
+## Head Code Injection
+
+- Admin settings include **Custom Head Code** for controlled snippet injection into public `<head>`.
+- Intended for analytics, AdSense scripts, and verification tags.
+- Because this is admin-managed code, only trusted snippets should be used.
 
 ## Auto-Featured Translators
 

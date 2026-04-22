@@ -44,8 +44,8 @@ export default async function AdminRequestsPage({ searchParams }: PageProps) {
   return (
     <>
       <AdminTopbar
-        title="Translator Requests"
-        subtitle="Review visitor requests, generate drafts, and convert approved requests into translators."
+        title="Create Translator Submissions"
+        subtitle="Review submissions, generate AI drafts, and convert approved ideas into live translators."
       />
       <main className="space-y-4 p-4 sm:p-6">
         <form className="grid gap-2 rounded-2xl border border-border bg-surface p-4 md:grid-cols-[1fr_170px_190px_180px_180px_auto]">
@@ -53,7 +53,7 @@ export default async function AdminRequestsPage({ searchParams }: PageProps) {
             type="text"
             name="q"
             defaultValue={params.q || ""}
-            placeholder="Search by name, description, or email"
+            placeholder="Search by translator name, description, or email"
             className="h-11 rounded-xl border border-border bg-surface px-3 text-ink"
           />
 

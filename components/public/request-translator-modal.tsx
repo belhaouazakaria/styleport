@@ -12,7 +12,7 @@ interface RequestTranslatorModalProps {
 }
 
 export function RequestTranslatorModal({
-  triggerLabel = "Request a translator",
+  triggerLabel = "Create translator",
   triggerClassName,
   prefillIdea,
   icon,
@@ -33,4 +33,3 @@ export function RequestTranslatorModal({
     </button>
   );
 }
-

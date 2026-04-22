@@ -5,6 +5,8 @@ import { RequestTranslatorProvider } from "@/components/providers/request-transl
 import { ToastProvider } from "@/components/providers/toast-provider";
 import { APP_NAME, SEO_DESCRIPTION } from "@/lib/constants";
 import { getAppBaseUrl } from "@/lib/env";
+import { renderCustomHeadCode } from "@/lib/head-code";
+import { getAppSettings } from "@/lib/settings";
 
 import "./globals.css";
 
@@ -58,13 +60,16 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const settings = await getAppSettings();
+
   return (
     <html lang="en" className={`${bodyFont.variable} ${displayFont.variable}`}>
+      <head>{renderCustomHeadCode(settings.customHeadCode || "")}</head>
       <body className="min-h-screen bg-page text-ink antialiased">
         <ToastProvider>
           <RequestTranslatorProvider>{children}</RequestTranslatorProvider>

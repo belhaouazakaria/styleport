@@ -3,9 +3,19 @@ import { TranslatorRequestStatus } from "@prisma/client";
 import { adminRouteGuard } from "@/lib/permissions";
 import { apiError, apiOk } from "@/lib/api-response";
 import { createTranslator } from "@/lib/data/translators";
-import { getAdminTranslatorRequestById, linkRequestToTranslator } from "@/lib/data/requests";
-import { draftToTranslatorInput } from "@/lib/translator-draft";
+import {
+  getAdminTranslatorRequestById,
+  linkRequestToTranslator,
+  saveTranslatorRequestDraft,
+} from "@/lib/data/requests";
+import {
+  buildTranslatorDraftBriefFromRequest,
+  draftToTranslatorInput,
+  generateTranslatorDraft,
+} from "@/lib/translator-draft";
 import { getCategoryChoices } from "@/lib/data/categories";
+import { logError } from "@/lib/logger";
+import { getAppSettings } from "@/lib/settings";
 import { slugify } from "@/lib/slugify";
 
 interface RouteContext {
@@ -51,8 +61,8 @@ export async function POST(_: Request, context: RouteContext) {
     return apiError(404, "NOT_FOUND", "Request not found.");
   }
 
-  if (!translatorRequest.aiDraftJson) {
-    return apiError(400, "BAD_REQUEST", "No AI draft found for this request.");
+  if (translatorRequest.createdTranslatorId) {
+    return apiError(409, "CONFLICT", "A translator was already created for this submission.");
   }
 
   if (!categories.length) {
@@ -60,9 +70,31 @@ export async function POST(_: Request, context: RouteContext) {
   }
 
   try {
+    let draft = translatorRequest.aiDraftJson;
+
+    if (!draft) {
+      const settings = await getAppSettings();
+      const brief = buildTranslatorDraftBriefFromRequest({
+        requestedName: translatorRequest.requestedName,
+        description: translatorRequest.description,
+        exampleInput: translatorRequest.exampleInput,
+        desiredStyle: translatorRequest.desiredStyle,
+        suggestedCategory: translatorRequest.suggestedCategory,
+        audience: translatorRequest.audience,
+        notes: translatorRequest.notes,
+      });
+
+      draft = await generateTranslatorDraft({
+        brief,
+        model: settings.defaultModelOverride || undefined,
+      });
+
+      await saveTranslatorRequestDraft(id, draft);
+    }
+
     const categoryId = resolveCategoryId({
       suggestedCategory: translatorRequest.suggestedCategory,
-      draftCategory: translatorRequest.aiDraftJson.categorySuggestion,
+      draftCategory: draft.categorySuggestion,
       categories,
     });
 
@@ -71,7 +103,7 @@ export async function POST(_: Request, context: RouteContext) {
     }
 
     const input = draftToTranslatorInput({
-      draft: translatorRequest.aiDraftJson,
+      draft,
       categoryIds: [categoryId],
       primaryCategoryId: categoryId,
     });
@@ -84,7 +116,13 @@ export async function POST(_: Request, context: RouteContext) {
     });
 
     return apiOk({ translator }, 201);
-  } catch {
+  } catch (error) {
+    logError(
+      "create_translator_from_request_failed",
+      "Unable to create translator from request submission.",
+      { requestId: id },
+      error,
+    );
     return apiError(500, "BAD_REQUEST", "Unable to create translator from draft right now.");
   }
 }

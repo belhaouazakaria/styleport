@@ -218,6 +218,7 @@ export interface AppSettings {
   discoveryPageSize: number;
   adsEnabled: boolean;
   adSenseClientId: string;
+  customHeadCode: string;
 }
 
 export interface AutoFeaturedTranslatorSummary {

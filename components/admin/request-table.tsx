@@ -30,7 +30,7 @@ export function RequestTable({ requests }: RequestTableProps) {
   if (!requests.length) {
     return (
       <div className="rounded-2xl border border-border bg-surface p-10 text-center text-sm text-muted-ink">
-        No translator requests found for the current filters.
+        No create-submissions found for the current filters.
       </div>
     );
   }
@@ -40,7 +40,7 @@ export function RequestTable({ requests }: RequestTableProps) {
       <table className="min-w-full text-sm">
         <thead className="bg-muted-surface text-left text-muted-ink">
           <tr>
-            <th className="px-4 py-3 font-medium">Requested Name</th>
+            <th className="px-4 py-3 font-medium">Translator Name</th>
             <th className="px-4 py-3 font-medium">Category</th>
             <th className="px-4 py-3 font-medium">Email</th>
             <th className="px-4 py-3 font-medium">Status</th>

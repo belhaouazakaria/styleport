@@ -29,7 +29,7 @@ export async function POST(request: Request) {
   const parsed = translatorRequestSchema.safeParse(payload);
   if (!parsed.success) {
     logWarn("translator_request_validation_failed", "Translator request payload failed validation.");
-    return apiError(400, "VALIDATION_ERROR", "Please add a translator idea and a short description.");
+    return apiError(400, "VALIDATION_ERROR", "Please add a translator name and description.");
   }
 
   if (parsed.data.honeypot?.trim()) {

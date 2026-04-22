@@ -144,7 +144,7 @@ export function DiscoverySearch({ q, category }: DiscoverySearchProps) {
                 className="inline-flex items-center gap-1 rounded-lg border border-brand-300 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 transition hover:border-brand-500 hover:bg-brand-100 hover:text-brand-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60"
               >
                 <MessageSquarePlus className="h-3.5 w-3.5" />
-                Request “{query}”
+                Create “{query}” translator
               </button>
             </div>
           )}

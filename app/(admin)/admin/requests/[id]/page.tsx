@@ -21,8 +21,8 @@ export default async function AdminRequestDetailPage({ params }: PageProps) {
   return (
     <>
       <AdminTopbar
-        title={`Request: ${request.requestedName}`}
-        subtitle="Inspect request details, update status, and generate an AI translator draft."
+        title={`Submission: ${request.requestedName}`}
+        subtitle="Review details, update status, and approve to create a translator with AI."
       />
       <main className="p-4 sm:p-6">
         <RequestDetail request={request} />

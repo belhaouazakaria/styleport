@@ -310,6 +310,25 @@ export function SettingsForm({
               placeholder="ca-pub-xxxxxxxxxxxxxxxx"
             />
           </label>
+
+          <label className="space-y-1 text-sm md:col-span-2">
+            <span className="font-medium text-muted-ink">Custom Head Code (optional)</span>
+            <textarea
+              value={form.customHeadCode}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  customHeadCode: event.target.value,
+                }))
+              }
+              className="min-h-36 w-full rounded-xl border border-border px-3 py-2 font-mono text-xs"
+              placeholder="<meta name=&quot;google-site-verification&quot; content=&quot;...&quot; />&#10;<script async src=&quot;https://www.googletagmanager.com/gtag/js?id=G-XXXX&quot;></script>"
+            />
+            <p className="text-xs text-muted-ink">
+              Injected into public &lt;head&gt; on every page. Admin-only, use trusted snippets (analytics, AdSense,
+              verification tags).
+            </p>
+          </label>
         </div>
       </section>
 

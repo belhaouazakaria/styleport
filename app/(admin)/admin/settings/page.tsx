@@ -26,7 +26,7 @@ export default async function AdminSettingsPage() {
 
   return (
     <>
-      <AdminTopbar title="Settings" subtitle="Control global brand, discovery, model, and monetization defaults." />
+      <AdminTopbar title="Settings" subtitle="Control global brand, discovery, model, monetization, and head-code defaults." />
       <main className="p-4 sm:p-6">
         <SettingsForm
           initial={settings}

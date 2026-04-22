@@ -17,7 +17,7 @@ const links = [
   { href: "/admin/translators/new", label: "Create Translator", icon: PlusSquare },
   { href: "/admin/translators/ai/new", label: "Create With AI", icon: Sparkles },
   { href: "/admin/categories", label: "Categories", icon: FolderTree },
-  { href: "/admin/requests", label: "Requests", icon: MessageSquareText },
+  { href: "/admin/requests", label: "Create Submissions", icon: MessageSquareText },
   { href: "/admin/usage-protection", label: "Usage Protection", icon: ShieldAlert },
   { href: "/admin/ads", label: "Monetization", icon: LayoutTemplate },
   { href: "/admin/settings", label: "Settings", icon: Cog },

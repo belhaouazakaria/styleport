@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Sparkles } from "lucide-react";
 
 import type { PublicTranslator } from "@/lib/types";
 
@@ -24,21 +24,31 @@ export function FeaturedTranslators({ translators }: FeaturedTranslatorsProps) {
 
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {translators.map((translator) => (
-            <Link
+            <article
               key={translator.id}
-              href={`/translators/${translator.slug}`}
-              className="group rounded-2xl border border-border bg-muted-surface p-4 transition hover:border-brand-300 hover:bg-surface"
+              className="rounded-2xl border border-border bg-muted-surface p-4 transition hover:border-brand-300 hover:bg-surface"
             >
-              <h3 className="font-semibold text-ink">{translator.name}</h3>
+              <h3 className="font-semibold text-ink">
+                <Link
+                  href={`/translators/${translator.slug}`}
+                  className="group inline-flex items-center gap-1 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60"
+                >
+                  {translator.name}
+                  <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+                </Link>
+              </h3>
               <p className="mt-1 text-sm text-muted-ink">{translator.shortDescription}</p>
               {translator.primaryCategory ? (
                 <p className="mt-2 text-xs font-medium text-brand-700">{translator.primaryCategory.name}</p>
               ) : null}
-              <span className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-brand-700">
-                Open translator
-                <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
-              </span>
-            </Link>
+              <Link
+                href={`/translators/${translator.slug}`}
+                className="mt-3 inline-flex h-9 items-center gap-1.5 rounded-lg border border-brand-300 bg-brand-50 px-3 text-xs font-semibold text-brand-700 transition hover:border-brand-500 hover:bg-brand-100 hover:text-brand-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                Try this translator
+              </Link>
+            </article>
           ))}
         </div>
       </div>

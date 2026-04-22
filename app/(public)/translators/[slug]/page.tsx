@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AdDeviceType, AdPageType } from "@prisma/client";
+import { Sparkles } from "lucide-react";
 import { cache } from "react";
 
 import { Breadcrumbs } from "@/components/public/breadcrumbs";
@@ -9,7 +11,7 @@ import { Navbar } from "@/components/sections/navbar";
 import { TranslatorCard } from "@/components/translator/translator-card";
 import { AdSlot } from "@/components/shared/ad-slot";
 import { getRenderableAdPlacements } from "@/lib/data/ads";
-import { getPublicTranslatorBySlug } from "@/lib/data/translators";
+import { getPublicTranslatorBySlug, getRelatedPublicTranslators } from "@/lib/data/translators";
 import { getAppBaseUrl } from "@/lib/env";
 import { getShareImageAbsoluteUrl } from "@/lib/share-images";
 import { getAppSettings } from "@/lib/settings";
@@ -70,12 +72,17 @@ export default async function TranslatorSlugPage({ params }: PageProps) {
     notFound();
   }
 
-  const [settings, ads] = await Promise.all([
+  const [settings, ads, relatedTranslators] = await Promise.all([
     getAppSettings(),
     getRenderableAdPlacements({
       pageType: AdPageType.TRANSLATOR,
       deviceType: AdDeviceType.DESKTOP,
       categorySlug: translator.primaryCategory?.slug,
+    }),
+    getRelatedPublicTranslators({
+      currentTranslatorId: translator.id,
+      categorySlug: translator.primaryCategory?.slug,
+      limit: 3,
     }),
   ]);
   const baseUrl = getAppBaseUrl();
@@ -112,13 +119,62 @@ export default async function TranslatorSlugPage({ params }: PageProps) {
 
         <TranslatorCard translator={translator} shareUrl={shareUrl} pinImageUrl={pinImageUrl} />
 
+        <section className="mx-auto mt-8 w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="rounded-2xl border border-border bg-surface p-5 sm:p-6">
+            <h2 className="font-display text-2xl font-semibold text-ink">About This Translator</h2>
+            <p className="mt-3 text-base leading-7 text-muted-ink">{translator.shortDescription}</p>
+            <p className="mt-2 text-sm leading-7 text-muted-ink">
+              This translator helps convert {translator.sourceLabel.toLowerCase()} into{" "}
+              {translator.targetLabel.toLowerCase()} while preserving your core intent.
+            </p>
+          </div>
+        </section>
+
+        {relatedTranslators.length ? (
+          <section className="mx-auto mt-8 w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="rounded-2xl border border-border bg-surface p-5 sm:p-6">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                <h2 className="font-display text-2xl font-semibold text-ink">Related Translators</h2>
+                <Link
+                  href="/translators"
+                  className="text-sm font-medium text-brand-700 transition hover:text-brand-800"
+                >
+                  Browse all translators
+                </Link>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {relatedTranslators.map((item) => (
+                  <article
+                    key={item.id}
+                    className="rounded-2xl border border-border bg-muted-surface p-4 transition hover:border-brand-300 hover:bg-surface"
+                  >
+                    <h3 className="text-lg font-semibold text-ink">{item.name}</h3>
+                    <p className="mt-1 line-clamp-3 text-sm text-muted-ink">{item.shortDescription}</p>
+                    {item.primaryCategory ? (
+                      <p className="mt-2 text-xs font-medium text-brand-700">{item.primaryCategory.name}</p>
+                    ) : null}
+                    <Link
+                      href={`/translators/${item.slug}`}
+                      className="mt-4 inline-flex h-10 items-center gap-2 rounded-xl border border-brand-300 bg-brand-50 px-3 text-sm font-semibold text-brand-700 transition hover:border-brand-500 hover:bg-brand-100 hover:text-brand-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60"
+                    >
+                      <Sparkles className="h-4 w-4" />
+                      Try this translator
+                    </Link>
+                  </article>
+                ))}
+              </div>
+            </div>
+          </section>
+        ) : null}
+
         {ads.length > 1 ? (
           <section className="mx-auto mt-6 w-full max-w-7xl px-4 sm:px-6 lg:px-8">
             <AdSlot placement={ads[1]} adSenseClientId={settings.adSenseClientId} />
           </section>
         ) : null}
       </main>
-      <Footer platformName={settings.platformName} disclaimer={settings.footerDisclaimer} />
+      <Footer platformName={settings.platformName} />
     </div>
   );
 }

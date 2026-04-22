@@ -60,13 +60,19 @@ export function Navbar() {
             <LayoutGrid className="h-4 w-4" />
             Categories
           </Link>
+          <Link
+            href="/contact"
+            className="inline-flex h-10 items-center rounded-xl px-3 text-sm font-medium text-muted-ink transition hover:bg-muted-surface hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60"
+          >
+            Contact
+          </Link>
           <button
             type="button"
             onClick={() => openRequestModal()}
             className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-brand-300 bg-brand-50 px-3 text-sm font-semibold text-brand-700 transition hover:border-brand-500 hover:bg-brand-100 hover:text-brand-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60"
           >
             <MessageSquarePlus className="h-4 w-4" />
-            Request
+            Create translator
           </button>
         </nav>
 
@@ -123,6 +129,13 @@ export function Navbar() {
                 <LayoutGrid className="h-4 w-4" />
                 Categories
               </Link>
+              <Link
+                href="/contact"
+                onClick={() => setMobileOpen(false)}
+                className="inline-flex h-11 w-full items-center rounded-xl border border-border bg-surface px-3 text-sm font-medium text-ink transition hover:border-brand-300 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60"
+              >
+                Contact
+              </Link>
               <button
                 type="button"
                 onClick={() => {
@@ -132,7 +145,7 @@ export function Navbar() {
                 className="inline-flex h-11 w-full items-center gap-2 rounded-xl border border-brand-300 bg-brand-50 px-3 text-sm font-semibold text-brand-700 transition hover:border-brand-500 hover:bg-brand-100 hover:text-brand-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60"
               >
                 <MessageSquarePlus className="h-4 w-4" />
-                Request a translator
+                Create translator
               </button>
             </div>
           </aside>

@@ -22,6 +22,12 @@ export interface EmailSendResult {
   error?: string;
 }
 
+export interface ContactMessagePayload {
+  name: string;
+  email: string;
+  message: string;
+}
+
 function escapeHtml(value: string): string {
   return value
     .replaceAll("&", "&amp;")
@@ -157,6 +163,85 @@ export async function sendEmergencyShutdownAlertEmail(
     return {
       sent: false,
       error: error instanceof Error ? error.message : "Unknown email error.",
+    };
+  }
+}
+
+export async function sendContactMessageEmail(payload: ContactMessagePayload): Promise<EmailSendResult> {
+  const env = getServerEnv();
+  const apiKey = env.RESEND_API_KEY;
+  const from = env.EMAIL_FROM;
+  const to = env.ALERT_ADMIN_EMAIL?.trim();
+
+  if (!apiKey) {
+    logWarn("contact_email_missing_key", "RESEND_API_KEY is missing; contact email was not sent.");
+    return { sent: false, error: "Missing RESEND_API_KEY." };
+  }
+
+  if (!from) {
+    logWarn("contact_email_missing_from", "EMAIL_FROM is missing; contact email was not sent.");
+    return { sent: false, error: "Missing EMAIL_FROM." };
+  }
+
+  if (!to) {
+    logWarn("contact_email_missing_recipient", "ALERT_ADMIN_EMAIL is missing; contact email was not sent.");
+    return { sent: false, error: "Missing ALERT_ADMIN_EMAIL." };
+  }
+
+  const safeName = escapeHtml(payload.name);
+  const safeEmail = escapeHtml(payload.email);
+  const safeMessage = escapeHtml(payload.message).replaceAll("\n", "<br/>");
+
+  try {
+    const response = await fetch(RESEND_API_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from,
+        to: [to],
+        reply_to: payload.email,
+        subject: `StylePort contact message from ${payload.name}`,
+        text: [
+          "New contact message received.",
+          "",
+          `Name: ${payload.name}`,
+          `Email: ${payload.email}`,
+          "",
+          "Message:",
+          payload.message,
+        ].join("\n"),
+        html: `
+          <div style="font-family:Inter,Segoe UI,Arial,sans-serif;color:#111827;max-width:640px;margin:0 auto;">
+            <h1 style="margin:0 0 12px;font-size:20px;">New contact message</h1>
+            <p style="margin:0 0 8px;"><strong>Name:</strong> ${safeName}</p>
+            <p style="margin:0 0 8px;"><strong>Email:</strong> ${safeEmail}</p>
+            <p style="margin:0 0 6px;"><strong>Message:</strong></p>
+            <p style="margin:0;color:#374151;line-height:1.65;">${safeMessage}</p>
+          </div>
+        `,
+      }),
+    });
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => "");
+      logWarn("contact_email_http_error", "Resend returned non-OK for contact email.", {
+        status: response.status,
+      });
+      return {
+        sent: false,
+        error: body || `Resend request failed with status ${response.status}.`,
+      };
+    }
+
+    return { sent: true };
+  } catch (error) {
+    logError("contact_email_send_error", "Unexpected error while sending contact email.", undefined, error);
+    return {
+      sent: false,
+      error: error instanceof Error ? error.message : "Unknown contact email error.",
     };
   }
 }
