@@ -12,6 +12,8 @@ import { getAppSettings } from "@/lib/settings";
 
 const SHARE_IMAGE_WIDTH = 1000;
 const SHARE_IMAGE_HEIGHT = 1500;
+const HEAVY_SHARE_IMAGE_FONT_FAMILY =
+  '"Arial Black", "Segoe UI Black", Impact, Haettenschweiler, "Franklin Gothic Heavy", sans-serif';
 
 const publicPathPrefix = (() => {
   const raw = (process.env.SHARE_IMAGE_PUBLIC_PATH_PREFIX || "/generated/pins").trim();
@@ -157,7 +159,8 @@ async function renderShareImageBuffer(snapshot: ShareImageSnapshot, platformName
             gap: 18,
             color: theme.accent,
             fontSize: 28,
-            fontWeight: 800,
+            fontWeight: 900,
+            fontFamily: HEAVY_SHARE_IMAGE_FONT_FAMILY,
             letterSpacing: 0.8,
             textTransform: "uppercase",
             textAlign: "center",
@@ -185,7 +188,7 @@ async function renderShareImageBuffer(snapshot: ShareImageSnapshot, platformName
               fontSize: 128,
               lineHeight: 1.04,
               fontWeight: 900,
-              fontFamily: '"Arial Black", Impact, "Segoe UI Black", sans-serif',
+              fontFamily: HEAVY_SHARE_IMAGE_FONT_FAMILY,
               letterSpacing: -1.2,
               textAlign: "center",
               textTransform: "capitalize",
@@ -201,7 +204,8 @@ async function renderShareImageBuffer(snapshot: ShareImageSnapshot, platformName
             margin: 0,
             color: theme.accent,
             fontSize: 34,
-            fontWeight: 800,
+            fontWeight: 900,
+            fontFamily: HEAVY_SHARE_IMAGE_FONT_FAMILY,
             lineHeight: 1.25,
             textAlign: "center",
           }}
