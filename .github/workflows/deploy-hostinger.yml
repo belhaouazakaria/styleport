@@ -143,5 +143,11 @@ jobs:
           script: |
             set -eu
             cd ${{ secrets.HOSTINGER_APP_PATH || vars.HOSTINGER_APP_PATH }}
+            echo "[gha][ssh] pwd=$(pwd)"
+            echo "[gha][ssh] listing current directory"
+            ls -la
+            echo "[gha][ssh] listing scripts directory"
+            ls -la scripts || true
+            command -v bash >/dev/null 2>&1 || { echo "[gha][ssh][error] bash not found"; exit 1; }
             chmod +x ./scripts/hostinger-deploy.sh
-            HOSTINGER_DEPLOY_ARCHIVE="${{ secrets.HOSTINGER_APP_PATH || vars.HOSTINGER_APP_PATH }}/release.tar.gz" ./scripts/hostinger-deploy.sh
+            HOSTINGER_DEPLOY_DEBUG=1 HOSTINGER_DEPLOY_ARCHIVE="${{ secrets.HOSTINGER_APP_PATH || vars.HOSTINGER_APP_PATH }}/release.tar.gz" bash ./scripts/hostinger-deploy.sh
