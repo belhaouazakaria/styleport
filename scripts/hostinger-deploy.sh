@@ -2,6 +2,19 @@
 set -eu
 
 APP_PATH="${HOSTINGER_APP_PATH:-$(pwd)}"
+DEPLOY_ARCHIVE="${HOSTINGER_DEPLOY_ARCHIVE:-$APP_PATH/release.tar.gz}"
+LOCK_DIR="$APP_PATH/.deploy-lock"
+RELEASE_ID="$(date +%Y%m%d%H%M%S)"
+STAGING_DIR="$APP_PATH/.deploy-stage-$RELEASE_ID"
+
+log() {
+  echo "[hostinger] $*"
+}
+
+fail() {
+  log "ERROR: $*"
+  exit 1
+}
 
 load_profile_if_exists() {
   profile_path="$1"
@@ -11,73 +24,99 @@ load_profile_if_exists() {
   fi
 }
 
-detect_runtime_path() {
-  for candidate in \
-    /usr/local/bin \
-    /usr/bin \
-    /bin \
-    "$HOME/bin" \
-    "$HOME/.local/bin" \
-    "$HOME/.npm-global/bin" \
-    /opt/alt/alt-nodejs*/root/usr/bin \
-    /opt/nodejs*/bin
-  do
-    if [ -d "$candidate" ]; then
-      PATH="$candidate:$PATH"
-    fi
-  done
-  export PATH
+cleanup() {
+  rm -rf "$STAGING_DIR" >/dev/null 2>&1 || true
+  rmdir "$LOCK_DIR" >/dev/null 2>&1 || true
 }
 
-echo "[hostinger] Bootstrapping shell environment..."
+acquire_lock() {
+  if mkdir "$LOCK_DIR" >/dev/null 2>&1; then
+    return
+  fi
+  fail "Another deployment is already running. Lock path: $LOCK_DIR"
+}
+
+validate_runtime() {
+  if ! command -v node >/dev/null 2>&1; then
+    fail "Node.js was not found in this SSH session PATH."
+  fi
+
+  log "Using node: $(command -v node)"
+  node --version || true
+}
+
+validate_archive() {
+  if [ ! -f "$DEPLOY_ARCHIVE" ]; then
+    fail "Deploy archive not found at $DEPLOY_ARCHIVE"
+  fi
+
+  if ! command -v tar >/dev/null 2>&1; then
+    fail "'tar' is required on the server to extract release bundles."
+  fi
+}
+
+validate_staging_layout() {
+  [ -f "$STAGING_DIR/package.json" ] || fail "Staging bundle missing package.json"
+  [ -d "$STAGING_DIR/.next" ] || fail "Staging bundle missing .next build output"
+  [ -d "$STAGING_DIR/node_modules" ] || fail "Staging bundle missing node_modules"
+}
+
+publish_staging_to_app_root() {
+  log "Publishing release into app root..."
+
+  for path in \
+    ".next" \
+    "public" \
+    "prisma" \
+    "node_modules" \
+    "package.json" \
+    "package-lock.json" \
+    "next.config.ts" \
+    "server.js" \
+    "next-env.d.ts"
+  do
+    if [ -e "$APP_PATH/$path" ] || [ -L "$APP_PATH/$path" ]; then
+      rm -rf "$APP_PATH/$path"
+    fi
+
+    if [ -e "$STAGING_DIR/$path" ] || [ -L "$STAGING_DIR/$path" ]; then
+      mv "$STAGING_DIR/$path" "$APP_PATH/$path"
+    fi
+  done
+}
+
+signal_restart() {
+  if [ -f "$APP_PATH/tmp/restart.txt" ]; then
+    touch "$APP_PATH/tmp/restart.txt"
+    log "Restart signal sent via tmp/restart.txt"
+  else
+    log "tmp/restart.txt not found. Restart from Hostinger hPanel if needed."
+  fi
+}
+
+trap cleanup EXIT INT TERM
+
+log "Bootstrapping shell environment..."
 load_profile_if_exists "$HOME/.profile"
 load_profile_if_exists "$HOME/.bash_profile"
 load_profile_if_exists "$HOME/.bashrc"
 load_profile_if_exists "$HOME/.zshrc"
-detect_runtime_path
 
-echo "[hostinger] App path: $APP_PATH"
+log "App path: $APP_PATH"
+mkdir -p "$APP_PATH"
 cd "$APP_PATH"
 
-if [ ! -f package.json ]; then
-  echo "[hostinger] ERROR: package.json not found at $APP_PATH"
-  exit 1
-fi
+acquire_lock
+validate_runtime
+validate_archive
 
-if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
-  echo "[hostinger] ERROR: node/npm were not found in this non-interactive SSH session."
-  echo "[hostinger] PATH=$PATH"
-  echo "[hostinger] node location: $(command -v node 2>/dev/null || echo not-found)"
-  echo "[hostinger] npm location: $(command -v npm 2>/dev/null || echo not-found)"
-  echo "[hostinger] Ensure Hostinger Node.js is configured for this app and PATH is available to SSH sessions."
-  exit 127
-fi
+log "Extracting release archive to staging: $STAGING_DIR"
+mkdir -p "$STAGING_DIR"
+tar -xzf "$DEPLOY_ARCHIVE" -C "$STAGING_DIR"
+validate_staging_layout
 
-echo "[hostinger] Using node: $(command -v node)"
-echo "[hostinger] Using npm: $(command -v npm)"
-node --version
-npm --version
+publish_staging_to_app_root
+rm -f "$DEPLOY_ARCHIVE"
 
-echo "[hostinger] Installing dependencies..."
-npm ci --no-audit --no-fund
-
-echo "[hostinger] Validating production environment..."
-npm run validate:env:production
-
-echo "[hostinger] Generating Prisma client..."
-npm run prisma:generate
-
-echo "[hostinger] Applying production migrations..."
-npm run prisma:deploy
-
-echo "[hostinger] Building Next.js app..."
-npm run build
-
-if [ -f tmp/restart.txt ]; then
-  touch tmp/restart.txt
-  echo "[hostinger] Restart signal sent via tmp/restart.txt"
-else
-  echo "[hostinger] tmp/restart.txt not found. Restart the Node.js app from Hostinger hPanel if needed."
-fi
-
-echo "[hostinger] Deployment pipeline complete."
+signal_restart
+log "Deployment complete."

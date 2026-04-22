@@ -38,7 +38,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --no-audit --no-fund
 
       - name: Validate production env contract
         run: npm run validate:env:production
@@ -52,8 +52,35 @@ jobs:
       - name: Test
         run: npm run test
 
+      - name: Apply Prisma migrations to production database
+        run: npm run prisma:deploy
+
       - name: Build
         run: npm run build
+
+      - name: Prune dev dependencies for production release
+        run: npm prune --omit=dev --ignore-scripts
+
+      - name: Create deploy bundle
+        run: |
+          set -eu
+          tar -czf release.tar.gz \
+            .next \
+            public \
+            prisma \
+            node_modules \
+            package.json \
+            package-lock.json \
+            next.config.ts \
+            server.js \
+            next-env.d.ts
+
+      - name: Upload deploy artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hostinger-release
+          path: release.tar.gz
+          retention-days: 1
 
   deploy:
     name: Production Deploy
@@ -65,6 +92,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+
+      - name: Download deploy artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: hostinger-release
+          path: .
 
       - name: Validate deploy configuration
         env:
@@ -94,7 +127,7 @@ jobs:
           key: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
           port: ${{ secrets.HOSTINGER_SSH_PORT || vars.HOSTINGER_SSH_PORT }}
           source: >-
-            app,components,hooks,lib,prisma,public,scripts,types,auth.ts,proxy.ts,server.js,package.json,package-lock.json,next.config.ts,postcss.config.mjs,tsconfig.json,next-env.d.ts
+            release.tar.gz,scripts/hostinger-deploy.sh
           target: ${{ secrets.HOSTINGER_APP_PATH || vars.HOSTINGER_APP_PATH }}
           overwrite: true
 
@@ -111,4 +144,4 @@ jobs:
             set -eu
             cd ${{ secrets.HOSTINGER_APP_PATH || vars.HOSTINGER_APP_PATH }}
             chmod +x ./scripts/hostinger-deploy.sh
-            ./scripts/hostinger-deploy.sh
+            HOSTINGER_DEPLOY_ARCHIVE="${{ secrets.HOSTINGER_APP_PATH || vars.HOSTINGER_APP_PATH }}/release.tar.gz" ./scripts/hostinger-deploy.sh

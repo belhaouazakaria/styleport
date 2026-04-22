@@ -149,28 +149,25 @@ If Hostinger auto-detects your app as `Other` and leaves build settings as `null
 - Startup command: `npm run start:hostinger`
 
 ### 5. Deploy sequence
-Run this order on production host:
-```bash
-npm ci
-npm run validate:env:production
-npm run prisma:generate
-npm run prisma:deploy
-npm run build
-```
-Then (or via app restart in hPanel):
-```bash
-npm run start:hostinger
-```
+Preferred production deploy is GitHub Actions artifact deployment:
+- CI gate runs lint, typecheck, tests, Prisma migrations, and build on GitHub runners.
+- CI then creates a production release bundle (`release.tar.gz`) containing:
+  - `.next`
+  - `node_modules` (production-pruned)
+  - runtime config and assets (`public`, `prisma`, `package.json`, `server.js`, etc.)
+- Deploy job uploads only the bundle + deploy script to Hostinger.
+- Remote script extracts staged files and atomically swaps runtime paths in app root.
+- Server-side `npm install` and `next build` are intentionally avoided to prevent process-limit spikes.
 
-If your Hostinger runtime uses restart files, run:
+If your Hostinger runtime uses restart files, deployment touches:
 ```bash
-touch tmp/restart.txt
+tmp/restart.txt
 ```
 
 GitHub deploy workflow notes:
-- `deploy-hostinger.yml` now runs a CI gate first (lint, typecheck, tests, build).
-- Deployment uploads current repository files to `HOSTINGER_APP_PATH` (no `.git` dependency on server).
-- Remote script `scripts/hostinger-deploy.sh` bootstraps non-interactive shell PATH/profile and hard-fails with clear diagnostics if `node`/`npm` are unavailable.
+- `deploy-hostinger.yml` CI gate now also runs `npm run prisma:deploy` using `DATABASE_URL` secret.
+- Remote deploy script is low-overhead and lock-protected (`.deploy-lock`) to avoid overlapping deployments.
+- Deploy no longer depends on server-side `.git`.
 
 ### 6. Post-deploy verification
 Check:

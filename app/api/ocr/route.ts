@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { ALLOWED_IMAGE_TYPES, OCR_MAX_FILE_SIZE_MB } from "@/lib/constants";
-import { extractTextFromImageBuffer } from "@/lib/ocr";
+import { extractTextFromImageBuffer, OcrBusyError } from "@/lib/ocr";
 import { checkRateLimit } from "@/lib/rate-limit";
 import type { ApiErrorCode, OcrResponse } from "@/lib/types";
 import { extractClientIp } from "@/lib/utils";
@@ -50,7 +50,11 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json<OcrResponse>({ ok: true, text });
-  } catch {
+  } catch (error) {
+    if (error instanceof OcrBusyError) {
+      return errorResponse(503, "UPSTREAM_ERROR", "OCR is busy right now. Please try again in a moment.");
+    }
+
     return errorResponse(500, "OCR_ERROR", "OCR failed while reading that image.");
   }
 }
