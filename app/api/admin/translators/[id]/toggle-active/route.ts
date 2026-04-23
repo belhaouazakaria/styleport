@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { toggleTranslatorActive } from "@/lib/data/translators";
+import { markTranslatorRequestPublishedByTranslatorId } from "@/lib/data/requests";
 import { adminRouteGuard } from "@/lib/permissions";
 import { apiError, apiOk } from "@/lib/api-response";
 import { maybeSendPublishedNotificationForTranslator } from "@/lib/request-publish-notification";
@@ -35,6 +36,10 @@ export async function POST(request: Request, context: RouteContext) {
 
   if (!translator) {
     return apiError(404, "NOT_FOUND", "Translator not found.");
+  }
+
+  if (translator.isActive) {
+    await markTranslatorRequestPublishedByTranslatorId(translator.id);
   }
 
   const notification = await maybeSendPublishedNotificationForTranslator({

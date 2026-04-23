@@ -188,7 +188,7 @@ export async function buildTranslatorFromRequest(
 
   await linkRequestToTranslator(request.id, {
     translatorId: translator.id,
-    status: TranslatorRequestStatus.APPROVED,
+    status: input.activateTranslator ? TranslatorRequestStatus.PUBLISHED : TranslatorRequestStatus.APPROVED,
   });
 
   let publishNotificationSent = false;

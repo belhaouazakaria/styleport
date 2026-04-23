@@ -411,6 +411,22 @@ export async function markTranslatorRequestPublished(id: string) {
   });
 }
 
+export async function markTranslatorRequestPublishedByTranslatorId(translatorId: string) {
+  const result = await prisma.translatorRequest.updateMany({
+    where: {
+      createdTranslatorId: translatorId,
+      status: {
+        not: TranslatorRequestStatus.PUBLISHED,
+      },
+    },
+    data: {
+      status: TranslatorRequestStatus.PUBLISHED,
+    },
+  });
+
+  return result.count > 0;
+}
+
 export async function markTranslatorRequestPublishedNotificationSent(id: string) {
   await prisma.translatorRequest.update({
     where: { id },

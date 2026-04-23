@@ -1,8 +1,8 @@
 import {
   getTranslatorRequestByCreatedTranslatorId,
-  markTranslatorRequestPublished,
   markTranslatorRequestPublishedNotificationSent,
 } from "@/lib/data/requests";
+import { TranslatorRequestStatus } from "@prisma/client";
 import { sendTranslatorPublishedEmail } from "@/lib/email-alerts";
 import { getAppBaseUrl } from "@/lib/env";
 import { logWarn } from "@/lib/logger";
@@ -33,9 +33,8 @@ export async function maybeSendPublishedNotificationForTranslator(
     return { publishNotificationSent: false };
   }
 
-  await markTranslatorRequestPublished(linkedRequest.id);
-
   if (
+    linkedRequest.status !== TranslatorRequestStatus.PUBLISHED ||
     !linkedRequest.requesterEmail ||
     !linkedRequest.emailVerifiedAt ||
     linkedRequest.publishedNotificationSentAt
@@ -71,4 +70,3 @@ export async function maybeSendPublishedNotificationForTranslator(
   await markTranslatorRequestPublishedNotificationSent(linkedRequest.id);
   return { publishNotificationSent: true };
 }
-

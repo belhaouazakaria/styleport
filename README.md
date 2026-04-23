@@ -54,7 +54,7 @@ Copy `.env.production.example` to `.env.production` and fill values:
 - `NEXT_PUBLIC_APP_NAME=StylePort`
 - `IP_HASH_SECRET=<random-secret>`
 - `ALERT_ADMIN_EMAIL=<ops-email>`
-- `EMAIL_FROM=<sender-address>`
+- `EMAIL_FROM=StylePort Team <translate@whattypeof.com>`
 - `BREVO_API_KEY=<brevo-api-key>`
 
 Production validation is fail-fast for critical vars, so missing required values will stop startup.

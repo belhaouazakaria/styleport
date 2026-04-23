@@ -5,6 +5,7 @@ import {
   unarchiveTranslator,
   updateTranslator,
 } from "@/lib/data/translators";
+import { markTranslatorRequestPublishedByTranslatorId } from "@/lib/data/requests";
 import { adminRouteGuard } from "@/lib/permissions";
 import { apiError, apiOk } from "@/lib/api-response";
 import { translatorUpsertSchema } from "@/lib/validators";
@@ -49,6 +50,9 @@ export async function PATCH(request: Request, context: RouteContext) {
 
   try {
     const translator = await updateTranslator(id, parsed.data);
+    if (translator.isActive) {
+      await markTranslatorRequestPublishedByTranslatorId(translator.id);
+    }
     const notification = await maybeSendPublishedNotificationForTranslator({
       translator: {
         id: translator.id,
