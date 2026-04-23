@@ -98,10 +98,18 @@ export function RequestTranslatorProvider({ children }: { children: ReactNode })
     setError(null);
 
     const formData = new FormData(event.currentTarget);
+    const turnstileToken = String(formData.get("cf-turnstile-response") || "").trim();
+
+    if (showTurnstile && !turnstileToken) {
+      setSubmitting(false);
+      setError("Please complete the captcha challenge before submitting.");
+      return;
+    }
+
     const payload = {
       ...form,
       honeypot: String(formData.get("website") || ""),
-      turnstileToken: String(formData.get("cf-turnstile-response") || ""),
+      turnstileToken,
     };
 
     const response = await fetch("/api/translator-requests", {
