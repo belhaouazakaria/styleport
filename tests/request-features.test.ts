@@ -1,6 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import { verifyTurnstileToken } from "@/lib/turnstile";
 import { aiDraftInputSchema, translatorDraftSchema, translatorRequestSchema } from "@/lib/validators";
 
 describe("translatorRequestSchema", () => {
@@ -11,7 +10,6 @@ describe("translatorRequestSchema", () => {
       exampleInput: "we make AI for stores",
       requesterEmail: "founder@example.com",
       honeypot: "",
-      turnstileToken: "token",
     });
 
     expect(parsed.success).toBe(true);
@@ -72,42 +70,5 @@ describe("aiDraftInputSchema", () => {
     });
 
     expect(parsed.success).toBe(false);
-  });
-});
-
-describe("verifyTurnstileToken", () => {
-  it("skips verification in development when secret is missing", async () => {
-    const previous = process.env.TURNSTILE_SECRET_KEY;
-    const previousEnv = process.env.NODE_ENV;
-    delete process.env.TURNSTILE_SECRET_KEY;
-    process.env.NODE_ENV = "development";
-
-    const result = await verifyTurnstileToken({ token: "" });
-    expect(result.success).toBe(true);
-    expect(result.skipped).toBe(true);
-
-    process.env.TURNSTILE_SECRET_KEY = previous;
-    process.env.NODE_ENV = previousEnv;
-  });
-
-  it("fails when provider returns unsuccessful result", async () => {
-    const previous = process.env.TURNSTILE_SECRET_KEY;
-    const previousEnv = process.env.NODE_ENV;
-    process.env.TURNSTILE_SECRET_KEY = "secret";
-    process.env.NODE_ENV = "production";
-
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ success: false, "error-codes": ["invalid-input-response"] }),
-    });
-
-    vi.stubGlobal("fetch", fetchMock);
-
-    const result = await verifyTurnstileToken({ token: "bad-token" });
-    expect(result.success).toBe(false);
-
-    vi.unstubAllGlobals();
-    process.env.TURNSTILE_SECRET_KEY = previous;
-    process.env.NODE_ENV = previousEnv;
   });
 });

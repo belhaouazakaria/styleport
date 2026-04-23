@@ -6,7 +6,7 @@ StylePort is a production-grade multi-translator discovery platform with:
 - OpenAI translation + AI draft generation
 - translator page quick-share to Pinterest with **pre-generated stored pin images per translator**
 - quota protection + emergency shutdown + alert email flow
-- create-translator intake flow with captcha + anti-spam controls
+- create-translator intake flow with anti-spam controls
 
 This repository is **feature-complete** and this hardening pass is focused on **deployment and operational readiness**.
 
@@ -52,12 +52,10 @@ Copy `.env.production.example` to `.env.production` and fill values:
 - `OPENAI_API_KEY=<openai-key>`
 - `OPENAI_MODEL=<model>`
 - `NEXT_PUBLIC_APP_NAME=StylePort`
-- `NEXT_PUBLIC_TURNSTILE_SITE_KEY=<turnstile-site-key>`
-- `TURNSTILE_SECRET_KEY=<turnstile-secret>`
 - `IP_HASH_SECRET=<random-secret>`
 - `ALERT_ADMIN_EMAIL=<ops-email>`
-- `EMAIL_FROM=<resend-from-address>`
-- `RESEND_API_KEY=<resend-key>`
+- `EMAIL_FROM=<sender-address>`
+- `BREVO_API_KEY=<brevo-api-key>`
 
 Production validation is fail-fast for critical vars, so missing required values will stop startup.
 
@@ -176,7 +174,7 @@ Check:
 3. public homepage `/` loads and search works
 4. `/translators/[slug]` translates successfully
 5. `/login` and `/admin` auth flow works
-6. request form submission + captcha works
+6. request form submission works
 7. usage protection dashboard reflects expected state
 8. legal/contact pages load (`/privacy`, `/terms`, `/disclaimer`, `/cookies`, `/contact`)
 
@@ -298,12 +296,8 @@ Required GitHub secrets for deploy workflow:
 - Review `GLOBAL_DAILY_TOKEN_CAP` and emergency flags.
 - Confirm `OPENAI_API_KEY` is valid.
 
-### Request form blocked
-- Validate Turnstile site/secret pair.
-- Confirm production domain is registered in Turnstile config.
-
 ### Alert emails not sent
-- Verify `RESEND_API_KEY`, `EMAIL_FROM`, `ALERT_ADMIN_EMAIL`.
+- Verify `BREVO_API_KEY`, `EMAIL_FROM`, `ALERT_ADMIN_EMAIL`.
 - Check server logs for structured `email_alert_*` events.
 
 ---

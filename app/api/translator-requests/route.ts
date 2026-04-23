@@ -7,7 +7,6 @@ import { sendTranslatorRequestVerificationEmail } from "@/lib/email-alerts";
 import { getAppBaseUrl } from "@/lib/env";
 import { logError, logWarn } from "@/lib/logger";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { verifyTurnstileToken } from "@/lib/turnstile";
 import { extractClientIp } from "@/lib/utils";
 import { translatorRequestSchema } from "@/lib/validators";
 
@@ -40,18 +39,6 @@ export async function POST(request: Request) {
   if (parsed.data.honeypot?.trim()) {
     logWarn("translator_request_honeypot_triggered", "Translator request blocked by honeypot.");
     return apiError(403, "FORBIDDEN", "Submission blocked.");
-  }
-
-  const turnstile = await verifyTurnstileToken({
-    token: parsed.data.turnstileToken,
-    ip: identifier,
-  });
-
-  if (!turnstile.success) {
-    logWarn("translator_request_turnstile_failed", "Translator request failed captcha verification.", {
-      errorCodes: turnstile.errorCodes,
-    });
-    return apiError(403, "FORBIDDEN", "Captcha verification failed.");
   }
 
   try {

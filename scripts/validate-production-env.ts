@@ -7,11 +7,10 @@ const requiredPairs: Array<[string, string | undefined]> = [
   ["NEXTAUTH_SECRET", env.NEXTAUTH_SECRET],
   ["DATABASE_URL", env.DATABASE_URL],
   ["OPENAI_API_KEY", env.OPENAI_API_KEY],
-  ["TURNSTILE_SECRET_KEY", env.TURNSTILE_SECRET_KEY],
   ["IP_HASH_SECRET", env.IP_HASH_SECRET],
   ["ALERT_ADMIN_EMAIL", env.ALERT_ADMIN_EMAIL],
   ["EMAIL_FROM", env.EMAIL_FROM],
-  ["RESEND_API_KEY", env.RESEND_API_KEY],
+  ["BREVO_API_KEY", env.BREVO_API_KEY],
 ];
 
 const missing = requiredPairs.filter(([, value]) => !value).map(([name]) => name);

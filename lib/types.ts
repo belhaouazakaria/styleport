@@ -266,7 +266,6 @@ export interface TranslatorRequestInput {
   audience?: string;
   notes?: string;
   honeypot?: string;
-  turnstileToken?: string;
 }
 
 export interface TranslatorDraftModeInput {

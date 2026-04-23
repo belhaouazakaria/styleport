@@ -1,7 +1,6 @@
 "use client";
 
 import { createPortal } from "react-dom";
-import Script from "next/script";
 import {
   createContext,
   useCallback,
@@ -46,9 +45,6 @@ export function RequestTranslatorProvider({ children }: { children: ReactNode })
 
   const firstInputRef = useRef<HTMLInputElement | null>(null);
   const { toast } = useToast();
-
-  const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "";
-  const showTurnstile = useMemo(() => Boolean(siteKey), [siteKey]);
 
   useEffect(() => {
     if (!open) return;
@@ -98,18 +94,9 @@ export function RequestTranslatorProvider({ children }: { children: ReactNode })
     setError(null);
 
     const formData = new FormData(event.currentTarget);
-    const turnstileToken = String(formData.get("cf-turnstile-response") || "").trim();
-
-    if (showTurnstile && !turnstileToken) {
-      setSubmitting(false);
-      setError("Please complete the captcha challenge before submitting.");
-      return;
-    }
-
     const payload = {
       ...form,
       honeypot: String(formData.get("website") || ""),
-      turnstileToken,
     };
 
     const response = await fetch("/api/translator-requests", {
@@ -239,18 +226,6 @@ export function RequestTranslatorProvider({ children }: { children: ReactNode })
                       placeholder="Describe what this translator should transform and the style it should produce."
                     />
                   </label>
-
-                  {showTurnstile ? (
-                    <>
-                      <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer />
-                      <div className="cf-turnstile" data-sitekey={siteKey} data-theme="light" />
-                    </>
-                  ) : (
-                    <p className="rounded-xl border border-dashed border-border bg-muted-surface px-3 py-2 text-xs text-muted-ink">
-                      Captcha is not configured in this environment. In production, Turnstile verification is
-                      required.
-                    </p>
-                  )}
 
                   {error ? <p className="text-sm text-red-600">{error}</p> : null}
 

@@ -214,7 +214,6 @@ export const translatorRequestSchema = z.object({
   audience: z.string().trim().max(240).optional().or(z.literal("")),
   notes: z.string().trim().max(2000).optional().or(z.literal("")),
   honeypot: z.string().max(0).optional().or(z.literal("")),
-  turnstileToken: z.string().trim().optional().or(z.literal("")),
 });
 
 export const translatorRequestResendSchema = z.object({
