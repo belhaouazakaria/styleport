@@ -45,7 +45,7 @@ export async function POST(request: Request) {
     return apiError(429, "RATE_LIMITED", "A verification email was sent recently. Please try again in a minute.");
   }
 
-  const verificationUrl = new URL("/api/translator-requests/verify", getAppBaseUrl());
+  const verificationUrl = new URL("/api/translator-requests/verify", getAppBaseUrl({ requestUrl: request.url }));
   verificationUrl.searchParams.set("token", resend.verificationToken);
   verificationUrl.searchParams.set("requestId", resend.requestId);
 

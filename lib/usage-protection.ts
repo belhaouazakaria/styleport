@@ -178,28 +178,45 @@ export async function getOrCreateUsageProtectionState(db: DbClient = prisma) {
   }
 
   const defaults = getDefaultStateValues();
-  const runUpsert = async () =>
-    db.usageProtectionState.upsert({
+  const resolveState = async () => {
+    const existing = await db.usageProtectionState.findUnique({
       where: { id: USAGE_PROTECTION_STATE_ID },
-      update: {},
-      create: {
-        id: USAGE_PROTECTION_STATE_ID,
-        usageProtectionEnabled: defaults.usageProtectionEnabled,
-        ipLimitPerMinute: defaults.ipLimitPerMinute,
-        ipLimitPerHour: defaults.ipLimitPerHour,
-        ipLimitPerDay: defaults.ipLimitPerDay,
-        globalDailyTokenCap: defaults.globalDailyTokenCap,
-        autoEmergencyShutdownEnabled: defaults.autoEmergencyShutdownEnabled,
-        translationsEnabled: true,
-        alertEmail: defaults.alertEmail,
-      },
     });
 
+    if (existing) {
+      return existing;
+    }
+
+    try {
+      return await db.usageProtectionState.create({
+        data: {
+          id: USAGE_PROTECTION_STATE_ID,
+          usageProtectionEnabled: defaults.usageProtectionEnabled,
+          ipLimitPerMinute: defaults.ipLimitPerMinute,
+          ipLimitPerHour: defaults.ipLimitPerHour,
+          ipLimitPerDay: defaults.ipLimitPerDay,
+          globalDailyTokenCap: defaults.globalDailyTokenCap,
+          autoEmergencyShutdownEnabled: defaults.autoEmergencyShutdownEnabled,
+          translationsEnabled: true,
+          alertEmail: defaults.alertEmail,
+        },
+      });
+    } catch (error) {
+      const raced = await db.usageProtectionState.findUnique({
+        where: { id: USAGE_PROTECTION_STATE_ID },
+      });
+      if (raced) {
+        return raced;
+      }
+      throw error;
+    }
+  };
+
   if (!isDefaultClient) {
-    return runUpsert();
+    return resolveState();
   }
 
-  const task = runUpsert()
+  const task = resolveState()
     .then((state) => {
       setUsageProtectionStateCache(state);
       return state;
@@ -237,31 +254,37 @@ async function getIpUsageCounts(ipHash: string, now = new Date()): Promise<Usage
   const hourStart = new Date(now.getTime() - 60 * 60_000);
   const { start: dayStart, endExclusive: dayEndExclusive } = getUtcDayWindow(now);
 
-  const [minute, hour, day] = await Promise.all([
-    prisma.translationLog.count({
-      where: {
-        ipHash,
-        createdAt: { gte: minuteStart },
+  const rows = await prisma.translationLog.findMany({
+    where: {
+      ipHash,
+      createdAt: {
+        gte: dayStart,
+        lt: dayEndExclusive,
       },
-    }),
-    prisma.translationLog.count({
-      where: {
-        ipHash,
-        createdAt: { gte: hourStart },
-      },
-    }),
-    prisma.translationLog.count({
-      where: {
-        ipHash,
-        createdAt: {
-          gte: dayStart,
-          lt: dayEndExclusive,
-        },
-      },
-    }),
-  ]);
+    },
+    select: {
+      createdAt: true,
+    },
+  });
 
-  return { minute, hour, day };
+  let minute = 0;
+  let hour = 0;
+
+  for (const row of rows) {
+    const createdAtMs = row.createdAt.getTime();
+    if (createdAtMs >= hourStart.getTime()) {
+      hour += 1;
+      if (createdAtMs >= minuteStart.getTime()) {
+        minute += 1;
+      }
+    }
+  }
+
+  return {
+    minute,
+    hour,
+    day: rows.length,
+  };
 }
 
 export async function getGlobalDailyTokenUsage(

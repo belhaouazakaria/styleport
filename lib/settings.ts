@@ -7,7 +7,7 @@ import {
 import { prisma } from "@/lib/prisma";
 import type { AppSettings } from "@/lib/types";
 
-const SETTINGS_CACHE_TTL_MS = 15_000;
+const SETTINGS_CACHE_TTL_MS = 60_000;
 
 const defaultSettings: AppSettings = {
   platformName: APP_NAME,

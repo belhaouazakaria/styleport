@@ -5,13 +5,23 @@ import { getServerEnv } from "@/lib/env";
 import { logError } from "@/lib/logger";
 import { toPlainText } from "@/lib/utils";
 
+const globalForOpenAI = globalThis as typeof globalThis & {
+  __styleportOpenAIClient?: OpenAI;
+};
+
 function getClient(): OpenAI {
+  if (globalForOpenAI.__styleportOpenAIClient) {
+    return globalForOpenAI.__styleportOpenAIClient;
+  }
+
   const env = getServerEnv();
   if (!env.OPENAI_API_KEY) {
     throw new Error("OPENAI_API_KEY is missing. Add it to your environment variables.");
   }
 
-  return new OpenAI({ apiKey: env.OPENAI_API_KEY });
+  const client = new OpenAI({ apiKey: env.OPENAI_API_KEY });
+  globalForOpenAI.__styleportOpenAIClient = client;
+  return client;
 }
 
 function extractTextFromResponse(response: OpenAI.Responses.Response): string {

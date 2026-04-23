@@ -5,11 +5,20 @@ interface RateRecord {
   resetAt: number;
 }
 
+interface RateLimitOptions {
+  maxRequests?: number;
+  windowMs?: number;
+}
+
 const globalStore = globalThis as typeof globalThis & {
   __regalRateLimitStore?: Map<string, RateRecord>;
+  __regalRateLimitLastPruneAt?: number;
 };
 
 const store = globalStore.__regalRateLimitStore ?? new Map<string, RateRecord>();
+let lastPruneAt = globalStore.__regalRateLimitLastPruneAt ?? 0;
+const RATE_LIMIT_STORE_PRUNE_INTERVAL_MS = RATE_LIMIT_WINDOW_MS;
+const RATE_LIMIT_STORE_MAX_ENTRIES = 10_000;
 
 globalStore.__regalRateLimitStore = store;
 
@@ -19,23 +28,53 @@ export interface RateLimitResult {
   resetAt: number;
 }
 
-export function checkRateLimit(identifier: string): RateLimitResult {
+function pruneRateLimitStore(now: number) {
+  if (now - lastPruneAt < RATE_LIMIT_STORE_PRUNE_INTERVAL_MS && store.size < RATE_LIMIT_STORE_MAX_ENTRIES) {
+    return;
+  }
+
+  for (const [key, record] of store.entries()) {
+    if (record.resetAt <= now) {
+      store.delete(key);
+    }
+  }
+
+  if (store.size > RATE_LIMIT_STORE_MAX_ENTRIES) {
+    const overflow = store.size - RATE_LIMIT_STORE_MAX_ENTRIES;
+    const oldestEntries = Array.from(store.entries())
+      .sort((a, b) => a[1].resetAt - b[1].resetAt)
+      .slice(0, overflow);
+
+    for (const [key] of oldestEntries) {
+      store.delete(key);
+    }
+  }
+
+  lastPruneAt = now;
+  globalStore.__regalRateLimitLastPruneAt = lastPruneAt;
+}
+
+export function checkRateLimit(identifier: string, options?: RateLimitOptions): RateLimitResult {
   const now = Date.now();
-  const key = identifier || "anonymous";
+  pruneRateLimitStore(now);
+
+  const maxRequests = Math.max(1, options?.maxRequests ?? RATE_LIMIT_MAX_REQUESTS);
+  const windowMs = Math.max(1_000, options?.windowMs ?? RATE_LIMIT_WINDOW_MS);
+  const key = `${identifier || "anonymous"}:${maxRequests}:${windowMs}`;
   const current = store.get(key);
 
   if (!current || current.resetAt < now) {
-    const resetAt = now + RATE_LIMIT_WINDOW_MS;
+    const resetAt = now + windowMs;
     store.set(key, { count: 1, resetAt });
 
     return {
       allowed: true,
-      remaining: RATE_LIMIT_MAX_REQUESTS - 1,
+      remaining: Math.max(0, maxRequests - 1),
       resetAt,
     };
   }
 
-  if (current.count >= RATE_LIMIT_MAX_REQUESTS) {
+  if (current.count >= maxRequests) {
     return {
       allowed: false,
       remaining: 0,
@@ -48,7 +87,7 @@ export function checkRateLimit(identifier: string): RateLimitResult {
 
   return {
     allowed: true,
-    remaining: RATE_LIMIT_MAX_REQUESTS - current.count,
+    remaining: Math.max(0, maxRequests - current.count),
     resetAt: current.resetAt,
   };
 }

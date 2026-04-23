@@ -29,6 +29,15 @@ if (baseUrl) {
     if (!["http:", "https:"].includes(parsed.protocol)) {
       throw new Error("Unsupported protocol");
     }
+
+    const host = parsed.hostname.toLowerCase();
+    const isLoopback = host === "localhost" || host === "0.0.0.0" || host === "::1" || host.startsWith("127.");
+    if (isLoopback && env.NODE_ENV === "production") {
+      console.error(
+        "[env] APP_BASE_URL/NEXTAUTH_URL must be the public production domain (not localhost/0.0.0.0).",
+      );
+      process.exit(1);
+    }
   } catch {
     console.error("[env] APP_BASE_URL/NEXTAUTH_URL must be a valid absolute URL.");
     process.exit(1);

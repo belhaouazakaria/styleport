@@ -48,9 +48,48 @@ const envSchema = z.object({
 export type ServerEnv = z.infer<typeof envSchema>;
 
 let cachedServerEnv: ServerEnv | null = null;
+const FALLBACK_LOCAL_BASE_URL = "http://localhost:3000";
+const LOOPBACK_HOSTNAMES = new Set(["localhost", "0.0.0.0", "::1"]);
 
 function formatIssues(issues: z.ZodIssue[]) {
   return issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join("; ");
+}
+
+function parseHttpUrl(raw: string | undefined): URL | null {
+  if (!raw?.trim()) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function isLoopbackHostname(hostname: string) {
+  const normalized = hostname.trim().toLowerCase();
+  if (LOOPBACK_HOSTNAMES.has(normalized)) {
+    return true;
+  }
+
+  if (normalized.startsWith("127.")) {
+    return true;
+  }
+
+  return false;
+}
+
+function isUsablePublicBaseUrl(url: URL, options: { isProduction: boolean }) {
+  if (!options.isProduction) {
+    return true;
+  }
+
+  return !isLoopbackHostname(url.hostname);
 }
 
 export function getServerEnv(): ServerEnv {
@@ -73,13 +112,30 @@ export function getServerEnv(): ServerEnv {
   return parsed.data;
 }
 
-export function getAppBaseUrl() {
+export function getAppBaseUrl(options?: { requestUrl?: string }) {
   const env = getServerEnv();
-  const raw = env.APP_BASE_URL || env.NEXTAUTH_URL || "http://localhost:3000";
+  const isProduction = env.NODE_ENV === "production";
+  const candidates: Array<string | undefined> = [env.APP_BASE_URL, env.NEXTAUTH_URL];
 
-  try {
-    return new URL(raw);
-  } catch {
-    return new URL("http://localhost:3000");
+  if (options?.requestUrl) {
+    const requestParsed = parseHttpUrl(options.requestUrl);
+    if (requestParsed) {
+      candidates.push(requestParsed.origin);
+    }
   }
+
+  for (const raw of candidates) {
+    const parsed = parseHttpUrl(raw);
+    if (!parsed) {
+      continue;
+    }
+
+    if (!isUsablePublicBaseUrl(parsed, { isProduction })) {
+      continue;
+    }
+
+    return parsed;
+  }
+
+  return new URL(FALLBACK_LOCAL_BASE_URL);
 }

@@ -43,7 +43,7 @@ export async function POST(request: Request) {
 
   try {
     const created = await createPublicTranslatorRequest(parsed.data);
-    const verificationUrl = new URL("/api/translator-requests/verify", getAppBaseUrl());
+    const verificationUrl = new URL("/api/translator-requests/verify", getAppBaseUrl({ requestUrl: request.url }));
     verificationUrl.searchParams.set("token", created.verificationToken);
     verificationUrl.searchParams.set("requestId", created.id);
 

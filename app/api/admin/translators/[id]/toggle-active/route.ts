@@ -57,7 +57,10 @@ export async function POST(request: Request, context: RouteContext) {
         linkedRequest.emailVerifiedAt &&
         !linkedRequest.publishedNotificationSentAt
       ) {
-        const translatorUrl = new URL(`/translators/${translator.slug}`, getAppBaseUrl()).toString();
+        const translatorUrl = new URL(
+          `/translators/${translator.slug}`,
+          getAppBaseUrl({ requestUrl: request.url }),
+        ).toString();
         const emailResult = await sendTranslatorPublishedEmail({
           to: linkedRequest.requesterEmail,
           requestedName: linkedRequest.requestedName,
