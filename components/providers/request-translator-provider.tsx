@@ -11,9 +11,8 @@ import {
   useRef,
   type ReactNode,
 } from "react";
-import { Sparkles, X } from "lucide-react";
+import { CheckCircle2, Sparkles, X } from "lucide-react";
 
-import { useToast } from "@/components/providers/toast-provider";
 import { Button } from "@/components/ui/button";
 
 interface RequestTranslatorContextValue {
@@ -29,6 +28,10 @@ interface RequestFormState {
   description: string;
 }
 
+interface SubmissionSuccessState {
+  requesterEmail: string;
+}
+
 function createDefaultFormState(initialIdea?: string): RequestFormState {
   return {
     requesterEmail: "",
@@ -42,9 +45,9 @@ export function RequestTranslatorProvider({ children }: { children: ReactNode })
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState<RequestFormState>(createDefaultFormState());
+  const [successState, setSuccessState] = useState<SubmissionSuccessState | null>(null);
 
   const firstInputRef = useRef<HTMLInputElement | null>(null);
-  const { toast } = useToast();
 
   useEffect(() => {
     if (!open) return;
@@ -72,12 +75,14 @@ export function RequestTranslatorProvider({ children }: { children: ReactNode })
   const openRequestModal = useCallback((initialIdea?: string) => {
     setForm(createDefaultFormState(initialIdea));
     setError(null);
+    setSuccessState(null);
     setOpen(true);
   }, []);
 
   const closeRequestModal = useCallback(() => {
     setOpen(false);
     setError(null);
+    setSuccessState(null);
   }, []);
 
   const contextValue = useMemo(
@@ -113,14 +118,10 @@ export function RequestTranslatorProvider({ children }: { children: ReactNode })
       return;
     }
 
-    toast({
-      title: "Check your inbox",
-      description:
-        "We sent a verification link so we can notify you if your translator gets approved and goes live. Check spam/junk too.",
-    });
-
     setForm(createDefaultFormState());
-    setOpen(false);
+    setSuccessState({
+      requesterEmail: form.requesterEmail.trim(),
+    });
   }
 
   return (
@@ -158,86 +159,122 @@ export function RequestTranslatorProvider({ children }: { children: ReactNode })
                   </button>
                 </div>
 
-                <form onSubmit={onSubmit} className="space-y-4 px-4 py-4 sm:px-6 sm:py-6">
-                  <input
-                    type="text"
-                    name="website"
-                    tabIndex={-1}
-                    autoComplete="off"
-                    className="hidden"
-                    aria-hidden="true"
-                  />
+                {successState ? (
+                  <div className="space-y-4 px-4 py-6 sm:px-6">
+                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800">
+                      <p className="inline-flex items-center gap-2 text-sm font-semibold">
+                        <CheckCircle2 className="h-4 w-4" />
+                        Request received
+                      </p>
+                      <p className="mt-2 text-sm leading-6">
+                        One more step is required. We sent a verification email to{" "}
+                        <strong>{successState.requesterEmail}</strong>.
+                      </p>
+                      <p className="mt-2 text-sm leading-6">
+                        Please confirm your email to complete your submission. If you don&apos;t see the email, check
+                        your spam/junk folder.
+                      </p>
+                    </div>
 
-                  <label className="block space-y-1 text-sm">
-                    <span className="font-medium text-ink">Your email</span>
-                    <input
-                      name="requesterEmail"
-                      type="email"
-                      value={form.requesterEmail}
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          requesterEmail: event.target.value,
-                        }))
-                      }
-                      required
-                      className="h-11 w-full rounded-xl border border-border bg-surface px-3 text-ink placeholder:text-muted-ink/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60"
-                      placeholder="you@example.com"
-                    />
-                  </label>
-
-                  <p className="rounded-xl border border-border bg-muted-surface px-3 py-2 text-xs leading-5 text-muted-ink">
-                    We ask for your email so we can let you know if your translator idea gets approved and goes live.
-                    After submitting, please confirm your email address through the verification email we send. If
-                    you don&apos;t see it, check your spam/junk folder.
-                  </p>
-
-                  <label className="block space-y-1 text-sm">
-                    <span className="font-medium text-ink">Translator name</span>
-                    <input
-                      ref={firstInputRef}
-                      name="requestedName"
-                      value={form.requestedName}
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          requestedName: event.target.value,
-                        }))
-                      }
-                      required
-                      className="h-11 w-full rounded-xl border border-border bg-surface px-3 text-ink placeholder:text-muted-ink/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60"
-                      placeholder="Ex: Pirate Captain Translator"
-                    />
-                  </label>
-
-                  <label className="block space-y-1 text-sm">
-                    <span className="font-medium text-ink">Translator description</span>
-                    <textarea
-                      name="description"
-                      value={form.description}
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          description: event.target.value,
-                        }))
-                      }
-                      required
-                      className="min-h-28 w-full rounded-xl border border-border bg-surface px-3 py-2 text-ink placeholder:text-muted-ink/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60"
-                      placeholder="Describe what this translator should transform and the style it should produce."
-                    />
-                  </label>
-
-                  {error ? <p className="text-sm text-red-600">{error}</p> : null}
-
-                  <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
-                    <Button type="button" variant="outline" onClick={closeRequestModal}>
-                      Cancel
-                    </Button>
-                    <Button type="submit" disabled={submitting}>
-                      {submitting ? "Sending..." : "Create translator"}
-                    </Button>
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          setForm(createDefaultFormState());
+                          setError(null);
+                          setSuccessState(null);
+                        }}
+                      >
+                        Submit another idea
+                      </Button>
+                      <Button type="button" onClick={closeRequestModal}>
+                        Done
+                      </Button>
+                    </div>
                   </div>
-                </form>
+                ) : (
+                  <form onSubmit={onSubmit} className="space-y-4 px-4 py-4 sm:px-6 sm:py-6">
+                    <input
+                      type="text"
+                      name="website"
+                      tabIndex={-1}
+                      autoComplete="off"
+                      className="hidden"
+                      aria-hidden="true"
+                    />
+
+                    <label className="block space-y-1 text-sm">
+                      <span className="font-medium text-ink">Your email</span>
+                      <input
+                        name="requesterEmail"
+                        type="email"
+                        value={form.requesterEmail}
+                        onChange={(event) =>
+                          setForm((current) => ({
+                            ...current,
+                            requesterEmail: event.target.value,
+                          }))
+                        }
+                        required
+                        className="h-11 w-full rounded-xl border border-border bg-surface px-3 text-ink placeholder:text-muted-ink/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60"
+                        placeholder="you@example.com"
+                      />
+                    </label>
+
+                    <p className="rounded-xl border border-border bg-muted-surface px-3 py-2 text-xs leading-5 text-muted-ink">
+                      We ask for your email so we can let you know if your translator idea gets approved and goes
+                      live. After submitting, please confirm your email address through the verification email we
+                      send. If you don&apos;t see it, check your spam/junk folder.
+                    </p>
+
+                    <label className="block space-y-1 text-sm">
+                      <span className="font-medium text-ink">Translator name</span>
+                      <input
+                        ref={firstInputRef}
+                        name="requestedName"
+                        value={form.requestedName}
+                        onChange={(event) =>
+                          setForm((current) => ({
+                            ...current,
+                            requestedName: event.target.value,
+                          }))
+                        }
+                        required
+                        className="h-11 w-full rounded-xl border border-border bg-surface px-3 text-ink placeholder:text-muted-ink/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60"
+                        placeholder="Ex: Pirate Captain Translator"
+                      />
+                    </label>
+
+                    <label className="block space-y-1 text-sm">
+                      <span className="font-medium text-ink">Translator description</span>
+                      <textarea
+                        name="description"
+                        value={form.description}
+                        onChange={(event) =>
+                          setForm((current) => ({
+                            ...current,
+                            description: event.target.value,
+                          }))
+                        }
+                        required
+                        className="min-h-28 w-full rounded-xl border border-border bg-surface px-3 py-2 text-ink placeholder:text-muted-ink/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60"
+                        placeholder="Describe what this translator should transform and the style it should produce."
+                      />
+                    </label>
+
+                    {error ? <p className="text-sm text-red-600">{error}</p> : null}
+
+                    <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
+                      <Button type="button" variant="outline" onClick={closeRequestModal}>
+                        Cancel
+                      </Button>
+                      <Button type="submit" disabled={submitting}>
+                        {submitting ? "Sending..." : "Create translator"}
+                      </Button>
+                    </div>
+                  </form>
+                )}
               </div>
             </div>,
             document.body,

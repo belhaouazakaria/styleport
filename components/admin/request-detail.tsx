@@ -3,10 +3,11 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { TranslatorRequestStatus } from "@prisma/client";
-import { RefreshCcw, Sparkles } from "lucide-react";
+import { RefreshCcw, Sparkles, Trash2 } from "lucide-react";
 
 import type { AdminTranslatorRequestDetail } from "@/lib/types";
 import { useToast } from "@/components/providers/toast-provider";
+import { ConfirmDialog } from "@/components/admin/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { formatDateTime } from "@/lib/utils";
 
@@ -30,7 +31,8 @@ export function RequestDetail({ request }: RequestDetailProps) {
   const [status, setStatus] = useState<TranslatorRequestStatus>(request.status);
   const [adminNotes, setAdminNotes] = useState(request.adminNotes || "");
   const [draft, setDraft] = useState(request.aiDraftJson);
-  const [busy, setBusy] = useState<"save" | "draft" | "create" | null>(null);
+  const [busy, setBusy] = useState<"save" | "draft" | "create" | "delete" | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const { toast } = useToast();
   const router = useRouter();
@@ -114,6 +116,28 @@ export function RequestDetail({ request }: RequestDetailProps) {
 
     toast({ title: "Translator created from submission" });
     router.push(`/admin/translators/${payload.translator.id}`);
+    router.refresh();
+  }
+
+  async function deleteRequest() {
+    setBusy("delete");
+    const response = await fetch(`/api/admin/requests/${request.id}`, {
+      method: "DELETE",
+    });
+    const payload = await response.json();
+    setBusy(null);
+
+    if (!response.ok || !payload.ok) {
+      toast({
+        title: "Delete failed",
+        description: payload?.error?.message || "Please try again.",
+        variant: "error",
+      });
+      return;
+    }
+
+    toast({ title: "Submission deleted" });
+    router.push("/admin/requests");
     router.refresh();
   }
 
@@ -230,6 +254,16 @@ export function RequestDetail({ request }: RequestDetailProps) {
           >
             {busy === "create" ? "Approving..." : "Approve and create translator"}
           </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="border-red-300 text-red-700 hover:bg-red-50"
+            onClick={() => setConfirmDelete(true)}
+            disabled={busy === "delete"}
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete request
+          </Button>
         </div>
         {!canCreateTranslator ? (
           <p className="mt-3 text-sm text-amber-700">
@@ -273,6 +307,19 @@ export function RequestDetail({ request }: RequestDetailProps) {
           </p>
         )}
       </section>
+
+      <ConfirmDialog
+        open={confirmDelete}
+        title="Delete this submission?"
+        description="This will permanently remove the create-translator submission record."
+        confirmLabel="Delete submission"
+        onCancel={() => setConfirmDelete(false)}
+        onConfirm={() => {
+          setConfirmDelete(false);
+          void deleteRequest();
+        }}
+        variant="danger"
+      />
     </div>
   );
 }

@@ -201,6 +201,22 @@ validate_staging_layout() {
   ensure_file_exists "$STAGING_DIR/server.js"
 }
 
+preserve_generated_assets() {
+  step "preserve-generated-assets"
+  local existing_generated_dir="$APP_PATH/public/generated"
+  local staging_generated_dir="$STAGING_DIR/public/generated"
+
+  if [[ ! -d "$existing_generated_dir" ]]; then
+    log "No existing generated asset directory to preserve."
+    return
+  fi
+
+  mkdir -p "$staging_generated_dir"
+  ensure_directory_writable "$staging_generated_dir"
+  log "Preserving generated assets from $existing_generated_dir into staging."
+  cp -a "$existing_generated_dir/." "$staging_generated_dir/"
+}
+
 replace_path_from_staging() {
   local rel_path="$1"
   local source_path="$STAGING_DIR/$rel_path"
@@ -280,6 +296,7 @@ validate_environment
 validate_archive
 extract_archive
 validate_staging_layout
+preserve_generated_assets
 publish_release
 signal_restart
 

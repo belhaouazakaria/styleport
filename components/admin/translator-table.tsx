@@ -25,12 +25,34 @@ export function TranslatorTable({ translators }: TranslatorTableProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [confirm, setConfirm] = useState<ConfirmState>(null);
 
   const target = useMemo(
     () => (confirm ? translators.find((item) => item.id === confirm.id) || null : null),
     [confirm, translators],
   );
+  const selectedVisibleIds = useMemo(
+    () => translators.filter((translator) => selectedIds.has(translator.id)).map((translator) => translator.id),
+    [selectedIds, translators],
+  );
+  const allVisibleSelected = translators.length > 0 && selectedVisibleIds.length === translators.length;
+  const selectedCount = selectedVisibleIds.length;
+
+  function buildShareImageHref(path: string | null, updatedAt: string | null) {
+    if (!path) {
+      return null;
+    }
+
+    const normalizedPath = /^https?:\/\//i.test(path) || path.startsWith("/") ? path : `/${path}`;
+    if (!updatedAt) {
+      return normalizedPath;
+    }
+
+    const separator = normalizedPath.includes("?") ? "&" : "?";
+    return `${normalizedPath}${separator}v=${encodeURIComponent(updatedAt)}`;
+  }
 
   async function runAction(id: string, action: () => Promise<Response>) {
     setBusyId(id);
@@ -105,6 +127,74 @@ export function TranslatorTable({ translators }: TranslatorTableProps) {
     }
   }
 
+  async function regenerateSelectedImages() {
+    const translatorIds = selectedVisibleIds;
+    if (!translatorIds.length) {
+      return;
+    }
+
+    setBulkBusy(true);
+    try {
+      const response = await fetch("/api/admin/translators/regenerate-share-images", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ translatorIds }),
+      });
+      const payload = await response.json();
+
+      if (!response.ok || !payload.ok) {
+        toast({
+          title: "Bulk regeneration failed",
+          description: payload?.error?.message || "Unable to regenerate selected images.",
+          variant: "error",
+        });
+        return;
+      }
+
+      const regeneratedCount = Number(payload.regeneratedCount) || 0;
+      const failedCount = Number(payload.failedCount) || 0;
+
+      if (failedCount > 0) {
+        toast({
+          title: "Bulk regeneration finished with issues",
+          description: `${regeneratedCount} regenerated, ${failedCount} failed. You can retry failed items.`,
+          variant: "error",
+        });
+      } else {
+        toast({
+          title: "Share images regenerated",
+          description: `${regeneratedCount} translator images were regenerated successfully.`,
+        });
+      }
+
+      setSelectedIds(new Set());
+      router.refresh();
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  function toggleSelected(id: string, checked: boolean) {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (checked) {
+        next.add(id);
+      } else {
+        next.delete(id);
+      }
+      return next;
+    });
+  }
+
+  function toggleSelectAll(checked: boolean) {
+    if (!checked) {
+      setSelectedIds(new Set());
+      return;
+    }
+
+    setSelectedIds(new Set(translators.map((translator) => translator.id)));
+  }
+
   async function runConfirm() {
     if (!confirm) {
       return;
@@ -131,10 +221,31 @@ export function TranslatorTable({ translators }: TranslatorTableProps) {
 
   return (
     <>
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="inline-flex items-center gap-2 rounded-lg border border-border bg-white px-3 py-2 text-xs font-medium text-ink">
+          <input
+            type="checkbox"
+            checked={allVisibleSelected}
+            onChange={(event) => toggleSelectAll(event.target.checked)}
+          />
+          Select all
+        </label>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => void regenerateSelectedImages()}
+          disabled={bulkBusy || selectedCount === 0}
+        >
+          <RefreshCcw className={`h-3.5 w-3.5 ${bulkBusy ? "animate-spin" : ""}`} />
+          Regen selected images ({selectedCount})
+        </Button>
+      </div>
+
       <div className="overflow-x-auto rounded-2xl border border-border bg-white">
         <table className="min-w-full divide-y divide-border text-sm">
           <thead className="bg-muted-surface text-left text-muted-ink">
             <tr>
+              <th className="px-4 py-3 font-medium">Select</th>
               <th className="px-4 py-3 font-medium">Name</th>
               <th className="px-4 py-3 font-medium">Slug</th>
               <th className="px-4 py-3 font-medium">Categories</th>
@@ -149,9 +260,18 @@ export function TranslatorTable({ translators }: TranslatorTableProps) {
             {translators.map((row) => {
               const isBusy = busyId === row.id;
               const isArchived = Boolean(row.archivedAt);
+              const shareImageHref = buildShareImageHref(row.shareImagePath, row.shareImageUpdatedAt);
 
               return (
                 <tr key={row.id}>
+                  <td className="px-4 py-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(row.id)}
+                      onChange={(event) => toggleSelected(row.id, event.target.checked)}
+                      aria-label={`Select ${row.name}`}
+                    />
+                  </td>
                   <td className="px-4 py-3 font-medium text-ink">{row.name}</td>
                   <td className="px-4 py-3 text-muted-ink">/{row.slug}</td>
                   <td className="px-4 py-3">
@@ -197,9 +317,9 @@ export function TranslatorTable({ translators }: TranslatorTableProps) {
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    {row.shareImagePath ? (
+                    {shareImageHref ? (
                       <a
-                        href={row.shareImagePath}
+                        href={shareImageHref}
                         target="_blank"
                         rel="noreferrer"
                         className="inline-flex items-center gap-1 rounded-lg border border-border bg-muted-surface px-2 py-1 text-xs font-medium text-ink hover:border-brand-300 hover:text-brand-700"
@@ -229,7 +349,7 @@ export function TranslatorTable({ translators }: TranslatorTableProps) {
                         size="sm"
                         variant="outline"
                         onClick={() => regenerateShareImage(row.id)}
-                        disabled={isBusy}
+                        disabled={isBusy || bulkBusy}
                       >
                         <RefreshCcw className="h-3.5 w-3.5" />
                         Regen image

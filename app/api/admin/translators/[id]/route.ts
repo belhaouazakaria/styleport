@@ -8,6 +8,7 @@ import {
 import { adminRouteGuard } from "@/lib/permissions";
 import { apiError, apiOk } from "@/lib/api-response";
 import { translatorUpsertSchema } from "@/lib/validators";
+import { maybeSendPublishedNotificationForTranslator } from "@/lib/request-publish-notification";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -48,7 +49,16 @@ export async function PATCH(request: Request, context: RouteContext) {
 
   try {
     const translator = await updateTranslator(id, parsed.data);
-    return apiOk({ translator });
+    const notification = await maybeSendPublishedNotificationForTranslator({
+      translator: {
+        id: translator.id,
+        name: translator.name,
+        slug: translator.slug,
+        isActive: translator.isActive,
+      },
+      requestUrl: request.url,
+    });
+    return apiOk({ translator, publishNotificationSent: notification.publishNotificationSent });
   } catch {
     return apiError(500, "BAD_REQUEST", "Unable to update translator right now.");
   }

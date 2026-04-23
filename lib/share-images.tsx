@@ -407,6 +407,14 @@ function toStoragePath(publicPath: string) {
   return path.join(storageDirectory, fileName);
 }
 
+function isManagedShareImagePath(shareImagePath: string | null) {
+  if (!shareImagePath) {
+    return false;
+  }
+
+  return shareImagePath.startsWith(`${publicPathPrefix}/`);
+}
+
 async function fileExists(filePath: string) {
   try {
     await access(filePath);
@@ -530,6 +538,22 @@ async function removeOldShareImageIfNeeded(oldPublicPath: string | null, nextPub
     return;
   }
 
+  if (!isManagedShareImagePath(oldPublicPath)) {
+    return;
+  }
+
+  const remainingReferences = await prisma.translator.count({
+    where: { shareImagePath: oldPublicPath },
+  });
+
+  if (remainingReferences > 0) {
+    logInfo("share_image_cleanup_skipped", "Skipped share image cleanup because the path is still referenced.", {
+      shareImagePath: oldPublicPath,
+      remainingReferences,
+    });
+    return;
+  }
+
   const oldStoragePath = toStoragePath(oldPublicPath);
   try {
     await rm(oldStoragePath, { force: true });
@@ -540,6 +564,10 @@ async function removeOldShareImageIfNeeded(oldPublicPath: string | null, nextPub
 
 export async function deleteStoredShareImage(shareImagePath: string | null) {
   if (!shareImagePath) {
+    return;
+  }
+
+  if (!isManagedShareImagePath(shareImagePath)) {
     return;
   }
 

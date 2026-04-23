@@ -1,5 +1,9 @@
 import { apiError, apiOk } from "@/lib/api-response";
-import { getAdminTranslatorRequestById, updateTranslatorRequestById } from "@/lib/data/requests";
+import {
+  deleteTranslatorRequestById,
+  getAdminTranslatorRequestById,
+  updateTranslatorRequestById,
+} from "@/lib/data/requests";
 import { adminRouteGuard } from "@/lib/permissions";
 import { requestStatusUpdateSchema } from "@/lib/validators";
 
@@ -49,5 +53,23 @@ export async function PATCH(request: Request, context: RouteContext) {
     return apiOk({ request: updated });
   } catch {
     return apiError(500, "BAD_REQUEST", "Unable to update request right now.");
+  }
+}
+
+export async function DELETE(_: Request, context: RouteContext) {
+  const guard = await adminRouteGuard();
+  if (guard) return guard;
+
+  const { id } = await context.params;
+  const existing = await getAdminTranslatorRequestById(id);
+  if (!existing) {
+    return apiError(404, "NOT_FOUND", "Request not found.");
+  }
+
+  try {
+    await deleteTranslatorRequestById(id);
+    return apiOk({ deleted: true });
+  } catch {
+    return apiError(500, "BAD_REQUEST", "Unable to delete request right now.");
   }
 }

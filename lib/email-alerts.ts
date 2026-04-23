@@ -4,6 +4,7 @@ import { logError, logWarn } from "@/lib/logger";
 const BREVO_API_URL = "https://api.brevo.com/v3/smtp/email";
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const DISPLAY_EMAIL_PATTERN = /^(.+?)<\s*([^\s@]+@[^\s@]+\.[^\s@]+)\s*>$/;
+const DEFAULT_SENDER_NAME = "StylePort Team";
 
 export interface EmergencyAlertPayload {
   to: string;
@@ -78,6 +79,18 @@ function parseEmailAddress(value: string): BrevoAddress | null {
   }
 
   return null;
+}
+
+function parseConfiguredSender(value: string): BrevoAddress | null {
+  const parsed = parseEmailAddress(value);
+  if (!parsed) {
+    return null;
+  }
+
+  return {
+    email: parsed.email,
+    name: parsed.name || DEFAULT_SENDER_NAME,
+  };
 }
 
 async function sendBrevoEmail(params: {
@@ -228,7 +241,7 @@ export async function sendEmergencyShutdownAlertEmail(
     return { sent: false, error: "Missing EMAIL_FROM." };
   }
 
-  const sender = parseEmailAddress(from);
+  const sender = parseConfiguredSender(from);
   if (!sender) {
     logWarn("email_alert_invalid_from", "EMAIL_FROM is invalid; alert email was not sent.");
     return { sent: false, error: "Invalid EMAIL_FROM format." };
@@ -278,7 +291,7 @@ export async function sendContactMessageEmail(payload: ContactMessagePayload): P
     return { sent: false, error: "Missing ALERT_ADMIN_EMAIL." };
   }
 
-  const sender = parseEmailAddress(from);
+  const sender = parseConfiguredSender(from);
   if (!sender) {
     logWarn("contact_email_invalid_from", "EMAIL_FROM is invalid; contact email was not sent.");
     return { sent: false, error: "Invalid EMAIL_FROM format." };
@@ -345,7 +358,7 @@ export async function sendTranslatorRequestVerificationEmail(
     return { sent: false, error: "Missing EMAIL_FROM." };
   }
 
-  const sender = parseEmailAddress(from);
+  const sender = parseConfiguredSender(from);
   if (!sender) {
     logWarn("request_verify_email_invalid_from", "EMAIL_FROM is invalid; verification email was not sent.");
     return { sent: false, error: "Invalid EMAIL_FROM format." };
@@ -423,7 +436,7 @@ export async function sendTranslatorPublishedEmail(
     return { sent: false, error: "Missing EMAIL_FROM." };
   }
 
-  const sender = parseEmailAddress(from);
+  const sender = parseConfiguredSender(from);
   if (!sender) {
     logWarn("request_publish_email_invalid_from", "EMAIL_FROM is invalid; publish email was not sent.");
     return { sent: false, error: "Invalid EMAIL_FROM format." };
@@ -445,6 +458,7 @@ export async function sendTranslatorPublishedEmail(
       `Live translator: ${payload.translatorName}`,
       `Open it: ${payload.translatorUrl}`,
       "",
+      "If you like it, feel free to share it with your friends.",
       "Thanks for helping us improve the platform.",
     ].join("\n"),
     html: `
@@ -460,6 +474,9 @@ export async function sendTranslatorPublishedEmail(
           <a href="${safeUrl}" style="display:inline-block;background:#4F46E5;color:#fff;text-decoration:none;padding:10px 14px;border-radius:10px;font-weight:600;">
             Try this translator
           </a>
+        </p>
+        <p style="margin:14px 0 0;line-height:1.6;color:#4B5563;">
+          If you like it, share it with your friends.
         </p>
       </div>
     `,

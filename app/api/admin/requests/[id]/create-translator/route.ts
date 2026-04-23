@@ -17,6 +17,7 @@ import { getCategoryChoices } from "@/lib/data/categories";
 import { logError } from "@/lib/logger";
 import { getAppSettings } from "@/lib/settings";
 import { slugify } from "@/lib/slugify";
+import { maybeSendPublishedNotificationForTranslator } from "@/lib/request-publish-notification";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -121,6 +122,15 @@ export async function POST(_: Request, context: RouteContext) {
     await linkRequestToTranslator(id, {
       translatorId: translator.id,
       status: TranslatorRequestStatus.APPROVED,
+    });
+
+    await maybeSendPublishedNotificationForTranslator({
+      translator: {
+        id: translator.id,
+        name: translator.name,
+        slug: translator.slug,
+        isActive: translator.isActive,
+      },
     });
 
     return apiOk({ translator }, 201);

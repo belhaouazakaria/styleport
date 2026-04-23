@@ -213,6 +213,13 @@ export async function updateTranslatorRequestById(
   });
 }
 
+export async function deleteTranslatorRequestById(id: string) {
+  return prisma.translatorRequest.delete({
+    where: { id },
+    select: { id: true },
+  });
+}
+
 export async function saveTranslatorRequestDraft(id: string, draft: TranslatorDraft) {
   return prisma.translatorRequest.update({
     where: { id },

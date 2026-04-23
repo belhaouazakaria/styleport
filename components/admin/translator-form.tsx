@@ -129,6 +129,24 @@ export function TranslatorForm({
     initial?.shareImageUpdatedAt || null,
   );
 
+  const shareImagePreviewSrc = useMemo(() => {
+    if (!shareImagePath) {
+      return null;
+    }
+
+    const normalizedPath =
+      /^https?:\/\//i.test(shareImagePath) || shareImagePath.startsWith("/")
+        ? shareImagePath
+        : `/${shareImagePath}`;
+
+    if (!shareImageUpdatedAt) {
+      return normalizedPath;
+    }
+
+    const separator = normalizedPath.includes("?") ? "&" : "?";
+    return `${normalizedPath}${separator}v=${encodeURIComponent(shareImageUpdatedAt)}`;
+  }, [shareImagePath, shareImageUpdatedAt]);
+
   const [form, setForm] = useState({
     name: initial?.name ?? defaults.name,
     slug: initial?.slug ?? defaults.slug,
@@ -700,14 +718,16 @@ export function TranslatorForm({
         </div>
 
         <div className="mt-4 rounded-xl border border-border bg-muted-surface p-3">
-          {shareImagePath ? (
+          {shareImagePreviewSrc ? (
             <div className="space-y-3">
               <Image
-                src={shareImagePath}
+                src={shareImagePreviewSrc}
                 alt="Stored Pinterest share preview"
+                className="w-full max-w-xs rounded-lg border border-border bg-white object-cover"
                 width={300}
                 height={450}
-                className="w-full max-w-xs rounded-lg border border-border bg-white object-cover"
+                loading="lazy"
+                unoptimized
               />
               <p className="text-xs text-muted-ink">{shareImagePath}</p>
             </div>
