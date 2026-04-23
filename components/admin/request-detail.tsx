@@ -17,6 +17,7 @@ interface RequestDetailProps {
 
 const statusOptions: TranslatorRequestStatus[] = [
   "PENDING_EMAIL_VERIFICATION",
+  "VERIFIED",
   "PENDING_REVIEW",
   "NEW",
   "REVIEWING",

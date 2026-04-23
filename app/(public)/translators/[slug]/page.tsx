@@ -10,6 +10,7 @@ import { Footer } from "@/components/sections/footer";
 import { Navbar } from "@/components/sections/navbar";
 import { TranslatorCard } from "@/components/translator/translator-card";
 import { AdSlot } from "@/components/shared/ad-slot";
+import { TranslatorComments } from "@/components/public/translator-comments";
 import { getRenderableAdPlacements } from "@/lib/data/ads";
 import { getPublicTranslatorBySlug, getRelatedPublicTranslators } from "@/lib/data/translators";
 import { getAppBaseUrl } from "@/lib/env";
@@ -167,6 +168,8 @@ export default async function TranslatorSlugPage({ params }: PageProps) {
             </div>
           </section>
         ) : null}
+
+        <TranslatorComments translatorId={translator.id} translatorSlug={translator.slug} />
 
         {ads.length > 1 ? (
           <section className="mx-auto mt-6 w-full max-w-7xl px-4 sm:px-6 lg:px-8">

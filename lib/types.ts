@@ -1,4 +1,4 @@
-import type { Role, TranslatorRequestStatus } from "@prisma/client";
+import type { CommentModerationStatus, Role, TranslatorRequestStatus } from "@prisma/client";
 
 export type ApiErrorCode =
   | "VALIDATION_ERROR"
@@ -340,6 +340,36 @@ export interface RequestFilters {
   category?: string;
   dateFrom?: string;
   dateTo?: string;
+}
+
+export interface TranslatorCommentInput {
+  translatorId: string;
+  name: string;
+  email: string;
+  comment: string;
+}
+
+export interface PublicTranslatorCommentItem {
+  id: string;
+  name: string;
+  content: string;
+  createdAt: string;
+}
+
+export interface AdminTranslatorCommentListItem {
+  id: string;
+  name: string;
+  email: string;
+  content: string;
+  status: CommentModerationStatus;
+  moderationReason: string | null;
+  createdAt: string;
+  reviewedAt: string | null;
+  translator: {
+    id: string;
+    name: string;
+    slug: string;
+  };
 }
 
 export interface UsageProtectionSettingsInput {

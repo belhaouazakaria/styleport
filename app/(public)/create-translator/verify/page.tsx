@@ -19,11 +19,21 @@ interface PageProps {
   searchParams: Promise<{
     status?: string;
     requestId?: string;
+    mode?: string;
+    translatorSlug?: string;
   }>;
 }
 
-function getStatusCopy(status: string) {
+function getStatusCopy(status: string, mode?: string) {
   if (status === "verified") {
+    if (mode === "live") {
+      return {
+        title: "Email verified and translator is live",
+        body: "Great news. Your request passed review checks, and your translator is already live.",
+        tone: "text-emerald-700 bg-emerald-50 border-emerald-200",
+      };
+    }
+
     return {
       title: "Email verified successfully",
       body: "Thanks for confirming your email. Your translator idea is now queued for admin review.",
@@ -58,7 +68,9 @@ export default async function CreateTranslatorVerificationPage({ searchParams }:
   const [settings, params] = await Promise.all([getAppSettings(), searchParams]);
   const status = params.status || "invalid";
   const requestId = params.requestId || "";
-  const copy = getStatusCopy(status);
+  const mode = params.mode || undefined;
+  const translatorSlug = params.translatorSlug || "";
+  const copy = getStatusCopy(status, mode);
 
   return (
     <div className="relative overflow-x-hidden">
@@ -74,12 +86,22 @@ export default async function CreateTranslatorVerificationPage({ searchParams }:
             If you don&apos;t see our email, please check your spam/junk folder.
           </p>
           <div className="mt-6">
-            <Link
-              href="/translators"
-              className="inline-flex h-10 items-center rounded-xl border border-border bg-white px-4 text-sm font-medium text-ink transition hover:border-brand-300 hover:text-brand-700"
-            >
-              Back to translators
-            </Link>
+            <div className="flex flex-wrap gap-2">
+              {status === "verified" && mode === "live" && translatorSlug ? (
+                <Link
+                  href={`/translators/${translatorSlug}`}
+                  className="inline-flex h-10 items-center rounded-xl border border-brand-300 bg-brand-50 px-4 text-sm font-medium text-brand-700 transition hover:border-brand-500 hover:bg-brand-100"
+                >
+                  Open your live translator
+                </Link>
+              ) : null}
+              <Link
+                href="/translators"
+                className="inline-flex h-10 items-center rounded-xl border border-border bg-white px-4 text-sm font-medium text-ink transition hover:border-brand-300 hover:text-brand-700"
+              >
+                Back to translators
+              </Link>
+            </div>
           </div>
         </section>
 

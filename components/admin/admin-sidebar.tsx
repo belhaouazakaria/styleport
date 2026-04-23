@@ -4,12 +4,18 @@ import {
   Cog,
   FolderTree,
   LayoutTemplate,
+  MessageCircleMore,
   MessageSquareText,
   PlusSquare,
   ScrollText,
   ShieldAlert,
   Sparkles,
 } from "lucide-react";
+
+interface AdminSidebarProps {
+  pendingRequestCount: number;
+  pendingCommentCount: number;
+}
 
 const links = [
   { href: "/admin", label: "Overview", icon: BarChart3 },
@@ -18,13 +24,26 @@ const links = [
   { href: "/admin/translators/ai/new", label: "Create With AI", icon: Sparkles },
   { href: "/admin/categories", label: "Categories", icon: FolderTree },
   { href: "/admin/requests", label: "Create Submissions", icon: MessageSquareText },
+  { href: "/admin/comments", label: "Comments", icon: MessageCircleMore },
   { href: "/admin/usage-protection", label: "Usage Protection", icon: ShieldAlert },
   { href: "/admin/ads", label: "Monetization", icon: LayoutTemplate },
   { href: "/admin/settings", label: "Settings", icon: Cog },
   { href: "/admin/logs", label: "Logs", icon: ScrollText },
 ];
 
-export function AdminSidebar() {
+function linkBadgeCount(href: string, props: AdminSidebarProps) {
+  if (href === "/admin/requests") {
+    return props.pendingRequestCount;
+  }
+
+  if (href === "/admin/comments") {
+    return props.pendingCommentCount;
+  }
+
+  return 0;
+}
+
+export function AdminSidebar(props: AdminSidebarProps) {
   return (
     <aside className="hidden w-72 border-r border-border bg-surface p-5 lg:block">
       <Link href="/admin" className="mb-8 flex items-center gap-2">
@@ -45,7 +64,12 @@ export function AdminSidebar() {
             className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-muted-ink transition hover:bg-muted-surface hover:text-ink"
           >
             <item.icon className="h-4 w-4" />
-            {item.label}
+            <span>{item.label}</span>
+            {linkBadgeCount(item.href, props) > 0 ? (
+              <span className="ml-auto rounded-full bg-brand-500 px-2 py-0.5 text-[11px] font-semibold text-white">
+                {linkBadgeCount(item.href, props)}
+              </span>
+            ) : null}
           </Link>
         ))}
       </nav>
@@ -53,7 +77,7 @@ export function AdminSidebar() {
   );
 }
 
-export function AdminMobileNav() {
+export function AdminMobileNav(props: AdminSidebarProps) {
   return (
     <nav className="flex gap-2 overflow-x-auto border-b border-border bg-surface px-4 py-2 lg:hidden">
       {links.map((item) => (
@@ -64,6 +88,11 @@ export function AdminMobileNav() {
         >
           <item.icon className="h-3.5 w-3.5" />
           {item.label}
+          {linkBadgeCount(item.href, props) > 0 ? (
+            <span className="rounded-full bg-brand-500 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+              {linkBadgeCount(item.href, props)}
+            </span>
+          ) : null}
         </Link>
       ))}
     </nav>

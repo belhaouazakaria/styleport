@@ -51,6 +51,7 @@ enum AdProviderType {
 
 enum TranslatorRequestStatus {
   PENDING_EMAIL_VERIFICATION
+  VERIFIED
   PENDING_REVIEW
   NEW
   REVIEWING
@@ -59,6 +60,13 @@ enum TranslatorRequestStatus {
   REJECTED
   COMPLETED
   PUBLISHED
+}
+
+enum CommentModerationStatus {
+  VISIBLE
+  PENDING_REVIEW
+  HIDDEN
+  REJECTED
 }
 
 enum FeaturedSource {
@@ -160,6 +168,7 @@ model Translator {
   categories          TranslatorCategory[]
   primaryCategory     Category?            @relation("PrimaryTranslatorCategory", fields: [primaryCategoryId], references: [id], onDelete: SetNull)
   fulfilledRequests   TranslatorRequest[]  @relation("RequestCreatedTranslator")
+  comments            TranslatorComment[]
 
   @@index([isActive, isFeatured, sortOrder])
   @@index([isFeatured, featuredRank])
@@ -326,6 +335,23 @@ model TranslatorRequest {
   @@index([createdTranslatorId])
   @@index([verificationTokenHash])
   @@index([requesterEmail, status])
+}
+
+model TranslatorComment {
+  id               String                  @id @default(cuid())
+  translatorId     String
+  name             String
+  email            String
+  content          String
+  status           CommentModerationStatus @default(PENDING_REVIEW)
+  moderationReason String?
+  reviewedAt       DateTime?
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+  translator       Translator              @relation(fields: [translatorId], references: [id], onDelete: Cascade)
+
+  @@index([translatorId, status, createdAt])
+  @@index([status, createdAt])
 }
 
 model AdPlacement {

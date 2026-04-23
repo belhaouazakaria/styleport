@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { TranslatorRequestStatus } from "@prisma/client";
+import { CommentModerationStatus, TranslatorRequestStatus } from "@prisma/client";
 
 import { MAX_INPUT_CHARS } from "@/lib/constants";
 import type { ApiError } from "@/lib/types";
@@ -293,4 +293,21 @@ export const contactMessageSchema = z.object({
   email: z.string().trim().email("Please enter a valid email address.").max(160),
   message: z.string().trim().min(12).max(4_000),
   honeypot: z.string().max(0).optional().or(z.literal("")),
+});
+
+export const translatorCommentSchema = z.object({
+  name: z.string().trim().min(2).max(120),
+  email: z.string().trim().email("Please enter a valid email address.").max(160),
+  comment: z.string().trim().min(3).max(3000),
+  honeypot: z.string().max(0).optional().or(z.literal("")),
+});
+
+export const adminCommentFilterSchema = z.object({
+  q: z.string().trim().max(120).optional(),
+  status: z.nativeEnum(CommentModerationStatus).optional().or(z.literal("all")),
+});
+
+export const adminCommentStatusUpdateSchema = z.object({
+  status: z.nativeEnum(CommentModerationStatus),
+  moderationReason: z.string().trim().max(400).optional().or(z.literal("")),
 });

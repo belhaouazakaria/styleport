@@ -302,7 +302,7 @@ export async function verifyTranslatorRequestEmailToken(token: string): Promise<
       emailVerifiedAt: new Date(),
       verificationTokenHash: null,
       verificationTokenExpiresAt: null,
-      status: TranslatorRequestStatus.PENDING_REVIEW,
+      status: TranslatorRequestStatus.VERIFIED,
     },
   });
 
@@ -417,6 +417,16 @@ export async function markTranslatorRequestPublishedNotificationSent(id: string)
     data: {
       status: TranslatorRequestStatus.PUBLISHED,
       publishedNotificationSentAt: new Date(),
+    },
+  });
+}
+
+export async function countPendingAdminTranslatorRequests() {
+  return prisma.translatorRequest.count({
+    where: {
+      status: {
+        in: [TranslatorRequestStatus.PENDING_REVIEW, TranslatorRequestStatus.NEW],
+      },
     },
   });
 }

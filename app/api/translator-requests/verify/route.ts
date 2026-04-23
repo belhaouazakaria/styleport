@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { verifyTranslatorRequestEmailToken } from "@/lib/data/requests";
 import { getAppBaseUrl } from "@/lib/env";
+import { processVerifiedTranslatorRequest } from "@/lib/request-processing";
 
 function buildRedirectUrl(baseUrl: URL, status: string, requestId?: string) {
   const url = new URL("/create-translator/verify", baseUrl);
@@ -23,7 +24,20 @@ export async function GET(request: Request) {
   const result = await verifyTranslatorRequestEmailToken(token);
 
   if (result.outcome === "VERIFIED") {
-    return NextResponse.redirect(buildRedirectUrl(baseUrl, "verified", result.requestId));
+    const processing = await processVerifiedTranslatorRequest({
+      requestId: result.requestId,
+      requestUrl: request.url,
+    });
+    const redirectUrl = buildRedirectUrl(baseUrl, "verified", result.requestId);
+
+    if (processing.outcome === "AUTO_PUBLISHED") {
+      redirectUrl.searchParams.set("mode", "live");
+      redirectUrl.searchParams.set("translatorSlug", processing.translatorSlug);
+    } else {
+      redirectUrl.searchParams.set("mode", "review");
+    }
+
+    return NextResponse.redirect(redirectUrl);
   }
 
   if (result.outcome === "ALREADY_VERIFIED") {

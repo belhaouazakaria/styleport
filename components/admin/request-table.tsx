@@ -14,6 +14,8 @@ function statusClasses(status: TranslatorRequestStatus) {
       return "bg-orange-100 text-orange-700";
     case "PENDING_REVIEW":
       return "bg-brand-100 text-brand-700";
+    case "VERIFIED":
+      return "bg-sky-100 text-sky-700";
     case "NEW":
       return "bg-brand-100 text-brand-700";
     case "REVIEWING":

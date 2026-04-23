@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Copy, Eye, EyeOff, Image as ImageIcon, Pencil, RefreshCcw, Trash2 } from "lucide-react";
+import { Copy, Image as ImageIcon, Pencil, RefreshCcw, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
@@ -84,12 +84,12 @@ export function TranslatorTable({ translators }: TranslatorTableProps) {
     toast({ title: "Translator duplicated", description: "A draft copy has been created." });
   }
 
-  async function toggleActive(id: string) {
+  async function toggleActive(id: string, active: boolean) {
     await runAction(id, () =>
       fetch(`/api/admin/translators/${id}/toggle-active`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ active }),
       }),
     );
   }
@@ -355,10 +355,21 @@ export function TranslatorTable({ translators }: TranslatorTableProps) {
                         Regen image
                       </Button>
                       {!isArchived ? (
-                        <Button size="sm" variant="outline" onClick={() => toggleActive(row.id)} disabled={isBusy}>
-                          {row.isActive ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                          {row.isActive ? "Deactivate" : "Activate"}
-                        </Button>
+                        <label
+                          className={`inline-flex h-8 cursor-pointer items-center gap-2 rounded-lg border border-border px-3 text-xs font-medium ${
+                            isBusy ? "opacity-60" : ""
+                          }`}
+                        >
+                          <span className="text-muted-ink">Active</span>
+                          <input
+                            type="checkbox"
+                            role="switch"
+                            checked={row.isActive}
+                            onChange={(event) => void toggleActive(row.id, event.target.checked)}
+                            disabled={isBusy}
+                            className="h-4 w-4 accent-brand-500"
+                          />
+                        </label>
                       ) : null}
                       <Button
                         size="sm"
