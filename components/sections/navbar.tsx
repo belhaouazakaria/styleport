@@ -40,7 +40,7 @@ export function Navbar() {
       <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between gap-2 px-4 sm:px-6 lg:px-8">
         <Link href="/" className="group flex items-center gap-2">
           <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-brand-500 text-sm font-black text-white shadow-sm transition group-hover:bg-brand-600">
-            SP
+            WT
           </span>
           <span className="font-display text-xl font-semibold tracking-tight text-ink">{APP_NAME}</span>
         </Link>

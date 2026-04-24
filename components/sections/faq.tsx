@@ -1,14 +1,14 @@
 const items = [
   {
     q: "How accurate are translations?",
-    a: "StylePort aims to preserve meaning while changing tone or style. Always review output before high-stakes use.",
+    a: "What Type Of | Translator aims to preserve meaning while changing tone or style. Always review output before high-stakes use.",
   },
   {
     q: "Can I manage translators myself?",
     a: "Yes. Admin users can create and edit translators, categories, models, and ad placements from the dashboard.",
   },
   {
-    q: "Does StylePort support many translation styles?",
+    q: "Does What Type Of | Translator support many translation styles?",
     a: "Yes. The platform is built for multiple categories such as professional, funny, historical, social, and more.",
   },
 ];

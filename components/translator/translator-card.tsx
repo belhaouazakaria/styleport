@@ -330,7 +330,13 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
               <Trash2 className="h-4 w-4" />
               Clear
             </Button>
-            <Button type="button" variant="outline" onClick={handlePinterestShare} disabled={isLoading}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handlePinterestShare}
+              disabled={isLoading}
+              className="border-[#E60023] bg-[#E60023] text-white hover:border-[#cc001f] hover:bg-[#cc001f] hover:text-white focus-visible:ring-[#E60023]/60"
+            >
               <PinterestIcon className="h-4 w-4" />
               Share on Pinterest
             </Button>

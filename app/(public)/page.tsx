@@ -36,7 +36,7 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   const hasCategory = Boolean(params.category?.trim());
 
   return {
-    title: "StylePort Translator Discovery",
+    title: "What Type Of | Translator Discovery",
     description:
       "Browse and search style translators by category, tone, and writing intent.",
     alternates: {

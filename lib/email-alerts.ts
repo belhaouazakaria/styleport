@@ -4,7 +4,7 @@ import { logError, logWarn } from "@/lib/logger";
 const BREVO_API_URL = "https://api.brevo.com/v3/smtp/email";
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const DISPLAY_EMAIL_PATTERN = /^(.+?)<\s*([^\s@]+@[^\s@]+\.[^\s@]+)\s*>$/;
-const DEFAULT_SENDER_NAME = "StylePort Team";
+const DEFAULT_SENDER_NAME = "What Type Of | Translator";
 
 export interface EmergencyAlertPayload {
   to: string;
@@ -159,7 +159,7 @@ function buildTextBody(payload: EmergencyAlertPayload): string {
     : "No translator usage data available for this UTC day.";
 
   return [
-    "StylePort Emergency Shutdown Alert",
+    "What Type Of | Translator Emergency Shutdown Alert",
     "",
     `Reason: ${payload.reason}`,
     `Triggered at (UTC): ${payload.triggeredAt}`,
@@ -198,7 +198,7 @@ function buildHtmlBody(payload: EmergencyAlertPayload): string {
 
   return `
     <div style="font-family:Inter,Segoe UI,Arial,sans-serif;color:#111827;max-width:640px;margin:0 auto;">
-      <h1 style="margin:0 0 12px;font-size:20px;">StylePort Emergency Shutdown Alert</h1>
+      <h1 style="margin:0 0 12px;font-size:20px;">What Type Of | Translator Emergency Shutdown Alert</h1>
       <p style="margin:0 0 8px;"><strong>Reason:</strong> ${escapeHtml(payload.reason)}</p>
       <p style="margin:0 0 8px;"><strong>Triggered at (UTC):</strong> ${escapeHtml(payload.triggeredAt)}</p>
       <p style="margin:0 0 8px;"><strong>Total tokens today:</strong> ${payload.tokenUsage}</p>
@@ -251,7 +251,7 @@ export async function sendEmergencyShutdownAlertEmail(
     apiKey,
     sender,
     to: [payload.to],
-    subject: "StylePort emergency shutdown: global token cap reached",
+    subject: "What Type Of | Translator emergency shutdown: global token cap reached",
     text: buildTextBody(payload),
     html: buildHtmlBody(payload),
   });
@@ -306,7 +306,7 @@ export async function sendContactMessageEmail(payload: ContactMessagePayload): P
     sender,
     to: [to],
     replyTo: payload.email,
-    subject: `StylePort contact message from ${payload.name}`,
+    subject: `What Type Of | Translator contact message from ${payload.name}`,
     text: [
       "New contact message received.",
       "",
@@ -371,7 +371,7 @@ export async function sendTranslatorRequestVerificationEmail(
     apiKey,
     sender,
     to: [payload.to],
-    subject: "Confirm your StylePort translator idea",
+    subject: "Confirm your What Type Of | Translator idea",
     text: [
       `Thanks for submitting your translator idea: ${payload.requestedName}`,
       "",
@@ -452,7 +452,7 @@ export async function sendTranslatorPublishedEmail(
     to: [payload.to],
     subject: `Your translator idea is now live: ${payload.translatorName}`,
     text: [
-      "Great news, your translator idea is now live on StylePort.",
+      "Great news, your translator idea is now live on What Type Of | Translator.",
       "",
       `Your idea: ${payload.requestedName}`,
       `Live translator: ${payload.translatorName}`,

@@ -8,7 +8,7 @@ import { getAppSettings } from "@/lib/settings";
 export const metadata: Metadata = {
   title: "Disclaimer",
   description:
-    "Important limitations and responsibility notices for AI-generated translator outputs on StylePort.",
+    "Important limitations and responsibility notices for AI-generated translator outputs on What Type Of | Translator.",
 };
 
 export default async function DisclaimerPage() {

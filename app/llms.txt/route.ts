@@ -3,9 +3,9 @@ import { getAppBaseUrl } from "@/lib/env";
 export async function GET() {
   const base = getAppBaseUrl().toString().replace(/\/$/, "");
   const content = [
-    "StylePort",
+    "What Type Of | Translator",
     "",
-    "StylePort is an AI-powered text translator directory where people transform writing into different tones and styles.",
+    "What Type Of | Translator is an AI-powered text translator directory where people transform writing into different tones and styles.",
     "",
     "Public sections:",
     `- Home: ${base}/`,

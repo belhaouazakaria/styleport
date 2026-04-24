@@ -8,7 +8,7 @@ import { getAppSettings } from "@/lib/settings";
 export const metadata: Metadata = {
   title: "Privacy Policy",
   description:
-    "Learn how StylePort collects, uses, and protects personal data across translator discovery, usage analytics, and support workflows.",
+    "Learn how What Type Of | Translator collects, uses, and protects personal data across translator discovery, usage analytics, and support workflows.",
 };
 
 export default async function PrivacyPolicyPage() {

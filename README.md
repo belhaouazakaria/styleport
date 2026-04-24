@@ -1,6 +1,6 @@
-# StylePort Platform
+# What Type Of | Translator Platform
 
-StylePort is a production-grade multi-translator discovery platform with:
+What Type Of | Translator is a production-grade multi-translator discovery platform with:
 - public translator discovery + translator runtime pages
 - secure admin dashboard (CRUD for translators/categories/requests/ads/settings)
 - OpenAI translation + AI draft generation
@@ -51,10 +51,10 @@ Copy `.env.production.example` to `.env.production` and fill values:
 - `DATABASE_URL=<managed-postgres-connection>`
 - `OPENAI_API_KEY=<openai-key>`
 - `OPENAI_MODEL=<model>`
-- `NEXT_PUBLIC_APP_NAME=StylePort`
+- `NEXT_PUBLIC_APP_NAME=What Type Of | Translator`
 - `IP_HASH_SECRET=<random-secret>`
 - `ALERT_ADMIN_EMAIL=<ops-email>`
-- `EMAIL_FROM=StylePort Team <translate@whattypeof.com>`
+- `EMAIL_FROM=What Type Of | Translator <translate@whattypeof.com>`
 - `BREVO_API_KEY=<brevo-api-key>`
 
 Production validation is fail-fast for critical vars, so missing required values will stop startup.
@@ -242,7 +242,7 @@ npm run prisma:seed
 
 ## Auto-Featured Translators
 
-- StylePort can auto-assign the top 3 featured translators from performance analytics.
+- What Type Of | Translator can auto-assign the top 3 featured translators from performance analytics.
 - Ranking logic:
   1. highest successful translation usage count (selected window)
   2. highest recent success count (last 7 days)

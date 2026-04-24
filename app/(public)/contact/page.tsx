@@ -9,7 +9,7 @@ import { getAppSettings } from "@/lib/settings";
 export const metadata: Metadata = {
   title: "Contact",
   description:
-    "Contact the StylePort team for support, partnership requests, bug reports, or privacy and policy questions.",
+    "Contact the What Type Of | Translator team for support, partnership requests, bug reports, or privacy and policy questions.",
 };
 
 export default async function ContactPage() {

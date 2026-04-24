@@ -8,7 +8,7 @@ import { getAppSettings } from "@/lib/settings";
 export const metadata: Metadata = {
   title: "Cookie Policy",
   description:
-    "Understand how StylePort uses cookies and similar technologies for authentication, security, analytics, and performance.",
+    "Understand how What Type Of | Translator uses cookies and similar technologies for authentication, security, analytics, and performance.",
 };
 
 export default async function CookiesPage() {

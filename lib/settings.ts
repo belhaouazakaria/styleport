@@ -17,7 +17,7 @@ const defaultSettings: AppSettings = {
   catalogIntro:
     "Search by style, category, or intent to find the right translator in seconds.",
   footerDisclaimer:
-    "StylePort provides AI-assisted rewriting for drafting purposes. Always review outputs before critical use.",
+    "What Type Of | Translator provides AI-assisted rewriting for drafting purposes. Always review outputs before critical use.",
   defaultTranslatorSlug: "regal-rewrite",
   featuredTranslatorsEnabled: true,
   autoFeaturedEnabled: true,

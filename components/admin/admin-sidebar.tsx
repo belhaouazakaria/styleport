@@ -48,10 +48,10 @@ export function AdminSidebar(props: AdminSidebarProps) {
     <aside className="hidden w-72 border-r border-border bg-surface p-5 lg:block">
       <Link href="/admin" className="mb-8 flex items-center gap-2">
         <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-brand-500 text-sm font-black text-white shadow-sm">
-          SP
+          WT
         </span>
         <div>
-          <p className="font-display text-lg font-semibold text-ink">StylePort</p>
+          <p className="font-display text-lg font-semibold text-ink">What Type Of | Translator</p>
           <p className="text-xs text-muted-ink">Admin Console</p>
         </div>
       </Link>
