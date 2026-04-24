@@ -14,6 +14,23 @@ import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 
 const LOADING_COPY = "Composing your translation...";
+const RESULT_PIN_TRANSLATOR_MAX = 96;
+const RESULT_PIN_INPUT_MAX = 220;
+const RESULT_PIN_OUTPUT_MAX = 260;
+const RESULT_PIN_DESCRIPTION_MAX = 180;
+
+function truncateShareText(value: string, maxLength: number) {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    return "";
+  }
+
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, maxLength - 1).trimEnd()}…`;
+}
 
 interface TranslatorCardProps {
   translator: PublicTranslator;
@@ -186,6 +203,39 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
     window.open(intentUrl.toString(), "_blank", "noopener,noreferrer");
   }
 
+  function handlePinterestResultShare() {
+    if (typeof window === "undefined" || !outputText.trim()) {
+      return;
+    }
+
+    const pageUrl = shareUrl || window.location.href;
+    const mediaUrl = new URL("/api/pinterest/result-image", window.location.origin);
+
+    mediaUrl.searchParams.set(
+      "translator",
+      truncateShareText(translator.title || translator.name, RESULT_PIN_TRANSLATOR_MAX),
+    );
+    mediaUrl.searchParams.set(
+      "input",
+      truncateShareText(inputText || "No source text provided.", RESULT_PIN_INPUT_MAX),
+    );
+    mediaUrl.searchParams.set("output", truncateShareText(outputText, RESULT_PIN_OUTPUT_MAX));
+    mediaUrl.searchParams.set("cta", "Try this translator free");
+    mediaUrl.searchParams.set("v", Date.now().toString());
+
+    const description = truncateShareText(
+      `${translator.name}: ${outputText}`,
+      RESULT_PIN_DESCRIPTION_MAX,
+    );
+
+    const intentUrl = new URL("https://www.pinterest.com/pin/create/button/");
+    intentUrl.searchParams.set("url", pageUrl);
+    intentUrl.searchParams.set("media", mediaUrl.toString());
+    intentUrl.searchParams.set("description", description);
+
+    window.open(intentUrl.toString(), "_blank", "noopener,noreferrer");
+  }
+
   return (
     <section className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
       <Card className="overflow-hidden border-border bg-surface">
@@ -332,13 +382,22 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
             </Button>
             <Button
               type="button"
+              onClick={handlePinterestResultShare}
+              disabled={isLoading || !outputText.trim()}
+              className="bg-[#E60023] text-white hover:bg-[#cc001f] focus-visible:ring-[#E60023]/60 disabled:bg-[#E60023]/65 disabled:text-white"
+            >
+              <PinterestIcon className="h-4 w-4" />
+              Share result to Pinterest
+            </Button>
+            <Button
+              type="button"
               variant="outline"
               onClick={handlePinterestShare}
               disabled={isLoading}
-              className="border-[#E60023] bg-[#E60023] text-white hover:border-[#cc001f] hover:bg-[#cc001f] hover:text-white focus-visible:ring-[#E60023]/60"
+              className="border-[#E60023] text-[#E60023] hover:border-[#E60023] hover:bg-[#E60023]/10 hover:text-[#E60023] focus-visible:ring-[#E60023]/60"
             >
               <PinterestIcon className="h-4 w-4" />
-              Share on Pinterest
+              Share translator to Pinterest
             </Button>
           </div>
 
