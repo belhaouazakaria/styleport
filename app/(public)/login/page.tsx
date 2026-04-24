@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { auth } from "@/auth";
 import { LoginForm } from "@/components/admin/login-form";
 import { Navbar } from "@/components/sections/navbar";
+import { getAppSettings } from "@/lib/settings";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
@@ -14,7 +15,7 @@ export const metadata: Metadata = {
 };
 
 export default async function LoginPage() {
-  const session = await auth();
+  const [session, settings] = await Promise.all([auth(), getAppSettings()]);
 
   if (session?.user?.role === "ADMIN") {
     redirect("/admin");
@@ -22,7 +23,7 @@ export default async function LoginPage() {
 
   return (
     <div className="min-h-screen bg-page">
-      <Navbar />
+      <Navbar platformName={settings.platformName} />
       <main className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-md items-center px-4 py-10">
         <div className="w-full rounded-2xl border border-border bg-white p-6 shadow-[0_20px_45px_-35px_rgba(17,24,39,0.3)]">
           <h1 className="font-display text-3xl font-semibold text-ink">Admin Login</h1>

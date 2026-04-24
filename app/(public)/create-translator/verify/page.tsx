@@ -75,7 +75,7 @@ export default async function CreateTranslatorVerificationPage({ searchParams }:
 
   return (
     <div className="relative overflow-x-hidden">
-      <Navbar />
+      <Navbar platformName={settings.platformName} />
       <main className="mx-auto w-full max-w-3xl px-4 pb-16 pt-10 sm:px-6 lg:px-8">
         <section className={`rounded-2xl border p-6 sm:p-8 ${copy.tone}`}>
           <h1 className="font-display text-3xl font-semibold sm:text-4xl">{copy.title}</h1>

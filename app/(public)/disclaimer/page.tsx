@@ -16,7 +16,7 @@ export default async function DisclaimerPage() {
 
   return (
     <div className="relative overflow-x-hidden">
-      <Navbar />
+      <Navbar platformName={settings.platformName} />
       <LegalPage
         title="Disclaimer"
         intro="AI-generated content can be useful for drafting, but it is not a substitute for professional judgment."

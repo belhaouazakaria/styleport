@@ -94,7 +94,7 @@ export default async function TranslatorSlugPage({ params }: PageProps) {
 
   return (
     <div className="relative overflow-x-hidden">
-      <Navbar />
+      <Navbar platformName={settings.platformName} />
       <main className="pb-10">
         <section className="mx-auto w-full max-w-7xl px-4 pb-6 pt-10 text-center sm:px-6 lg:px-8">
           <Breadcrumbs

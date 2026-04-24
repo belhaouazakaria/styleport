@@ -10,7 +10,11 @@ import { useRequestTranslatorModal } from "@/components/providers/request-transl
 const searchHref = "/#search-translators";
 const categoriesHref = "/#categories";
 
-export function Navbar() {
+interface NavbarProps {
+  platformName?: string;
+}
+
+export function Navbar({ platformName = APP_NAME }: NavbarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { openRequestModal } = useRequestTranslatorModal();
 
@@ -42,7 +46,7 @@ export function Navbar() {
           <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-brand-500 text-sm font-black text-white shadow-sm transition group-hover:bg-brand-600">
             WT
           </span>
-          <span className="font-display text-xl font-semibold tracking-tight text-ink">{APP_NAME}</span>
+          <span className="font-display text-xl font-semibold tracking-tight text-ink">{platformName}</span>
         </Link>
 
         <nav className="hidden items-center gap-2 md:flex">
@@ -101,7 +105,7 @@ export function Navbar() {
             className="fixed right-0 top-0 z-50 flex h-dvh w-[86vw] max-w-sm flex-col gap-3 border-l border-border bg-white p-5 shadow-2xl"
           >
             <div className="flex items-center justify-between">
-              <p className="font-display text-xl font-semibold text-ink">{APP_NAME}</p>
+              <p className="font-display text-xl font-semibold text-ink">{platformName}</p>
               <button
                 type="button"
                 onClick={() => setMobileOpen(false)}

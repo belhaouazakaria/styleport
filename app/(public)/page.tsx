@@ -76,7 +76,7 @@ export default async function HomePage({ searchParams }: PageProps) {
 
   return (
     <div className="relative overflow-x-hidden">
-      <Navbar />
+      <Navbar platformName={settings.platformName} />
       <main className="pb-10">
         <Hero title={settings.homepageTitle} subtitle={settings.homepageSubtitle} />
 

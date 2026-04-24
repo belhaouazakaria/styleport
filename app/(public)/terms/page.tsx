@@ -16,7 +16,7 @@ export default async function TermsOfUsePage() {
 
   return (
     <div className="relative overflow-x-hidden">
-      <Navbar />
+      <Navbar platformName={settings.platformName} />
       <LegalPage
         title="Terms of Use"
         intro="By using this platform, you agree to these terms. If you do not agree, please stop using the service."

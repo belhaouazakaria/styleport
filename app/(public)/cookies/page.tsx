@@ -16,7 +16,7 @@ export default async function CookiesPage() {
 
   return (
     <div className="relative overflow-x-hidden">
-      <Navbar />
+      <Navbar platformName={settings.platformName} />
       <LegalPage
         title="Cookie Policy"
         intro="This policy explains how cookies and similar technologies are used on this website."

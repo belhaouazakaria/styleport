@@ -18,7 +18,7 @@ export default async function ContactPage() {
 
   return (
     <div className="relative overflow-x-hidden">
-      <Navbar />
+      <Navbar platformName={settings.platformName} />
       <main className="mx-auto w-full max-w-5xl px-4 pb-16 pt-10 sm:px-6 lg:px-8">
         <header className="mb-6">
           <h1 className="font-display text-4xl font-semibold text-ink sm:text-5xl">Contact</h1>
