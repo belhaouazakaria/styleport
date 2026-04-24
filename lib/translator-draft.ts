@@ -69,6 +69,8 @@ function buildSystemPrompt() {
     "The final draft must be directly usable in an admin create-translator form.",
     "Preserve clarity and avoid unsafe or abusive content.",
     "Ensure prompts preserve meaning and facts while transforming style.",
+    "Default translator output tone should be playful, witty, and entertaining unless the brief clearly requests a different tone (for example: professional, formal, legal, academic, romantic, poetic, or corporate).",
+    "Do not force category selection to Funny when the brief points to another category or use case.",
   ].join("\n");
 }
 
@@ -120,7 +122,12 @@ function buildUserPrompt(brief: string) {
     "- Choose the best category suggestion from: Fancy, Funny, Professional, Historical, Roleplay, Casual, Social, Marketing.",
     "- Slug must be lowercase-kebab-case.",
     "- Prompts should be safe, concise, and production-ready.",
-    "- SEO title and description should be high quality and search-friendly.",
+    "- Make shortDescription a richer SEO-friendly paragraph (about 140-240 characters).",
+    "- shortDescription should naturally mention the translator style/name plus text translation or rewriting value and one realistic use case when relevant.",
+    "- Use keywords naturally: AI translator, AI text converter, text rewriting, text translation.",
+    "- SEO title and SEO description should be high quality, readable, and search-friendly without keyword stuffing.",
+    "- Default systemPrompt and promptInstructions to playful/funny/witty output when the brief does not request a specific serious/professional tone.",
+    "- If the brief explicitly requests another tone, honor that requested tone instead of playful humor.",
     "- Keep output plain JSON only.",
   ]
     .filter(Boolean)

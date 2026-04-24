@@ -83,7 +83,7 @@ export default async function TranslatorSlugPage({ params }: PageProps) {
     getRelatedPublicTranslators({
       currentTranslatorId: translator.id,
       categorySlug: translator.primaryCategory?.slug,
-      limit: 3,
+      limit: 12,
     }),
   ]);
   const baseUrl = getAppBaseUrl();
@@ -131,6 +131,8 @@ export default async function TranslatorSlugPage({ params }: PageProps) {
           </div>
         </section>
 
+        <TranslatorComments translatorId={translator.id} translatorSlug={translator.slug} />
+
         {relatedTranslators.length ? (
           <section className="mx-auto mt-8 w-full max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="rounded-2xl border border-border bg-surface p-5 sm:p-6">
@@ -168,8 +170,6 @@ export default async function TranslatorSlugPage({ params }: PageProps) {
             </div>
           </section>
         ) : null}
-
-        <TranslatorComments translatorId={translator.id} translatorSlug={translator.slug} />
 
         {ads.length > 1 ? (
           <section className="mx-auto mt-6 w-full max-w-7xl px-4 sm:px-6 lg:px-8">
