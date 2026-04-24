@@ -5,21 +5,31 @@ import type { PublicTranslator } from "@/lib/types";
 
 interface FeaturedTranslatorsProps {
   translators: PublicTranslator[];
+  title?: string;
+  sectionId?: string;
+  showBrowseLink?: boolean;
 }
 
-export function FeaturedTranslators({ translators }: FeaturedTranslatorsProps) {
+export function FeaturedTranslators({
+  translators,
+  title = "Featured Translators",
+  sectionId,
+  showBrowseLink = true,
+}: FeaturedTranslatorsProps) {
   if (!translators.length) {
     return null;
   }
 
   return (
-    <section className="mx-auto mt-8 w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+    <section id={sectionId} className="mx-auto mt-8 w-full max-w-7xl px-4 sm:px-6 lg:px-8">
       <div className="rounded-3xl border border-border bg-surface p-5 shadow-[0_20px_45px_-35px_rgba(17,24,39,0.25)] sm:p-6">
         <div className="mb-4 flex items-center justify-between gap-2">
-          <h2 className="font-display text-2xl font-semibold text-ink">Featured Translators</h2>
-          <Link href="/translators" className="text-sm font-medium text-brand-700 hover:text-brand-800">
-            Browse all
-          </Link>
+          <h2 className="font-display text-2xl font-semibold text-ink">{title}</h2>
+          {showBrowseLink ? (
+            <Link href="/translators" className="text-sm font-medium text-brand-700 hover:text-brand-800">
+              Browse all
+            </Link>
+          ) : null}
         </div>
 
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">

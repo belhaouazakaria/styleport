@@ -1,53 +1,36 @@
 import type { MetadataRoute } from "next";
 
+import { getIndexableTranslatorSlugsForSitemap } from "@/lib/data/translators";
 import { getAppBaseUrl } from "@/lib/env";
 
-export default function sitemap(): MetadataRoute.Sitemap {
+const STATIC_INDEXABLE_ROUTES = [
+  "/",
+  "/translators",
+  "/contact",
+  "/privacy",
+  "/terms",
+  "/disclaimer",
+  "/cookies",
+] as const;
+
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = getAppBaseUrl().toString().replace(/\/$/, "");
   const now = new Date();
+  const translators = await getIndexableTranslatorSlugsForSitemap();
 
-  return [
-    {
-      url: `${base}/`,
-      changeFrequency: "daily",
-      priority: 1,
-      lastModified: now,
-    },
-    {
-      url: `${base}/translators`,
-      changeFrequency: "daily",
-      priority: 0.9,
-      lastModified: now,
-    },
-    {
-      url: `${base}/contact`,
-      changeFrequency: "monthly",
-      priority: 0.7,
-      lastModified: now,
-    },
-    {
-      url: `${base}/privacy`,
-      changeFrequency: "yearly",
-      priority: 0.4,
-      lastModified: now,
-    },
-    {
-      url: `${base}/terms`,
-      changeFrequency: "yearly",
-      priority: 0.4,
-      lastModified: now,
-    },
-    {
-      url: `${base}/disclaimer`,
-      changeFrequency: "yearly",
-      priority: 0.3,
-      lastModified: now,
-    },
-    {
-      url: `${base}/cookies`,
-      changeFrequency: "yearly",
-      priority: 0.3,
-      lastModified: now,
-    },
-  ];
+  const staticEntries: MetadataRoute.Sitemap = STATIC_INDEXABLE_ROUTES.map((path) => ({
+    url: `${base}${path}`,
+    changeFrequency: path === "/" || path === "/translators" ? "daily" : "monthly",
+    priority: path === "/" ? 1 : path === "/translators" ? 0.9 : 0.6,
+    lastModified: now,
+  }));
+
+  const translatorEntries: MetadataRoute.Sitemap = translators.map((translator) => ({
+    url: `${base}/translators/${translator.slug}`,
+    changeFrequency: "weekly",
+    priority: 0.8,
+    lastModified: translator.updatedAt,
+  }));
+
+  return [...staticEntries, ...translatorEntries];
 }

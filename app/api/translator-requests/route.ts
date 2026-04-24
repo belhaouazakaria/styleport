@@ -7,6 +7,7 @@ import { sendTranslatorRequestVerificationEmail } from "@/lib/email-alerts";
 import { getAppBaseUrl } from "@/lib/env";
 import { logError, logWarn } from "@/lib/logger";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { processVerifiedTranslatorRequest } from "@/lib/request-processing";
 import { extractClientIp } from "@/lib/utils";
 import { translatorRequestSchema } from "@/lib/validators";
 
@@ -43,6 +44,43 @@ export async function POST(request: Request) {
 
   try {
     const created = await createPublicTranslatorRequest(parsed.data);
+    if (!created.verificationRequired) {
+      const processing = await processVerifiedTranslatorRequest({
+        requestId: created.id,
+        requestUrl: request.url,
+      });
+
+      if (processing.outcome === "AUTO_PUBLISHED") {
+        return apiOk(
+          {
+            requestId: created.id,
+            verificationRequired: false,
+            mode: "live",
+            translatorSlug: processing.translatorSlug,
+          },
+          201,
+        );
+      }
+
+      return apiOk(
+        {
+          requestId: created.id,
+          verificationRequired: false,
+          mode: "review",
+        },
+        201,
+      );
+    }
+
+    if (!created.verificationToken) {
+      logError(
+        "translator_request_verification_token_missing",
+        "Translator request verification token is missing for a pending verification request.",
+        { requestId: created.id },
+      );
+      return apiError(500, "UPSTREAM_ERROR", "Unable to submit request right now.");
+    }
+
     const verificationUrl = new URL("/api/translator-requests/verify", getAppBaseUrl({ requestUrl: request.url }));
     verificationUrl.searchParams.set("token", created.verificationToken);
     verificationUrl.searchParams.set("requestId", created.id);

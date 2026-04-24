@@ -3,17 +3,16 @@ import type { MetadataRoute } from "next";
 import { getAppBaseUrl } from "@/lib/env";
 
 export default function robots(): MetadataRoute.Robots {
-  const baseUrl = getAppBaseUrl();
+  const base = getAppBaseUrl().toString().replace(/\/$/, "");
 
   return {
     rules: [
       {
         userAgent: "*",
-        allow: ["/", "/translators", "/translators/*"],
-        disallow: ["/admin", "/admin/*", "/login", "/api/admin/*"],
+        allow: "/",
+        disallow: ["/admin", "/admin/*", "/api", "/api/*", "/login", "/create-translator/verify"],
       },
     ],
-    sitemap: [`${baseUrl.toString().replace(/\/$/, "")}/sitemap.xml`],
+    sitemap: [`${base}/sitemap.xml`],
   };
 }
-

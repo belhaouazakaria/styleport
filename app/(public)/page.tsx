@@ -12,7 +12,11 @@ import { Navbar } from "@/components/sections/navbar";
 import { AdSlot } from "@/components/shared/ad-slot";
 import { DISCOVERY_DEFAULT_PAGE_SIZE } from "@/lib/constants";
 import { getRenderableAdPlacements } from "@/lib/data/ads";
-import { getDiscoveryResult, getFeaturedPublicTranslators } from "@/lib/data/translators";
+import {
+  getDiscoveryResult,
+  getFeaturedPublicTranslators,
+  getNewestPublicTranslators,
+} from "@/lib/data/translators";
 import { getAppSettings } from "@/lib/settings";
 
 interface PageProps {
@@ -56,9 +60,10 @@ export default async function HomePage({ searchParams }: PageProps) {
   const page = Math.max(1, Number(params.page || 1) || 1);
   const pageSize = settings.discoveryPageSize || DISCOVERY_DEFAULT_PAGE_SIZE;
 
-  const [discovery, featured, desktopAds, mobileAds] = await Promise.all([
+  const [discovery, featured, newest, desktopAds, mobileAds] = await Promise.all([
     getDiscoveryResult({ q, category, page, pageSize }),
     getFeaturedPublicTranslators(6),
+    getNewestPublicTranslators(3),
     getRenderableAdPlacements({
       pageType: AdPageType.HOMEPAGE,
       deviceType: AdDeviceType.DESKTOP,
@@ -91,7 +96,17 @@ export default async function HomePage({ searchParams }: PageProps) {
           </section>
         ) : null}
 
-        {settings.featuredTranslatorsEnabled ? <FeaturedTranslators translators={featured} /> : null}
+        {settings.featuredTranslatorsEnabled ? (
+          <>
+            <FeaturedTranslators translators={featured} sectionId="featured-translators" />
+            <FeaturedTranslators
+              translators={newest}
+              title="New Translators"
+              sectionId="new-translators"
+              showBrowseLink={false}
+            />
+          </>
+        ) : null}
 
         {desktopAds.length > 1 ? (
           <section className="mx-auto mt-6 w-full max-w-7xl px-4 sm:px-6 lg:px-8">

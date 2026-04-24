@@ -744,6 +744,34 @@ export async function getFeaturedPublicTranslators(limit = 6): Promise<PublicTra
   return task;
 }
 
+export async function getNewestPublicTranslators(limit = 3): Promise<PublicTranslator[]> {
+  const rows = await prisma.translator.findMany({
+    where: {
+      isActive: true,
+      archivedAt: null,
+    },
+    include: publicTranslatorInclude,
+    orderBy: [{ createdAt: "desc" }, { updatedAt: "desc" }],
+    take: Math.max(1, limit),
+  });
+
+  return rows.map(mapPublicTranslator);
+}
+
+export async function getIndexableTranslatorSlugsForSitemap() {
+  return prisma.translator.findMany({
+    where: {
+      isActive: true,
+      archivedAt: null,
+    },
+    select: {
+      slug: true,
+      updatedAt: true,
+    },
+    orderBy: [{ updatedAt: "desc" }],
+  });
+}
+
 export async function getRelatedPublicTranslators(params: {
   currentTranslatorId: string;
   categorySlug?: string | null;

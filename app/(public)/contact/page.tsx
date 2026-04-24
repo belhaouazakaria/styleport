@@ -4,7 +4,6 @@ import Link from "next/link";
 import { ContactForm } from "@/components/public/contact-form";
 import { Footer } from "@/components/sections/footer";
 import { Navbar } from "@/components/sections/navbar";
-import { getServerEnv } from "@/lib/env";
 import { getAppSettings } from "@/lib/settings";
 
 export const metadata: Metadata = {
@@ -14,8 +13,8 @@ export const metadata: Metadata = {
 };
 
 export default async function ContactPage() {
-  const [settings, env] = await Promise.all([getAppSettings(), Promise.resolve(getServerEnv())]);
-  const fallbackEmail = env.ALERT_ADMIN_EMAIL || "support@example.com";
+  const settings = await getAppSettings();
+  const contactEmail = "translator@whattypeof.com";
 
   return (
     <div className="relative overflow-x-hidden">
@@ -33,8 +32,8 @@ export default async function ContactPage() {
           <aside className="space-y-4 rounded-2xl border border-border bg-surface p-5 sm:p-6">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-ink">General Email</p>
-              <a href={`mailto:${fallbackEmail}`} className="mt-1 inline-block text-sm font-medium text-brand-700">
-                {fallbackEmail}
+              <a href={`mailto:${contactEmail}`} className="mt-1 inline-block text-sm font-medium text-brand-700">
+                {contactEmail}
               </a>
             </div>
             <div>

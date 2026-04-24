@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { createPortal } from "react-dom";
 import {
   createContext,
@@ -30,6 +31,9 @@ interface RequestFormState {
 
 interface SubmissionSuccessState {
   requesterEmail: string;
+  verificationRequired: boolean;
+  mode?: "live" | "review";
+  translatorSlug?: string;
 }
 
 function createDefaultFormState(initialIdea?: string): RequestFormState {
@@ -121,6 +125,9 @@ export function RequestTranslatorProvider({ children }: { children: ReactNode })
     setForm(createDefaultFormState());
     setSuccessState({
       requesterEmail: form.requesterEmail.trim(),
+      verificationRequired: result.verificationRequired !== false,
+      mode: result.mode === "live" ? "live" : result.mode === "review" ? "review" : undefined,
+      translatorSlug: typeof result.translatorSlug === "string" ? result.translatorSlug : undefined,
     });
   }
 
@@ -166,14 +173,37 @@ export function RequestTranslatorProvider({ children }: { children: ReactNode })
                         <CheckCircle2 className="h-4 w-4" />
                         Request received
                       </p>
-                      <p className="mt-2 text-sm leading-6">
-                        One more step is required. We sent a verification email to{" "}
-                        <strong>{successState.requesterEmail}</strong>.
-                      </p>
-                      <p className="mt-2 text-sm leading-6">
-                        Please confirm your email to complete your submission. If you don&apos;t see the email, check
-                        your spam/junk folder.
-                      </p>
+                      {successState.verificationRequired ? (
+                        <>
+                          <p className="mt-2 text-sm leading-6">
+                            One more step is required. We sent a verification email to{" "}
+                            <strong>{successState.requesterEmail}</strong>.
+                          </p>
+                          <p className="mt-2 text-sm leading-6">
+                            Please confirm your email to complete your submission. If you don&apos;t see the email,
+                            check your spam/junk folder.
+                          </p>
+                        </>
+                      ) : successState.mode === "live" && successState.translatorSlug ? (
+                        <>
+                          <p className="mt-2 text-sm leading-6">
+                            Your email was already verified, so we processed your request right away and published your
+                            translator.
+                          </p>
+                          <p className="mt-2 text-sm leading-6">
+                            <Link
+                              href={`/translators/${successState.translatorSlug}`}
+                              className="font-semibold text-brand-700 underline decoration-brand-300 underline-offset-2 hover:text-brand-800"
+                            >
+                              Open your live translator
+                            </Link>
+                          </p>
+                        </>
+                      ) : (
+                        <p className="mt-2 text-sm leading-6">
+                          Your email was already verified, so your request was submitted directly for review.
+                        </p>
+                      )}
                     </div>
 
                     <div className="flex flex-wrap items-center justify-end gap-2">

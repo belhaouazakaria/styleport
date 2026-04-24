@@ -57,8 +57,16 @@ function buildVerificationTokenPayload() {
 }
 
 export async function createPublicTranslatorRequest(input: TranslatorRequestInput) {
-  const verification = buildVerificationTokenPayload();
   const requesterEmail = normalizeEmail(input.requesterEmail);
+  const previouslyVerified = await prisma.translatorRequest.findFirst({
+    where: {
+      requesterEmail,
+      emailVerifiedAt: { not: null },
+    },
+    select: { id: true },
+  });
+  const verificationRequired = !previouslyVerified;
+  const verification = verificationRequired ? buildVerificationTokenPayload() : null;
 
   const created = await prisma.translatorRequest.create({
     data: {
@@ -70,9 +78,12 @@ export async function createPublicTranslatorRequest(input: TranslatorRequestInpu
       suggestedCategory: normalizeOptional(input.suggestedCategory),
       audience: normalizeOptional(input.audience),
       notes: normalizeOptional(input.notes),
-      status: TranslatorRequestStatus.PENDING_EMAIL_VERIFICATION,
-      verificationTokenHash: verification.tokenHash,
-      verificationTokenExpiresAt: verification.expiresAt,
+      status: verificationRequired
+        ? TranslatorRequestStatus.PENDING_EMAIL_VERIFICATION
+        : TranslatorRequestStatus.VERIFIED,
+      emailVerifiedAt: verificationRequired ? null : new Date(),
+      verificationTokenHash: verification?.tokenHash || null,
+      verificationTokenExpiresAt: verification?.expiresAt || null,
     },
     select: {
       id: true,
@@ -85,7 +96,8 @@ export async function createPublicTranslatorRequest(input: TranslatorRequestInpu
     id: created.id,
     requesterEmail: created.requesterEmail || requesterEmail,
     requestedName: created.requestedName,
-    verificationToken: verification.token,
+    verificationRequired,
+    verificationToken: verification?.token || null,
   };
 }
 
