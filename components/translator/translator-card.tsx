@@ -25,6 +25,7 @@ const RESULT_PIN_MAX_TEXT_CHARS = 320;
 const RESULT_PIN_MAX_TITLE_LINES = 3;
 const RESULT_PIN_MAX_TITLE_CHARS = 96;
 const RESULT_PIN_MAX_CTA_CHARS = 82;
+const RESULT_PIN_MAX_UPLOAD_BYTES = 3 * 1024 * 1024;
 
 function truncateShareText(value: string, maxLength: number) {
   const normalized = value.replace(/\s+/g, " ").trim();
@@ -360,8 +361,7 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
 
   const [isLoading, setIsLoading] = useState(false);
   const [isPreparingResultPin, setIsPreparingResultPin] = useState(false);
-  const [resultPinUrl, setResultPinUrl] = useState<string | null>(null);
-  const [resultPinBlob, setResultPinBlob] = useState<Blob | null>(null);
+  const [resultPinMediaUrl, setResultPinMediaUrl] = useState<string | null>(null);
   const [resultPinError, setResultPinError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [speechSupported] = useState(
@@ -389,19 +389,12 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
       if (typeof window !== "undefined") {
         window.speechSynthesis?.cancel();
       }
-      if (resultPinUrl) {
-        URL.revokeObjectURL(resultPinUrl);
-      }
     },
-    [resultPinUrl],
+    [],
   );
 
   function clearPreparedResultPin() {
-    if (resultPinUrl) {
-      URL.revokeObjectURL(resultPinUrl);
-    }
-    setResultPinUrl(null);
-    setResultPinBlob(null);
+    setResultPinMediaUrl(null);
     setResultPinError(null);
   }
 
@@ -532,28 +525,45 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
     window.open(intentUrl.toString(), "_blank", "noopener,noreferrer");
   }
 
-  function openPinterestIntent(translatedText: string) {
+  function openPinterestIntent(mediaUrl: string, translatedText: string) {
     const pageUrl = shareUrl || window.location.href;
     const description = truncateShareText(`${translator.name}: ${translatedText}`, RESULT_PIN_DESCRIPTION_MAX);
     const intentUrl = new URL("https://www.pinterest.com/pin/create/button/");
     intentUrl.searchParams.set("url", pageUrl);
+    intentUrl.searchParams.set("media", mediaUrl);
     intentUrl.searchParams.set("description", description);
 
     window.open(intentUrl.toString(), "_blank", "noopener,noreferrer");
   }
 
-  function downloadPreparedResultPin() {
-    if (typeof window === "undefined" || !resultPinUrl) {
-      return;
+  async function uploadResultPinBlob(blob: Blob) {
+    if (blob.size > RESULT_PIN_MAX_UPLOAD_BYTES) {
+      throw new Error("Result image is too large to upload.");
     }
 
-    const link = document.createElement("a");
-    link.href = resultPinUrl;
-    link.download = `${translator.slug}-result-pin.png`;
-    link.rel = "noopener";
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+    const formData = new FormData();
+    formData.append("image", blob, "result-pin.png");
+
+    const response = await fetch("/api/pinterest/result-image", {
+      method: "POST",
+      body: formData,
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      throw new Error(`Result image upload failed (${response.status}).`);
+    }
+
+    const payload = (await response.json()) as {
+      ok?: boolean;
+      mediaUrl?: string;
+    };
+
+    if (!payload.ok || !payload.mediaUrl) {
+      throw new Error("Result image upload did not return a media URL.");
+    }
+
+    return payload.mediaUrl;
   }
 
   async function prepareResultPin(options: {
@@ -578,25 +588,16 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
         outputText: truncateShareText(options.translatedText, RESULT_PIN_OUTPUT_MAX),
         cta: buildResultPinCta(translator),
       });
-      const objectUrl = URL.createObjectURL(blob);
+      const mediaUrl = await uploadResultPinBlob(blob);
       if (resultPinRequestIdRef.current !== requestId) {
-        URL.revokeObjectURL(objectUrl);
         return null;
       }
-      if (resultPinUrl) {
-        URL.revokeObjectURL(resultPinUrl);
-      }
-      setResultPinBlob(blob);
-      setResultPinUrl(objectUrl);
+      setResultPinMediaUrl(mediaUrl);
       setResultPinError(null);
-      return objectUrl;
+      return mediaUrl;
     } catch {
       if (resultPinRequestIdRef.current === requestId) {
-        if (resultPinUrl) {
-          URL.revokeObjectURL(resultPinUrl);
-        }
-        setResultPinBlob(null);
-        setResultPinUrl(null);
+        setResultPinMediaUrl(null);
         setResultPinError("Unable to prepare Pinterest image right now.");
       }
       if (options.announceFailure) {
@@ -623,13 +624,8 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
       return;
     }
 
-    if (resultPinUrl && resultPinBlob) {
-      downloadPreparedResultPin();
-      openPinterestIntent(outputText);
-      toast({
-        title: "Pinterest image ready",
-        description: "Pin image downloaded. Pinterest opened; upload that image to complete your post.",
-      });
+    if (resultPinMediaUrl) {
+      openPinterestIntent(resultPinMediaUrl, outputText);
       return;
     }
 
@@ -639,12 +635,7 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
       announceFailure: true,
     });
     if (prepared) {
-      downloadPreparedResultPin();
-      openPinterestIntent(outputText);
-      toast({
-        title: "Pinterest image ready",
-        description: "Pin image downloaded. Pinterest opened; upload that image to complete your post.",
-      });
+      openPinterestIntent(prepared, outputText);
     }
   }
 
@@ -833,7 +824,7 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
 
           {error ? <p className="text-sm text-red-600">{error}</p> : null}
           {!error && resultPinError ? <p className="text-xs text-muted-ink">{resultPinError}</p> : null}
-          {!error && !resultPinError && resultPinUrl ? (
+          {!error && !resultPinError && resultPinMediaUrl ? (
             <p className="text-xs text-muted-ink">Result pin image is ready to share.</p>
           ) : null}
         </div>
