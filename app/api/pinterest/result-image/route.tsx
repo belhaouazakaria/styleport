@@ -1,4 +1,7 @@
 import { ImageResponse } from "next/og";
+import { NextResponse } from "next/server";
+
+import { logError } from "@/lib/logger";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,14 +13,17 @@ const MAX_TRANSLATOR_LENGTH = 96;
 const MAX_INPUT_LENGTH = 300;
 const MAX_OUTPUT_LENGTH = 340;
 const MAX_CTA_LENGTH = 120;
+const RESPONSE_HEADERS = {
+  "Content-Type": "image/png",
+  "Cache-Control": "no-store, max-age=0",
+} as const;
 
-const DISPLAY_FONT_NAME = "PinDisplayCormorant";
-const BODY_FONT_NAME = "PinBodyManrope";
-const DISPLAY_FONT_CSS_URL = "https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@700";
-
-let resultPinFontsPromise:
-  | Promise<Array<{ name: string; data: ArrayBuffer; style: "normal"; weight: 400 | 600 | 700 }>>
-  | null = null;
+interface ResultPinSnapshot {
+  translatorTitle: string;
+  inputText: string;
+  outputText: string;
+  cta: string;
+}
 
 function clampText(value: string | null, maxLength: number) {
   const normalized = (value || "").replace(/\s+/g, " ").trim();
@@ -32,307 +38,282 @@ function clampText(value: string | null, maxLength: number) {
   return `${normalized.slice(0, maxLength - 1).trimEnd()}…`;
 }
 
-async function fetchFontFromGoogleCss(cssUrl: string) {
-  const cssResponse = await fetch(cssUrl, {
-    cache: "force-cache",
-    next: { revalidate: 60 * 60 * 24 * 30 },
-    headers: {
-      "User-Agent":
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
-    },
-  });
-
-  if (!cssResponse.ok) {
-    throw new Error(`Font CSS request failed with status ${cssResponse.status}`);
-  }
-
-  const cssText = await cssResponse.text();
-  const match = cssText.match(/src:\s*url\(([^)]+)\)\s*format\('(opentype|truetype|woff2?)'\)/i);
-  if (!match?.[1]) {
-    throw new Error("Unable to locate font src URL in Google Fonts CSS.");
-  }
-
-  const fontUrl = match[1].replace(/["']/g, "");
-  const fontResponse = await fetch(fontUrl, {
-    cache: "force-cache",
-    next: { revalidate: 60 * 60 * 24 * 30 },
-  });
-
-  if (!fontResponse.ok) {
-    throw new Error(`Font file request failed with status ${fontResponse.status}`);
-  }
-
-  return fontResponse.arrayBuffer();
+function parseSnapshot(requestUrl: string): ResultPinSnapshot {
+  const { searchParams } = new URL(requestUrl);
+  return {
+    translatorTitle: clampText(searchParams.get("translator"), MAX_TRANSLATOR_LENGTH) || "Style Translator",
+    inputText: clampText(searchParams.get("input"), MAX_INPUT_LENGTH) || "No source text provided.",
+    outputText: clampText(searchParams.get("output"), MAX_OUTPUT_LENGTH) || "No translated result provided.",
+    cta: clampText(searchParams.get("cta"), MAX_CTA_LENGTH) || "Translate your text for free",
+  };
 }
 
-async function getResultPinFonts() {
-  if (resultPinFontsPromise) {
-    return resultPinFontsPromise;
-  }
-
-  resultPinFontsPromise = (async () => {
-    const [display, bodyRegular, bodySemiBold, bodyBold] = await Promise.allSettled([
-      fetchFontFromGoogleCss(DISPLAY_FONT_CSS_URL),
-      fetchFontFromGoogleCss("https://fonts.googleapis.com/css2?family=Manrope:wght@400"),
-      fetchFontFromGoogleCss("https://fonts.googleapis.com/css2?family=Manrope:wght@600"),
-      fetchFontFromGoogleCss("https://fonts.googleapis.com/css2?family=Manrope:wght@700"),
-    ]);
-
-    const fonts: Array<{
-      name: string;
-      data: ArrayBuffer;
-      style: "normal";
-      weight: 400 | 600 | 700;
-    }> = [];
-
-    if (display.status === "fulfilled") {
-      fonts.push({
-        name: DISPLAY_FONT_NAME,
-        data: display.value,
-        style: "normal",
-        weight: 700,
-      });
-    }
-
-    if (bodyRegular.status === "fulfilled") {
-      fonts.push({
-        name: BODY_FONT_NAME,
-        data: bodyRegular.value,
-        style: "normal",
-        weight: 400,
-      });
-    }
-
-    if (bodySemiBold.status === "fulfilled") {
-      fonts.push({
-        name: BODY_FONT_NAME,
-        data: bodySemiBold.value,
-        style: "normal",
-        weight: 600,
-      });
-    }
-
-    if (bodyBold.status === "fulfilled") {
-      fonts.push({
-        name: BODY_FONT_NAME,
-        data: bodyBold.value,
-        style: "normal",
-        weight: 700,
-      });
-    }
-
-    return fonts;
-  })().catch(() => []);
-
-  return resultPinFontsPromise;
-}
-
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const translatorTitle = clampText(searchParams.get("translator"), MAX_TRANSLATOR_LENGTH) || "Style Translator";
-  const inputText = clampText(searchParams.get("input"), MAX_INPUT_LENGTH) || "No source text provided.";
-  const outputText = clampText(searchParams.get("output"), MAX_OUTPUT_LENGTH) || "No translated result provided.";
-  const cta =
-    clampText(searchParams.get("cta"), MAX_CTA_LENGTH) || "Translate your text for free";
-  const fonts = await getResultPinFonts();
-
-  return new ImageResponse(
-    (
+function renderResultPin(snapshot: ResultPinSnapshot) {
+  return (
+    <div
+      style={{
+        width: "100%",
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        backgroundColor: "#f1efff",
+        color: "#111827",
+        padding: "42px 44px 34px",
+        boxSizing: "border-box",
+      }}
+    >
       <div
         style={{
-          width: "100%",
-          height: "100%",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "18px",
+        }}
+      >
+        <div
+          style={{
+            width: "46px",
+            height: "46px",
+            borderRadius: "12px",
+            backgroundColor: "#5b5bf6",
+            color: "#ffffff",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontFamily: 'Manrope, Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
+            fontWeight: 800,
+            fontSize: "21px",
+            lineHeight: 1,
+          }}
+        >
+          WT
+        </div>
+        <p
+          style={{
+            margin: 0,
+            color: "#4040cb",
+            fontFamily: 'Manrope, Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
+            fontWeight: 700,
+            fontSize: "25px",
+            lineHeight: 1.1,
+          }}
+        >
+          {BRAND_NAME}
+        </p>
+      </div>
+
+      <div
+        style={{
           display: "flex",
           flexDirection: "column",
-          backgroundColor: "#f4f2ff",
-          backgroundImage:
-            "radial-gradient(circle at 10% 0%, rgba(91,91,246,0.09) 0, rgba(91,91,246,0.01) 45%), radial-gradient(circle at 95% 90%, rgba(64,64,203,0.08) 0, rgba(64,64,203,0.01) 42%)",
-          color: "#111827",
-          padding: "44px 44px 38px",
-          boxSizing: "border-box",
+          borderRadius: "26px",
+          backgroundColor: "#ffffff",
+          border: "2px solid #d9d6ff",
+          padding: "24px 26px 20px",
+          marginBottom: "16px",
+        }}
+      >
+        <p
+          style={{
+            margin: "0 0 10px",
+            color: "#4040cb",
+            fontFamily: 'Manrope, Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
+            fontSize: "24px",
+            fontWeight: 600,
+            lineHeight: 1.1,
+          }}
+        >
+          Translator
+        </p>
+        <h1
+          style={{
+            margin: 0,
+            color: "#1f2145",
+            fontFamily: '"Cormorant Garamond", Georgia, "Times New Roman", serif',
+            fontWeight: 700,
+            fontSize: "66px",
+            lineHeight: 0.95,
+            letterSpacing: "-0.02em",
+          }}
+        >
+          {snapshot.translatorTitle}
+        </h1>
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "14px",
+          flex: 1,
         }}
       >
         <div
           style={{
             display: "flex",
-            alignItems: "center",
+            flexDirection: "column",
             justifyContent: "space-between",
-            marginBottom: "20px",
+            flex: 1,
+            borderRadius: "24px",
+            backgroundColor: "#ffffff",
+            border: "2px solid #e1ddff",
+            padding: "18px 20px",
           }}
         >
-          <div
+          <p
             style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              width: "46px",
-              height: "46px",
-              borderRadius: "12px",
-              backgroundColor: "#5b5bf6",
-              color: "#ffffff",
-              fontSize: "22px",
-              fontWeight: 800,
-              fontFamily: `${BODY_FONT_NAME}, ui-sans-serif, system-ui, sans-serif`,
-            }}
-          >
-            WT
-          </div>
-          <div
-            style={{
-              color: "#4040cb",
+              margin: "0 0 10px",
+              color: "#3737a6",
+              fontFamily: 'Manrope, Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
               fontSize: "25px",
               fontWeight: 700,
-              fontFamily: `${BODY_FONT_NAME}, ui-sans-serif, system-ui, sans-serif`,
-              letterSpacing: "-0.01em",
+              lineHeight: 1.1,
             }}
           >
-            {BRAND_NAME}
-          </div>
+            Your text
+          </p>
+          <p
+            style={{
+              margin: 0,
+              color: "#151932",
+              fontFamily: 'Manrope, Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
+              fontSize: "38px",
+              lineHeight: 1.2,
+              fontWeight: 500,
+            }}
+          >
+            {snapshot.inputText}
+          </p>
         </div>
 
         <div
           style={{
             display: "flex",
             flexDirection: "column",
-            borderRadius: "28px",
+            justifyContent: "space-between",
+            flex: 1,
+            borderRadius: "24px",
             backgroundColor: "#ffffff",
-            border: "2px solid #d9d6ff",
-            padding: "26px 28px 22px",
-            marginBottom: "20px",
+            border: "2px solid #d8d1ff",
+            padding: "18px 20px",
           }}
         >
-          <div
+          <p
             style={{
-              color: "#4040cb",
-              fontSize: "24px",
-              fontWeight: 600,
-              marginBottom: "10px",
-              fontFamily: `${BODY_FONT_NAME}, ui-sans-serif, system-ui, sans-serif`,
-            }}
-          >
-            Translator
-          </div>
-          <div
-            style={{
-              fontSize: "68px",
-              lineHeight: 0.96,
+              margin: "0 0 10px",
+              color: "#4338ca",
+              fontFamily: 'Manrope, Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
+              fontSize: "25px",
               fontWeight: 700,
-              letterSpacing: "-0.02em",
-              color: "#1f2145",
-              fontFamily: `${DISPLAY_FONT_NAME}, "Cormorant Garamond", Georgia, serif`,
+              lineHeight: 1.1,
             }}
           >
-            {translatorTitle}
-          </div>
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: "16px",
-            flexGrow: 1,
-          }}
-        >
-          <div
+            Translated result
+          </p>
+          <p
             style={{
-              display: "flex",
-              flexDirection: "column",
-              flex: 1,
-              justifyContent: "space-between",
-              borderRadius: "24px",
-              backgroundColor: "#ffffff",
-              border: "2px solid #e0e7ff",
-              padding: "20px 22px",
+              margin: 0,
+              color: "#1d2347",
+              fontFamily: 'Manrope, Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
+              fontSize: "38px",
+              lineHeight: 1.2,
+              fontWeight: 500,
             }}
           >
-            <div
-              style={{
-                fontSize: "25px",
-                fontWeight: 700,
-                color: "#3737a6",
-                marginBottom: "12px",
-                fontFamily: `${BODY_FONT_NAME}, ui-sans-serif, system-ui, sans-serif`,
-              }}
-            >
-              Your text
-            </div>
-            <div
-              style={{
-                fontSize: "38px",
-                lineHeight: 1.2,
-                color: "#151932",
-                fontFamily: `${BODY_FONT_NAME}, ui-sans-serif, system-ui, sans-serif`,
-              }}
-            >
-              {inputText}
-            </div>
-          </div>
-
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              flex: 1,
-              justifyContent: "space-between",
-              borderRadius: "24px",
-              backgroundColor: "#ffffff",
-              border: "2px solid #ddd6fe",
-              padding: "20px 22px",
-            }}
-          >
-            <div
-              style={{
-                fontSize: "25px",
-                fontWeight: 700,
-                color: "#4338ca",
-                marginBottom: "12px",
-                fontFamily: `${BODY_FONT_NAME}, ui-sans-serif, system-ui, sans-serif`,
-              }}
-            >
-              Translated result
-            </div>
-            <div
-              style={{
-                fontSize: "38px",
-                lineHeight: 1.2,
-                color: "#1d2347",
-                fontFamily: `${BODY_FONT_NAME}, ui-sans-serif, system-ui, sans-serif`,
-              }}
-            >
-              {outputText}
-            </div>
-          </div>
-        </div>
-
-        <div
-          style={{
-            marginTop: "18px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "#4040cb",
-            fontSize: "33px",
-            lineHeight: 1.2,
-            fontWeight: 700,
-            padding: "14px 8px 0",
-            textAlign: "center",
-            fontFamily: `${DISPLAY_FONT_NAME}, "Cormorant Garamond", Georgia, serif`,
-            letterSpacing: "-0.01em",
-            borderTop: "2px solid #d9d6ff",
-          }}
-        >
-          {cta}
+            {snapshot.outputText}
+          </p>
         </div>
       </div>
-    ),
-    {
-      width: IMAGE_WIDTH,
-      height: IMAGE_HEIGHT,
-      fonts,
-      headers: {
-        "Cache-Control": "no-store, max-age=0",
-      },
-    },
+
+      <p
+        style={{
+          margin: "16px 0 0",
+          paddingTop: "12px",
+          borderTop: "2px solid #d9d6ff",
+          color: "#4040cb",
+          textAlign: "center",
+          fontFamily: '"Cormorant Garamond", Georgia, "Times New Roman", serif',
+          fontWeight: 700,
+          fontSize: "33px",
+          lineHeight: 1.2,
+          letterSpacing: "-0.01em",
+        }}
+      >
+        {snapshot.cta}
+      </p>
+    </div>
   );
 }
+
+async function generateResultPinBuffer(snapshot: ResultPinSnapshot) {
+  const imageResponse = new ImageResponse(renderResultPin(snapshot), {
+    width: IMAGE_WIDTH,
+    height: IMAGE_HEIGHT,
+    headers: RESPONSE_HEADERS,
+  });
+
+  return imageResponse.arrayBuffer();
+}
+
+export async function HEAD(request: Request) {
+  const snapshot = parseSnapshot(request.url);
+  try {
+    await generateResultPinBuffer(snapshot);
+    return new Response(null, {
+      status: 200,
+      headers: RESPONSE_HEADERS,
+    });
+  } catch (error) {
+    logError("result_pin_image_generation_failed", "Failed to generate Pinterest result pin preview.", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return NextResponse.json(
+      {
+        ok: false,
+        error: {
+          code: "IMAGE_GENERATION_FAILED",
+          message: "Unable to generate Pinterest result image right now.",
+        },
+      },
+      {
+        status: 500,
+        headers: {
+          "Cache-Control": "no-store, max-age=0",
+        },
+      },
+    );
+  }
+}
+
+export async function GET(request: Request) {
+  const snapshot = parseSnapshot(request.url);
+
+  try {
+    const arrayBuffer = await generateResultPinBuffer(snapshot);
+    return new Response(arrayBuffer, {
+      status: 200,
+      headers: RESPONSE_HEADERS,
+    });
+  } catch (error) {
+    logError("result_pin_image_generation_failed", "Failed to generate Pinterest result pin.", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+
+    return NextResponse.json(
+      {
+        ok: false,
+        error: {
+          code: "IMAGE_GENERATION_FAILED",
+          message: "Unable to generate Pinterest result image right now.",
+        },
+      },
+      {
+        status: 500,
+        headers: {
+          "Cache-Control": "no-store, max-age=0",
+        },
+      },
+    );
+  }
+}
+

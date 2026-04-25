@@ -55,6 +55,7 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
   const [modeKey, setModeKey] = useLocalStorage<string>(`${storagePrefix}:last-mode`, initialMode);
 
   const [isLoading, setIsLoading] = useState(false);
+  const [isPreparingResultPin, setIsPreparingResultPin] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [speechSupported] = useState(
     () => typeof window !== "undefined" && "speechSynthesis" in window,
@@ -203,7 +204,7 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
     window.open(intentUrl.toString(), "_blank", "noopener,noreferrer");
   }
 
-  function handlePinterestResultShare() {
+  async function handlePinterestResultShare() {
     if (typeof window === "undefined" || !outputText.trim()) {
       return;
     }
@@ -228,12 +229,37 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
       RESULT_PIN_DESCRIPTION_MAX,
     );
 
-    const intentUrl = new URL("https://www.pinterest.com/pin/create/button/");
-    intentUrl.searchParams.set("url", pageUrl);
-    intentUrl.searchParams.set("media", mediaUrl.toString());
-    intentUrl.searchParams.set("description", description);
+    setIsPreparingResultPin(true);
+    try {
+      const probe = await fetch(mediaUrl.toString(), {
+        method: "HEAD",
+        cache: "no-store",
+      });
 
-    window.open(intentUrl.toString(), "_blank", "noopener,noreferrer");
+      if (!probe.ok) {
+        throw new Error("Result pin preview generation failed.");
+      }
+
+      const contentType = probe.headers.get("content-type");
+      if (contentType && !contentType.includes("image/png")) {
+        throw new Error("Unexpected content type for generated result pin.");
+      }
+
+      const intentUrl = new URL("https://www.pinterest.com/pin/create/button/");
+      intentUrl.searchParams.set("url", pageUrl);
+      intentUrl.searchParams.set("media", mediaUrl.toString());
+      intentUrl.searchParams.set("description", description);
+
+      window.open(intentUrl.toString(), "_blank", "noopener,noreferrer");
+    } catch {
+      toast({
+        title: "Share unavailable",
+        description: "Unable to generate Pinterest image right now. Please try again.",
+        variant: "error",
+      });
+    } finally {
+      setIsPreparingResultPin(false);
+    }
   }
 
   return (
@@ -382,12 +408,12 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
             </Button>
             <Button
               type="button"
-              onClick={handlePinterestResultShare}
-              disabled={isLoading || !outputText.trim()}
+              onClick={() => void handlePinterestResultShare()}
+              disabled={isLoading || isPreparingResultPin || !outputText.trim()}
               className="bg-[#E60023] text-white hover:bg-[#cc001f] focus-visible:ring-[#E60023]/60 disabled:bg-[#E60023]/65 disabled:text-white"
             >
-              <PinterestIcon className="h-4 w-4" />
-              Share result to Pinterest
+              {isPreparingResultPin ? <Loader2 className="h-4 w-4 animate-spin" /> : <PinterestIcon className="h-4 w-4" />}
+              {isPreparingResultPin ? "Preparing result pin..." : "Share result to Pinterest"}
             </Button>
             <Button
               type="button"
