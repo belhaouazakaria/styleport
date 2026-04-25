@@ -40,12 +40,59 @@ function clampText(value: string | null, maxLength: number) {
 
 function parseSnapshot(requestUrl: string): ResultPinSnapshot {
   const { searchParams } = new URL(requestUrl);
+  const translatorTitle = clampText(searchParams.get("translator"), MAX_TRANSLATOR_LENGTH) || "Style Translator";
+  const ctaFromQuery = clampText(searchParams.get("cta"), MAX_CTA_LENGTH);
+
   return {
-    translatorTitle: clampText(searchParams.get("translator"), MAX_TRANSLATOR_LENGTH) || "Style Translator",
+    translatorTitle,
     inputText: clampText(searchParams.get("input"), MAX_INPUT_LENGTH) || "No source text provided.",
     outputText: clampText(searchParams.get("output"), MAX_OUTPUT_LENGTH) || "No translated result provided.",
-    cta: clampText(searchParams.get("cta"), MAX_CTA_LENGTH) || "Translate your text for free",
+    cta:
+      ctaFromQuery &&
+      ctaFromQuery.toLowerCase() !== "try this translator free" &&
+      ctaFromQuery.toLowerCase() !== "translate your text for free"
+        ? ctaFromQuery
+        : buildDynamicCta(translatorTitle),
   };
+}
+
+function normalizeTranslatorCtaBase(title: string) {
+  return title
+    .replace(/\s+/g, " ")
+    .replace(/\btranslator\b/gi, "")
+    .replace(/[|:]+/g, " ")
+    .trim();
+}
+
+function buildDynamicCta(translatorTitle: string) {
+  const title = translatorTitle.trim();
+  const normalized = title.toLowerCase();
+  const base = normalizeTranslatorCtaBase(title);
+
+  if (/(pirate|captain|sea|ship)/i.test(normalized)) {
+    return clampText("Try the Pirate Translator free", MAX_CTA_LENGTH);
+  }
+  if (/(stone age|caveman|cave)/i.test(normalized)) {
+    return clampText("Turn your text into caveman talk", MAX_CTA_LENGTH);
+  }
+  if (/(professional|linkedin|corporate|business|formal)/i.test(normalized)) {
+    return clampText("Make your message sound professional", MAX_CTA_LENGTH);
+  }
+  if (/(gen z|tiktok|slang|teen)/i.test(normalized)) {
+    return clampText("Rewrite your text in Gen Z style", MAX_CTA_LENGTH);
+  }
+  if (/(romantic|love|poetic|poem|valentine)/i.test(normalized)) {
+    return clampText("Make your words feel more romantic", MAX_CTA_LENGTH);
+  }
+  if (/(funny|joke|comedy|meme)/i.test(normalized)) {
+    return clampText("Make your text funnier in seconds", MAX_CTA_LENGTH);
+  }
+
+  if (base) {
+    return clampText(`Try the ${base} Translator free`, MAX_CTA_LENGTH);
+  }
+
+  return "Translate your text for free";
 }
 
 function renderResultPin(snapshot: ResultPinSnapshot) {
@@ -72,9 +119,9 @@ function renderResultPin(snapshot: ResultPinSnapshot) {
       >
         <div
           style={{
-            width: "46px",
-            height: "46px",
-            borderRadius: "12px",
+            width: "56px",
+            height: "56px",
+            borderRadius: "14px",
             backgroundColor: "#5b5bf6",
             color: "#ffffff",
             display: "flex",
@@ -82,7 +129,7 @@ function renderResultPin(snapshot: ResultPinSnapshot) {
             justifyContent: "center",
             fontFamily: 'Manrope, Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
             fontWeight: 800,
-            fontSize: "21px",
+            fontSize: "24px",
             lineHeight: 1,
           }}
         >
@@ -118,7 +165,7 @@ function renderResultPin(snapshot: ResultPinSnapshot) {
             margin: "0 0 10px",
             color: "#4040cb",
             fontFamily: 'Manrope, Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
-            fontSize: "24px",
+            fontSize: "27px",
             fontWeight: 600,
             lineHeight: 1.1,
           }}
@@ -152,7 +199,7 @@ function renderResultPin(snapshot: ResultPinSnapshot) {
           style={{
             display: "flex",
             flexDirection: "column",
-            justifyContent: "space-between",
+            justifyContent: "flex-start",
             flex: 1,
             borderRadius: "24px",
             backgroundColor: "#ffffff",
@@ -165,7 +212,7 @@ function renderResultPin(snapshot: ResultPinSnapshot) {
               margin: "0 0 10px",
               color: "#3737a6",
               fontFamily: 'Manrope, Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
-              fontSize: "25px",
+              fontSize: "28px",
               fontWeight: 700,
               lineHeight: 1.1,
             }}
@@ -190,7 +237,7 @@ function renderResultPin(snapshot: ResultPinSnapshot) {
           style={{
             display: "flex",
             flexDirection: "column",
-            justifyContent: "space-between",
+            justifyContent: "flex-start",
             flex: 1,
             borderRadius: "24px",
             backgroundColor: "#ffffff",
@@ -203,7 +250,7 @@ function renderResultPin(snapshot: ResultPinSnapshot) {
               margin: "0 0 10px",
               color: "#4338ca",
               fontFamily: 'Manrope, Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
-              fontSize: "25px",
+              fontSize: "28px",
               fontWeight: 700,
               lineHeight: 1.1,
             }}
@@ -228,15 +275,19 @@ function renderResultPin(snapshot: ResultPinSnapshot) {
       <p
         style={{
           margin: "16px 0 0",
-          paddingTop: "12px",
-          borderTop: "2px solid #d9d6ff",
-          color: "#4040cb",
+          paddingTop: "14px",
+          borderTop: "3px solid #b4adff",
+          color: "#332f92",
           textAlign: "center",
           fontFamily: '"Cormorant Garamond", Georgia, "Times New Roman", serif',
           fontWeight: 700,
-          fontSize: "33px",
-          lineHeight: 1.2,
+          fontSize: "39px",
+          lineHeight: 1.12,
           letterSpacing: "-0.01em",
+          textDecorationLine: "underline",
+          textDecorationColor: "#7f73ff",
+          textDecorationThickness: "2px",
+          textUnderlineOffset: "6px",
         }}
       >
         {snapshot.cta}
@@ -316,4 +367,3 @@ export async function GET(request: Request) {
     );
   }
 }
-
