@@ -56,43 +56,38 @@ function parseSnapshot(requestUrl: string): ResultPinSnapshot {
   };
 }
 
-function normalizeTranslatorCtaBase(title: string) {
-  return title
-    .replace(/\s+/g, " ")
-    .replace(/\btranslator\b/gi, "")
-    .replace(/[|:]+/g, " ")
-    .trim();
-}
-
 function buildDynamicCta(translatorTitle: string) {
-  const title = translatorTitle.trim();
-  const normalized = title.toLowerCase();
-  const base = normalizeTranslatorCtaBase(title);
+  const normalized = translatorTitle.toLowerCase();
 
-  if (/(pirate|captain|sea|ship)/i.test(normalized)) {
-    return clampText("Try the Pirate Translator free", MAX_CTA_LENGTH);
+  if (/(pirate|captain|sea|ship|corsair|buccaneer)/i.test(normalized)) {
+    return clampText("Try this translator fer free, matey!", MAX_CTA_LENGTH);
   }
-  if (/(stone age|caveman|cave)/i.test(normalized)) {
-    return clampText("Turn your text into caveman talk", MAX_CTA_LENGTH);
+
+  if (/(stone age|caveman|cave|prehistoric|neanderthal)/i.test(normalized)) {
+    return clampText("Try this talk-maker free, big brain!", MAX_CTA_LENGTH);
   }
-  if (/(professional|linkedin|corporate|business|formal)/i.test(normalized)) {
-    return clampText("Make your message sound professional", MAX_CTA_LENGTH);
+
+  if (/(gen z|tiktok|slang|teen|zoomer)/i.test(normalized)) {
+    return clampText("Try this translator for free, no cap.", MAX_CTA_LENGTH);
   }
-  if (/(gen z|tiktok|slang|teen)/i.test(normalized)) {
-    return clampText("Rewrite your text in Gen Z style", MAX_CTA_LENGTH);
+
+  if (/(professional|linkedin|corporate|business|formal|executive)/i.test(normalized)) {
+    return clampText("Try this translator for free today.", MAX_CTA_LENGTH);
   }
+
+  if (/(shakespeare|old english|elizabethan|bard)/i.test(normalized)) {
+    return clampText("Try this translator freely, good friend.", MAX_CTA_LENGTH);
+  }
+
   if (/(romantic|love|poetic|poem|valentine)/i.test(normalized)) {
-    return clampText("Make your words feel more romantic", MAX_CTA_LENGTH);
+    return clampText("Try this translator for free, my dear.", MAX_CTA_LENGTH);
   }
+
   if (/(funny|joke|comedy|meme)/i.test(normalized)) {
-    return clampText("Make your text funnier in seconds", MAX_CTA_LENGTH);
+    return clampText("Try this translator for free, guaranteed giggles.", MAX_CTA_LENGTH);
   }
 
-  if (base) {
-    return clampText(`Try the ${base} Translator free`, MAX_CTA_LENGTH);
-  }
-
-  return "Translate your text for free";
+  return "Try this translator for free.";
 }
 
 function renderResultPin(snapshot: ResultPinSnapshot) {
@@ -112,16 +107,20 @@ function renderResultPin(snapshot: ResultPinSnapshot) {
       <div
         style={{
           display: "flex",
+          alignItems: "stretch",
           justifyContent: "space-between",
-          alignItems: "center",
+          borderRadius: "24px",
+          backgroundColor: "#ffffff",
+          border: "2px solid #d9d6ff",
+          padding: "14px 16px",
           marginBottom: "18px",
         }}
       >
         <div
           style={{
-            width: "56px",
-            height: "56px",
-            borderRadius: "14px",
+            width: "74px",
+            height: "74px",
+            borderRadius: "18px",
             backgroundColor: "#5b5bf6",
             color: "#ffffff",
             display: "flex",
@@ -129,24 +128,46 @@ function renderResultPin(snapshot: ResultPinSnapshot) {
             justifyContent: "center",
             fontFamily: 'Manrope, Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
             fontWeight: 800,
-            fontSize: "24px",
+            fontSize: "30px",
             lineHeight: 1,
+            marginRight: "14px",
           }}
         >
           WT
         </div>
-        <p
+        <div
           style={{
-            margin: 0,
-            color: "#4040cb",
-            fontFamily: 'Manrope, Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
-            fontWeight: 700,
-            fontSize: "25px",
-            lineHeight: 1.1,
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
+            flex: 1,
           }}
         >
-          {BRAND_NAME}
-        </p>
+          <p
+            style={{
+              margin: 0,
+              color: "#4040cb",
+              fontFamily: 'Manrope, Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
+              fontWeight: 700,
+              fontSize: "28px",
+              lineHeight: 1.05,
+            }}
+          >
+            {BRAND_NAME}
+          </p>
+          <p
+            style={{
+              margin: "6px 0 0",
+              color: "#5f5b9f",
+              fontFamily: 'Manrope, Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
+              fontWeight: 600,
+              fontSize: "20px",
+              lineHeight: 1.1,
+            }}
+          >
+            Share-ready result pin
+          </p>
+        </div>
       </div>
 
       <div
@@ -280,14 +301,10 @@ function renderResultPin(snapshot: ResultPinSnapshot) {
           color: "#332f92",
           textAlign: "center",
           fontFamily: '"Cormorant Garamond", Georgia, "Times New Roman", serif',
-          fontWeight: 700,
-          fontSize: "39px",
+          fontWeight: 800,
+          fontSize: "41px",
           lineHeight: 1.12,
           letterSpacing: "-0.01em",
-          textDecorationLine: "underline",
-          textDecorationColor: "#7f73ff",
-          textDecorationThickness: "2px",
-          textUnderlineOffset: "6px",
         }}
       >
         {snapshot.cta}
