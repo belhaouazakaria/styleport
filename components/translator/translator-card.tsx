@@ -19,6 +19,7 @@ const RESULT_PIN_INPUT_MAX = 220;
 const RESULT_PIN_OUTPUT_MAX = 260;
 const RESULT_PIN_DESCRIPTION_MAX = 180;
 const RESULT_PIN_STYLE_HINT_MAX = 180;
+const RESULT_PIN_PREPARE_TIMEOUT_MS = 15000;
 
 function truncateShareText(value: string, maxLength: number) {
   const normalized = value.replace(/\s+/g, " ").trim();
@@ -57,6 +58,8 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
 
   const [isLoading, setIsLoading] = useState(false);
   const [isPreparingResultPin, setIsPreparingResultPin] = useState(false);
+  const [resultPinUrl, setResultPinUrl] = useState<string | null>(null);
+  const [resultPinError, setResultPinError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [speechSupported] = useState(
     () => typeof window !== "undefined" && "speechSynthesis" in window,
@@ -65,6 +68,7 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
 
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const outputRef = useRef<HTMLTextAreaElement | null>(null);
+  const resultPinRequestVersionRef = useRef(0);
 
   const { toast } = useToast();
 
@@ -87,7 +91,8 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
   );
 
   async function translate() {
-    if (!inputText.trim()) {
+    const sourceText = inputText.trim();
+    if (!sourceText) {
       setError("Please enter some text first.");
       return;
     }
@@ -102,7 +107,7 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          text: inputText,
+          text: sourceText,
           translatorSlug: translator.slug,
           modeKey: translator.showModeSelector ? modeKey : undefined,
         }),
@@ -116,6 +121,11 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
       }
 
       setOutputText(payload.result);
+      void prepareResultPin({
+        sourceText,
+        translatedText: payload.result,
+        announceFailure: false,
+      });
     } catch {
       setError("We couldn't refine that text just now.");
     } finally {
@@ -126,6 +136,8 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
   function handleSwap() {
     setInputText(outputText);
     setOutputText(inputText);
+    setResultPinUrl(null);
+    setResultPinError(null);
     setError(null);
   }
 
@@ -152,6 +164,8 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
   function handleClear() {
     setInputText("");
     setOutputText("");
+    setResultPinUrl(null);
+    setResultPinError(null);
     setError(null);
   }
 
@@ -205,12 +219,7 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
     window.open(intentUrl.toString(), "_blank", "noopener,noreferrer");
   }
 
-  async function handlePinterestResultShare() {
-    if (typeof window === "undefined" || !outputText.trim()) {
-      return;
-    }
-
-    const pageUrl = shareUrl || window.location.href;
+  function buildResultPinMediaUrl(sourceText: string, translatedText: string, version: number) {
     const mediaUrl = new URL("/api/pinterest/result-image", window.location.origin);
 
     mediaUrl.searchParams.set(
@@ -219,52 +228,117 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
     );
     mediaUrl.searchParams.set(
       "input",
-      truncateShareText(inputText || "No source text provided.", RESULT_PIN_INPUT_MAX),
+      truncateShareText(sourceText || "No source text provided.", RESULT_PIN_INPUT_MAX),
     );
-    mediaUrl.searchParams.set("output", truncateShareText(outputText, RESULT_PIN_OUTPUT_MAX));
+    mediaUrl.searchParams.set("output", truncateShareText(translatedText, RESULT_PIN_OUTPUT_MAX));
     mediaUrl.searchParams.set("cta", "Try this translator for free");
-    mediaUrl.searchParams.set("ctaMode", "ai");
     mediaUrl.searchParams.set(
       "styleHint",
-      truncateShareText(translator.shortDescription || translator.title || translator.name, RESULT_PIN_STYLE_HINT_MAX),
+      truncateShareText(
+        translator.shortDescription || translator.title || translator.name,
+        RESULT_PIN_STYLE_HINT_MAX,
+      ),
     );
-    mediaUrl.searchParams.set("v", Date.now().toString());
+    mediaUrl.searchParams.set("v", version.toString());
 
-    const description = truncateShareText(
-      `${translator.name}: ${outputText}`,
-      RESULT_PIN_DESCRIPTION_MAX,
-    );
+    return mediaUrl.toString();
+  }
+
+  function openPinterestIntent(media: string, translatedText: string) {
+    const pageUrl = shareUrl || window.location.href;
+    const description = truncateShareText(`${translator.name}: ${translatedText}`, RESULT_PIN_DESCRIPTION_MAX);
+    const intentUrl = new URL("https://www.pinterest.com/pin/create/button/");
+    intentUrl.searchParams.set("url", pageUrl);
+    intentUrl.searchParams.set("media", media);
+    intentUrl.searchParams.set("description", description);
+
+    window.open(intentUrl.toString(), "_blank", "noopener,noreferrer");
+  }
+
+  async function prepareResultPin(options: {
+    sourceText: string;
+    translatedText: string;
+    announceFailure: boolean;
+  }) {
+    if (typeof window === "undefined" || !options.translatedText.trim()) {
+      return null;
+    }
+
+    const version = Date.now();
+    resultPinRequestVersionRef.current = version;
+    const mediaUrl = buildResultPinMediaUrl(options.sourceText, options.translatedText, version);
 
     setIsPreparingResultPin(true);
+    setResultPinError(null);
+
+    const abortController = new AbortController();
+    const timeout = window.setTimeout(() => abortController.abort(), RESULT_PIN_PREPARE_TIMEOUT_MS);
+
     try {
-      const probe = await fetch(mediaUrl.toString(), {
-        method: "HEAD",
+      const response = await fetch(mediaUrl, {
+        method: "GET",
         cache: "no-store",
+        signal: abortController.signal,
       });
 
-      if (!probe.ok) {
-        throw new Error("Result pin preview generation failed.");
+      if (!response.ok) {
+        throw new Error(`Result pin generation failed (${response.status}).`);
       }
 
-      const contentType = probe.headers.get("content-type");
+      const contentType = response.headers.get("content-type");
       if (contentType && !contentType.includes("image/png")) {
         throw new Error("Unexpected content type for generated result pin.");
       }
 
-      const intentUrl = new URL("https://www.pinterest.com/pin/create/button/");
-      intentUrl.searchParams.set("url", pageUrl);
-      intentUrl.searchParams.set("media", mediaUrl.toString());
-      intentUrl.searchParams.set("description", description);
+      if (resultPinRequestVersionRef.current !== version) {
+        return null;
+      }
 
-      window.open(intentUrl.toString(), "_blank", "noopener,noreferrer");
+      setResultPinUrl(mediaUrl);
+      setResultPinError(null);
+      return mediaUrl;
     } catch {
-      toast({
-        title: "Share unavailable",
-        description: "Unable to generate Pinterest image right now. Please try again.",
-        variant: "error",
-      });
+      if (resultPinRequestVersionRef.current === version) {
+        setResultPinUrl(null);
+        setResultPinError("Unable to prepare Pinterest image right now.");
+      }
+      if (options.announceFailure) {
+        toast({
+          title: "Share unavailable",
+          description: "Unable to generate Pinterest image right now. Please try again.",
+          variant: "error",
+        });
+      }
+      return null;
     } finally {
-      setIsPreparingResultPin(false);
+      window.clearTimeout(timeout);
+      if (resultPinRequestVersionRef.current === version) {
+        setIsPreparingResultPin(false);
+      }
+    }
+  }
+
+  async function handlePinterestResultShare() {
+    if (typeof window === "undefined" || !outputText.trim()) {
+      return;
+    }
+
+    if (isPreparingResultPin) {
+      return;
+    }
+
+    if (resultPinUrl) {
+      openPinterestIntent(resultPinUrl, outputText);
+      return;
+    }
+
+    const prepared = await prepareResultPin({
+      sourceText: inputText || "No source text provided.",
+      translatedText: outputText,
+      announceFailure: true,
+    });
+    if (prepared) {
+      openPinterestIntent(prepared, outputText);
     }
   }
 
@@ -415,11 +489,15 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
             <Button
               type="button"
               onClick={() => void handlePinterestResultShare()}
-              disabled={isLoading || isPreparingResultPin || !outputText.trim()}
+              disabled={isLoading || !outputText.trim() || isPreparingResultPin}
               className="bg-[#E60023] text-white hover:bg-[#cc001f] focus-visible:ring-[#E60023]/60 disabled:bg-[#E60023]/65 disabled:text-white"
             >
               {isPreparingResultPin ? <Loader2 className="h-4 w-4 animate-spin" /> : <PinterestIcon className="h-4 w-4" />}
-              {isPreparingResultPin ? "Preparing result pin..." : "Share result to Pinterest"}
+              {isPreparingResultPin
+                ? "Preparing Pinterest image..."
+                : resultPinError
+                  ? "Retry result Pinterest image"
+                  : "Share result to Pinterest"}
             </Button>
             <Button
               type="button"
@@ -448,6 +526,7 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
           </div>
 
           {error ? <p className="text-sm text-red-600">{error}</p> : null}
+          {!error && resultPinError ? <p className="text-xs text-muted-ink">{resultPinError}</p> : null}
         </div>
       </Card>
 

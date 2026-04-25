@@ -26,18 +26,6 @@ export async function GET(_request: Request, { params }: RouteProps) {
     });
   }
 
-  if (snapshot.shareImagePath) {
-    const existingTarget = getShareImageAbsoluteUrl(snapshot.shareImagePath);
-    if (existingTarget) {
-      return NextResponse.redirect(existingTarget, {
-        status: 307,
-        headers: {
-          "Cache-Control": "public, max-age=3600, stale-while-revalidate=86400",
-        },
-      });
-    }
-  }
-
   const ensured = await ensureTranslatorShareImageById(snapshot.id);
 
   if (!ensured?.shareImagePath) {

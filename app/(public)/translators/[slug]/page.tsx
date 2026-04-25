@@ -14,7 +14,6 @@ import { TranslatorComments } from "@/components/public/translator-comments";
 import { getRenderableAdPlacements } from "@/lib/data/ads";
 import { getPublicTranslatorBySlug, getRelatedPublicTranslators } from "@/lib/data/translators";
 import { getAppBaseUrl } from "@/lib/env";
-import { getShareImageAbsoluteUrl } from "@/lib/share-images";
 import { getAppSettings } from "@/lib/settings";
 
 interface PageProps {
@@ -37,7 +36,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   const description = translator.seoDescription || translator.shortDescription;
   const title = translator.seoTitle || `${translator.name} Translator`;
-  const imageUrl = translator.shareImagePath || `/translators/${translator.slug}/pin-image`;
+  const imageUrl = `/translators/${translator.slug}/pin-image`;
 
   return {
     title,
@@ -88,9 +87,7 @@ export default async function TranslatorSlugPage({ params }: PageProps) {
   ]);
   const baseUrl = getAppBaseUrl();
   const shareUrl = new URL(`/translators/${translator.slug}`, baseUrl).toString();
-  const pinImageUrl =
-    getShareImageAbsoluteUrl(translator.shareImagePath) ||
-    new URL(`/translators/${translator.slug}/pin-image`, baseUrl).toString();
+  const pinImageUrl = new URL(`/translators/${translator.slug}/pin-image`, baseUrl).toString();
 
   return (
     <div className="relative overflow-x-hidden">
