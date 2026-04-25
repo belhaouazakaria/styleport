@@ -18,8 +18,13 @@ const RESULT_PIN_TRANSLATOR_MAX = 96;
 const RESULT_PIN_INPUT_MAX = 220;
 const RESULT_PIN_OUTPUT_MAX = 260;
 const RESULT_PIN_DESCRIPTION_MAX = 180;
-const RESULT_PIN_STYLE_HINT_MAX = 180;
-const RESULT_PIN_PREPARE_TIMEOUT_MS = 15000;
+const RESULT_PIN_WIDTH = 1000;
+const RESULT_PIN_HEIGHT = 1500;
+const RESULT_PIN_MAX_TEXT_LINES = 7;
+const RESULT_PIN_MAX_TEXT_CHARS = 320;
+const RESULT_PIN_MAX_TITLE_LINES = 3;
+const RESULT_PIN_MAX_TITLE_CHARS = 96;
+const RESULT_PIN_MAX_CTA_CHARS = 82;
 
 function truncateShareText(value: string, maxLength: number) {
   const normalized = value.replace(/\s+/g, " ").trim();
@@ -32,6 +37,303 @@ function truncateShareText(value: string, maxLength: number) {
   }
 
   return `${normalized.slice(0, maxLength - 1).trimEnd()}…`;
+}
+
+function normalizeText(value: string) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function buildResultPinCta(translator: PublicTranslator) {
+  const context = `${translator.name} ${translator.title || ""} ${translator.shortDescription || ""}`.toLowerCase();
+
+  if (/(pirate|captain|sea|ship|corsair|buccaneer)/i.test(context)) {
+    return "Try this translator fer free, matey!";
+  }
+  if (/(stone age|caveman|prehistoric|neanderthal)/i.test(context)) {
+    return "Try this talk-maker free, big brain!";
+  }
+  if (/(gen z|slang|zoomer|tiktok|vibe|no cap)/i.test(context)) {
+    return "Try this translator for free, no cap.";
+  }
+  if (/(professional|linkedin|business|formal|corporate|executive)/i.test(context)) {
+    return "Try this translator for free today.";
+  }
+  if (/(shakespeare|old english|elizabethan|bard)/i.test(context)) {
+    return "Try this translator freely, good friend.";
+  }
+  if (/(romantic|love|poetic|valentine)/i.test(context)) {
+    return "Try this translator for free, my dear.";
+  }
+  return "Try this translator for free.";
+}
+
+function drawRoundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number) {
+  const r = Math.min(radius, width / 2, height / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + width - r, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+  ctx.lineTo(x + width, y + height - r);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+  ctx.lineTo(x + r, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function fitLineWithEllipsis(ctx: CanvasRenderingContext2D, text: string, maxWidth: number) {
+  if (!text) {
+    return "";
+  }
+  if (ctx.measureText(text).width <= maxWidth) {
+    return text;
+  }
+
+  let output = text;
+  while (output.length > 1 && ctx.measureText(`${output}…`).width > maxWidth) {
+    output = output.slice(0, -1).trimEnd();
+  }
+  return `${output}…`;
+}
+
+function wrapTextByWidth(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxWidth: number,
+  maxLines: number,
+) {
+  const normalized = normalizeText(text);
+  if (!normalized) {
+    return [];
+  }
+
+  const words = normalized.split(" ");
+  const lines: string[] = [];
+  let current = "";
+
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word;
+    if (ctx.measureText(candidate).width <= maxWidth) {
+      current = candidate;
+      continue;
+    }
+
+    if (current) {
+      lines.push(current);
+    }
+
+    if (ctx.measureText(word).width <= maxWidth) {
+      current = word;
+      continue;
+    }
+
+    let chunk = "";
+    for (const char of word) {
+      const chunkCandidate = `${chunk}${char}`;
+      if (ctx.measureText(chunkCandidate).width <= maxWidth) {
+        chunk = chunkCandidate;
+      } else {
+        if (chunk) {
+          lines.push(chunk);
+        }
+        chunk = char;
+      }
+    }
+    current = chunk;
+  }
+
+  if (current) {
+    lines.push(current);
+  }
+
+  if (lines.length <= maxLines) {
+    return lines;
+  }
+
+  const trimmed = lines.slice(0, maxLines);
+  trimmed[maxLines - 1] = fitLineWithEllipsis(ctx, trimmed[maxLines - 1], maxWidth);
+  return trimmed;
+}
+
+async function canvasToPngBlob(canvas: HTMLCanvasElement) {
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        reject(new Error("Canvas blob generation failed."));
+        return;
+      }
+      resolve(blob);
+    }, "image/png");
+  });
+}
+
+async function buildResultPinBlob(params: {
+  translatorTitle: string;
+  inputText: string;
+  outputText: string;
+  cta: string;
+}) {
+  const canvas = document.createElement("canvas");
+  canvas.width = RESULT_PIN_WIDTH;
+  canvas.height = RESULT_PIN_HEIGHT;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    throw new Error("Canvas context unavailable.");
+  }
+
+  const bgColor = "#f2eeff";
+  const surface = "#ffffff";
+  const resultSurface = "#ece8ff";
+  const border = "#d6d0ff";
+  const resultBorder = "#bdb4ff";
+  const brand = "#3d37be";
+  const ink = "#17193a";
+  const muted = "#5f58a4";
+
+  const pad = 44;
+  const gap = 14;
+  const headerHeight = 170;
+  const titleHeight = 246;
+  const footerHeight = 128;
+  const contentHeight =
+    RESULT_PIN_HEIGHT - pad * 2 - headerHeight - titleHeight - footerHeight - gap * 2;
+  const inputBoxHeight = Math.floor(contentHeight * 0.43);
+  const outputBoxHeight = contentHeight - inputBoxHeight - gap;
+  const boxWidth = RESULT_PIN_WIDTH - pad * 2;
+
+  ctx.fillStyle = bgColor;
+  ctx.fillRect(0, 0, RESULT_PIN_WIDTH, RESULT_PIN_HEIGHT);
+
+  let y = pad;
+
+  drawRoundedRect(ctx, pad, y, boxWidth, headerHeight, 30);
+  ctx.fillStyle = surface;
+  ctx.fill();
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = border;
+  ctx.stroke();
+
+  const logoSize = 108;
+  const logoX = pad + 22;
+  const logoY = y + 30;
+  drawRoundedRect(ctx, logoX, logoY, logoSize, logoSize, 24);
+  ctx.fillStyle = "#4e46d6";
+  ctx.fill();
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = '800 46px Inter, "Segoe UI", Arial, sans-serif';
+  ctx.textBaseline = "middle";
+  ctx.fillText("WT", logoX + 20, logoY + logoSize / 2 + 2);
+
+  ctx.fillStyle = brand;
+  ctx.font = '800 34px Inter, "Segoe UI", Arial, sans-serif';
+  ctx.textBaseline = "top";
+  ctx.fillText("What Type Of | Translator", logoX + logoSize + 18, y + 40);
+  ctx.fillStyle = muted;
+  ctx.font = '600 22px Inter, "Segoe UI", Arial, sans-serif';
+  ctx.fillText("Text transformed in one tap", logoX + logoSize + 18, y + 86);
+
+  y += headerHeight + gap;
+
+  drawRoundedRect(ctx, pad, y, boxWidth, titleHeight, 30);
+  ctx.fillStyle = surface;
+  ctx.fill();
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = border;
+  ctx.stroke();
+
+  ctx.fillStyle = "#4d44bf";
+  ctx.font = '700 28px Inter, "Segoe UI", Arial, sans-serif';
+  ctx.textBaseline = "top";
+  ctx.fillText("Translator", pad + 22, y + 22);
+
+  const titleText = truncateShareText(params.translatorTitle, RESULT_PIN_MAX_TITLE_CHARS);
+  ctx.fillStyle = ink;
+  ctx.font = '700 74px "Times New Roman", Georgia, serif';
+  const titleLines = wrapTextByWidth(ctx, titleText, boxWidth - 44, RESULT_PIN_MAX_TITLE_LINES);
+  let titleY = y + 66;
+  for (const line of titleLines) {
+    ctx.fillText(line, pad + 22, titleY);
+    titleY += 74;
+  }
+
+  y += titleHeight + gap;
+
+  drawRoundedRect(ctx, pad, y, boxWidth, inputBoxHeight, 24);
+  ctx.fillStyle = surface;
+  ctx.fill();
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = border;
+  ctx.stroke();
+
+  ctx.fillStyle = "#4440aa";
+  ctx.font = '700 31px Inter, "Segoe UI", Arial, sans-serif';
+  ctx.fillText("Your text", pad + 22, y + 18);
+
+  ctx.fillStyle = ink;
+  ctx.font = '500 34px Inter, "Segoe UI", Arial, sans-serif';
+  const inputLines = wrapTextByWidth(
+    ctx,
+    truncateShareText(params.inputText, RESULT_PIN_MAX_TEXT_CHARS),
+    boxWidth - 44,
+    RESULT_PIN_MAX_TEXT_LINES,
+  );
+  let inputY = y + 66;
+  for (const line of inputLines) {
+    ctx.fillText(line, pad + 22, inputY);
+    inputY += 44;
+    if (inputY > y + inputBoxHeight - 16) {
+      break;
+    }
+  }
+
+  y += inputBoxHeight + gap;
+
+  drawRoundedRect(ctx, pad, y, boxWidth, outputBoxHeight, 24);
+  ctx.fillStyle = resultSurface;
+  ctx.fill();
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = resultBorder;
+  ctx.stroke();
+
+  ctx.fillStyle = "#3327ab";
+  ctx.font = '800 32px Inter, "Segoe UI", Arial, sans-serif';
+  ctx.fillText("Translated result", pad + 22, y + 20);
+
+  ctx.fillStyle = "#1a1e42";
+  ctx.font = '700 43px Inter, "Segoe UI", Arial, sans-serif';
+  const outputLines = wrapTextByWidth(
+    ctx,
+    truncateShareText(params.outputText, RESULT_PIN_MAX_TEXT_CHARS),
+    boxWidth - 44,
+    RESULT_PIN_MAX_TEXT_LINES,
+  );
+  let outputY = y + 74;
+  for (const line of outputLines) {
+    ctx.fillText(line, pad + 22, outputY);
+    outputY += 52;
+    if (outputY > y + outputBoxHeight - 16) {
+      break;
+    }
+  }
+
+  const ctaY = RESULT_PIN_HEIGHT - pad - footerHeight + 8;
+  ctx.strokeStyle = "#a79ff6";
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(pad, ctaY);
+  ctx.lineTo(RESULT_PIN_WIDTH - pad, ctaY);
+  ctx.stroke();
+
+  const ctaText = truncateShareText(params.cta, RESULT_PIN_MAX_CTA_CHARS);
+  ctx.fillStyle = "#27227b";
+  ctx.font = '800 50px "Times New Roman", Georgia, serif';
+  ctx.textAlign = "center";
+  ctx.fillText(ctaText, RESULT_PIN_WIDTH / 2, ctaY + 30);
+  ctx.textAlign = "left";
+
+  return canvasToPngBlob(canvas);
 }
 
 interface TranslatorCardProps {
@@ -59,6 +361,7 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
   const [isLoading, setIsLoading] = useState(false);
   const [isPreparingResultPin, setIsPreparingResultPin] = useState(false);
   const [resultPinUrl, setResultPinUrl] = useState<string | null>(null);
+  const [resultPinBlob, setResultPinBlob] = useState<Blob | null>(null);
   const [resultPinError, setResultPinError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [speechSupported] = useState(
@@ -68,7 +371,7 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
 
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const outputRef = useRef<HTMLTextAreaElement | null>(null);
-  const resultPinRequestVersionRef = useRef(0);
+  const resultPinRequestIdRef = useRef(0);
 
   const { toast } = useToast();
 
@@ -86,9 +389,21 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
       if (typeof window !== "undefined") {
         window.speechSynthesis?.cancel();
       }
+      if (resultPinUrl) {
+        URL.revokeObjectURL(resultPinUrl);
+      }
     },
-    [],
+    [resultPinUrl],
   );
+
+  function clearPreparedResultPin() {
+    if (resultPinUrl) {
+      URL.revokeObjectURL(resultPinUrl);
+    }
+    setResultPinUrl(null);
+    setResultPinBlob(null);
+    setResultPinError(null);
+  }
 
   async function translate() {
     const sourceText = inputText.trim();
@@ -136,8 +451,7 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
   function handleSwap() {
     setInputText(outputText);
     setOutputText(inputText);
-    setResultPinUrl(null);
-    setResultPinError(null);
+    clearPreparedResultPin();
     setError(null);
   }
 
@@ -164,8 +478,7 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
   function handleClear() {
     setInputText("");
     setOutputText("");
-    setResultPinUrl(null);
-    setResultPinError(null);
+    clearPreparedResultPin();
     setError(null);
   }
 
@@ -219,40 +532,28 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
     window.open(intentUrl.toString(), "_blank", "noopener,noreferrer");
   }
 
-  function buildResultPinMediaUrl(sourceText: string, translatedText: string, version: number) {
-    const mediaUrl = new URL("/api/pinterest/result-image", window.location.origin);
-
-    mediaUrl.searchParams.set(
-      "translator",
-      truncateShareText(translator.title || translator.name, RESULT_PIN_TRANSLATOR_MAX),
-    );
-    mediaUrl.searchParams.set(
-      "input",
-      truncateShareText(sourceText || "No source text provided.", RESULT_PIN_INPUT_MAX),
-    );
-    mediaUrl.searchParams.set("output", truncateShareText(translatedText, RESULT_PIN_OUTPUT_MAX));
-    mediaUrl.searchParams.set("cta", "Try this translator for free");
-    mediaUrl.searchParams.set(
-      "styleHint",
-      truncateShareText(
-        translator.shortDescription || translator.title || translator.name,
-        RESULT_PIN_STYLE_HINT_MAX,
-      ),
-    );
-    mediaUrl.searchParams.set("v", version.toString());
-
-    return mediaUrl.toString();
-  }
-
-  function openPinterestIntent(media: string, translatedText: string) {
+  function openPinterestIntent(translatedText: string) {
     const pageUrl = shareUrl || window.location.href;
     const description = truncateShareText(`${translator.name}: ${translatedText}`, RESULT_PIN_DESCRIPTION_MAX);
     const intentUrl = new URL("https://www.pinterest.com/pin/create/button/");
     intentUrl.searchParams.set("url", pageUrl);
-    intentUrl.searchParams.set("media", media);
     intentUrl.searchParams.set("description", description);
 
     window.open(intentUrl.toString(), "_blank", "noopener,noreferrer");
+  }
+
+  function downloadPreparedResultPin() {
+    if (typeof window === "undefined" || !resultPinUrl) {
+      return;
+    }
+
+    const link = document.createElement("a");
+    link.href = resultPinUrl;
+    link.download = `${translator.slug}-result-pin.png`;
+    link.rel = "noopener";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
   }
 
   async function prepareResultPin(options: {
@@ -264,41 +565,37 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
       return null;
     }
 
-    const version = Date.now();
-    resultPinRequestVersionRef.current = version;
-    const mediaUrl = buildResultPinMediaUrl(options.sourceText, options.translatedText, version);
+    const requestId = resultPinRequestIdRef.current + 1;
+    resultPinRequestIdRef.current = requestId;
 
     setIsPreparingResultPin(true);
     setResultPinError(null);
 
-    const abortController = new AbortController();
-    const timeout = window.setTimeout(() => abortController.abort(), RESULT_PIN_PREPARE_TIMEOUT_MS);
-
     try {
-      const response = await fetch(mediaUrl, {
-        method: "GET",
-        cache: "no-store",
-        signal: abortController.signal,
+      const blob = await buildResultPinBlob({
+        translatorTitle: truncateShareText(translator.title || translator.name, RESULT_PIN_TRANSLATOR_MAX),
+        inputText: truncateShareText(options.sourceText || "No source text provided.", RESULT_PIN_INPUT_MAX),
+        outputText: truncateShareText(options.translatedText, RESULT_PIN_OUTPUT_MAX),
+        cta: buildResultPinCta(translator),
       });
-
-      if (!response.ok) {
-        throw new Error(`Result pin generation failed (${response.status}).`);
-      }
-
-      const contentType = response.headers.get("content-type");
-      if (contentType && !contentType.includes("image/png")) {
-        throw new Error("Unexpected content type for generated result pin.");
-      }
-
-      if (resultPinRequestVersionRef.current !== version) {
+      const objectUrl = URL.createObjectURL(blob);
+      if (resultPinRequestIdRef.current !== requestId) {
+        URL.revokeObjectURL(objectUrl);
         return null;
       }
-
-      setResultPinUrl(mediaUrl);
+      if (resultPinUrl) {
+        URL.revokeObjectURL(resultPinUrl);
+      }
+      setResultPinBlob(blob);
+      setResultPinUrl(objectUrl);
       setResultPinError(null);
-      return mediaUrl;
+      return objectUrl;
     } catch {
-      if (resultPinRequestVersionRef.current === version) {
+      if (resultPinRequestIdRef.current === requestId) {
+        if (resultPinUrl) {
+          URL.revokeObjectURL(resultPinUrl);
+        }
+        setResultPinBlob(null);
         setResultPinUrl(null);
         setResultPinError("Unable to prepare Pinterest image right now.");
       }
@@ -311,8 +608,7 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
       }
       return null;
     } finally {
-      window.clearTimeout(timeout);
-      if (resultPinRequestVersionRef.current === version) {
+      if (resultPinRequestIdRef.current === requestId) {
         setIsPreparingResultPin(false);
       }
     }
@@ -327,8 +623,13 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
       return;
     }
 
-    if (resultPinUrl) {
-      openPinterestIntent(resultPinUrl, outputText);
+    if (resultPinUrl && resultPinBlob) {
+      downloadPreparedResultPin();
+      openPinterestIntent(outputText);
+      toast({
+        title: "Pinterest image ready",
+        description: "Pin image downloaded. Pinterest opened; upload that image to complete your post.",
+      });
       return;
     }
 
@@ -338,7 +639,12 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
       announceFailure: true,
     });
     if (prepared) {
-      openPinterestIntent(prepared, outputText);
+      downloadPreparedResultPin();
+      openPinterestIntent(outputText);
+      toast({
+        title: "Pinterest image ready",
+        description: "Pin image downloaded. Pinterest opened; upload that image to complete your post.",
+      });
     }
   }
 
@@ -527,6 +833,9 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
 
           {error ? <p className="text-sm text-red-600">{error}</p> : null}
           {!error && resultPinError ? <p className="text-xs text-muted-ink">{resultPinError}</p> : null}
+          {!error && !resultPinError && resultPinUrl ? (
+            <p className="text-xs text-muted-ink">Result pin image is ready to share.</p>
+          ) : null}
         </div>
       </Card>
 
