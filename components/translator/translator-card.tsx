@@ -18,6 +18,7 @@ const RESULT_PIN_TRANSLATOR_MAX = 96;
 const RESULT_PIN_INPUT_MAX = 220;
 const RESULT_PIN_OUTPUT_MAX = 260;
 const RESULT_PIN_DESCRIPTION_MAX = 180;
+const RESULT_PIN_STYLE_HINT_MAX = 180;
 
 function truncateShareText(value: string, maxLength: number) {
   const normalized = value.replace(/\s+/g, " ").trim();
@@ -221,7 +222,12 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
       truncateShareText(inputText || "No source text provided.", RESULT_PIN_INPUT_MAX),
     );
     mediaUrl.searchParams.set("output", truncateShareText(outputText, RESULT_PIN_OUTPUT_MAX));
-    mediaUrl.searchParams.set("cta", "Try this translator free");
+    mediaUrl.searchParams.set("cta", "Try this translator for free");
+    mediaUrl.searchParams.set("ctaMode", "ai");
+    mediaUrl.searchParams.set(
+      "styleHint",
+      truncateShareText(translator.shortDescription || translator.title || translator.name, RESULT_PIN_STYLE_HINT_MAX),
+    );
     mediaUrl.searchParams.set("v", Date.now().toString());
 
     const description = truncateShareText(
