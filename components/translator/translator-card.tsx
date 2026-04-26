@@ -20,11 +20,11 @@ const RESULT_PIN_OUTPUT_MAX = 260;
 const RESULT_PIN_DESCRIPTION_MAX = 180;
 const RESULT_PIN_WIDTH = 1000;
 const RESULT_PIN_HEIGHT = 1500;
-const RESULT_PIN_MAX_TEXT_LINES = 7;
-const RESULT_PIN_MAX_TEXT_CHARS = 320;
-const RESULT_PIN_MAX_TITLE_LINES = 3;
-const RESULT_PIN_MAX_TITLE_CHARS = 96;
-const RESULT_PIN_MAX_CTA_CHARS = 82;
+const RESULT_PIN_MAX_TEXT_LINES = 4;
+const RESULT_PIN_MAX_TEXT_CHARS = 260;
+const RESULT_PIN_MAX_TITLE_LINES = 2;
+const RESULT_PIN_MAX_TITLE_CHARS = 72;
+const RESULT_PIN_MAX_CTA_CHARS = 60;
 const RESULT_PIN_MAX_UPLOAD_BYTES = 3 * 1024 * 1024;
 
 function truncateShareText(value: string, maxLength: number) {
@@ -48,22 +48,25 @@ function buildResultPinCta(translator: PublicTranslator) {
   const context = `${translator.name} ${translator.title || ""} ${translator.shortDescription || ""}`.toLowerCase();
 
   if (/(pirate|captain|sea|ship|corsair|buccaneer)/i.test(context)) {
-    return "Try this translator fer free, matey!";
+    return "Translate yer text fer free, matey!";
   }
   if (/(stone age|caveman|prehistoric|neanderthal)/i.test(context)) {
-    return "Try this talk-maker free, big brain!";
+    return "Make cave talk for free.";
   }
   if (/(gen z|slang|zoomer|tiktok|vibe|no cap)/i.test(context)) {
-    return "Try this translator for free, no cap.";
+    return "Try it free, bestie.";
   }
   if (/(professional|linkedin|business|formal|corporate|executive)/i.test(context)) {
-    return "Try this translator for free today.";
+    return "Make it professional for free.";
   }
   if (/(shakespeare|old english|elizabethan|bard)/i.test(context)) {
     return "Try this translator freely, good friend.";
   }
   if (/(romantic|love|poetic|valentine)/i.test(context)) {
-    return "Try this translator for free, my dear.";
+    return "Make your words romantic for free.";
+  }
+  if (/(comic|funny|joke|humor|comedy|meme)/i.test(context)) {
+    return "Make your message funnier for free.";
   }
   return "Try this translator for free.";
 }
@@ -197,7 +200,7 @@ async function buildResultPinBlob(params: {
 
   const logoSize = 108;
   const logoX = RESULT_PIN_WIDTH / 2 - logoSize / 2;
-  const logoY = 118;
+  const logoY = 112;
   drawRoundedRect(ctx, logoX, logoY, logoSize, logoSize, 28);
   const logoGradient = ctx.createLinearGradient(logoX, logoY, logoX + logoSize, logoY + logoSize);
   logoGradient.addColorStop(0, "#6b66ff");
@@ -213,22 +216,34 @@ async function buildResultPinBlob(params: {
 
   ctx.fillStyle = softText;
   ctx.textBaseline = "top";
-  ctx.font = '700 56px Inter, "Segoe UI", Arial, sans-serif';
+  ctx.font = '700 50px Inter, "Segoe UI", Arial, sans-serif';
   ctx.fillText("What Type Of", RESULT_PIN_WIDTH / 2, logoY + logoSize + 30);
 
   const title = truncateShareText(params.translatorTitle, RESULT_PIN_MAX_TITLE_CHARS);
-  ctx.font = '800 106px Inter, "Segoe UI", Arial, sans-serif';
+  let titleFontSize = 84;
+  if (title.length > 26) {
+    titleFontSize = 76;
+  }
+  if (title.length > 38) {
+    titleFontSize = 68;
+  }
+  if (title.length > 52) {
+    titleFontSize = 62;
+  }
+  ctx.font = `800 ${titleFontSize}px Inter, "Segoe UI", Arial, sans-serif`;
   const titleLines = wrapTextByWidth(ctx, title, RESULT_PIN_WIDTH - 140, RESULT_PIN_MAX_TITLE_LINES);
-  let titleY = 338;
+  const titleLineHeight = Math.round(titleFontSize * 1.08);
+  let titleY = 342;
   for (const line of titleLines) {
     ctx.fillText(line, RESULT_PIN_WIDTH / 2, titleY);
-    titleY += 106;
+    titleY += titleLineHeight;
   }
+  const titleBottom = titleY;
 
   const cardX = 92;
-  const cardY = 500;
+  const cardY = Math.min(530, Math.max(468, titleBottom + 26));
   const cardWidth = RESULT_PIN_WIDTH - cardX * 2;
-  const cardHeight = 810;
+  const cardHeight = 760;
   drawRoundedRect(ctx, cardX, cardY, cardWidth, cardHeight, 58);
   ctx.fillStyle = whiteGlass;
   ctx.fill();
@@ -252,11 +267,11 @@ async function buildResultPinBlob(params: {
 
   ctx.textAlign = "left";
   ctx.fillStyle = darkText;
-  ctx.font = '700 52px Inter, "Segoe UI", Arial, sans-serif';
+  ctx.font = '700 48px Inter, "Segoe UI", Arial, sans-serif';
   ctx.fillText("Your text", innerX, cardY + 52);
 
   const inputBoxY = cardY + 118;
-  const inputBoxH = 238;
+  const inputBoxH = 206;
   drawRoundedRect(ctx, innerX - 2, inputBoxY, innerWidth + 4, inputBoxH, 34);
   ctx.fillStyle = "rgba(255,255,255,0.22)";
   ctx.fill();
@@ -265,7 +280,7 @@ async function buildResultPinBlob(params: {
   ctx.stroke();
 
   ctx.fillStyle = darkText;
-  ctx.font = '500 46px Inter, "Segoe UI", Arial, sans-serif';
+  ctx.font = '500 38px Inter, "Segoe UI", Arial, sans-serif';
   const inputLines = wrapTextByWidth(
     ctx,
     truncateShareText(params.inputText, RESULT_PIN_MAX_TEXT_CHARS),
@@ -275,7 +290,7 @@ async function buildResultPinBlob(params: {
   let inputTextY = inputBoxY + 34;
   for (const line of inputLines) {
     ctx.fillText(line, innerX + 20, inputTextY);
-    inputTextY += 52;
+    inputTextY += 46;
     if (inputTextY > inputBoxY + inputBoxH - 22) {
       break;
     }
@@ -283,16 +298,16 @@ async function buildResultPinBlob(params: {
 
   ctx.textAlign = "center";
   ctx.fillStyle = "rgba(255,255,255,0.55)";
-  ctx.font = '500 64px Inter, "Segoe UI", Arial, sans-serif';
-  ctx.fillText("↓", RESULT_PIN_WIDTH / 2, inputBoxY + inputBoxH + 62);
+  ctx.font = '500 54px Inter, "Segoe UI", Arial, sans-serif';
+  ctx.fillText("↓", RESULT_PIN_WIDTH / 2, inputBoxY + inputBoxH + 58);
 
   ctx.textAlign = "left";
   ctx.fillStyle = darkText;
-  ctx.font = '700 52px Inter, "Segoe UI", Arial, sans-serif';
-  ctx.fillText("Translated result", innerX, inputBoxY + inputBoxH + 114);
+  ctx.font = '700 48px Inter, "Segoe UI", Arial, sans-serif';
+  ctx.fillText("Translated result", innerX, inputBoxY + inputBoxH + 104);
 
-  const outputBoxY = inputBoxY + inputBoxH + 180;
-  const outputBoxH = 262;
+  const outputBoxY = inputBoxY + inputBoxH + 166;
+  const outputBoxH = 242;
   drawRoundedRect(ctx, innerX - 2, outputBoxY, innerWidth + 4, outputBoxH, 34);
   ctx.fillStyle = "rgba(255,255,255,0.24)";
   ctx.fill();
@@ -312,7 +327,7 @@ async function buildResultPinBlob(params: {
   ctx.shadowOffsetY = 0;
 
   ctx.fillStyle = darkText;
-  ctx.font = '600 48px Inter, "Segoe UI", Arial, sans-serif';
+  ctx.font = '600 40px Inter, "Segoe UI", Arial, sans-serif';
   const outputLines = wrapTextByWidth(
     ctx,
     truncateShareText(params.outputText, RESULT_PIN_MAX_TEXT_CHARS),
@@ -322,16 +337,16 @@ async function buildResultPinBlob(params: {
   let outputTextY = outputBoxY + 36;
   for (const line of outputLines) {
     ctx.fillText(line, innerX + 20, outputTextY);
-    outputTextY += 54;
+    outputTextY += 50;
     if (outputTextY > outputBoxY + outputBoxH - 22) {
       break;
     }
   }
 
   const ctaWidth = 560;
-  const ctaHeight = 126;
+  const ctaHeight = 120;
   const ctaX = RESULT_PIN_WIDTH / 2 - ctaWidth / 2;
-  const ctaY = cardY + cardHeight + 58;
+  const ctaY = cardY + cardHeight + 46;
   drawRoundedRect(ctx, ctaX, ctaY, ctaWidth, ctaHeight, 30);
   const ctaGradient = ctx.createLinearGradient(ctaX, ctaY, ctaX + ctaWidth, ctaY + ctaHeight);
   ctaGradient.addColorStop(0, "#5f56ff");
@@ -354,11 +369,20 @@ async function buildResultPinBlob(params: {
   ctx.shadowOffsetY = 0;
 
   const ctaText = truncateShareText(params.cta, RESULT_PIN_MAX_CTA_CHARS);
+  let ctaFontSize = 58;
+  const ctaMaxWidth = ctaWidth - 64;
+  while (ctaFontSize > 38) {
+    ctx.font = `800 ${ctaFontSize}px Inter, "Segoe UI", Arial, sans-serif`;
+    if (ctx.measureText(ctaText).width <= ctaMaxWidth) {
+      break;
+    }
+    ctaFontSize -= 2;
+  }
+  const ctaLine = fitLineWithEllipsis(ctx, ctaText, ctaMaxWidth);
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillStyle = "#ffffff";
-  ctx.font = '800 58px Inter, "Segoe UI", Arial, sans-serif';
-  ctx.fillText(ctaText, RESULT_PIN_WIDTH / 2, ctaY + ctaHeight / 2 + 2);
+  ctx.fillText(ctaLine, RESULT_PIN_WIDTH / 2, ctaY + ctaHeight / 2 + 2);
   ctx.textAlign = "left";
 
   return canvasToPngBlob(canvas);
@@ -455,6 +479,7 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
         return;
       }
 
+      clearPreparedResultPin();
       setOutputText(payload.result);
       void prepareResultPin({
         sourceText,
@@ -656,14 +681,22 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
       return;
     }
 
-    const prepared = await prepareResultPin({
-      sourceText: inputText || "No source text provided.",
-      translatedText: outputText,
-      announceFailure: true,
-    });
-    if (prepared) {
-      openPinterestIntent(prepared, outputText);
+    if (resultPinError) {
+      const prepared = await prepareResultPin({
+        sourceText: inputText || "No source text provided.",
+        translatedText: outputText,
+        announceFailure: true,
+      });
+      if (prepared) {
+        openPinterestIntent(prepared, outputText);
+      }
+      return;
     }
+
+    toast({
+      title: "Pinterest image is still preparing",
+      description: "Please wait a moment, then try sharing again.",
+    });
   }
 
   return (
