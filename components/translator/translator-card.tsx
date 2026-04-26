@@ -195,8 +195,10 @@ async function buildResultPinBlob(params: {
 
   const whiteGlass = "rgba(255,255,255,0.22)";
   const glassBorder = "rgba(255,255,255,0.62)";
-  const softText = "rgba(255,255,255,0.94)";
-  const darkText = "#181734";
+  const softText = "rgba(255,255,255,0.96)";
+  const headingText = "rgba(255,255,255,0.98)";
+  const labelText = "rgba(255,255,255,0.86)";
+  const bodyText = "rgba(255,255,255,0.95)";
 
   const logoSize = 108;
   const logoX = RESULT_PIN_WIDTH / 2 - logoSize / 2;
@@ -266,20 +268,20 @@ async function buildResultPinBlob(params: {
   const innerWidth = cardWidth - 68;
 
   ctx.textAlign = "left";
-  ctx.fillStyle = darkText;
+  ctx.fillStyle = labelText;
   ctx.font = '700 48px Inter, "Segoe UI", Arial, sans-serif';
   ctx.fillText("Your text", innerX, cardY + 52);
 
   const inputBoxY = cardY + 118;
   const inputBoxH = 206;
   drawRoundedRect(ctx, innerX - 2, inputBoxY, innerWidth + 4, inputBoxH, 34);
-  ctx.fillStyle = "rgba(255,255,255,0.22)";
+  ctx.fillStyle = "rgba(42, 36, 114, 0.34)";
   ctx.fill();
   ctx.lineWidth = 2;
-  ctx.strokeStyle = "rgba(255,255,255,0.54)";
+  ctx.strokeStyle = "rgba(255,255,255,0.58)";
   ctx.stroke();
 
-  ctx.fillStyle = darkText;
+  ctx.fillStyle = bodyText;
   ctx.font = '500 38px Inter, "Segoe UI", Arial, sans-serif';
   const inputLines = wrapTextByWidth(
     ctx,
@@ -296,20 +298,15 @@ async function buildResultPinBlob(params: {
     }
   }
 
-  ctx.textAlign = "center";
-  ctx.fillStyle = "rgba(255,255,255,0.55)";
-  ctx.font = '500 54px Inter, "Segoe UI", Arial, sans-serif';
-  ctx.fillText("↓", RESULT_PIN_WIDTH / 2, inputBoxY + inputBoxH + 58);
-
   ctx.textAlign = "left";
-  ctx.fillStyle = darkText;
+  ctx.fillStyle = labelText;
   ctx.font = '700 48px Inter, "Segoe UI", Arial, sans-serif';
-  ctx.fillText("Translated result", innerX, inputBoxY + inputBoxH + 104);
+  ctx.fillText("Translated result", innerX, inputBoxY + inputBoxH + 78);
 
-  const outputBoxY = inputBoxY + inputBoxH + 166;
+  const outputBoxY = inputBoxY + inputBoxH + 140;
   const outputBoxH = 242;
   drawRoundedRect(ctx, innerX - 2, outputBoxY, innerWidth + 4, outputBoxH, 34);
-  ctx.fillStyle = "rgba(255,255,255,0.24)";
+  ctx.fillStyle = "rgba(55, 40, 132, 0.38)";
   ctx.fill();
   ctx.lineWidth = 3;
   ctx.strokeStyle = "rgba(158, 126, 255, 0.95)";
@@ -326,7 +323,7 @@ async function buildResultPinBlob(params: {
   ctx.shadowOffsetX = 0;
   ctx.shadowOffsetY = 0;
 
-  ctx.fillStyle = darkText;
+  ctx.fillStyle = headingText;
   ctx.font = '600 40px Inter, "Segoe UI", Arial, sans-serif';
   const outputLines = wrapTextByWidth(
     ctx,
