@@ -183,155 +183,182 @@ async function buildResultPinBlob(params: {
     throw new Error("Canvas context unavailable.");
   }
 
-  const bgColor = "#f2eeff";
-  const surface = "#ffffff";
-  const resultSurface = "#ece8ff";
-  const border = "#d6d0ff";
-  const resultBorder = "#bdb4ff";
-  const brand = "#3d37be";
-  const ink = "#17193a";
-  const muted = "#5f58a4";
-
-  const pad = 44;
-  const gap = 14;
-  const headerHeight = 170;
-  const titleHeight = 246;
-  const footerHeight = 128;
-  const contentHeight =
-    RESULT_PIN_HEIGHT - pad * 2 - headerHeight - titleHeight - footerHeight - gap * 2;
-  const inputBoxHeight = Math.floor(contentHeight * 0.43);
-  const outputBoxHeight = contentHeight - inputBoxHeight - gap;
-  const boxWidth = RESULT_PIN_WIDTH - pad * 2;
-
-  ctx.fillStyle = bgColor;
+  const pageGradient = ctx.createLinearGradient(0, 0, RESULT_PIN_WIDTH, RESULT_PIN_HEIGHT);
+  pageGradient.addColorStop(0, "#5547f1");
+  pageGradient.addColorStop(0.5, "#7f86ff");
+  pageGradient.addColorStop(1, "#8bc7ff");
+  ctx.fillStyle = pageGradient;
   ctx.fillRect(0, 0, RESULT_PIN_WIDTH, RESULT_PIN_HEIGHT);
 
-  let y = pad;
-
-  drawRoundedRect(ctx, pad, y, boxWidth, headerHeight, 30);
-  ctx.fillStyle = surface;
-  ctx.fill();
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = border;
-  ctx.stroke();
+  const whiteGlass = "rgba(255,255,255,0.22)";
+  const glassBorder = "rgba(255,255,255,0.62)";
+  const softText = "rgba(255,255,255,0.94)";
+  const darkText = "#181734";
 
   const logoSize = 108;
-  const logoX = pad + 22;
-  const logoY = y + 30;
-  drawRoundedRect(ctx, logoX, logoY, logoSize, logoSize, 24);
-  ctx.fillStyle = "#4e46d6";
+  const logoX = RESULT_PIN_WIDTH / 2 - logoSize / 2;
+  const logoY = 118;
+  drawRoundedRect(ctx, logoX, logoY, logoSize, logoSize, 28);
+  const logoGradient = ctx.createLinearGradient(logoX, logoY, logoX + logoSize, logoY + logoSize);
+  logoGradient.addColorStop(0, "#6b66ff");
+  logoGradient.addColorStop(1, "#4f52f7");
+  ctx.fillStyle = logoGradient;
   ctx.fill();
 
   ctx.fillStyle = "#ffffff";
-  ctx.font = '800 46px Inter, "Segoe UI", Arial, sans-serif';
+  ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText("WT", logoX + 20, logoY + logoSize / 2 + 2);
+  ctx.font = '800 48px Inter, "Segoe UI", Arial, sans-serif';
+  ctx.fillText("WT", RESULT_PIN_WIDTH / 2, logoY + logoSize / 2 + 2);
 
-  ctx.fillStyle = brand;
-  ctx.font = '800 34px Inter, "Segoe UI", Arial, sans-serif';
+  ctx.fillStyle = softText;
   ctx.textBaseline = "top";
-  ctx.fillText("What Type Of | Translator", logoX + logoSize + 18, y + 40);
-  ctx.fillStyle = muted;
-  ctx.font = '600 22px Inter, "Segoe UI", Arial, sans-serif';
-  ctx.fillText("Text transformed in one tap", logoX + logoSize + 18, y + 86);
+  ctx.font = '700 56px Inter, "Segoe UI", Arial, sans-serif';
+  ctx.fillText("What Type Of", RESULT_PIN_WIDTH / 2, logoY + logoSize + 30);
 
-  y += headerHeight + gap;
-
-  drawRoundedRect(ctx, pad, y, boxWidth, titleHeight, 30);
-  ctx.fillStyle = surface;
-  ctx.fill();
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = border;
-  ctx.stroke();
-
-  ctx.fillStyle = "#4d44bf";
-  ctx.font = '700 28px Inter, "Segoe UI", Arial, sans-serif';
-  ctx.textBaseline = "top";
-  ctx.fillText("Translator", pad + 22, y + 22);
-
-  const titleText = truncateShareText(params.translatorTitle, RESULT_PIN_MAX_TITLE_CHARS);
-  ctx.fillStyle = ink;
-  ctx.font = '700 74px "Times New Roman", Georgia, serif';
-  const titleLines = wrapTextByWidth(ctx, titleText, boxWidth - 44, RESULT_PIN_MAX_TITLE_LINES);
-  let titleY = y + 66;
+  const title = truncateShareText(params.translatorTitle, RESULT_PIN_MAX_TITLE_CHARS);
+  ctx.font = '800 106px Inter, "Segoe UI", Arial, sans-serif';
+  const titleLines = wrapTextByWidth(ctx, title, RESULT_PIN_WIDTH - 140, RESULT_PIN_MAX_TITLE_LINES);
+  let titleY = 338;
   for (const line of titleLines) {
-    ctx.fillText(line, pad + 22, titleY);
-    titleY += 74;
+    ctx.fillText(line, RESULT_PIN_WIDTH / 2, titleY);
+    titleY += 106;
   }
 
-  y += titleHeight + gap;
-
-  drawRoundedRect(ctx, pad, y, boxWidth, inputBoxHeight, 24);
-  ctx.fillStyle = surface;
+  const cardX = 92;
+  const cardY = 500;
+  const cardWidth = RESULT_PIN_WIDTH - cardX * 2;
+  const cardHeight = 810;
+  drawRoundedRect(ctx, cardX, cardY, cardWidth, cardHeight, 58);
+  ctx.fillStyle = whiteGlass;
   ctx.fill();
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = border;
+  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = glassBorder;
+  ctx.stroke();
+  ctx.shadowColor = "rgba(44, 35, 115, 0.25)";
+  ctx.shadowBlur = 34;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 16;
+  drawRoundedRect(ctx, cardX, cardY, cardWidth, cardHeight, 58);
+  ctx.strokeStyle = "rgba(255,255,255,0.35)";
+  ctx.stroke();
+  ctx.shadowColor = "transparent";
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 0;
+
+  const innerX = cardX + 34;
+  const innerWidth = cardWidth - 68;
+
+  ctx.textAlign = "left";
+  ctx.fillStyle = darkText;
+  ctx.font = '700 52px Inter, "Segoe UI", Arial, sans-serif';
+  ctx.fillText("Your text", innerX, cardY + 52);
+
+  const inputBoxY = cardY + 118;
+  const inputBoxH = 238;
+  drawRoundedRect(ctx, innerX - 2, inputBoxY, innerWidth + 4, inputBoxH, 34);
+  ctx.fillStyle = "rgba(255,255,255,0.22)";
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = "rgba(255,255,255,0.54)";
   ctx.stroke();
 
-  ctx.fillStyle = "#4440aa";
-  ctx.font = '700 31px Inter, "Segoe UI", Arial, sans-serif';
-  ctx.fillText("Your text", pad + 22, y + 18);
-
-  ctx.fillStyle = ink;
-  ctx.font = '500 34px Inter, "Segoe UI", Arial, sans-serif';
+  ctx.fillStyle = darkText;
+  ctx.font = '500 46px Inter, "Segoe UI", Arial, sans-serif';
   const inputLines = wrapTextByWidth(
     ctx,
     truncateShareText(params.inputText, RESULT_PIN_MAX_TEXT_CHARS),
-    boxWidth - 44,
+    innerWidth - 42,
     RESULT_PIN_MAX_TEXT_LINES,
   );
-  let inputY = y + 66;
+  let inputTextY = inputBoxY + 34;
   for (const line of inputLines) {
-    ctx.fillText(line, pad + 22, inputY);
-    inputY += 44;
-    if (inputY > y + inputBoxHeight - 16) {
+    ctx.fillText(line, innerX + 20, inputTextY);
+    inputTextY += 52;
+    if (inputTextY > inputBoxY + inputBoxH - 22) {
       break;
     }
   }
 
-  y += inputBoxHeight + gap;
+  ctx.textAlign = "center";
+  ctx.fillStyle = "rgba(255,255,255,0.55)";
+  ctx.font = '500 64px Inter, "Segoe UI", Arial, sans-serif';
+  ctx.fillText("↓", RESULT_PIN_WIDTH / 2, inputBoxY + inputBoxH + 62);
 
-  drawRoundedRect(ctx, pad, y, boxWidth, outputBoxHeight, 24);
-  ctx.fillStyle = resultSurface;
+  ctx.textAlign = "left";
+  ctx.fillStyle = darkText;
+  ctx.font = '700 52px Inter, "Segoe UI", Arial, sans-serif';
+  ctx.fillText("Translated result", innerX, inputBoxY + inputBoxH + 114);
+
+  const outputBoxY = inputBoxY + inputBoxH + 180;
+  const outputBoxH = 262;
+  drawRoundedRect(ctx, innerX - 2, outputBoxY, innerWidth + 4, outputBoxH, 34);
+  ctx.fillStyle = "rgba(255,255,255,0.24)";
   ctx.fill();
   ctx.lineWidth = 3;
-  ctx.strokeStyle = resultBorder;
+  ctx.strokeStyle = "rgba(158, 126, 255, 0.95)";
   ctx.stroke();
+  ctx.shadowColor = "rgba(173, 106, 255, 0.58)";
+  ctx.shadowBlur = 26;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 0;
+  drawRoundedRect(ctx, innerX - 2, outputBoxY, innerWidth + 4, outputBoxH, 34);
+  ctx.strokeStyle = "rgba(204, 155, 255, 0.86)";
+  ctx.stroke();
+  ctx.shadowColor = "transparent";
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 0;
 
-  ctx.fillStyle = "#3327ab";
-  ctx.font = '800 32px Inter, "Segoe UI", Arial, sans-serif';
-  ctx.fillText("Translated result", pad + 22, y + 20);
-
-  ctx.fillStyle = "#1a1e42";
-  ctx.font = '700 43px Inter, "Segoe UI", Arial, sans-serif';
+  ctx.fillStyle = darkText;
+  ctx.font = '600 48px Inter, "Segoe UI", Arial, sans-serif';
   const outputLines = wrapTextByWidth(
     ctx,
     truncateShareText(params.outputText, RESULT_PIN_MAX_TEXT_CHARS),
-    boxWidth - 44,
+    innerWidth - 42,
     RESULT_PIN_MAX_TEXT_LINES,
   );
-  let outputY = y + 74;
+  let outputTextY = outputBoxY + 36;
   for (const line of outputLines) {
-    ctx.fillText(line, pad + 22, outputY);
-    outputY += 52;
-    if (outputY > y + outputBoxHeight - 16) {
+    ctx.fillText(line, innerX + 20, outputTextY);
+    outputTextY += 54;
+    if (outputTextY > outputBoxY + outputBoxH - 22) {
       break;
     }
   }
 
-  const ctaY = RESULT_PIN_HEIGHT - pad - footerHeight + 8;
-  ctx.strokeStyle = "#a79ff6";
-  ctx.lineWidth = 4;
-  ctx.beginPath();
-  ctx.moveTo(pad, ctaY);
-  ctx.lineTo(RESULT_PIN_WIDTH - pad, ctaY);
+  const ctaWidth = 560;
+  const ctaHeight = 126;
+  const ctaX = RESULT_PIN_WIDTH / 2 - ctaWidth / 2;
+  const ctaY = cardY + cardHeight + 58;
+  drawRoundedRect(ctx, ctaX, ctaY, ctaWidth, ctaHeight, 30);
+  const ctaGradient = ctx.createLinearGradient(ctaX, ctaY, ctaX + ctaWidth, ctaY + ctaHeight);
+  ctaGradient.addColorStop(0, "#5f56ff");
+  ctaGradient.addColorStop(1, "#4839f2");
+  ctx.fillStyle = ctaGradient;
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = "rgba(255,255,255,0.45)";
   ctx.stroke();
+  ctx.shadowColor = "rgba(86, 75, 255, 0.45)";
+  ctx.shadowBlur = 24;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 8;
+  drawRoundedRect(ctx, ctaX, ctaY, ctaWidth, ctaHeight, 30);
+  ctx.strokeStyle = "rgba(255,255,255,0.18)";
+  ctx.stroke();
+  ctx.shadowColor = "transparent";
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 0;
 
   const ctaText = truncateShareText(params.cta, RESULT_PIN_MAX_CTA_CHARS);
-  ctx.fillStyle = "#27227b";
-  ctx.font = '800 50px "Times New Roman", Georgia, serif';
   ctx.textAlign = "center";
-  ctx.fillText(ctaText, RESULT_PIN_WIDTH / 2, ctaY + 30);
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = "#ffffff";
+  ctx.font = '800 58px Inter, "Segoe UI", Arial, sans-serif';
+  ctx.fillText(ctaText, RESULT_PIN_WIDTH / 2, ctaY + ctaHeight / 2 + 2);
   ctx.textAlign = "left";
 
   return canvasToPngBlob(canvas);
