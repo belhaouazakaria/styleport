@@ -6,6 +6,7 @@ import { getAppBaseUrl } from "@/lib/env";
 const STATIC_INDEXABLE_ROUTES = [
   "/",
   "/translators",
+  "/translators/new",
   "/contact",
   "/privacy",
   "/terms",

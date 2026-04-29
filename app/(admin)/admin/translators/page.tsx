@@ -8,7 +8,13 @@ import { getCategoryChoices } from "@/lib/data/categories";
 export const dynamic = "force-dynamic";
 
 interface PageProps {
-  searchParams: Promise<{ q?: string; status?: string; featured?: string; category?: string }>;
+  searchParams: Promise<{
+    q?: string;
+    status?: string;
+    featured?: string;
+    category?: string;
+    sort?: string;
+  }>;
 }
 
 export default async function AdminTranslatorsPage({ searchParams }: PageProps) {
@@ -26,6 +32,7 @@ export default async function AdminTranslatorsPage({ searchParams }: PageProps) 
           ? params.featured
           : "all",
       category: params.category || undefined,
+      sort: params.sort === "newest" ? "newest" : "updated",
     }),
     getCategoryChoices(),
   ]);
@@ -49,7 +56,7 @@ export default async function AdminTranslatorsPage({ searchParams }: PageProps) 
           </Link>
         </div>
 
-        <form className="grid gap-2 rounded-2xl border border-border bg-surface p-4 md:grid-cols-[1fr_170px_170px_190px_auto]">
+        <form className="grid gap-2 rounded-2xl border border-border bg-surface p-4 md:grid-cols-[1fr_170px_170px_190px_190px_auto]">
           <input
             type="text"
             name="q"
@@ -87,6 +94,14 @@ export default async function AdminTranslatorsPage({ searchParams }: PageProps) 
                 {category.name}
               </option>
             ))}
+          </select>
+          <select
+            name="sort"
+            defaultValue={params.sort === "newest" ? "newest" : "updated"}
+            className="h-11 rounded-xl border border-border bg-surface px-3 text-ink"
+          >
+            <option value="updated">Recently updated</option>
+            <option value="newest">Newest added</option>
           </select>
           <button
             type="submit"

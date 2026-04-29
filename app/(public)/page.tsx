@@ -103,7 +103,9 @@ export default async function HomePage({ searchParams }: PageProps) {
               translators={newest}
               title="New Translators"
               sectionId="new-translators"
-              showBrowseLink={false}
+              showBrowseLink
+              browseHref="/translators/new"
+              browseLabel="Browse all newest translators"
             />
           </>
         ) : null}

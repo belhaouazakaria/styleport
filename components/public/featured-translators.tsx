@@ -8,6 +8,8 @@ interface FeaturedTranslatorsProps {
   title?: string;
   sectionId?: string;
   showBrowseLink?: boolean;
+  browseHref?: string;
+  browseLabel?: string;
 }
 
 export function FeaturedTranslators({
@@ -15,6 +17,8 @@ export function FeaturedTranslators({
   title = "Featured Translators",
   sectionId,
   showBrowseLink = true,
+  browseHref = "/translators",
+  browseLabel = "Browse all",
 }: FeaturedTranslatorsProps) {
   if (!translators.length) {
     return null;
@@ -26,8 +30,8 @@ export function FeaturedTranslators({
         <div className="mb-4 flex items-center justify-between gap-2">
           <h2 className="font-display text-2xl font-semibold text-ink">{title}</h2>
           {showBrowseLink ? (
-            <Link href="/translators" className="text-sm font-medium text-brand-700 hover:text-brand-800">
-              Browse all
+            <Link href={browseHref} className="text-sm font-medium text-brand-700 hover:text-brand-800">
+              {browseLabel}
             </Link>
           ) : null}
         </div>

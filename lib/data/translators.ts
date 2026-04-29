@@ -1008,6 +1008,7 @@ export async function listAdminTranslators(filters: {
   status?: "all" | "active" | "inactive" | "archived";
   featured?: "all" | "featured" | "non-featured";
   category?: string;
+  sort?: "updated" | "newest";
 }): Promise<TranslatorListItem[]> {
   const where: Prisma.TranslatorWhereInput = {};
 
@@ -1044,6 +1045,11 @@ export async function listAdminTranslators(filters: {
     };
   }
 
+  const orderBy: Prisma.TranslatorOrderByWithRelationInput[] =
+    filters.sort === "newest"
+      ? [{ createdAt: "desc" }, { updatedAt: "desc" }]
+      : [{ updatedAt: "desc" }, { sortOrder: "asc" }];
+
   const rows = await prisma.translator.findMany({
     where,
     select: {
@@ -1071,7 +1077,7 @@ export async function listAdminTranslators(filters: {
         },
       },
     },
-    orderBy: [{ updatedAt: "desc" }, { sortOrder: "asc" }],
+    orderBy,
   });
 
   return rows.map((row) => ({
@@ -1081,6 +1087,34 @@ export async function listAdminTranslators(filters: {
     updatedAt: row.updatedAt.toISOString(),
     shareImageUpdatedAt: row.shareImageUpdatedAt ? row.shareImageUpdatedAt.toISOString() : null,
   }));
+}
+
+export async function getNewestPublicTranslatorsPage(params: { page: number; pageSize: number }) {
+  const page = Math.max(1, params.page || 1);
+  const pageSize = Math.max(1, params.pageSize || 12);
+  const where: Prisma.TranslatorWhereInput = {
+    isActive: true,
+    archivedAt: null,
+  };
+
+  const [total, rows] = await Promise.all([
+    prisma.translator.count({ where }),
+    prisma.translator.findMany({
+      where,
+      include: publicTranslatorInclude,
+      orderBy: [{ createdAt: "desc" }, { updatedAt: "desc" }],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+  ]);
+
+  return {
+    translators: rows.map(mapPublicTranslator),
+    total,
+    page,
+    pageSize,
+    totalPages: Math.max(1, Math.ceil(total / pageSize)),
+  };
 }
 
 function normalizeTranslatorInput(input: TranslatorUpsertInput) {
