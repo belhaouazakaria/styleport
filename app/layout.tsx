@@ -26,7 +26,7 @@ const displayFont = Cormorant_Garamond({
 export const metadata: Metadata = {
   metadataBase: getAppBaseUrl(),
   title: {
-    default: `${APP_NAME} | Style Translator Platform`,
+    default: APP_NAME,
     template: `%s | ${APP_NAME}`,
   },
   description: SEO_DESCRIPTION,
@@ -38,25 +38,30 @@ export const metadata: Metadata = {
     "translator discovery",
   ],
   openGraph: {
-    title: `${APP_NAME} | Style Translator Platform`,
+    title: APP_NAME,
     description: SEO_DESCRIPTION,
     type: "website",
     url: getAppBaseUrl().toString(),
     siteName: APP_NAME,
     images: [
       {
-        url: "/og-image.svg",
+        url: "/opengraph-image",
         width: 1200,
         height: 630,
-        alt: `${APP_NAME} preview`,
+        alt: APP_NAME,
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: `${APP_NAME} | Style Translator Platform`,
+    title: APP_NAME,
     description: SEO_DESCRIPTION,
-    images: ["/og-image.svg"],
+    images: ["/twitter-image"],
+  },
+  icons: {
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
+    shortcut: ["/icon.svg"],
+    apple: ["/icon.svg"],
   },
 };
 

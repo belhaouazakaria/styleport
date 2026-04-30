@@ -34,24 +34,46 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     };
   }
 
-  const description = translator.seoDescription || translator.shortDescription;
-  const title = translator.seoTitle || `${translator.name} Translator`;
-  const imageUrl = `/translators/${translator.slug}/pin-image`;
+  const baseUrl = getAppBaseUrl();
+  const cleanDescription = (translator.seoDescription || translator.shortDescription || "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const descriptionBase =
+    cleanDescription ||
+    `Use ${translator.name} to rewrite text in a new tone with What Type Of | Translator.`;
+  const description =
+    descriptionBase.length > 190 ? `${descriptionBase.slice(0, 189).trimEnd()}…` : descriptionBase;
+  const title = `${translator.name} | What Type Of | Translator`;
+  const translatorUrl = new URL(`/translators/${translator.slug}`, baseUrl).toString();
+  const fallbackImageUrl = new URL("/opengraph-image", baseUrl).toString();
+  const imageUrl = translator.shareImagePath
+    ? /^https?:\/\//i.test(translator.shareImagePath)
+      ? translator.shareImagePath
+      : new URL(
+          translator.shareImagePath.startsWith("/")
+            ? translator.shareImagePath
+            : `/${translator.shareImagePath}`,
+          baseUrl,
+        ).toString()
+    : fallbackImageUrl;
 
   return {
     title,
     description,
+    alternates: {
+      canonical: `/translators/${translator.slug}`,
+    },
     openGraph: {
       title,
       description,
       type: "article",
-      url: `/translators/${translator.slug}`,
+      url: translatorUrl,
       images: [
         {
           url: imageUrl,
-          width: 1000,
-          height: 1500,
-          alt: `${translator.name} Pinterest share image`,
+          width: 1200,
+          height: 630,
+          alt: `${translator.name} | What Type Of | Translator`,
         },
       ],
     },

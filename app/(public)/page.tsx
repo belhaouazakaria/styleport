@@ -15,8 +15,9 @@ import { getRenderableAdPlacements } from "@/lib/data/ads";
 import {
   getDiscoveryResult,
   getFeaturedPublicTranslators,
-  getNewestPublicTranslators,
+  getNewestPublicTranslatorsPage,
 } from "@/lib/data/translators";
+import { getAppBaseUrl } from "@/lib/env";
 import { getAppSettings } from "@/lib/settings";
 
 interface PageProps {
@@ -36,11 +37,30 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   const hasCategory = Boolean(params.category?.trim());
 
   return {
-    title: "What Type Of | Translator Discovery",
-    description:
-      "Browse and search style translators by category, tone, and writing intent.",
+    title: "What Type Of | Translator",
+    description: "AI-powered text translators for rewriting text into different styles, tones, and personalities.",
     alternates: {
       canonical: hasCategory || hasSearch ? "/" : "/",
+    },
+    openGraph: {
+      title: "What Type Of | Translator",
+      description: "AI-powered text translators for rewriting text into different styles, tones, and personalities.",
+      type: "website",
+      url: getAppBaseUrl().toString(),
+      images: [
+        {
+          url: "/opengraph-image",
+          width: 1200,
+          height: 630,
+          alt: "What Type Of | Translator",
+        },
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: "What Type Of | Translator",
+      description: "AI-powered text translators for rewriting text into different styles, tones, and personalities.",
+      images: ["/twitter-image"],
     },
     robots: hasSearch
       ? {
@@ -57,13 +77,14 @@ export default async function HomePage({ searchParams }: PageProps) {
 
   const q = (params.q || "").trim() || undefined;
   const category = (params.category || "").trim() || undefined;
+  const useNewestCatalog = !q && !category;
   const page = Math.max(1, Number(params.page || 1) || 1);
   const pageSize = settings.discoveryPageSize || DISCOVERY_DEFAULT_PAGE_SIZE;
 
-  const [discovery, featured, newest, desktopAds, mobileAds] = await Promise.all([
+  const [discovery, newestCatalog, featured, desktopAds, mobileAds] = await Promise.all([
     getDiscoveryResult({ q, category, page, pageSize }),
+    useNewestCatalog ? getNewestPublicTranslatorsPage({ page, pageSize }) : Promise.resolve(null),
     getFeaturedPublicTranslators(6),
-    getNewestPublicTranslators(3),
     getRenderableAdPlacements({
       pageType: AdPageType.HOMEPAGE,
       deviceType: AdDeviceType.DESKTOP,
@@ -73,6 +94,10 @@ export default async function HomePage({ searchParams }: PageProps) {
       deviceType: AdDeviceType.MOBILE,
     }),
   ]);
+  const catalogTranslators = useNewestCatalog && newestCatalog ? newestCatalog.translators : discovery.translators;
+  const catalogTotal = useNewestCatalog && newestCatalog ? newestCatalog.total : discovery.total;
+  const catalogPage = useNewestCatalog && newestCatalog ? newestCatalog.page : discovery.page;
+  const catalogTotalPages = useNewestCatalog && newestCatalog ? newestCatalog.totalPages : discovery.totalPages;
 
   return (
     <div className="relative overflow-x-hidden">
@@ -97,17 +122,7 @@ export default async function HomePage({ searchParams }: PageProps) {
         ) : null}
 
         {settings.featuredTranslatorsEnabled ? (
-          <>
-            <FeaturedTranslators translators={featured} sectionId="featured-translators" />
-            <FeaturedTranslators
-              translators={newest}
-              title="New Translators"
-              sectionId="new-translators"
-              showBrowseLink
-              browseHref="/translators/new"
-              browseLabel="Browse all newest translators"
-            />
-          </>
+          <FeaturedTranslators translators={featured} sectionId="featured-translators" />
         ) : null}
 
         {desktopAds.length > 1 ? (
@@ -120,14 +135,14 @@ export default async function HomePage({ searchParams }: PageProps) {
           <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
             <h2 className="font-display text-3xl font-semibold text-ink">Translator Catalog</h2>
             <p className="text-sm text-muted-ink">
-              {discovery.total} result{discovery.total === 1 ? "" : "s"}
+              {catalogTotal} result{catalogTotal === 1 ? "" : "s"}
             </p>
           </div>
-          <TranslatorDirectory translators={discovery.translators} searchQuery={discovery.q} />
+          <TranslatorDirectory translators={catalogTranslators} searchQuery={discovery.q} />
           <div className="mt-6">
             <DiscoveryPagination
-              page={discovery.page}
-              totalPages={discovery.totalPages}
+              page={catalogPage}
+              totalPages={catalogTotalPages}
               q={discovery.q}
               category={discovery.category}
             />

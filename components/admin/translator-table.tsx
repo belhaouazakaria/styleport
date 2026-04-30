@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Copy, Image as ImageIcon, Pencil, RefreshCcw, Trash2 } from "lucide-react";
+import { Copy, ExternalLink, Image as ImageIcon, Pencil, RefreshCcw, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
@@ -340,6 +340,15 @@ export function TranslatorTable({ translators }: TranslatorTableProps) {
                       >
                         <Pencil className="h-3.5 w-3.5" />
                         Edit
+                      </Link>
+                      <Link
+                        href={`/translators/${row.slug}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-white px-3 text-xs font-medium text-ink hover:bg-muted-surface"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                        View translator
                       </Link>
                       <Button size="sm" variant="outline" onClick={() => duplicate(row.id)} disabled={isBusy}>
                         <Copy className="h-3.5 w-3.5" />
