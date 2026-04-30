@@ -45,7 +45,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     descriptionBase.length > 190 ? `${descriptionBase.slice(0, 189).trimEnd()}…` : descriptionBase;
   const title = `${translator.name} | What Type Of | Translator`;
   const translatorUrl = new URL(`/translators/${translator.slug}`, baseUrl).toString();
-  const fallbackImageUrl = new URL("/opengraph-image", baseUrl).toString();
+  const fallbackImageUrl = new URL("/og-image.png", baseUrl).toString();
   const imageUrl = translator.shareImagePath
     ? /^https?:\/\//i.test(translator.shareImagePath)
       ? translator.shareImagePath

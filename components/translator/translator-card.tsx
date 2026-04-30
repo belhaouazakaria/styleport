@@ -48,27 +48,27 @@ function buildResultPinCta(translator: PublicTranslator) {
   const context = `${translator.name} ${translator.title || ""} ${translator.shortDescription || ""}`.toLowerCase();
 
   if (/(pirate|captain|sea|ship|corsair|buccaneer)/i.test(context)) {
-    return "Translate yer text fer free, matey!";
+    return "Try this translator, matey!";
   }
   if (/(stone age|caveman|prehistoric|neanderthal)/i.test(context)) {
-    return "Make cave talk for free.";
+    return "Try this translator, cave friend.";
   }
   if (/(gen z|slang|zoomer|tiktok|vibe|no cap)/i.test(context)) {
-    return "Try it free, bestie.";
+    return "Try this translator fr.";
   }
   if (/(professional|linkedin|business|formal|corporate|executive)/i.test(context)) {
-    return "Make it professional for free.";
+    return "Try this translator.";
   }
   if (/(shakespeare|old english|elizabethan|bard)/i.test(context)) {
-    return "Try this translator freely, good friend.";
+    return "Try this translator, good sir.";
   }
   if (/(romantic|love|poetic|valentine)/i.test(context)) {
-    return "Make your words romantic for free.";
+    return "Try this translator, my dear.";
   }
   if (/(comic|funny|joke|humor|comedy|meme)/i.test(context)) {
-    return "Make your message funnier for free.";
+    return "Try this translator, laugh first.";
   }
-  return "Try this translator for free.";
+  return "Try this translator";
 }
 
 function drawRoundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number) {
@@ -245,7 +245,7 @@ async function buildResultPinBlob(params: {
   const cardX = 92;
   const cardY = Math.min(530, Math.max(468, titleBottom + 26));
   const cardWidth = RESULT_PIN_WIDTH - cardX * 2;
-  const cardHeight = 760;
+  const cardHeight = 826;
   drawRoundedRect(ctx, cardX, cardY, cardWidth, cardHeight, 58);
   ctx.fillStyle = whiteGlass;
   ctx.fill();
@@ -304,7 +304,7 @@ async function buildResultPinBlob(params: {
   ctx.fillText("Translated result", innerX, inputBoxY + inputBoxH + 78);
 
   const outputBoxY = inputBoxY + inputBoxH + 140;
-  const outputBoxH = 242;
+  const outputBoxH = 214;
   drawRoundedRect(ctx, innerX - 2, outputBoxY, innerWidth + 4, outputBoxH, 34);
   ctx.fillStyle = "rgba(55, 40, 132, 0.38)";
   ctx.fill();
@@ -340,35 +340,18 @@ async function buildResultPinBlob(params: {
     }
   }
 
-  const ctaWidth = 560;
-  const ctaHeight = 120;
-  const ctaX = RESULT_PIN_WIDTH / 2 - ctaWidth / 2;
-  const ctaY = cardY + cardHeight + 46;
-  drawRoundedRect(ctx, ctaX, ctaY, ctaWidth, ctaHeight, 30);
-  const ctaGradient = ctx.createLinearGradient(ctaX, ctaY, ctaX + ctaWidth, ctaY + ctaHeight);
-  ctaGradient.addColorStop(0, "#5f56ff");
-  ctaGradient.addColorStop(1, "#4839f2");
-  ctx.fillStyle = ctaGradient;
-  ctx.fill();
+  const dividerY = outputBoxY + outputBoxH + 42;
+  ctx.beginPath();
+  ctx.moveTo(innerX + 16, dividerY);
+  ctx.lineTo(innerX + innerWidth - 16, dividerY);
+  ctx.strokeStyle = "rgba(255,255,255,0.28)";
   ctx.lineWidth = 2;
-  ctx.strokeStyle = "rgba(255,255,255,0.45)";
   ctx.stroke();
-  ctx.shadowColor = "rgba(86, 75, 255, 0.45)";
-  ctx.shadowBlur = 24;
-  ctx.shadowOffsetX = 0;
-  ctx.shadowOffsetY = 8;
-  drawRoundedRect(ctx, ctaX, ctaY, ctaWidth, ctaHeight, 30);
-  ctx.strokeStyle = "rgba(255,255,255,0.18)";
-  ctx.stroke();
-  ctx.shadowColor = "transparent";
-  ctx.shadowBlur = 0;
-  ctx.shadowOffsetX = 0;
-  ctx.shadowOffsetY = 0;
 
   const ctaText = truncateShareText(params.cta, RESULT_PIN_MAX_CTA_CHARS);
-  let ctaFontSize = 58;
-  const ctaMaxWidth = ctaWidth - 64;
-  while (ctaFontSize > 38) {
+  let ctaFontSize = 50;
+  const ctaMaxWidth = innerWidth - 36;
+  while (ctaFontSize > 34) {
     ctx.font = `800 ${ctaFontSize}px Inter, "Segoe UI", Arial, sans-serif`;
     if (ctx.measureText(ctaText).width <= ctaMaxWidth) {
       break;
@@ -377,9 +360,18 @@ async function buildResultPinBlob(params: {
   }
   const ctaLine = fitLineWithEllipsis(ctx, ctaText, ctaMaxWidth);
   ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
+  ctx.textBaseline = "top";
   ctx.fillStyle = "#ffffff";
-  ctx.fillText(ctaLine, RESULT_PIN_WIDTH / 2, ctaY + ctaHeight / 2 + 2);
+  ctx.shadowColor = "rgba(52, 44, 132, 0.42)";
+  ctx.shadowBlur = 8;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 2;
+  ctx.fillText(ctaLine, RESULT_PIN_WIDTH / 2, dividerY + 26);
+  ctx.shadowColor = "transparent";
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 0;
+  ctx.fillStyle = "#ffffff";
   ctx.textAlign = "left";
 
   return canvasToPngBlob(canvas);

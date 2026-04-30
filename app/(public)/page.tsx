@@ -17,7 +17,6 @@ import {
   getFeaturedPublicTranslators,
   getNewestPublicTranslatorsPage,
 } from "@/lib/data/translators";
-import { getAppBaseUrl } from "@/lib/env";
 import { getAppSettings } from "@/lib/settings";
 
 interface PageProps {
@@ -38,18 +37,20 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
 
   return {
     title: "What Type Of | Translator",
-    description: "AI-powered text translators for rewriting text into different styles, tones, and personalities.",
+    description:
+      "AI-powered text translators to rewrite text into different styles, tones, and personalities.",
     alternates: {
       canonical: hasCategory || hasSearch ? "/" : "/",
     },
     openGraph: {
       title: "What Type Of | Translator",
-      description: "AI-powered text translators for rewriting text into different styles, tones, and personalities.",
+      description:
+        "AI-powered text translators to rewrite text into different styles, tones, and personalities.",
       type: "website",
-      url: getAppBaseUrl().toString(),
+      url: "https://translator.whattypeof.com",
       images: [
         {
-          url: "/opengraph-image",
+          url: "https://translator.whattypeof.com/og-image.png",
           width: 1200,
           height: 630,
           alt: "What Type Of | Translator",
@@ -59,8 +60,9 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
     twitter: {
       card: "summary_large_image",
       title: "What Type Of | Translator",
-      description: "AI-powered text translators for rewriting text into different styles, tones, and personalities.",
-      images: ["/twitter-image"],
+      description:
+        "AI-powered text translators to rewrite text into different styles, tones, and personalities.",
+      images: ["https://translator.whattypeof.com/og-image.png"],
     },
     robots: hasSearch
       ? {

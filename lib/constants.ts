@@ -15,7 +15,7 @@ export const RATE_LIMIT_WINDOW_MS = 60_000;
 export const RATE_LIMIT_MAX_REQUESTS = 20;
 
 export const SEO_DESCRIPTION =
-  "AI-powered text translators for rewriting text into different styles, tones, and personalities.";
+  "AI-powered text translators to rewrite text into different styles, tones, and personalities.";
 
 export const DISCOVERY_DEFAULT_PAGE_SIZE = 12;
 export const DISCOVERY_SUGGESTION_LIMIT = 8;
