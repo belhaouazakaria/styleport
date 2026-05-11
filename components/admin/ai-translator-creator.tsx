@@ -118,10 +118,10 @@ export function AiTranslatorCreator({ categories }: AiTranslatorCreatorProps) {
         seoTitle: draft.seoTitle || "",
         seoDescription: draft.seoDescription || "",
         modelOverride: "",
-        isActive: false,
+        isActive: true,
         isFeatured: false,
-        showModeSelector: false,
-        showSwap: false,
+        showModeSelector: true,
+        showSwap: true,
         showExamples: false,
         sortOrder: 50,
         primaryCategoryId: selectedCategoryId,
@@ -343,4 +343,3 @@ export function AiTranslatorCreator({ categories }: AiTranslatorCreatorProps) {
     </div>
   );
 }
-

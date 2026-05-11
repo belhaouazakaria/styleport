@@ -16,7 +16,7 @@ export async function POST(request: Request, context: RouteContext) {
     const built = await buildTranslatorFromRequest({
       requestId: id,
       requestUrl: request.url,
-      activateTranslator: false,
+      activateTranslator: true,
     });
     return apiOk({ translator: built.translator, publishNotificationSent: built.publishNotificationSent }, 201);
   } catch (error) {

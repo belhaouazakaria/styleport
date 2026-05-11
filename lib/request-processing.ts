@@ -182,13 +182,14 @@ export async function buildTranslatorFromRequest(
     categoryIds: [categoryId],
     primaryCategoryId: categoryId,
   });
-  translatorInput.isActive = Boolean(input.activateTranslator);
+  const shouldActivateTranslator = input.activateTranslator ?? true;
+  translatorInput.isActive = shouldActivateTranslator;
 
   const translator = await createTranslator(translatorInput);
 
   await linkRequestToTranslator(request.id, {
     translatorId: translator.id,
-    status: input.activateTranslator ? TranslatorRequestStatus.PUBLISHED : TranslatorRequestStatus.APPROVED,
+    status: shouldActivateTranslator ? TranslatorRequestStatus.PUBLISHED : TranslatorRequestStatus.APPROVED,
   });
 
   let publishNotificationSent = false;

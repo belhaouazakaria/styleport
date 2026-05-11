@@ -35,7 +35,26 @@ export async function POST(request: Request) {
     return apiError(400, "BAD_REQUEST", "Invalid JSON payload.");
   }
 
-  const parsed = translatorUpsertSchema.safeParse(payload);
+  const payloadWithDefaults =
+    payload && typeof payload === "object"
+      ? {
+          ...payload,
+          isActive:
+            typeof (payload as { isActive?: unknown }).isActive === "boolean"
+              ? (payload as { isActive: boolean }).isActive
+              : true,
+          showModeSelector:
+            typeof (payload as { showModeSelector?: unknown }).showModeSelector === "boolean"
+              ? (payload as { showModeSelector: boolean }).showModeSelector
+              : true,
+          showSwap:
+            typeof (payload as { showSwap?: unknown }).showSwap === "boolean"
+              ? (payload as { showSwap: boolean }).showSwap
+              : true,
+        }
+      : payload;
+
+  const parsed = translatorUpsertSchema.safeParse(payloadWithDefaults);
 
   if (!parsed.success) {
     return apiError(400, "VALIDATION_ERROR", "Please provide valid translator fields.");
