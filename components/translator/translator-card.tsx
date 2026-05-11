@@ -1,16 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRightLeft, Copy, Loader2, RefreshCcw, Sparkles, Square, Trash2, Volume2 } from "lucide-react";
+import { ArrowRightLeft, Copy, Loader2, RefreshCcw, Sparkles, Square, Trash2, Volume2, WandSparkles } from "lucide-react";
 
 import { useAutoResizeTextarea } from "@/hooks/use-auto-resize";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { MAX_INPUT_CHARS } from "@/lib/constants";
 import type { PublicTranslator, TranslateResponse } from "@/lib/types";
-import { ModeSelector } from "@/components/translator/mode-selector";
 import { useToast } from "@/components/providers/toast-provider";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
 const LOADING_COPY = "Composing your translation...";
@@ -26,6 +26,7 @@ const RESULT_PIN_MAX_TITLE_LINES = 2;
 const RESULT_PIN_MAX_TITLE_CHARS = 72;
 const RESULT_PIN_MAX_CTA_CHARS = 60;
 const RESULT_PIN_MAX_UPLOAD_BYTES = 3 * 1024 * 1024;
+type TranslationDirection = "forward" | "reverse";
 
 function truncateShareText(value: string, maxLength: number) {
   const normalized = value.replace(/\s+/g, " ").trim();
@@ -398,6 +399,7 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
   const [inputText, setInputText] = useLocalStorage<string>(`${storagePrefix}:last-input`, "");
   const [outputText, setOutputText] = useLocalStorage<string>(`${storagePrefix}:last-output`, "");
   const [modeKey, setModeKey] = useLocalStorage<string>(`${storagePrefix}:last-mode`, initialMode);
+  const [direction, setDirection] = useLocalStorage<TranslationDirection>(`${storagePrefix}:last-direction`, "forward");
 
   const [isLoading, setIsLoading] = useState(false);
   const [isPreparingResultPin, setIsPreparingResultPin] = useState(false);
@@ -414,6 +416,11 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
   const resultPinRequestIdRef = useRef(0);
 
   const { toast } = useToast();
+  const hasModeOptions = translator.showModeSelector && translator.modes.length > 1;
+  const useModeChips = hasModeOptions && translator.modes.length <= 4;
+  const isReverse = direction === "reverse";
+  const activeInputLabel = isReverse ? translator.targetLabel : translator.sourceLabel;
+  const activeOutputLabel = isReverse ? translator.sourceLabel : translator.targetLabel;
 
   useAutoResizeTextarea(inputRef, inputText);
   useAutoResizeTextarea(outputRef, outputText);
@@ -423,6 +430,12 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
       setModeKey(initialMode);
     }
   }, [initialMode, modeKey, setModeKey, translator.modes]);
+
+  useEffect(() => {
+    if (direction !== "forward" && direction !== "reverse") {
+      setDirection("forward");
+    }
+  }, [direction, setDirection]);
 
   useEffect(
     () => () => {
@@ -458,6 +471,7 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
           text: sourceText,
           translatorSlug: translator.slug,
           modeKey: translator.showModeSelector ? modeKey : undefined,
+          direction,
         }),
       });
 
@@ -483,6 +497,7 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
   }
 
   function handleSwap() {
+    setDirection(direction === "forward" ? "reverse" : "forward");
     setInputText(outputText);
     setOutputText(inputText);
     clearPreparedResultPin();
@@ -694,7 +709,7 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
         <div className="hidden border-b border-border px-4 py-3 sm:px-6 md:block">
           <div className="grid items-center gap-3 md:grid-cols-[1fr_auto_1fr]">
             <div className="flex items-center justify-between gap-2 text-sm font-semibold uppercase tracking-wide text-muted-ink md:justify-start">
-              <span>{translator.sourceLabel}</span>
+              <span>{activeInputLabel}</span>
               <span className="text-xs font-medium text-muted-ink md:ml-2">
                 {inputText.length} / {MAX_INPUT_CHARS}
               </span>
@@ -706,7 +721,8 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
                 variant="outline"
                 size="icon"
                 onClick={handleSwap}
-                aria-label="Swap input and output"
+                aria-label="Reverse translation direction"
+                title="Reverse translation direction"
                 disabled={isLoading}
                 className="mx-auto"
               >
@@ -717,15 +733,61 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
             )}
 
             <h2 className="text-left text-sm font-semibold uppercase tracking-wide text-muted-ink md:text-right">
-              {translator.targetLabel}
+              {activeOutputLabel}
             </h2>
           </div>
         </div>
 
+        {hasModeOptions ? (
+          <div className="border-b border-border bg-muted-surface px-4 py-3 sm:px-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="inline-flex items-center gap-2 text-sm font-medium text-muted-ink">
+                <WandSparkles className="h-4 w-4 text-brand-600" />
+                <span>Style mode</span>
+              </div>
+
+              {useModeChips ? (
+                <div className="flex flex-wrap gap-2">
+                  {translator.modes.map((mode) => {
+                    const active = mode.key === modeKey;
+                    return (
+                      <button
+                        key={mode.id}
+                        type="button"
+                        onClick={() => setModeKey(mode.key)}
+                        className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                          active
+                            ? "border-brand-500 bg-brand-500 text-white"
+                            : "border-border bg-surface text-muted-ink hover:border-brand-300 hover:text-ink"
+                        }`}
+                        aria-pressed={active}
+                        title={mode.label}
+                      >
+                        {mode.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <Select
+                  aria-label="Style mode"
+                  value={modeKey}
+                  onChange={(event) => setModeKey(event.target.value)}
+                  options={translator.modes.map((mode) => ({
+                    value: mode.key,
+                    label: mode.label,
+                  }))}
+                  className="w-full sm:w-[260px]"
+                />
+              )}
+            </div>
+          </div>
+        ) : null}
+
         <div className="grid grid-cols-1 divide-y divide-border md:grid-cols-2 md:divide-x md:divide-y-0">
           <div className="p-4 sm:p-6">
             <div className="mb-2 flex items-center justify-between">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-ink">{translator.sourceLabel}</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-ink">{activeInputLabel}</p>
               <Button type="button" variant="ghost" size="sm" onClick={() => void handleCopy(inputText, "Input")}>
                 <Copy className="h-4 w-4" />
                 Copy
@@ -741,7 +803,7 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
                   void translate();
                 }
               }}
-              placeholder={`Write your ${translator.sourceLabel.toLowerCase()} text here...`}
+              placeholder={`Write your ${activeInputLabel.toLowerCase()} text here...`}
               aria-label="Input text"
             />
 
@@ -763,7 +825,7 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
 
           <div className="p-4 sm:p-6">
             <div className="mb-2 flex items-center justify-between">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-ink">{translator.targetLabel}</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-ink">{activeOutputLabel}</p>
               <div className="flex items-center gap-1">
                 <Button
                   type="button"
@@ -792,7 +854,7 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
               onChange={() => undefined}
               readOnly
               aria-label="Output text"
-              placeholder={`Your ${translator.targetLabel.toLowerCase()} text appears here...`}
+              placeholder={`Your ${activeOutputLabel.toLowerCase()} text appears here...`}
               className="bg-muted-surface"
             />
 
@@ -823,9 +885,16 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
               Regenerate
             </Button>
             {translator.showSwap ? (
-              <Button type="button" variant="ghost" onClick={handleSwap} disabled={isLoading}>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={handleSwap}
+                disabled={isLoading}
+                aria-label="Reverse translation direction"
+                title="Reverse translation direction"
+              >
                 <ArrowRightLeft className="h-4 w-4" />
-                Swap
+                Reverse
               </Button>
             ) : null}
             <Button type="button" variant="ghost" onClick={handleClear} disabled={isLoading}>
@@ -858,11 +927,9 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
           </div>
 
           <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-            {translator.showModeSelector ? (
-              <ModeSelector value={modeKey} modes={translator.modes} onChange={setModeKey} />
-            ) : (
-              <p className="text-xs text-muted-ink">Mode selection is locked for this translator.</p>
-            )}
+            <p className="text-xs text-muted-ink">
+              Direction: {isReverse ? `${translator.targetLabel} → ${translator.sourceLabel}` : `${translator.sourceLabel} → ${translator.targetLabel}`}
+            </p>
 
             {isLoading ? (
               <p className="text-sm text-brand-700">{LOADING_COPY}</p>

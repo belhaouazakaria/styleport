@@ -24,12 +24,13 @@ export const translateRequestSchema = z.object({
   translatorSlug: z.string().trim().optional(),
   modeKey: z.string().trim().optional(),
   mode: z.string().trim().optional(),
+  direction: z.enum(["forward", "reverse"]).optional(),
 });
 
 export type TranslateValidationResult =
   | {
       ok: true;
-      data: { text: string; translatorSlug?: string; modeKey?: string };
+      data: { text: string; translatorSlug?: string; modeKey?: string; direction: "forward" | "reverse" };
     }
   | {
       ok: false;
@@ -83,6 +84,7 @@ export function validateTranslateInput(payload: unknown): TranslateValidationRes
       text,
       translatorSlug: parsed.data.translatorSlug || undefined,
       modeKey: modeKey || undefined,
+      direction: parsed.data.direction || "forward",
     },
   };
 }

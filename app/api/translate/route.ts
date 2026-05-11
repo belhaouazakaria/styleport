@@ -70,6 +70,7 @@ export async function POST(request: Request) {
     translator,
     userText: validation.data.text,
     modeKey: validation.data.modeKey,
+    direction: validation.data.direction,
   });
 
   const settings = await getAppSettings();

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Copy, ExternalLink, Image as ImageIcon, Pencil, RefreshCcw, Trash2 } from "lucide-react";
+import { Archive, CheckSquare, Copy, ExternalLink, Image as ImageIcon, Pencil, RefreshCcw, RotateCcw, Square, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
@@ -333,70 +333,81 @@ export function TranslatorTable({ translators }: TranslatorTableProps) {
                   </td>
                   <td className="px-4 py-3 text-muted-ink">{formatDateTime(row.updatedAt)}</td>
                   <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap items-center gap-1.5">
                       <Link
                         href={`/admin/translators/${row.id}`}
-                        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-white px-3 text-xs font-medium text-ink hover:bg-muted-surface"
+                        aria-label={`Edit ${row.name}`}
+                        title="Edit"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-white text-ink hover:bg-muted-surface"
                       >
                         <Pencil className="h-3.5 w-3.5" />
-                        Edit
                       </Link>
                       <Link
                         href={`/translators/${row.slug}`}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-white px-3 text-xs font-medium text-ink hover:bg-muted-surface"
+                        aria-label={`View ${row.name}`}
+                        title="View translator"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-white text-ink hover:bg-muted-surface"
                       >
                         <ExternalLink className="h-3.5 w-3.5" />
-                        View translator
                       </Link>
-                      <Button size="sm" variant="outline" onClick={() => duplicate(row.id)} disabled={isBusy}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => duplicate(row.id)}
+                        disabled={isBusy}
+                        aria-label={`Duplicate ${row.name}`}
+                        title="Duplicate"
+                        className="h-8 w-8 p-0"
+                      >
                         <Copy className="h-3.5 w-3.5" />
-                        Duplicate
                       </Button>
                       <Button
                         size="sm"
                         variant="outline"
                         onClick={() => regenerateShareImage(row.id)}
                         disabled={isBusy || bulkBusy}
+                        aria-label={`Regenerate share image for ${row.name}`}
+                        title="Regenerate image"
+                        className="h-8 w-8 p-0"
                       >
                         <RefreshCcw className="h-3.5 w-3.5" />
-                        Regen image
                       </Button>
                       {!isArchived ? (
-                        <label
-                          className={`inline-flex h-8 cursor-pointer items-center gap-2 rounded-lg border border-border px-3 text-xs font-medium ${
-                            isBusy ? "opacity-60" : ""
-                          }`}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => void toggleActive(row.id, !row.isActive)}
+                          disabled={isBusy}
+                          aria-label={row.isActive ? `Deactivate ${row.name}` : `Activate ${row.name}`}
+                          title={row.isActive ? "Set inactive" : "Set active"}
+                          className={`h-8 w-8 p-0 ${row.isActive ? "text-emerald-700" : "text-muted-ink"}`}
                         >
-                          <span className="text-muted-ink">Active</span>
-                          <input
-                            type="checkbox"
-                            role="switch"
-                            checked={row.isActive}
-                            onChange={(event) => void toggleActive(row.id, event.target.checked)}
-                            disabled={isBusy}
-                            className="h-4 w-4 accent-brand-500"
-                          />
-                        </label>
+                          {row.isActive ? <CheckSquare className="h-3.5 w-3.5" /> : <Square className="h-3.5 w-3.5" />}
+                        </Button>
                       ) : null}
                       <Button
                         size="sm"
                         variant="outline"
                         onClick={() => setConfirm({ type: isArchived ? "unarchive" : "archive", id: row.id })}
                         disabled={isBusy}
+                        aria-label={isArchived ? `Unarchive ${row.name}` : `Archive ${row.name}`}
+                        title={isArchived ? "Unarchive" : "Archive"}
+                        className="h-8 w-8 p-0"
                       >
-                        {isArchived ? "Unarchive" : "Archive"}
+                        {isArchived ? <RotateCcw className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />}
                       </Button>
                       <Button
                         size="sm"
                         variant="outline"
-                        className="border-red-300 text-red-700 hover:bg-red-50"
+                        className="h-8 w-8 border-red-300 p-0 text-red-700 hover:bg-red-50"
                         onClick={() => setConfirm({ type: "hard-delete", id: row.id })}
                         disabled={isBusy}
+                        aria-label={`Delete ${row.name}`}
+                        title="Delete"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
-                        Delete
                       </Button>
                     </div>
                   </td>
