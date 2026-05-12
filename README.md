@@ -14,7 +14,7 @@ This repository is **feature-complete** and this hardening pass is focused on **
 
 Recommended runtime for this project:
 1. **Hostinger Node.js Web App** in hPanel
-2. **Subdomain** on existing domain (example: `translators.yourdomain.com`)
+2. **Subdomain** on existing domain (`translators.whattypeof.com`)
 3. **External managed PostgreSQL** (Supabase, Neon, Prisma Postgres, or equivalent)
 4. Existing app stack unchanged (Next.js + Prisma + Auth.js + OpenAI)
 
@@ -45,8 +45,9 @@ Important:
 
 Copy `.env.production.example` to `.env.production` and fill values:
 
-- `APP_BASE_URL=https://translators.yourdomain.com`
-- `NEXTAUTH_URL=https://translators.yourdomain.com`
+- `APP_BASE_URL=https://translators.whattypeof.com`
+- `NEXT_PUBLIC_APP_URL=https://translators.whattypeof.com`
+- `NEXTAUTH_URL=https://translators.whattypeof.com`
 - `NEXTAUTH_SECRET=<strong-random-secret>`
 - `DATABASE_URL=<managed-postgres-connection>`
 - `OPENAI_API_KEY=<openai-key>`
@@ -121,7 +122,7 @@ npm run dev
 
 ### 2. Create subdomain
 1. In Hostinger hPanel, open your existing domain.
-2. Create subdomain, e.g. `translators.yourdomain.com`.
+2. Create/use subdomain: `translators.whattypeof.com`.
 3. Point subdomain to your Node.js app location in hPanel.
 
 ### 3. Create Node.js Web App in hPanel
@@ -137,8 +138,9 @@ npm run start:hostinger
 Set all variables from `.env.production.example` in hPanel environment settings.
 
 Critical for auth/subdomain:
-- `APP_BASE_URL=https://translators.yourdomain.com`
-- `NEXTAUTH_URL=https://translators.yourdomain.com`
+- `APP_BASE_URL=https://translators.whattypeof.com`
+- `NEXT_PUBLIC_APP_URL=https://translators.whattypeof.com`
+- `NEXTAUTH_URL=https://translators.whattypeof.com`
 - `NEXTAUTH_SECRET=<strong random value>`
 
 If Hostinger auto-detects your app as `Other` and leaves build settings as `null`, set:

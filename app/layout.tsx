@@ -41,11 +41,11 @@ export const metadata: Metadata = {
     title: APP_NAME,
     description: SEO_DESCRIPTION,
     type: "website",
-    url: "https://translator.whattypeof.com",
+    url: "/",
     siteName: APP_NAME,
     images: [
       {
-        url: "https://translator.whattypeof.com/og-image.png",
+        url: "/og-image.png",
         width: 1200,
         height: 630,
         alt: APP_NAME,
@@ -56,7 +56,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: APP_NAME,
     description: SEO_DESCRIPTION,
-    images: ["https://translator.whattypeof.com/og-image.png"],
+    images: ["/og-image.png"],
   },
   icons: {
     icon: [{ url: "/icon.svg", type: "image/svg+xml" }],

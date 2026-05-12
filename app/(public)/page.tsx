@@ -17,6 +17,7 @@ import {
   getFeaturedPublicTranslators,
   getNewestPublicTranslatorsPage,
 } from "@/lib/data/translators";
+import { getAppBaseUrl } from "@/lib/env";
 import { getAppSettings } from "@/lib/settings";
 
 interface PageProps {
@@ -31,6 +32,9 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ searchParams }: PageProps): Promise<Metadata> {
   const params = await searchParams;
+  const baseUrl = getAppBaseUrl();
+  const ogImageUrl = new URL("/og-image.png", baseUrl).toString();
+  const homeUrl = new URL("/", baseUrl).toString();
 
   const hasSearch = Boolean(params.q?.trim());
   const hasCategory = Boolean(params.category?.trim());
@@ -47,10 +51,10 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
       description:
         "AI-powered text translators to rewrite text into different styles, tones, and personalities.",
       type: "website",
-      url: "https://translator.whattypeof.com",
+      url: homeUrl,
       images: [
         {
-          url: "https://translator.whattypeof.com/og-image.png",
+          url: ogImageUrl,
           width: 1200,
           height: 630,
           alt: "What Type Of | Translator",
@@ -62,7 +66,7 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
       title: "What Type Of | Translator",
       description:
         "AI-powered text translators to rewrite text into different styles, tones, and personalities.",
-      images: ["https://translator.whattypeof.com/og-image.png"],
+      images: [ogImageUrl],
     },
     robots: hasSearch
       ? {

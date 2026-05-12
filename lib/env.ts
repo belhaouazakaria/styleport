@@ -24,6 +24,7 @@ const integerParser = z
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   APP_BASE_URL: z.string().optional(),
+  NEXT_PUBLIC_APP_URL: z.string().optional(),
   DATABASE_URL: z.string().min(1).optional(),
   NEXTAUTH_URL: z.string().optional(),
   NEXTAUTH_SECRET: z.string().optional(),
@@ -49,6 +50,7 @@ export type ServerEnv = z.infer<typeof envSchema>;
 
 let cachedServerEnv: ServerEnv | null = null;
 const FALLBACK_LOCAL_BASE_URL = "http://localhost:3000";
+const FALLBACK_PRODUCTION_BASE_URL = "https://translators.whattypeof.com";
 const LOOPBACK_HOSTNAMES = new Set(["localhost", "0.0.0.0", "::1"]);
 
 function formatIssues(issues: z.ZodIssue[]) {
@@ -84,12 +86,24 @@ function isLoopbackHostname(hostname: string) {
   return false;
 }
 
+function isPlaceholderHostname(hostname: string) {
+  const normalized = hostname.trim().toLowerCase();
+  return (
+    normalized === "example.com" ||
+    normalized.endsWith(".example.com") ||
+    normalized === "example.org" ||
+    normalized.endsWith(".example.org") ||
+    normalized === "example.net" ||
+    normalized.endsWith(".example.net")
+  );
+}
+
 function isUsablePublicBaseUrl(url: URL, options: { isProduction: boolean }) {
   if (!options.isProduction) {
     return true;
   }
 
-  return !isLoopbackHostname(url.hostname);
+  return !isLoopbackHostname(url.hostname) && !isPlaceholderHostname(url.hostname);
 }
 
 export function getServerEnv(): ServerEnv {
@@ -115,7 +129,11 @@ export function getServerEnv(): ServerEnv {
 export function getAppBaseUrl(options?: { requestUrl?: string }) {
   const env = getServerEnv();
   const isProduction = env.NODE_ENV === "production";
-  const candidates: Array<string | undefined> = [env.APP_BASE_URL, env.NEXTAUTH_URL];
+  const candidates: Array<string | undefined> = [
+    env.APP_BASE_URL,
+    env.NEXT_PUBLIC_APP_URL,
+    env.NEXTAUTH_URL,
+  ];
 
   if (options?.requestUrl) {
     const requestParsed = parseHttpUrl(options.requestUrl);
@@ -137,5 +155,5 @@ export function getAppBaseUrl(options?: { requestUrl?: string }) {
     return parsed;
   }
 
-  return new URL(FALLBACK_LOCAL_BASE_URL);
+  return new URL(isProduction ? FALLBACK_PRODUCTION_BASE_URL : FALLBACK_LOCAL_BASE_URL);
 }

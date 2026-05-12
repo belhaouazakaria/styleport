@@ -3,7 +3,7 @@ import { getServerEnv } from "@/lib/env";
 const env = getServerEnv();
 
 const requiredPairs: Array<[string, string | undefined]> = [
-  ["APP_BASE_URL or NEXTAUTH_URL", env.APP_BASE_URL || env.NEXTAUTH_URL],
+  ["APP_BASE_URL or NEXT_PUBLIC_APP_URL or NEXTAUTH_URL", env.APP_BASE_URL || env.NEXT_PUBLIC_APP_URL || env.NEXTAUTH_URL],
   ["NEXTAUTH_SECRET", env.NEXTAUTH_SECRET],
   ["DATABASE_URL", env.DATABASE_URL],
   ["OPENAI_API_KEY", env.OPENAI_API_KEY],
@@ -22,7 +22,7 @@ if (missing.length) {
   process.exit(1);
 }
 
-const baseUrl = env.APP_BASE_URL || env.NEXTAUTH_URL;
+const baseUrl = env.APP_BASE_URL || env.NEXT_PUBLIC_APP_URL || env.NEXTAUTH_URL;
 if (baseUrl) {
   try {
     const parsed = new URL(baseUrl);
@@ -32,14 +32,28 @@ if (baseUrl) {
 
     const host = parsed.hostname.toLowerCase();
     const isLoopback = host === "localhost" || host === "0.0.0.0" || host === "::1" || host.startsWith("127.");
+    const isPlaceholder =
+      host === "example.com" ||
+      host.endsWith(".example.com") ||
+      host === "example.org" ||
+      host.endsWith(".example.org") ||
+      host === "example.net" ||
+      host.endsWith(".example.net");
     if (isLoopback && env.NODE_ENV === "production") {
       console.error(
-        "[env] APP_BASE_URL/NEXTAUTH_URL must be the public production domain (not localhost/0.0.0.0).",
+        "[env] APP_BASE_URL/NEXT_PUBLIC_APP_URL/NEXTAUTH_URL must be the public production domain (not localhost/0.0.0.0).",
+      );
+      process.exit(1);
+    }
+
+    if (isPlaceholder && env.NODE_ENV === "production") {
+      console.error(
+        "[env] APP_BASE_URL/NEXT_PUBLIC_APP_URL/NEXTAUTH_URL cannot use example.com placeholder domains in production.",
       );
       process.exit(1);
     }
   } catch {
-    console.error("[env] APP_BASE_URL/NEXTAUTH_URL must be a valid absolute URL.");
+    console.error("[env] APP_BASE_URL/NEXT_PUBLIC_APP_URL/NEXTAUTH_URL must be a valid absolute URL.");
     process.exit(1);
   }
 }
