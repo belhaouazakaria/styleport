@@ -64,11 +64,7 @@ export default async function AdminIndexingPage({ searchParams }: PageProps) {
             <div className="rounded-xl border border-border bg-white p-3">
               <p className="text-xs font-medium text-muted-ink">Credential mode</p>
               <p className="mt-1 text-sm font-semibold text-ink">
-                {googleStatus.credentialMode === "json"
-                  ? "Full JSON"
-                  : googleStatus.credentialMode === "missing"
-                    ? "Missing"
-                    : "Invalid"}
+                Split env vars
               </p>
             </div>
             <div className="rounded-xl border border-border bg-white p-3">
@@ -77,9 +73,15 @@ export default async function AdminIndexingPage({ searchParams }: PageProps) {
             </div>
             <div className="rounded-xl border border-border bg-white p-3 md:col-span-2 xl:col-span-1">
               <p className="text-xs font-medium text-muted-ink">Service account email</p>
-              <p className="mt-1 break-all text-sm font-medium text-ink">{googleStatus.serviceAccountEmail || "Not available"}</p>
+              <p className="mt-1 break-all text-sm font-medium text-ink">
+                {googleStatus.serviceAccountEmail || "Not available"}
+              </p>
             </div>
-            <div className="rounded-xl border border-border bg-white p-3 md:col-span-2">
+            <div className="rounded-xl border border-border bg-white p-3 md:col-span-2 xl:col-span-1">
+              <p className="text-xs font-medium text-muted-ink">Project ID</p>
+              <p className="mt-1 break-all text-sm font-medium text-ink">{googleStatus.projectId || "Not available"}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-white p-3 md:col-span-2 xl:col-span-1">
               <p className="text-xs font-medium text-muted-ink">Base site URL</p>
               <p className="mt-1 break-all text-sm font-medium text-ink">{googleStatus.baseUrl}</p>
             </div>
@@ -94,6 +96,11 @@ export default async function AdminIndexingPage({ searchParams }: PageProps) {
           {!googleStatus.credentialsConfigured ? (
             <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
               <p className="font-medium">Google credentials are not configured correctly.</p>
+              {googleStatus.missingFields.length ? (
+                <p className="mt-1">
+                  Missing env vars: {googleStatus.missingFields.join(", ")}
+                </p>
+              ) : null}
               {googleStatus.validationErrors.length ? (
                 <ul className="mt-1 list-disc pl-5">
                   {googleStatus.validationErrors.map((error) => (

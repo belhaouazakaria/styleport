@@ -12,109 +12,84 @@ const GOOGLE_INDEXING_ENDPOINT = "https://indexing.googleapis.com/v3/urlNotifica
 interface ServiceAccountCredentials {
   type: "service_account";
   project_id: string;
-  private_key_id: string;
   private_key: string;
   client_email: string;
-  client_id: string;
-  auth_uri?: string;
-  token_uri?: string;
-  auth_provider_x509_cert_url?: string;
-  client_x509_cert_url?: string;
-  universe_domain?: string;
+  token_uri: string;
 }
 
+type MissingCredentialField =
+  | "GOOGLE_CLIENT_EMAIL"
+  | "GOOGLE_PRIVATE_KEY"
+  | "GOOGLE_PROJECT_ID";
+
 interface ParsedCredentialState {
-  mode: "missing" | "invalid" | "json";
   credentials: ServiceAccountCredentials | null;
+  missingFields: MissingCredentialField[];
   errors: string[];
 }
 
-function normalizePrivateKey(raw: string) {
-  return raw.includes("\\n") ? raw.replace(/\\n/g, "\n") : raw;
+function stripWrappingQuotes(value: string) {
+  const trimmed = value.trim();
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
 }
 
-function parseServiceAccountJson(raw: string | undefined): ParsedCredentialState {
-  if (!raw?.trim()) {
-    return {
-      mode: "missing",
-      credentials: null,
-      errors: ["GOOGLE_SERVICE_ACCOUNT_JSON is not set."],
-    };
+function normalizePrivateKey(raw: string) {
+  const unquoted = stripWrappingQuotes(raw);
+  return unquoted.includes("\\n") ? unquoted.replace(/\\n/g, "\n") : unquoted;
+}
+
+function parseSplitServiceAccountCredentials(): ParsedCredentialState {
+  const env = getServerEnv();
+  const clientEmailRaw = env.GOOGLE_CLIENT_EMAIL || "";
+  const privateKeyRaw = env.GOOGLE_PRIVATE_KEY || "";
+  const projectIdRaw = env.GOOGLE_PROJECT_ID || "";
+
+  const clientEmail = stripWrappingQuotes(clientEmailRaw);
+  const privateKey = normalizePrivateKey(privateKeyRaw);
+  const projectId = stripWrappingQuotes(projectIdRaw);
+
+  const missingFields: MissingCredentialField[] = [];
+  const errors: string[] = [];
+
+  if (!clientEmail) {
+    missingFields.push("GOOGLE_CLIENT_EMAIL");
+  } else if (!/\.gserviceaccount\.com$/i.test(clientEmail)) {
+    errors.push("GOOGLE_CLIENT_EMAIL must be a valid service account email.");
   }
 
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return {
-      mode: "invalid",
-      credentials: null,
-      errors: ["GOOGLE_SERVICE_ACCOUNT_JSON is not valid JSON."],
-    };
+  if (!privateKey) {
+    missingFields.push("GOOGLE_PRIVATE_KEY");
+  } else if (!privateKey.includes("BEGIN PRIVATE KEY")) {
+    errors.push("GOOGLE_PRIVATE_KEY format is invalid.");
   }
 
-  if (!parsed || typeof parsed !== "object") {
-    return {
-      mode: "invalid",
-      credentials: null,
-      errors: ["GOOGLE_SERVICE_ACCOUNT_JSON must be a JSON object."],
-    };
+  if (!projectId) {
+    missingFields.push("GOOGLE_PROJECT_ID");
   }
 
-  const candidate = parsed as Record<string, unknown>;
-  const requiredFields = ["type", "client_email", "private_key", "token_uri"] as const;
-  const missingFields = requiredFields.filter((field) => {
-    const value = candidate[field];
-    return typeof value !== "string" || !value.trim();
-  });
-
-  if (missingFields.length) {
+  if (missingFields.length || errors.length) {
     return {
-      mode: "invalid",
       credentials: null,
-      errors: [`Missing required service account fields: ${missingFields.join(", ")}.`],
+      missingFields,
+      errors,
     };
   }
-
-  if (candidate.type !== "service_account") {
-    return {
-      mode: "invalid",
-      credentials: null,
-      errors: ["Service account JSON must have type=service_account."],
-    };
-  }
-
-  const privateKey = normalizePrivateKey(String(candidate.private_key));
-  if (!privateKey.includes("BEGIN PRIVATE KEY")) {
-    return {
-      mode: "invalid",
-      credentials: null,
-      errors: ["Service account private_key format is invalid."],
-    };
-  }
-
-  const credentials: ServiceAccountCredentials = {
-    type: "service_account",
-    project_id: String(candidate.project_id || ""),
-    private_key_id: String(candidate.private_key_id || ""),
-    private_key: privateKey,
-    client_email: String(candidate.client_email),
-    client_id: String(candidate.client_id || ""),
-    auth_uri: typeof candidate.auth_uri === "string" ? candidate.auth_uri : undefined,
-    token_uri: typeof candidate.token_uri === "string" ? candidate.token_uri : undefined,
-    auth_provider_x509_cert_url:
-      typeof candidate.auth_provider_x509_cert_url === "string"
-        ? candidate.auth_provider_x509_cert_url
-        : undefined,
-    client_x509_cert_url:
-      typeof candidate.client_x509_cert_url === "string" ? candidate.client_x509_cert_url : undefined,
-    universe_domain:
-      typeof candidate.universe_domain === "string" ? candidate.universe_domain : undefined,
-  };
 
   return {
-    mode: "json",
-    credentials,
+    credentials: {
+      type: "service_account",
+      project_id: projectId,
+      private_key: privateKey,
+      client_email: clientEmail,
+      token_uri: GOOGLE_TOKEN_URI,
+    },
+    missingFields: [],
     errors: [],
   };
 }
@@ -133,7 +108,7 @@ function buildSignedJwt(credentials: ServiceAccountCredentials) {
   const payload = {
     iss: credentials.client_email,
     scope: GOOGLE_INDEXING_SCOPE,
-    aud: credentials.token_uri || GOOGLE_TOKEN_URI,
+    aud: credentials.token_uri,
     iat: now,
     exp: now + 3600,
   };
@@ -152,13 +127,12 @@ function buildSignedJwt(credentials: ServiceAccountCredentials) {
 
 async function fetchAccessToken(credentials: ServiceAccountCredentials) {
   const assertion = buildSignedJwt(credentials);
-  const tokenUri = credentials.token_uri || GOOGLE_TOKEN_URI;
   const body = new URLSearchParams({
     grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
     assertion,
   });
 
-  const response = await fetch(tokenUri, {
+  const response = await fetch(credentials.token_uri, {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
@@ -182,16 +156,19 @@ async function fetchAccessToken(credentials: ServiceAccountCredentials) {
 
 export function getGoogleIndexingStatus(): GoogleIndexingStatusSummary {
   const env = getServerEnv();
-  const parsed = parseServiceAccountJson(env.GOOGLE_SERVICE_ACCOUNT_JSON);
+  const parsed = parseSplitServiceAccountCredentials();
+  const baseUrl = getAppBaseUrl().toString().replace(/\/$/, "");
 
   return {
     enabled: env.GOOGLE_INDEXING_ENABLED === true,
     dryRun: env.GOOGLE_INDEXING_DRY_RUN === true,
-    credentialsConfigured: parsed.mode === "json",
-    credentialMode: parsed.mode,
+    credentialsConfigured: Boolean(parsed.credentials),
+    credentialMode: "split-env-vars",
+    projectId: parsed.credentials?.project_id || null,
     serviceAccountEmail: parsed.credentials?.client_email || null,
+    missingFields: parsed.missingFields,
     validationErrors: parsed.errors,
-    baseUrl: getAppBaseUrl().toString().replace(/\/$/, ""),
+    baseUrl,
   };
 }
 
@@ -239,13 +216,17 @@ export async function submitUrlToGoogleIndexing(
   }
 
   if (!status.credentialsConfigured) {
+    const missingMessage = status.missingFields.length
+      ? `Missing required env vars: ${status.missingFields.join(", ")}.`
+      : null;
     return {
       ok: false,
       url: normalizedUrl,
       status: "FAILED",
       message:
+        missingMessage ||
         status.validationErrors[0] ||
-        "GOOGLE_SERVICE_ACCOUNT_JSON is missing or invalid.",
+        "Google Indexing credentials are missing or invalid.",
     };
   }
 
@@ -258,13 +239,19 @@ export async function submitUrlToGoogleIndexing(
     };
   }
 
-  const parsedCredentials = parseServiceAccountJson(getServerEnv().GOOGLE_SERVICE_ACCOUNT_JSON);
+  const parsedCredentials = parseSplitServiceAccountCredentials();
   if (!parsedCredentials.credentials) {
+    const missingMessage = parsedCredentials.missingFields.length
+      ? `Missing required env vars: ${parsedCredentials.missingFields.join(", ")}.`
+      : null;
     return {
       ok: false,
       url: normalizedUrl,
       status: "FAILED",
-      message: parsedCredentials.errors[0] || "Unable to load service account credentials.",
+      message:
+        missingMessage ||
+        parsedCredentials.errors[0] ||
+        "Unable to load Google service account credentials.",
     };
   }
 

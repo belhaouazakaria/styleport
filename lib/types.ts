@@ -172,8 +172,10 @@ export interface GoogleIndexingStatusSummary {
   enabled: boolean;
   dryRun: boolean;
   credentialsConfigured: boolean;
-  credentialMode: "json" | "missing" | "invalid";
+  credentialMode: "split-env-vars";
+  projectId: string | null;
   serviceAccountEmail: string | null;
+  missingFields: Array<"GOOGLE_CLIENT_EMAIL" | "GOOGLE_PRIVATE_KEY" | "GOOGLE_PROJECT_ID">;
   validationErrors: string[];
   baseUrl: string;
 }

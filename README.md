@@ -54,7 +54,9 @@ Copy `.env.production.example` to `.env.production` and fill values:
 - `OPENAI_MODEL=<model>`
 - `GOOGLE_INDEXING_ENABLED=false`
 - `GOOGLE_INDEXING_DRY_RUN=false`
-- `GOOGLE_SERVICE_ACCOUNT_JSON=<full-service-account-json-one-line>`
+- `GOOGLE_CLIENT_EMAIL=<service-account-client-email>`
+- `GOOGLE_PRIVATE_KEY=<service-account-private-key>`
+- `GOOGLE_PROJECT_ID=<google-cloud-project-id>`
 - `NEXT_PUBLIC_APP_NAME=What Type Of | Translator`
 - `IP_HASH_SECRET=<random-secret>`
 - `ALERT_ADMIN_EMAIL=<ops-email>`
@@ -94,18 +96,31 @@ Important limitation:
 2. Add that email as a user on the Search Console property.
 3. Grant enough permission to submit indexing requests.
 
-### 5. Configure runtime environment (JSON-only mode)
-This app uses only one credential variable:
-- `GOOGLE_SERVICE_ACCOUNT_JSON`
+### 5. Configure runtime environment (split credentials)
+Set these server-only variables:
+- `GOOGLE_CLIENT_EMAIL`
+- `GOOGLE_PRIVATE_KEY`
+- `GOOGLE_PROJECT_ID`
 
-Do not split credentials into multiple vars.
+Mapping from downloaded service account JSON:
+- `client_email` -> `GOOGLE_CLIENT_EMAIL`
+- `private_key` -> `GOOGLE_PRIVATE_KEY`
+- `project_id` -> `GOOGLE_PROJECT_ID`
 
-Example shape:
+Example:
 ```bash
-GOOGLE_SERVICE_ACCOUNT_JSON='{"type":"service_account","project_id":"your-project-id","private_key_id":"...","private_key":"-----BEGIN PRIVATE KEY-----\\n...\\n-----END PRIVATE KEY-----\\n","client_email":"your-service-account@your-project.iam.gserviceaccount.com","client_id":"...","auth_uri":"https://accounts.google.com/o/oauth2/auth","token_uri":"https://oauth2.googleapis.com/token","auth_provider_x509_cert_url":"https://www.googleapis.com/oauth2/v1/certs","client_x509_cert_url":"...","universe_domain":"googleapis.com"}'
+GOOGLE_CLIENT_EMAIL=your-service-account@your-project.iam.gserviceaccount.com
+GOOGLE_PROJECT_ID=your-project-id
+GOOGLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nYOUR_KEY_HERE\n-----END PRIVATE KEY-----\n"
 ```
 
-To use the full JSON key, open the downloaded service account JSON file, copy the entire JSON content, compress it into one line if needed, and paste it into GOOGLE_SERVICE_ACCOUNT_JSON in Hostinger environment variables. Do not commit this value to GitHub.
+Steps:
+1. Open the downloaded service account JSON file.
+2. Copy `client_email` into `GOOGLE_CLIENT_EMAIL`.
+3. Copy `project_id` into `GOOGLE_PROJECT_ID`.
+4. Copy `private_key` into `GOOGLE_PRIVATE_KEY`.
+5. Keep `\n` newline characters exactly as shown, or paste multiline if Hostinger supports it.
+6. Restart the Node.js app after changing env vars.
 
 The service account JSON contains a private key. Treat it like a password. Never expose it in frontend code, public repositories, screenshots, or logs.
 
@@ -211,27 +226,29 @@ In Hostinger Node.js app environment variables, add:
 - `GOOGLE_INDEXING_DRY_RUN=false`
 - `NEXT_PUBLIC_APP_URL=https://translators.whattypeof.com`
 - `NEXTAUTH_URL=https://translators.whattypeof.com`
-- `GOOGLE_SERVICE_ACCOUNT_JSON=<paste full JSON as one line>`
+- `GOOGLE_CLIENT_EMAIL=<client_email from JSON>`
+- `GOOGLE_PROJECT_ID=<project_id from JSON>`
+- `GOOGLE_PRIVATE_KEY=<private_key from JSON>`
 
 Steps:
 1. Open the downloaded Google service account JSON file.
-2. Copy the entire JSON content.
-3. Paste it into Hostinger as the value of `GOOGLE_SERVICE_ACCOUNT_JSON`.
-4. Prefer keeping it as one line if Hostinger has issues with multiline values.
-5. Do not commit this JSON key to GitHub.
+2. Copy `client_email`, `project_id`, and `private_key`.
+3. Paste each value into its matching Hostinger env var.
+4. If Hostinger has issues with multiline private keys, keep `\n` escaped in one line.
+5. Do not commit this private key to GitHub.
 6. Do not expose it in frontend code.
 7. Restart the Node.js app after changing env vars.
 
 Notes:
-- If the JSON contains `\\n` in `private_key`, keep those characters exactly.
-- The app handles escaped newline sequences automatically.
-- If JSON is pasted multiline and Hostinger accepts it, it may still work, but one-line JSON is safer.
+- If `GOOGLE_PRIVATE_KEY` contains `\n`, keep those characters exactly.
+- The app converts escaped newline sequences automatically.
+- Multiline private key values can also work if Hostinger preserves them correctly.
 
 ### Do I need GitHub secrets for Google Indexing API?
 
 - For this project, Google indexing runs at runtime from the Hostinger app.
-- Therefore, GitHub does **not** need `GOOGLE_SERVICE_ACCOUNT_JSON` for normal build/deploy.
-- Add the Google JSON key to GitHub secrets only if a future workflow directly calls Google Indexing API.
+- Therefore, GitHub does **not** need Google credential secrets for normal build/deploy.
+- Add Google secrets to GitHub only if a future workflow directly calls Google Indexing API.
 - Do not expose Google service account JSON in public files.
 - Do not commit `.env.production`.
 
