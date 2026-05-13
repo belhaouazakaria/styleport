@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { CommentModerationStatus, TranslatorRequestStatus } from "@prisma/client";
+import {
+  CommentModerationStatus,
+  IndexingSource,
+  IndexingStatus,
+  TranslatorRequestStatus,
+} from "@prisma/client";
 
 import { MAX_INPUT_CHARS } from "@/lib/constants";
 import type { ApiError } from "@/lib/types";
@@ -229,6 +234,16 @@ export const adminRequestFilterSchema = z.object({
   category: z.string().trim().max(120).optional(),
   dateFrom: z.string().date().optional(),
   dateTo: z.string().date().optional(),
+});
+
+export const adminIndexingFilterSchema = z.object({
+  q: z.string().trim().max(200).optional(),
+  status: z.nativeEnum(IndexingStatus).optional().or(z.literal("all")),
+  source: z.nativeEnum(IndexingSource).optional().or(z.literal("all")),
+});
+
+export const adminIndexSingleSchema = z.object({
+  translatorId: z.string().trim().min(1),
 });
 
 export const requestStatusUpdateSchema = z.object({

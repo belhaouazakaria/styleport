@@ -1,4 +1,10 @@
-import type { CommentModerationStatus, Role, TranslatorRequestStatus } from "@prisma/client";
+import type {
+  CommentModerationStatus,
+  IndexingSource,
+  IndexingStatus,
+  Role,
+  TranslatorRequestStatus,
+} from "@prisma/client";
 
 export type ApiErrorCode =
   | "VALIDATION_ERROR"
@@ -157,7 +163,27 @@ export interface TranslatorListItem {
   featuredSource: "AUTO" | "MANUAL";
   shareImagePath: string | null;
   shareImageUpdatedAt: string | null;
+  latestIndexingStatus: IndexingStatus | null;
+  latestIndexingAt: string | null;
   categories: Array<{ id: string; name: string; slug: string }>;
+}
+
+export interface GoogleIndexingStatusSummary {
+  enabled: boolean;
+  dryRun: boolean;
+  credentialsConfigured: boolean;
+  credentialMode: "json" | "missing" | "invalid";
+  serviceAccountEmail: string | null;
+  validationErrors: string[];
+  baseUrl: string;
+}
+
+export interface IndexingSubmissionResult {
+  ok: boolean;
+  url: string;
+  status: "SUBMITTED" | "FAILED" | "SKIPPED" | "DRY_RUN";
+  message?: string;
+  response?: unknown;
 }
 
 export interface CategoryUpsertInput {
@@ -370,6 +396,35 @@ export interface AdminTranslatorCommentListItem {
     name: string;
     slug: string;
   };
+}
+
+export interface AdminIndexingLogListItem {
+  id: string;
+  translatorId: string | null;
+  translatorName: string | null;
+  translatorSlug: string | null;
+  url: string;
+  source: IndexingSource;
+  status: IndexingStatus;
+  provider: "GOOGLE_INDEXING_API";
+  message: string | null;
+  responseJson: unknown;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminIndexingLogFilters {
+  q?: string;
+  status?: "all" | IndexingStatus;
+  source?: "all" | IndexingSource;
+}
+
+export interface AdminBulkIndexingSummary {
+  total: number;
+  submitted: number;
+  failed: number;
+  skipped: number;
+  dryRun: number;
 }
 
 export interface UsageProtectionSettingsInput {

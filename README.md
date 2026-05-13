@@ -52,6 +52,9 @@ Copy `.env.production.example` to `.env.production` and fill values:
 - `DATABASE_URL=<managed-postgres-connection>`
 - `OPENAI_API_KEY=<openai-key>`
 - `OPENAI_MODEL=<model>`
+- `GOOGLE_INDEXING_ENABLED=false`
+- `GOOGLE_INDEXING_DRY_RUN=false`
+- `GOOGLE_SERVICE_ACCOUNT_JSON=<full-service-account-json-one-line>`
 - `NEXT_PUBLIC_APP_NAME=What Type Of | Translator`
 - `IP_HASH_SECRET=<random-secret>`
 - `ALERT_ADMIN_EMAIL=<ops-email>`
@@ -59,6 +62,59 @@ Copy `.env.production.example` to `.env.production` and fill values:
 - `BREVO_API_KEY=<brevo-api-key>`
 
 Production validation is fail-fast for critical vars, so missing required values will stop startup.
+
+---
+
+## Google Indexing API Setup
+
+Google Indexing API support in this app is optional and admin-triggered.  
+Sitemap remains the primary indexing method.
+
+Important limitation:
+- Google officially documents the Indexing API for limited content types (for example JobPosting and BroadcastEvent).
+- Use this feature as an extra submission tool only.
+- Indexing is never guaranteed, even after a successful submission response.
+
+### 1. Verify Search Console property
+1. Open Google Search Console.
+2. Verify this exact property:
+   - `https://translators.whattypeof.com`
+
+### 2. Google Cloud project and API
+1. Create or select a Google Cloud project.
+2. Enable **Google Indexing API** for that project.
+
+### 3. Create service account and JSON key
+1. Create a service account in Google Cloud IAM.
+2. Generate and download a JSON private key for that service account.
+3. Open the JSON file and keep it secure.
+
+### 4. Grant Search Console access to service account
+1. Copy `client_email` from the downloaded JSON.
+2. Add that email as a user on the Search Console property.
+3. Grant enough permission to submit indexing requests.
+
+### 5. Configure runtime environment (JSON-only mode)
+This app uses only one credential variable:
+- `GOOGLE_SERVICE_ACCOUNT_JSON`
+
+Do not split credentials into multiple vars.
+
+Example shape:
+```bash
+GOOGLE_SERVICE_ACCOUNT_JSON='{"type":"service_account","project_id":"your-project-id","private_key_id":"...","private_key":"-----BEGIN PRIVATE KEY-----\\n...\\n-----END PRIVATE KEY-----\\n","client_email":"your-service-account@your-project.iam.gserviceaccount.com","client_id":"...","auth_uri":"https://accounts.google.com/o/oauth2/auth","token_uri":"https://oauth2.googleapis.com/token","auth_provider_x509_cert_url":"https://www.googleapis.com/oauth2/v1/certs","client_x509_cert_url":"...","universe_domain":"googleapis.com"}'
+```
+
+To use the full JSON key, open the downloaded service account JSON file, copy the entire JSON content, compress it into one line if needed, and paste it into GOOGLE_SERVICE_ACCOUNT_JSON in Hostinger environment variables. Do not commit this value to GitHub.
+
+The service account JSON contains a private key. Treat it like a password. Never expose it in frontend code, public repositories, screenshots, or logs.
+
+### 6. Dry-run mode
+Use dry-run to test safely without sending requests to Google:
+- `GOOGLE_INDEXING_ENABLED=true`
+- `GOOGLE_INDEXING_DRY_RUN=true`
+
+---
 
 ---
 
@@ -148,6 +204,37 @@ If Hostinger auto-detects your app as `Other` and leaves build settings as `null
 - Entry file: `server.js`
 - Startup command: `npm run start:hostinger`
 
+### Google Indexing API production env setup on Hostinger
+
+In Hostinger Node.js app environment variables, add:
+- `GOOGLE_INDEXING_ENABLED=true`
+- `GOOGLE_INDEXING_DRY_RUN=false`
+- `NEXT_PUBLIC_APP_URL=https://translators.whattypeof.com`
+- `NEXTAUTH_URL=https://translators.whattypeof.com`
+- `GOOGLE_SERVICE_ACCOUNT_JSON=<paste full JSON as one line>`
+
+Steps:
+1. Open the downloaded Google service account JSON file.
+2. Copy the entire JSON content.
+3. Paste it into Hostinger as the value of `GOOGLE_SERVICE_ACCOUNT_JSON`.
+4. Prefer keeping it as one line if Hostinger has issues with multiline values.
+5. Do not commit this JSON key to GitHub.
+6. Do not expose it in frontend code.
+7. Restart the Node.js app after changing env vars.
+
+Notes:
+- If the JSON contains `\\n` in `private_key`, keep those characters exactly.
+- The app handles escaped newline sequences automatically.
+- If JSON is pasted multiline and Hostinger accepts it, it may still work, but one-line JSON is safer.
+
+### Do I need GitHub secrets for Google Indexing API?
+
+- For this project, Google indexing runs at runtime from the Hostinger app.
+- Therefore, GitHub does **not** need `GOOGLE_SERVICE_ACCOUNT_JSON` for normal build/deploy.
+- Add the Google JSON key to GitHub secrets only if a future workflow directly calls Google Indexing API.
+- Do not expose Google service account JSON in public files.
+- Do not commit `.env.production`.
+
 ### 5. Deploy sequence
 Preferred production deploy is GitHub Actions artifact deployment:
 - CI gate runs lint, typecheck, tests, Prisma migrations, and build on GitHub runners.
@@ -227,6 +314,21 @@ npm run prisma:seed
   - translator summary text
 - Make sure `APP_BASE_URL` (or `NEXTAUTH_URL`) is set correctly in production so share URLs resolve to the public domain.
 - Pin images are generated server-side when translators are created/updated and can be manually regenerated from admin translator edit/list screens.
+
+## Optional Admin Google Indexing Tool
+
+The admin dashboard now includes **Indexing** at `/admin/indexing`:
+- status/config panel
+- bulk action: **Index all active translators**
+- indexing logs table with source/status/message
+
+Automatic behavior:
+- when a translator is created active, it is submitted automatically
+- when a translator becomes active later, it is submitted automatically
+- failures are logged and never block translator create/update flows
+
+Admin message reminder:
+- “Google Indexing API submission requested. Final indexing is not guaranteed.”
 
 ## Public Create-Translator Flow
 

@@ -1,4 +1,4 @@
-import { FeaturedSource, Prisma, TranslationStatus } from "@prisma/client";
+import { FeaturedSource, IndexingProvider, IndexingSource, Prisma, TranslationStatus } from "@prisma/client";
 
 import {
   AUTO_FEATURED_LIMIT,
@@ -6,8 +6,9 @@ import {
   DEFAULT_AUTO_FEATURED_WINDOW_DAYS,
   APP_SETTING_KEYS,
 } from "@/lib/constants";
-import { logWarn } from "@/lib/logger";
+import { logError, logWarn } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
+import { submitTranslatorToGoogleIndexing } from "@/lib/data/indexing";
 import { deleteStoredShareImage, ensureTranslatorShareImageById } from "@/lib/share-images";
 import { ensureUniqueTranslatorSlug } from "@/lib/slug";
 import { getAppSettings } from "@/lib/settings";
@@ -1062,6 +1063,17 @@ export async function listAdminTranslators(filters: {
       featuredSource: true,
       shareImagePath: true,
       shareImageUpdatedAt: true,
+      indexingLogs: {
+        where: {
+          provider: IndexingProvider.GOOGLE_INDEXING_API,
+        },
+        select: {
+          status: true,
+          createdAt: true,
+        },
+        orderBy: [{ createdAt: "desc" }],
+        take: 1,
+      },
       archivedAt: true,
       updatedAt: true,
       sortOrder: true,
@@ -1086,6 +1098,8 @@ export async function listAdminTranslators(filters: {
     archivedAt: row.archivedAt ? row.archivedAt.toISOString() : null,
     updatedAt: row.updatedAt.toISOString(),
     shareImageUpdatedAt: row.shareImageUpdatedAt ? row.shareImageUpdatedAt.toISOString() : null,
+    latestIndexingStatus: row.indexingLogs[0]?.status || null,
+    latestIndexingAt: row.indexingLogs[0]?.createdAt ? row.indexingLogs[0].createdAt.toISOString() : null,
   }));
 }
 
@@ -1203,6 +1217,23 @@ export async function createTranslator(input: TranslatorUpsertInput) {
 
   await ensureTranslatorShareImageById(created.id);
 
+  if (created.isActive) {
+    try {
+      await submitTranslatorToGoogleIndexing({
+        translatorId: created.id,
+        slug: created.slug,
+        source: IndexingSource.AUTO_ACTIVE,
+      });
+    } catch (error) {
+      logError(
+        "auto_google_indexing_on_create_failed",
+        "Auto Google indexing submission failed after translator creation.",
+        { translatorId: created.id, slug: created.slug },
+        error,
+      );
+    }
+  }
+
   if (settings.autoFeaturedEnabled) {
     await maybeRecalculateAutoFeaturedTranslators("settings-save");
   }
@@ -1220,6 +1251,7 @@ export async function updateTranslator(id: string, input: TranslatorUpsertInput)
     where: { id },
     select: {
       id: true,
+      isActive: true,
       name: true,
       subtitle: true,
       shortDescription: true,
@@ -1298,6 +1330,23 @@ export async function updateTranslator(id: string, input: TranslatorUpsertInput)
 
   if (shareFieldsChanged || !updated.shareImagePath) {
     await ensureTranslatorShareImageById(updated.id, { force: shareFieldsChanged });
+  }
+
+  if (!existing?.isActive && updated.isActive) {
+    try {
+      await submitTranslatorToGoogleIndexing({
+        translatorId: updated.id,
+        slug: updated.slug,
+        source: IndexingSource.AUTO_ACTIVE,
+      });
+    } catch (error) {
+      logError(
+        "auto_google_indexing_on_update_failed",
+        "Auto Google indexing submission failed after translator activation via update.",
+        { translatorId: updated.id, slug: updated.slug },
+        error,
+      );
+    }
   }
 
   if (settings.autoFeaturedEnabled) {
@@ -1402,6 +1451,23 @@ export async function toggleTranslatorActive(id: string, active?: boolean) {
     },
   });
 
+  if (!current.isActive && updated.isActive) {
+    try {
+      await submitTranslatorToGoogleIndexing({
+        translatorId: updated.id,
+        slug: updated.slug,
+        source: IndexingSource.AUTO_ACTIVE,
+      });
+    } catch (error) {
+      logError(
+        "auto_google_indexing_on_toggle_failed",
+        "Auto Google indexing submission failed after translator activation toggle.",
+        { translatorId: updated.id, slug: updated.slug },
+        error,
+      );
+    }
+  }
+
   await maybeRecalculateAutoFeaturedTranslators("settings-save");
   invalidatePublicTranslatorCaches();
   return updated;
@@ -1431,6 +1497,23 @@ export async function unarchiveTranslator(id: string) {
       isActive: true,
     },
   });
+
+  if (updated.isActive) {
+    try {
+      await submitTranslatorToGoogleIndexing({
+        translatorId: updated.id,
+        slug: updated.slug,
+        source: IndexingSource.AUTO_ACTIVE,
+      });
+    } catch (error) {
+      logError(
+        "auto_google_indexing_on_unarchive_failed",
+        "Auto Google indexing submission failed after translator unarchive.",
+        { translatorId: updated.id, slug: updated.slug },
+        error,
+      );
+    }
+  }
 
   await maybeRecalculateAutoFeaturedTranslators("settings-save");
   invalidatePublicTranslatorCaches();

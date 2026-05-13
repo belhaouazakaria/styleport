@@ -79,6 +79,24 @@ enum UsageProtectionEventType {
   MANUAL_REENABLE
 }
 
+enum IndexingProvider {
+  GOOGLE_INDEXING_API
+}
+
+enum IndexingSource {
+  MANUAL_SINGLE
+  MANUAL_BULK
+  AUTO_ACTIVE
+}
+
+enum IndexingStatus {
+  PENDING
+  SUBMITTED
+  FAILED
+  SKIPPED
+  DRY_RUN
+}
+
 model User {
   id            String    @id @default(cuid())
   name          String?
@@ -169,6 +187,7 @@ model Translator {
   primaryCategory     Category?            @relation("PrimaryTranslatorCategory", fields: [primaryCategoryId], references: [id], onDelete: SetNull)
   fulfilledRequests   TranslatorRequest[]  @relation("RequestCreatedTranslator")
   comments            TranslatorComment[]
+  indexingLogs        IndexingLog[]
 
   @@index([isActive, isFeatured, sortOrder])
   @@index([isFeatured, featuredRank])
@@ -382,4 +401,23 @@ model AppSetting {
   key       String   @unique
   value     Json
   updatedAt DateTime @updatedAt
+}
+
+model IndexingLog {
+  id           String           @id @default(cuid())
+  translatorId String?
+  url          String
+  source       IndexingSource
+  status       IndexingStatus   @default(PENDING)
+  provider     IndexingProvider @default(GOOGLE_INDEXING_API)
+  message      String?
+  responseJson Json?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  translator   Translator?      @relation(fields: [translatorId], references: [id], onDelete: SetNull)
+
+  @@index([translatorId, createdAt])
+  @@index([status, createdAt])
+  @@index([source, createdAt])
+  @@index([provider, createdAt])
 }

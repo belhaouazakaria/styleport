@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Archive, CheckSquare, Copy, ExternalLink, Image as ImageIcon, Pencil, RefreshCcw, RotateCcw, Square, Trash2 } from "lucide-react";
+import { Archive, CheckSquare, Copy, ExternalLink, Image as ImageIcon, Pencil, RefreshCcw, RotateCcw, Send, Square, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
@@ -121,6 +121,35 @@ export function TranslatorTable({ translators }: TranslatorTableProps) {
       }
 
       toast({ title: "Share image regenerated" });
+      router.refresh();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function submitToGoogle(id: string) {
+    setBusyId(id);
+    try {
+      const response = await fetch(`/api/admin/indexing/translator/${id}`, {
+        method: "POST",
+      });
+      const payload = await response.json();
+
+      if (!response.ok || !payload.ok) {
+        toast({
+          title: "Google submission failed",
+          description: payload?.error?.message || "Unable to submit translator right now.",
+          variant: "error",
+        });
+        return;
+      }
+
+      const status = payload?.result?.status || "UNKNOWN";
+      const message = payload?.result?.message || "Google indexing request processed.";
+      toast({
+        title: `Google status: ${status}`,
+        description: message,
+      });
       router.refresh();
     } finally {
       setBusyId(null);
@@ -252,6 +281,7 @@ export function TranslatorTable({ translators }: TranslatorTableProps) {
               <th className="px-4 py-3 font-medium">Status</th>
               <th className="px-4 py-3 font-medium">Featured</th>
               <th className="px-4 py-3 font-medium">Share Image</th>
+              <th className="px-4 py-3 font-medium">Indexing</th>
               <th className="px-4 py-3 font-medium">Updated</th>
               <th className="px-4 py-3 font-medium">Actions</th>
             </tr>
@@ -331,6 +361,30 @@ export function TranslatorTable({ translators }: TranslatorTableProps) {
                       <span className="text-xs text-muted-ink">Missing</span>
                     )}
                   </td>
+                  <td className="px-4 py-3">
+                    {row.latestIndexingStatus ? (
+                      <div className="space-y-1">
+                        <span
+                          className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                            row.latestIndexingStatus === "SUBMITTED"
+                              ? "bg-emerald-100 text-emerald-700"
+                              : row.latestIndexingStatus === "FAILED"
+                                ? "bg-red-100 text-red-700"
+                                : row.latestIndexingStatus === "DRY_RUN"
+                                  ? "bg-blue-100 text-blue-700"
+                                  : "bg-amber-100 text-amber-700"
+                          }`}
+                        >
+                          {row.latestIndexingStatus}
+                        </span>
+                        {row.latestIndexingAt ? (
+                          <p className="text-[10px] text-muted-ink">{formatDateTime(row.latestIndexingAt)}</p>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <span className="text-xs text-muted-ink">Not submitted</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-muted-ink">{formatDateTime(row.updatedAt)}</td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap items-center gap-1.5">
@@ -362,6 +416,17 @@ export function TranslatorTable({ translators }: TranslatorTableProps) {
                         className="h-8 w-8 p-0"
                       >
                         <Copy className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void submitToGoogle(row.id)}
+                        disabled={isBusy || !row.isActive || isArchived}
+                        aria-label={`Submit ${row.name} to Google Indexing API`}
+                        title="Submit to Google"
+                        className="h-8 w-8 p-0"
+                      >
+                        <Send className="h-3.5 w-3.5" />
                       </Button>
                       <Button
                         size="sm"
