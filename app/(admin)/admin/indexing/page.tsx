@@ -62,10 +62,14 @@ export default async function AdminIndexingPage({ searchParams }: PageProps) {
               <p className="mt-1 text-sm font-semibold text-ink">{googleStatus.enabled ? "Enabled" : "Disabled"}</p>
             </div>
             <div className="rounded-xl border border-border bg-white p-3">
-              <p className="text-xs font-medium text-muted-ink">Credential mode</p>
+              <p className="text-xs font-medium text-muted-ink">Credential status</p>
               <p className="mt-1 text-sm font-semibold text-ink">
-                Split env vars
+                {googleStatus.credentialsConfigured ? "Configured" : "Misconfigured"}
               </p>
+            </div>
+            <div className="rounded-xl border border-border bg-white p-3">
+              <p className="text-xs font-medium text-muted-ink">Credential mode</p>
+              <p className="mt-1 text-sm font-semibold text-ink">Split env vars</p>
             </div>
             <div className="rounded-xl border border-border bg-white p-3">
               <p className="text-xs font-medium text-muted-ink">Dry run</p>
@@ -74,12 +78,26 @@ export default async function AdminIndexingPage({ searchParams }: PageProps) {
             <div className="rounded-xl border border-border bg-white p-3 md:col-span-2 xl:col-span-1">
               <p className="text-xs font-medium text-muted-ink">Service account email</p>
               <p className="mt-1 break-all text-sm font-medium text-ink">
-                {googleStatus.serviceAccountEmail || "Not available"}
+                {googleStatus.serviceAccountEmailConfigured
+                  ? googleStatus.serviceAccountEmail
+                  : "Missing"}
               </p>
             </div>
             <div className="rounded-xl border border-border bg-white p-3 md:col-span-2 xl:col-span-1">
               <p className="text-xs font-medium text-muted-ink">Project ID</p>
-              <p className="mt-1 break-all text-sm font-medium text-ink">{googleStatus.projectId || "Not available"}</p>
+              <p className="mt-1 break-all text-sm font-medium text-ink">
+                {googleStatus.projectIdConfigured ? googleStatus.projectId : "Missing"}
+              </p>
+            </div>
+            <div className="rounded-xl border border-border bg-white p-3 md:col-span-2 xl:col-span-1">
+              <p className="text-xs font-medium text-muted-ink">Private key</p>
+              <p className="mt-1 text-sm font-medium text-ink">
+                {!googleStatus.privateKeyPresent
+                  ? "Missing"
+                  : googleStatus.privateKeyNormalizedValid
+                    ? "Present and valid"
+                    : "Invalid format"}
+              </p>
             </div>
             <div className="rounded-xl border border-border bg-white p-3 md:col-span-2 xl:col-span-1">
               <p className="text-xs font-medium text-muted-ink">Base site URL</p>
@@ -96,6 +114,9 @@ export default async function AdminIndexingPage({ searchParams }: PageProps) {
           {!googleStatus.credentialsConfigured ? (
             <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
               <p className="font-medium">Google credentials are not configured correctly.</p>
+              {googleStatus.privateKeyPresent && !googleStatus.privateKeyNormalizedValid ? (
+                <p className="mt-1">GOOGLE_PRIVATE_KEY is invalid or incorrectly formatted.</p>
+              ) : null}
               {googleStatus.missingFields.length ? (
                 <p className="mt-1">
                   Missing env vars: {googleStatus.missingFields.join(", ")}

@@ -174,7 +174,11 @@ export interface GoogleIndexingStatusSummary {
   credentialsConfigured: boolean;
   credentialMode: "split-env-vars";
   projectId: string | null;
+  projectIdConfigured: boolean;
   serviceAccountEmail: string | null;
+  serviceAccountEmailConfigured: boolean;
+  privateKeyPresent: boolean;
+  privateKeyNormalizedValid: boolean;
   missingFields: Array<"GOOGLE_CLIENT_EMAIL" | "GOOGLE_PRIVATE_KEY" | "GOOGLE_PROJECT_ID">;
   validationErrors: string[];
   baseUrl: string;

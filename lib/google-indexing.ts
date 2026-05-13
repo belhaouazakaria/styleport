@@ -24,6 +24,10 @@ type MissingCredentialField =
 
 interface ParsedCredentialState {
   credentials: ServiceAccountCredentials | null;
+  projectId: string | null;
+  serviceAccountEmail: string | null;
+  privateKeyPresent: boolean;
+  privateKeyNormalizedValid: boolean;
   missingFields: MissingCredentialField[];
   errors: string[];
 }
@@ -39,9 +43,44 @@ function stripWrappingQuotes(value: string) {
   return trimmed;
 }
 
-function normalizePrivateKey(raw: string) {
-  const unquoted = stripWrappingQuotes(raw);
-  return unquoted.includes("\\n") ? unquoted.replace(/\\n/g, "\n") : unquoted;
+function normalizeGooglePrivateKey(rawKey: string | undefined): string | null {
+  if (!rawKey) {
+    return null;
+  }
+
+  let normalized = rawKey.trim();
+  if (!normalized) {
+    return null;
+  }
+
+  normalized = stripWrappingQuotes(normalized);
+  normalized = normalized.replace(/\\n/g, "\n").trim();
+
+  const hasBegin = normalized.includes("-----BEGIN PRIVATE KEY-----");
+  const hasEnd = normalized.includes("-----END PRIVATE KEY-----");
+  if (!hasBegin || !hasEnd) {
+    return null;
+  }
+
+  return normalized;
+}
+
+function mapGoogleCredentialError(error: unknown) {
+  const message = error instanceof Error ? error.message : "";
+  const normalized = message.toLowerCase();
+
+  if (
+    normalized.includes("decoder routines::unsupported") ||
+    normalized.includes("error:1e08010c") ||
+    normalized.includes("pem") ||
+    normalized.includes("private key")
+  ) {
+    return "Google private key could not be decoded. Check GOOGLE_PRIVATE_KEY formatting.";
+  }
+
+  return error instanceof Error
+    ? error.message
+    : "Unable to submit URL to Google Indexing API.";
 }
 
 function parseSplitServiceAccountCredentials(): ParsedCredentialState {
@@ -51,8 +90,9 @@ function parseSplitServiceAccountCredentials(): ParsedCredentialState {
   const projectIdRaw = env.GOOGLE_PROJECT_ID || "";
 
   const clientEmail = stripWrappingQuotes(clientEmailRaw);
-  const privateKey = normalizePrivateKey(privateKeyRaw);
   const projectId = stripWrappingQuotes(projectIdRaw);
+  const privateKeyPresent = privateKeyRaw.trim().length > 0;
+  const privateKey = normalizeGooglePrivateKey(privateKeyRaw);
 
   const missingFields: MissingCredentialField[] = [];
   const errors: string[] = [];
@@ -63,10 +103,10 @@ function parseSplitServiceAccountCredentials(): ParsedCredentialState {
     errors.push("GOOGLE_CLIENT_EMAIL must be a valid service account email.");
   }
 
-  if (!privateKey) {
+  if (!privateKeyPresent) {
     missingFields.push("GOOGLE_PRIVATE_KEY");
-  } else if (!privateKey.includes("BEGIN PRIVATE KEY")) {
-    errors.push("GOOGLE_PRIVATE_KEY format is invalid.");
+  } else if (!privateKey) {
+    errors.push("GOOGLE_PRIVATE_KEY is invalid or incorrectly formatted.");
   }
 
   if (!projectId) {
@@ -76,6 +116,10 @@ function parseSplitServiceAccountCredentials(): ParsedCredentialState {
   if (missingFields.length || errors.length) {
     return {
       credentials: null,
+      projectId: projectId || null,
+      serviceAccountEmail: clientEmail || null,
+      privateKeyPresent,
+      privateKeyNormalizedValid: Boolean(privateKey),
       missingFields,
       errors,
     };
@@ -85,10 +129,14 @@ function parseSplitServiceAccountCredentials(): ParsedCredentialState {
     credentials: {
       type: "service_account",
       project_id: projectId,
-      private_key: privateKey,
+      private_key: privateKey!,
       client_email: clientEmail,
       token_uri: GOOGLE_TOKEN_URI,
     },
+    projectId: projectId || null,
+    serviceAccountEmail: clientEmail || null,
+    privateKeyPresent,
+    privateKeyNormalizedValid: true,
     missingFields: [],
     errors: [],
   };
@@ -164,8 +212,12 @@ export function getGoogleIndexingStatus(): GoogleIndexingStatusSummary {
     dryRun: env.GOOGLE_INDEXING_DRY_RUN === true,
     credentialsConfigured: Boolean(parsed.credentials),
     credentialMode: "split-env-vars",
-    projectId: parsed.credentials?.project_id || null,
-    serviceAccountEmail: parsed.credentials?.client_email || null,
+    projectId: parsed.projectId,
+    projectIdConfigured: Boolean(parsed.projectId),
+    serviceAccountEmail: parsed.serviceAccountEmail,
+    serviceAccountEmailConfigured: Boolean(parsed.serviceAccountEmail),
+    privateKeyPresent: parsed.privateKeyPresent,
+    privateKeyNormalizedValid: parsed.privateKeyNormalizedValid,
     missingFields: parsed.missingFields,
     validationErrors: parsed.errors,
     baseUrl,
@@ -300,7 +352,7 @@ export async function submitUrlToGoogleIndexing(
       ok: false,
       url: normalizedUrl,
       status: "FAILED",
-      message: error instanceof Error ? error.message : "Unable to submit URL to Google Indexing API.",
+      message: mapGoogleCredentialError(error),
     };
   }
 }

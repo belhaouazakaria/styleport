@@ -114,13 +114,20 @@ GOOGLE_PROJECT_ID=your-project-id
 GOOGLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nYOUR_KEY_HERE\n-----END PRIVATE KEY-----\n"
 ```
 
+Alternative (if your host has trouble with surrounding quotes):
+```bash
+GOOGLE_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\nYOUR_KEY_HERE\n-----END PRIVATE KEY-----\n
+```
+
 Steps:
 1. Open the downloaded service account JSON file.
 2. Copy `client_email` into `GOOGLE_CLIENT_EMAIL`.
 3. Copy `project_id` into `GOOGLE_PROJECT_ID`.
 4. Copy `private_key` into `GOOGLE_PRIVATE_KEY`.
-5. Keep `\n` newline characters exactly as shown, or paste multiline if Hostinger supports it.
-6. Restart the Node.js app after changing env vars.
+5. Keep the `-----BEGIN PRIVATE KEY-----` and `-----END PRIVATE KEY-----` lines intact.
+6. Keep `\n` newline characters exactly as shown if using one-line format, or paste multiline if Hostinger supports it.
+7. Do not use a `NEXT_PUBLIC_` prefix for any Google credential vars.
+8. Restart the Node.js app after changing env vars.
 
 The service account JSON contains a private key. Treat it like a password. Never expose it in frontend code, public repositories, screenshots, or logs.
 
@@ -234,10 +241,12 @@ Steps:
 1. Open the downloaded Google service account JSON file.
 2. Copy `client_email`, `project_id`, and `private_key`.
 3. Paste each value into its matching Hostinger env var.
-4. If Hostinger has issues with multiline private keys, keep `\n` escaped in one line.
-5. Do not commit this private key to GitHub.
-6. Do not expose it in frontend code.
-7. Restart the Node.js app after changing env vars.
+4. Recommended format in Hostinger:
+   - `GOOGLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"`
+5. If Hostinger has issues with quotes, remove surrounding quotes but keep `\n` escaped in one line.
+6. Do not commit this private key to GitHub.
+7. Do not expose it in frontend code.
+8. Restart the Node.js app after changing env vars.
 
 Notes:
 - If `GOOGLE_PRIVATE_KEY` contains `\n`, keep those characters exactly.
