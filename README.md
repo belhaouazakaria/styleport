@@ -55,8 +55,10 @@ Copy `.env.production.example` to `.env.production` and fill values:
 - `GOOGLE_INDEXING_ENABLED=false`
 - `GOOGLE_INDEXING_DRY_RUN=false`
 - `GOOGLE_CLIENT_EMAIL=<service-account-client-email>`
-- `GOOGLE_PRIVATE_KEY=<service-account-private-key>`
 - `GOOGLE_PROJECT_ID=<google-cloud-project-id>`
+- `GOOGLE_PRIVATE_KEY_BASE64=<base64-encoded-private-key>`
+- `GOOGLE_PRIVATE_KEY=<fallback-raw-private-key-optional>`
+- `GOOGLE_SERVICE_ACCOUNT_JSON_BASE64=<fallback-full-json-base64-optional>`
 - `NEXT_PUBLIC_APP_NAME=What Type Of | Translator`
 - `IP_HASH_SECRET=<random-secret>`
 - `ALERT_ADMIN_EMAIL=<ops-email>`
@@ -96,38 +98,48 @@ Important limitation:
 2. Add that email as a user on the Search Console property.
 3. Grant enough permission to submit indexing requests.
 
-### 5. Configure runtime environment (split credentials)
+### 5. Configure runtime environment (recommended: Base64 private key)
 Set these server-only variables:
 - `GOOGLE_CLIENT_EMAIL`
-- `GOOGLE_PRIVATE_KEY`
 - `GOOGLE_PROJECT_ID`
+- `GOOGLE_PRIVATE_KEY_BASE64` (recommended)
 
-Mapping from downloaded service account JSON:
+Primary mapping from downloaded service account JSON:
 - `client_email` -> `GOOGLE_CLIENT_EMAIL`
-- `private_key` -> `GOOGLE_PRIVATE_KEY`
 - `project_id` -> `GOOGLE_PROJECT_ID`
+- `private_key` -> `GOOGLE_PRIVATE_KEY_BASE64` (after base64 encoding)
 
-Example:
+Recommended setup:
 ```bash
 GOOGLE_CLIENT_EMAIL=your-service-account@your-project.iam.gserviceaccount.com
 GOOGLE_PROJECT_ID=your-project-id
-GOOGLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nYOUR_KEY_HERE\n-----END PRIVATE KEY-----\n"
+GOOGLE_PRIVATE_KEY_BASE64=base64_encoded_private_key
 ```
 
-Alternative (if your host has trouble with surrounding quotes):
+How to generate `GOOGLE_PRIVATE_KEY_BASE64` on Mac:
+1. Copy only the `private_key` value from the JSON file.
+2. Run:
 ```bash
-GOOGLE_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\nYOUR_KEY_HERE\n-----END PRIVATE KEY-----\n
+pbpaste | base64 | tr -d '\n'
 ```
+3. Paste the output into `GOOGLE_PRIVATE_KEY_BASE64`.
+
+Alternative from JSON file directly:
+```bash
+node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('service-account.json','utf8')); process.stdout.write(Buffer.from(j.private_key).toString('base64'))"
+```
+
+Fallback envs (optional only):
+- `GOOGLE_PRIVATE_KEY` (raw key fallback)
+- `GOOGLE_SERVICE_ACCOUNT_JSON_BASE64` (full JSON base64 fallback)
 
 Steps:
 1. Open the downloaded service account JSON file.
 2. Copy `client_email` into `GOOGLE_CLIENT_EMAIL`.
 3. Copy `project_id` into `GOOGLE_PROJECT_ID`.
-4. Copy `private_key` into `GOOGLE_PRIVATE_KEY`.
-5. Keep the `-----BEGIN PRIVATE KEY-----` and `-----END PRIVATE KEY-----` lines intact.
-6. Keep `\n` newline characters exactly as shown if using one-line format, or paste multiline if Hostinger supports it.
-7. Do not use a `NEXT_PUBLIC_` prefix for any Google credential vars.
-8. Restart the Node.js app after changing env vars.
+4. Encode `private_key` and set it as `GOOGLE_PRIVATE_KEY_BASE64`.
+5. Do not use a `NEXT_PUBLIC_` prefix for any Google credential vars.
+6. Restart the Node.js app after changing env vars.
 
 The service account JSON contains a private key. Treat it like a password. Never expose it in frontend code, public repositories, screenshots, or logs.
 
@@ -233,25 +245,26 @@ In Hostinger Node.js app environment variables, add:
 - `GOOGLE_INDEXING_DRY_RUN=false`
 - `NEXT_PUBLIC_APP_URL=https://translators.whattypeof.com`
 - `NEXTAUTH_URL=https://translators.whattypeof.com`
-- `GOOGLE_CLIENT_EMAIL=<client_email from JSON>`
 - `GOOGLE_PROJECT_ID=<project_id from JSON>`
-- `GOOGLE_PRIVATE_KEY=<private_key from JSON>`
+- `GOOGLE_CLIENT_EMAIL=<client_email from JSON>`
+- `GOOGLE_PRIVATE_KEY_BASE64=<base64 encoded private_key>`
 
 Steps:
 1. Open the downloaded Google service account JSON file.
-2. Copy `client_email`, `project_id`, and `private_key`.
-3. Paste each value into its matching Hostinger env var.
-4. Recommended format in Hostinger:
-   - `GOOGLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"`
-5. If Hostinger has issues with quotes, remove surrounding quotes but keep `\n` escaped in one line.
+2. Copy `client_email` and `project_id` into their matching env vars.
+3. Encode `private_key` as base64 and paste it into `GOOGLE_PRIVATE_KEY_BASE64`.
+4. Recommended command on Mac after copying only `private_key`:
+   - `pbpaste | base64 | tr -d '\n'`
+5. Paste the command output into `GOOGLE_PRIVATE_KEY_BASE64`.
 6. Do not commit this private key to GitHub.
 7. Do not expose it in frontend code.
 8. Restart the Node.js app after changing env vars.
 
 Notes:
-- If `GOOGLE_PRIVATE_KEY` contains `\n`, keep those characters exactly.
-- The app converts escaped newline sequences automatically.
-- Multiline private key values can also work if Hostinger preserves them correctly.
+- Optional fallback only:
+  - `GOOGLE_PRIVATE_KEY=<raw private key>`
+  - `GOOGLE_SERVICE_ACCOUNT_JSON_BASE64=<full service account JSON in base64>`
+- Do not prefix any Google secret with `NEXT_PUBLIC_`.
 
 ### Do I need GitHub secrets for Google Indexing API?
 

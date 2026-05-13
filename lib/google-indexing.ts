@@ -2,68 +2,15 @@ import "server-only";
 
 import crypto from "node:crypto";
 
-import { getAppBaseUrl, getServerEnv } from "@/lib/env";
-import type { GoogleIndexingStatusSummary, IndexingSubmissionResult } from "@/lib/types";
+import {
+  getGoogleIndexingCredentials,
+  getGoogleIndexingStatus,
+} from "@/lib/google-indexing/credentials";
+import type { IndexingSubmissionResult } from "@/lib/types";
 
 const GOOGLE_INDEXING_SCOPE = "https://www.googleapis.com/auth/indexing";
 const GOOGLE_TOKEN_URI = "https://oauth2.googleapis.com/token";
 const GOOGLE_INDEXING_ENDPOINT = "https://indexing.googleapis.com/v3/urlNotifications:publish";
-
-interface ServiceAccountCredentials {
-  type: "service_account";
-  project_id: string;
-  private_key: string;
-  client_email: string;
-  token_uri: string;
-}
-
-type MissingCredentialField =
-  | "GOOGLE_CLIENT_EMAIL"
-  | "GOOGLE_PRIVATE_KEY"
-  | "GOOGLE_PROJECT_ID";
-
-interface ParsedCredentialState {
-  credentials: ServiceAccountCredentials | null;
-  projectId: string | null;
-  serviceAccountEmail: string | null;
-  privateKeyPresent: boolean;
-  privateKeyNormalizedValid: boolean;
-  missingFields: MissingCredentialField[];
-  errors: string[];
-}
-
-function stripWrappingQuotes(value: string) {
-  const trimmed = value.trim();
-  if (
-    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
-    (trimmed.startsWith("'") && trimmed.endsWith("'"))
-  ) {
-    return trimmed.slice(1, -1);
-  }
-  return trimmed;
-}
-
-function normalizeGooglePrivateKey(rawKey: string | undefined): string | null {
-  if (!rawKey) {
-    return null;
-  }
-
-  let normalized = rawKey.trim();
-  if (!normalized) {
-    return null;
-  }
-
-  normalized = stripWrappingQuotes(normalized);
-  normalized = normalized.replace(/\\n/g, "\n").trim();
-
-  const hasBegin = normalized.includes("-----BEGIN PRIVATE KEY-----");
-  const hasEnd = normalized.includes("-----END PRIVATE KEY-----");
-  if (!hasBegin || !hasEnd) {
-    return null;
-  }
-
-  return normalized;
-}
 
 function mapGoogleCredentialError(error: unknown) {
   const message = error instanceof Error ? error.message : "";
@@ -72,74 +19,17 @@ function mapGoogleCredentialError(error: unknown) {
   if (
     normalized.includes("decoder routines::unsupported") ||
     normalized.includes("error:1e08010c") ||
-    normalized.includes("pem") ||
+    normalized.includes("pem routines") ||
+    normalized.includes("no start line") ||
+    normalized.includes("bad decrypt") ||
     normalized.includes("private key")
   ) {
-    return "Google private key could not be decoded. Check GOOGLE_PRIVATE_KEY formatting.";
+    return "Google private key could not be decoded. Use GOOGLE_PRIVATE_KEY_BASE64 instead of GOOGLE_PRIVATE_KEY.";
   }
 
   return error instanceof Error
     ? error.message
     : "Unable to submit URL to Google Indexing API.";
-}
-
-function parseSplitServiceAccountCredentials(): ParsedCredentialState {
-  const env = getServerEnv();
-  const clientEmailRaw = env.GOOGLE_CLIENT_EMAIL || "";
-  const privateKeyRaw = env.GOOGLE_PRIVATE_KEY || "";
-  const projectIdRaw = env.GOOGLE_PROJECT_ID || "";
-
-  const clientEmail = stripWrappingQuotes(clientEmailRaw);
-  const projectId = stripWrappingQuotes(projectIdRaw);
-  const privateKeyPresent = privateKeyRaw.trim().length > 0;
-  const privateKey = normalizeGooglePrivateKey(privateKeyRaw);
-
-  const missingFields: MissingCredentialField[] = [];
-  const errors: string[] = [];
-
-  if (!clientEmail) {
-    missingFields.push("GOOGLE_CLIENT_EMAIL");
-  } else if (!/\.gserviceaccount\.com$/i.test(clientEmail)) {
-    errors.push("GOOGLE_CLIENT_EMAIL must be a valid service account email.");
-  }
-
-  if (!privateKeyPresent) {
-    missingFields.push("GOOGLE_PRIVATE_KEY");
-  } else if (!privateKey) {
-    errors.push("GOOGLE_PRIVATE_KEY is invalid or incorrectly formatted.");
-  }
-
-  if (!projectId) {
-    missingFields.push("GOOGLE_PROJECT_ID");
-  }
-
-  if (missingFields.length || errors.length) {
-    return {
-      credentials: null,
-      projectId: projectId || null,
-      serviceAccountEmail: clientEmail || null,
-      privateKeyPresent,
-      privateKeyNormalizedValid: Boolean(privateKey),
-      missingFields,
-      errors,
-    };
-  }
-
-  return {
-    credentials: {
-      type: "service_account",
-      project_id: projectId,
-      private_key: privateKey!,
-      client_email: clientEmail,
-      token_uri: GOOGLE_TOKEN_URI,
-    },
-    projectId: projectId || null,
-    serviceAccountEmail: clientEmail || null,
-    privateKeyPresent,
-    privateKeyNormalizedValid: true,
-    missingFields: [],
-    errors: [],
-  };
 }
 
 function base64urlEncode(value: string | Buffer) {
@@ -150,13 +40,13 @@ function base64urlEncode(value: string | Buffer) {
     .replace(/\//g, "_");
 }
 
-function buildSignedJwt(credentials: ServiceAccountCredentials) {
+function buildSignedJwt(credentials: { clientEmail: string; privateKey: string }) {
   const now = Math.floor(Date.now() / 1000);
   const header = { alg: "RS256", typ: "JWT" };
   const payload = {
-    iss: credentials.client_email,
+    iss: credentials.clientEmail,
     scope: GOOGLE_INDEXING_SCOPE,
-    aud: credentials.token_uri,
+    aud: GOOGLE_TOKEN_URI,
     iat: now,
     exp: now + 3600,
   };
@@ -169,18 +59,18 @@ function buildSignedJwt(credentials: ServiceAccountCredentials) {
   signer.update(unsignedToken);
   signer.end();
 
-  const signature = signer.sign(credentials.private_key);
+  const signature = signer.sign(credentials.privateKey);
   return `${unsignedToken}.${base64urlEncode(signature)}`;
 }
 
-async function fetchAccessToken(credentials: ServiceAccountCredentials) {
+async function fetchAccessToken(credentials: { clientEmail: string; privateKey: string }) {
   const assertion = buildSignedJwt(credentials);
   const body = new URLSearchParams({
     grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
     assertion,
   });
 
-  const response = await fetch(credentials.token_uri, {
+  const response = await fetch(GOOGLE_TOKEN_URI, {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
@@ -202,27 +92,7 @@ async function fetchAccessToken(credentials: ServiceAccountCredentials) {
   return payload.access_token;
 }
 
-export function getGoogleIndexingStatus(): GoogleIndexingStatusSummary {
-  const env = getServerEnv();
-  const parsed = parseSplitServiceAccountCredentials();
-  const baseUrl = getAppBaseUrl().toString().replace(/\/$/, "");
-
-  return {
-    enabled: env.GOOGLE_INDEXING_ENABLED === true,
-    dryRun: env.GOOGLE_INDEXING_DRY_RUN === true,
-    credentialsConfigured: Boolean(parsed.credentials),
-    credentialMode: "split-env-vars",
-    projectId: parsed.projectId,
-    projectIdConfigured: Boolean(parsed.projectId),
-    serviceAccountEmail: parsed.serviceAccountEmail,
-    serviceAccountEmailConfigured: Boolean(parsed.serviceAccountEmail),
-    privateKeyPresent: parsed.privateKeyPresent,
-    privateKeyNormalizedValid: parsed.privateKeyNormalizedValid,
-    missingFields: parsed.missingFields,
-    validationErrors: parsed.errors,
-    baseUrl,
-  };
-}
+export { getGoogleIndexingStatus } from "@/lib/google-indexing/credentials";
 
 export async function submitUrlToGoogleIndexing(
   url: string,
@@ -234,6 +104,7 @@ export async function submitUrlToGoogleIndexing(
       ok: false,
       url,
       status: "FAILED",
+      provider: "GOOGLE_INDEXING_API",
       message: "URL is required.",
     };
   }
@@ -245,6 +116,7 @@ export async function submitUrlToGoogleIndexing(
         ok: false,
         url: normalizedUrl,
         status: "FAILED",
+        provider: "GOOGLE_INDEXING_API",
         message: "Only HTTPS URLs can be submitted.",
       };
     }
@@ -253,6 +125,7 @@ export async function submitUrlToGoogleIndexing(
       ok: false,
       url: normalizedUrl,
       status: "FAILED",
+      provider: "GOOGLE_INDEXING_API",
       message: "URL is invalid.",
     };
   }
@@ -263,22 +136,19 @@ export async function submitUrlToGoogleIndexing(
       ok: true,
       url: normalizedUrl,
       status: "SKIPPED",
+      provider: "GOOGLE_INDEXING_API",
       message: "Google Indexing API is disabled.",
     };
   }
 
   if (!status.credentialsConfigured) {
-    const missingMessage = status.missingFields.length
-      ? `Missing required env vars: ${status.missingFields.join(", ")}.`
-      : null;
     return {
       ok: false,
       url: normalizedUrl,
       status: "FAILED",
+      provider: "GOOGLE_INDEXING_API",
       message:
-        missingMessage ||
-        status.validationErrors[0] ||
-        "Google Indexing credentials are missing or invalid.",
+        "Google Indexing credentials are invalid. Use GOOGLE_PRIVATE_KEY_BASE64 to avoid newline formatting issues.",
     };
   }
 
@@ -287,28 +157,29 @@ export async function submitUrlToGoogleIndexing(
       ok: true,
       url: normalizedUrl,
       status: "DRY_RUN",
+      provider: "GOOGLE_INDEXING_API",
       message: "Dry-run mode enabled. Request not sent to Google.",
     };
   }
 
-  const parsedCredentials = parseSplitServiceAccountCredentials();
-  if (!parsedCredentials.credentials) {
-    const missingMessage = parsedCredentials.missingFields.length
-      ? `Missing required env vars: ${parsedCredentials.missingFields.join(", ")}.`
-      : null;
+  const credentials = getGoogleIndexingCredentials();
+  if (!credentials) {
     return {
       ok: false,
       url: normalizedUrl,
       status: "FAILED",
+      provider: "GOOGLE_INDEXING_API",
       message:
-        missingMessage ||
-        parsedCredentials.errors[0] ||
-        "Unable to load Google service account credentials.",
+        "Google Indexing credentials are invalid. Use GOOGLE_PRIVATE_KEY_BASE64 to avoid newline formatting issues.",
     };
   }
 
   try {
-    const accessToken = await fetchAccessToken(parsedCredentials.credentials);
+    const accessToken = await fetchAccessToken({
+      clientEmail: credentials.clientEmail,
+      privateKey: credentials.privateKey,
+    });
+
     const response = await fetch(GOOGLE_INDEXING_ENDPOINT, {
       method: "POST",
       headers: {
@@ -335,6 +206,7 @@ export async function submitUrlToGoogleIndexing(
         ok: false,
         url: normalizedUrl,
         status: "FAILED",
+        provider: "GOOGLE_INDEXING_API",
         message: errorMessage,
         response: payload,
       };
@@ -344,6 +216,7 @@ export async function submitUrlToGoogleIndexing(
       ok: true,
       url: normalizedUrl,
       status: "SUBMITTED",
+      provider: "GOOGLE_INDEXING_API",
       message: "Google Indexing API submission requested. Final indexing is not guaranteed.",
       response: payload,
     };
@@ -352,7 +225,9 @@ export async function submitUrlToGoogleIndexing(
       ok: false,
       url: normalizedUrl,
       status: "FAILED",
+      provider: "GOOGLE_INDEXING_API",
       message: mapGoogleCredentialError(error),
     };
   }
 }
+

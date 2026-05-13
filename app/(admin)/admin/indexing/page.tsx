@@ -69,7 +69,17 @@ export default async function AdminIndexingPage({ searchParams }: PageProps) {
             </div>
             <div className="rounded-xl border border-border bg-white p-3">
               <p className="text-xs font-medium text-muted-ink">Credential mode</p>
-              <p className="mt-1 text-sm font-semibold text-ink">Split env vars</p>
+              <p className="mt-1 text-sm font-semibold text-ink">
+                {googleStatus.activeCredentialMethod === "private_key_base64"
+                  ? "Base64 private key"
+                  : googleStatus.activeCredentialMethod === "private_key_raw"
+                    ? "Raw private key"
+                    : googleStatus.activeCredentialMethod === "service_account_json_base64"
+                      ? "Service account JSON Base64"
+                      : googleStatus.credentialMode === "missing"
+                        ? "Missing"
+                        : "Invalid"}
+              </p>
             </div>
             <div className="rounded-xl border border-border bg-white p-3">
               <p className="text-xs font-medium text-muted-ink">Dry run</p>
@@ -94,7 +104,7 @@ export default async function AdminIndexingPage({ searchParams }: PageProps) {
               <p className="mt-1 text-sm font-medium text-ink">
                 {!googleStatus.privateKeyPresent
                   ? "Missing"
-                  : googleStatus.privateKeyNormalizedValid
+                  : googleStatus.privateKeyValid
                     ? "Present and valid"
                     : "Invalid format"}
               </p>
@@ -114,7 +124,10 @@ export default async function AdminIndexingPage({ searchParams }: PageProps) {
           {!googleStatus.credentialsConfigured ? (
             <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
               <p className="font-medium">Google credentials are not configured correctly.</p>
-              {googleStatus.privateKeyPresent && !googleStatus.privateKeyNormalizedValid ? (
+              <p className="mt-1">
+                Credentials are invalid. Use GOOGLE_PRIVATE_KEY_BASE64 to avoid newline formatting issues.
+              </p>
+              {googleStatus.privateKeyPresent && !googleStatus.privateKeyValid ? (
                 <p className="mt-1">GOOGLE_PRIVATE_KEY is invalid or incorrectly formatted.</p>
               ) : null}
               {googleStatus.missingFields.length ? (
@@ -129,6 +142,17 @@ export default async function AdminIndexingPage({ searchParams }: PageProps) {
                   ))}
                 </ul>
               ) : null}
+            </div>
+          ) : null}
+
+          {googleStatus.warnings.length ? (
+            <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              <p className="font-medium">Warnings</p>
+              <ul className="mt-1 list-disc pl-5">
+                {googleStatus.warnings.map((warning) => (
+                  <li key={warning}>{warning}</li>
+                ))}
+              </ul>
             </div>
           ) : null}
 

@@ -172,14 +172,21 @@ export interface GoogleIndexingStatusSummary {
   enabled: boolean;
   dryRun: boolean;
   credentialsConfigured: boolean;
-  credentialMode: "split-env-vars";
+  credentialMode:
+    | "private_key_base64"
+    | "private_key_raw"
+    | "service_account_json_base64"
+    | "missing"
+    | "invalid";
+  activeCredentialMethod: "private_key_base64" | "private_key_raw" | "service_account_json_base64" | null;
   projectId: string | null;
   projectIdConfigured: boolean;
   serviceAccountEmail: string | null;
   serviceAccountEmailConfigured: boolean;
   privateKeyPresent: boolean;
-  privateKeyNormalizedValid: boolean;
-  missingFields: Array<"GOOGLE_CLIENT_EMAIL" | "GOOGLE_PRIVATE_KEY" | "GOOGLE_PROJECT_ID">;
+  privateKeyValid: boolean;
+  missingFields: string[];
+  warnings: string[];
   validationErrors: string[];
   baseUrl: string;
 }
@@ -188,6 +195,7 @@ export interface IndexingSubmissionResult {
   ok: boolean;
   url: string;
   status: "SUBMITTED" | "FAILED" | "SKIPPED" | "DRY_RUN";
+  provider: "GOOGLE_INDEXING_API";
   message?: string;
   response?: unknown;
 }
