@@ -11,11 +11,11 @@ const SETTINGS_CACHE_TTL_MS = 60_000;
 
 const defaultSettings: AppSettings = {
   platformName: APP_NAME,
-  homepageTitle: "Discover Translators for Every Style",
+  homepageTitle: "Give Your Words a Different Twist",
   homepageSubtitle:
-    "Browse and use specialized AI translators for tone, voice, and creative transformation.",
+    "Browse specialized AI translators for every tone, voice, and creative style. Find the perfect twist for your text.",
   catalogIntro:
-    "Search by style, category, or intent to find the right translator in seconds.",
+    "Search by style, category, or intent to discover the right translator for your next rewrite.",
   footerDisclaimer:
     "SayTwist provides AI-assisted rewriting for drafting purposes. Always review outputs before critical use.",
   defaultTranslatorSlug: "regal-rewrite",

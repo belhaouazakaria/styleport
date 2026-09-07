@@ -16,7 +16,7 @@ export default async function PrivacyPolicyPage() {
 
   return (
     <div className="relative overflow-x-hidden">
-      <Navbar platformName={settings.platformName} />
+      <Navbar />
       <LegalPage
         title="Privacy Policy"
         intro="This policy explains what data we collect, why we collect it, and how we protect it when you use our translator platform."

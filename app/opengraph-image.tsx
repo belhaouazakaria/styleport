@@ -50,14 +50,12 @@ export default function OpenGraphImage() {
               justifyContent: "center",
             }}
           >
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
-              <path
-                d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"
-                stroke="white"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
+            <svg width="48" height="48" viewBox="0 0 32 32" fill="none">
+              <path d="M8 22C8 22 7 20 8 17C9.5 12 14 10 17 10C20 10 23 11 24 14C25 17 24 20 22 22C20 24 16 25 13 24C10 23 9 22 8 22Z" fill="white"/>
+              <path d="M10 23L8 27L13 24.5" fill="white"/>
+              <rect x="5" y="4" width="3.5" height="2" rx="1" transform="rotate(-30 5 4)" fill="#FF7A59"/>
+              <rect x="11" y="2.5" width="3.5" height="2" rx="1" transform="rotate(-10 11 2.5)" fill="#F59E0B"/>
+              <rect x="17" y="4" width="3" height="2" rx="1" transform="rotate(15 17 4)" fill="#60C5F7"/>
             </svg>
           </div>
           <div style={{ fontSize: 72, fontWeight: 800, color: "#0F172A", letterSpacing: -2 }}>

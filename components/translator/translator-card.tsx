@@ -206,8 +206,8 @@ async function buildResultPinBlob(params: {
   const logoY = 112;
   drawRoundedRect(ctx, logoX, logoY, logoSize, logoSize, 28);
   const logoGradient = ctx.createLinearGradient(logoX, logoY, logoX + logoSize, logoY + logoSize);
-  logoGradient.addColorStop(0, "#6b66ff");
-  logoGradient.addColorStop(1, "#4f52f7");
+  logoGradient.addColorStop(0, "#14B8A6");
+  logoGradient.addColorStop(1, "#0D9488");
   ctx.fillStyle = logoGradient;
   ctx.fill();
 
