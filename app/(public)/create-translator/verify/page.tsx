@@ -9,7 +9,7 @@ import { getAppSettings } from "@/lib/settings";
 export const metadata: Metadata = {
   title: "Verify Submission Email",
   description:
-    "Confirm your email so What Type Of | Translator can review your translator idea and notify you if it goes live.",
+    "Confirm your email so SayTwist can review your translator idea and notify you if it goes live.",
   robots: {
     index: false,
     follow: false,

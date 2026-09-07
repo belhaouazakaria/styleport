@@ -17,7 +17,7 @@ interface PageProps {
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Newest Translators | What Type Of | Translator",
+  title: "Newest Translators | SayTwist",
   description:
     "Browse the newest active translators, sorted from latest to oldest, and find fresh AI translator styles.",
   alternates: {

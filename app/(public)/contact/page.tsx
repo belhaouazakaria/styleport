@@ -9,12 +9,12 @@ import { getAppSettings } from "@/lib/settings";
 export const metadata: Metadata = {
   title: "Contact",
   description:
-    "Contact the What Type Of | Translator team for support, partnership requests, bug reports, or privacy and policy questions.",
+    "Contact the SayTwist team for support, partnership requests, bug reports, or privacy and policy questions.",
 };
 
 export default async function ContactPage() {
   const settings = await getAppSettings();
-  const contactEmail = "translator@whattypeof.com";
+  const contactEmail = "hello@saytwist.com";
 
   return (
     <div className="relative overflow-x-hidden">

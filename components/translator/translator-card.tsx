@@ -215,12 +215,12 @@ async function buildResultPinBlob(params: {
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.font = '800 48px Inter, "Segoe UI", Arial, sans-serif';
-  ctx.fillText("WT", RESULT_PIN_WIDTH / 2, logoY + logoSize / 2 + 2);
+  ctx.fillText("ST", RESULT_PIN_WIDTH / 2, logoY + logoSize / 2 + 2);
 
   ctx.fillStyle = softText;
   ctx.textBaseline = "top";
   ctx.font = '700 50px Inter, "Segoe UI", Arial, sans-serif';
-  ctx.fillText("What Type Of", RESULT_PIN_WIDTH / 2, logoY + logoSize + 30);
+  ctx.fillText("SayTwist", RESULT_PIN_WIDTH / 2, logoY + logoSize + 30);
 
   const title = truncateShareText(params.translatorTitle, RESULT_PIN_MAX_TITLE_CHARS);
   let titleFontSize = 84;
@@ -394,7 +394,7 @@ function PinterestIcon({ className }: { className?: string }) {
 
 export function TranslatorCard({ translator, shareUrl, pinImageUrl }: TranslatorCardProps) {
   const initialMode = translator.modes[0]?.key || "";
-  const storagePrefix = useMemo(() => `styleport:${translator.slug}`, [translator.slug]);
+  const storagePrefix = useMemo(() => `saytwist:${translator.slug}`, [translator.slug]);
 
   const [inputText, setInputText] = useLocalStorage<string>(`${storagePrefix}:last-input`, "");
   const [outputText, setOutputText] = useLocalStorage<string>(`${storagePrefix}:last-output`, "");

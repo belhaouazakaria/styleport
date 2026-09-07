@@ -8,7 +8,7 @@ import { getAppSettings } from "@/lib/settings";
 export const metadata: Metadata = {
   title: "Terms of Use",
   description:
-    "Read the terms governing your use of What Type Of | Translator, including acceptable use, account responsibilities, and service limitations.",
+    "Read the terms governing your use of SayTwist, including acceptable use, account responsibilities, and service limitations.",
 };
 
 export default async function TermsOfUsePage() {
@@ -25,7 +25,7 @@ export default async function TermsOfUsePage() {
         <section>
           <h2>Service Scope</h2>
           <p>
-            What Type Of | Translator provides AI-assisted text transformation tools and translator discovery features.
+            SayTwist provides AI-assisted text transformation tools and translator discovery features.
             Outputs are
             generated automatically and may require human review before publication or business-critical use.
           </p>

@@ -40,16 +40,16 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   const hasCategory = Boolean(params.category?.trim());
 
   return {
-    title: "What Type Of | Translator",
+    title: "SayTwist",
     description:
-      "AI-powered text translators to rewrite text into different styles, tones, and personalities.",
+      "AI-powered text translators to rewrite text into different styles, tones, and personalities. Give your words a different twist.",
     alternates: {
       canonical: hasCategory || hasSearch ? "/" : "/",
     },
     openGraph: {
-      title: "What Type Of | Translator",
+      title: "SayTwist",
       description:
-        "AI-powered text translators to rewrite text into different styles, tones, and personalities.",
+        "AI-powered text translators to rewrite text into different styles, tones, and personalities. Give your words a different twist.",
       type: "website",
       url: homeUrl,
       images: [
@@ -57,15 +57,15 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
           url: ogImageUrl,
           width: 1200,
           height: 630,
-          alt: "What Type Of | Translator",
+          alt: "SayTwist",
         },
       ],
     },
     twitter: {
       card: "summary_large_image",
-      title: "What Type Of | Translator",
+      title: "SayTwist",
       description:
-        "AI-powered text translators to rewrite text into different styles, tones, and personalities.",
+        "AI-powered text translators to rewrite text into different styles, tones, and personalities. Give your words a different twist.",
       images: [ogImageUrl],
     },
     robots: hasSearch

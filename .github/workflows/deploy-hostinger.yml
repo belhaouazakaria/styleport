@@ -19,10 +19,10 @@ jobs:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       OPENAI_API_KEY: test_key
       OPENAI_MODEL: gpt-4.1-mini
-      NEXT_PUBLIC_APP_NAME: StylePort
+      NEXT_PUBLIC_APP_NAME: SayTwist
       IP_HASH_SECRET: test_ip_hash_secret_value_123456
       ALERT_ADMIN_EMAIL: alerts@example.com
-      EMAIL_FROM: StylePort Alerts <alerts@example.com>
+      EMAIL_FROM: SayTwist Alerts <alerts@example.com>
       BREVO_API_KEY: test_brevo_key
 
     steps:

@@ -397,7 +397,7 @@ async function seedAdPlacements() {
 
 async function seedSettings() {
   const settings = [
-    { key: "platformName", value: "StylePort" },
+    { key: "platformName", value: "SayTwist" },
     {
       key: "homepageTitle",
       value: "Discover Translators for Every Style",
@@ -415,7 +415,7 @@ async function seedSettings() {
     {
       key: "footerDisclaimer",
       value:
-        "StylePort provides AI-assisted rewriting for drafting purposes. Always review outputs before critical use.",
+        "SayTwist provides AI-assisted rewriting for drafting purposes. Always review outputs before critical use.",
     },
     { key: "defaultTranslatorSlug", value: "regal-rewrite" },
     { key: "featuredTranslatorsEnabled", value: true },

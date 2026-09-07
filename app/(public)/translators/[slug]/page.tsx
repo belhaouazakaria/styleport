@@ -40,10 +40,10 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     .trim();
   const descriptionBase =
     cleanDescription ||
-    `Use ${translator.name} to rewrite text in a new tone with What Type Of | Translator.`;
+    `Use ${translator.name} to rewrite text in a new tone with SayTwist.`;
   const description =
     descriptionBase.length > 190 ? `${descriptionBase.slice(0, 189).trimEnd()}…` : descriptionBase;
-  const title = `${translator.name} | What Type Of | Translator`;
+  const title = `${translator.name} | SayTwist`;
   const translatorUrl = new URL(`/translators/${translator.slug}`, baseUrl).toString();
   const fallbackImageUrl = new URL("/og-image.png", baseUrl).toString();
   const imageUrl = translator.shareImagePath
@@ -73,7 +73,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
           url: imageUrl,
           width: 1200,
           height: 630,
-          alt: `${translator.name} | What Type Of | Translator`,
+          alt: `${translator.name} | SayTwist`,
         },
       ],
     },

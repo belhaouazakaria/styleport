@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Cormorant_Garamond, Manrope } from "next/font/google";
+import { Nunito_Sans, Fredoka } from "next/font/google";
 
 import { RequestTranslatorProvider } from "@/components/providers/request-translator-provider";
 import { ToastProvider } from "@/components/providers/toast-provider";
@@ -10,13 +10,13 @@ import { getAppSettings } from "@/lib/settings";
 
 import "./globals.css";
 
-const bodyFont = Manrope({
+const bodyFont = Nunito_Sans({
   subsets: ["latin"],
   variable: "--font-body",
   display: "swap",
 });
 
-const displayFont = Cormorant_Garamond({
+const displayFont = Fredoka({
   subsets: ["latin"],
   variable: "--font-display",
   weight: ["500", "600", "700"],
@@ -36,6 +36,7 @@ export const metadata: Metadata = {
     "text rewrite platform",
     "writing style transformation",
     "translator discovery",
+    "SayTwist",
   ],
   openGraph: {
     title: APP_NAME,

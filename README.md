@@ -1,6 +1,6 @@
-# What Type Of | Translator Platform
+# SayTwist Platform
 
-What Type Of | Translator is a production-grade multi-translator discovery platform with:
+SayTwist is a production-grade multi-translator discovery platform with:
 - public translator discovery + translator runtime pages
 - secure admin dashboard (CRUD for translators/categories/requests/ads/settings)
 - OpenAI translation + AI draft generation
@@ -14,7 +14,7 @@ This repository is **feature-complete** and this hardening pass is focused on **
 
 Recommended runtime for this project:
 1. **Hostinger Node.js Web App** in hPanel
-2. **Subdomain** on existing domain (`translators.whattypeof.com`)
+2. **Primary domain** (`saytwist.com`)
 3. **External managed PostgreSQL** (Supabase, Neon, Prisma Postgres, or equivalent)
 4. Existing app stack unchanged (Next.js + Prisma + Auth.js + OpenAI)
 
@@ -33,7 +33,7 @@ Important:
 
 ### Production (Hostinger)
 - Use `.env.production.example` as template for `.env.production`.
-- Must use your HTTPS subdomain URL (no localhost values).
+- Must use your HTTPS domain URL (no localhost values).
 
 ### Public vs server env vars
 - Public-safe (client-exposed): `NEXT_PUBLIC_*`
@@ -45,9 +45,9 @@ Important:
 
 Copy `.env.production.example` to `.env.production` and fill values:
 
-- `APP_BASE_URL=https://translators.whattypeof.com`
-- `NEXT_PUBLIC_APP_URL=https://translators.whattypeof.com`
-- `NEXTAUTH_URL=https://translators.whattypeof.com`
+- `APP_BASE_URL=https://saytwist.com`
+- `NEXT_PUBLIC_APP_URL=https://saytwist.com`
+- `NEXTAUTH_URL=https://saytwist.com`
 - `NEXTAUTH_SECRET=<strong-random-secret>`
 - `DATABASE_URL=<managed-postgres-connection>`
 - `OPENAI_API_KEY=<openai-key>`
@@ -59,10 +59,10 @@ Copy `.env.production.example` to `.env.production` and fill values:
 - `GOOGLE_PRIVATE_KEY_BASE64=<base64-encoded-private-key>`
 - `GOOGLE_PRIVATE_KEY=<fallback-raw-private-key-optional>`
 - `GOOGLE_SERVICE_ACCOUNT_JSON_BASE64=<fallback-full-json-base64-optional>`
-- `NEXT_PUBLIC_APP_NAME=What Type Of | Translator`
+- `NEXT_PUBLIC_APP_NAME=SayTwist`
 - `IP_HASH_SECRET=<random-secret>`
 - `ALERT_ADMIN_EMAIL=<ops-email>`
-- `EMAIL_FROM=What Type Of | Translator <translate@whattypeof.com>`
+- `EMAIL_FROM=SayTwist <hello@saytwist.com>`
 - `BREVO_API_KEY=<brevo-api-key>`
 
 Production validation is fail-fast for critical vars, so missing required values will stop startup.
@@ -82,7 +82,7 @@ Important limitation:
 ### 1. Verify Search Console property
 1. Open Google Search Console.
 2. Verify this exact property:
-   - `https://translators.whattypeof.com`
+   - `https://saytwist.com`
 
 ### 2. Google Cloud project and API
 1. Create or select a Google Cloud project.
@@ -150,8 +150,6 @@ Use dry-run to test safely without sending requests to Google:
 
 ---
 
----
-
 ## Scripts
 
 Core scripts:
@@ -210,10 +208,9 @@ npm run dev
 2. Copy the SSL-enabled `DATABASE_URL`.
 3. Verify connectivity from your app environment.
 
-### 2. Create subdomain
-1. In Hostinger hPanel, open your existing domain.
-2. Create/use subdomain: `translators.whattypeof.com`.
-3. Point subdomain to your Node.js app location in hPanel.
+### 2. Configure domain
+1. In Hostinger hPanel, point `saytwist.com` to your Node.js app location.
+2. Set up the domain to point to your Node.js app location in hPanel.
 
 ### 3. Create Node.js Web App in hPanel
 1. Select Node.js app (Node 20+ recommended).
@@ -227,10 +224,10 @@ npm run start:hostinger
 ### 4. Configure production env in Hostinger
 Set all variables from `.env.production.example` in hPanel environment settings.
 
-Critical for auth/subdomain:
-- `APP_BASE_URL=https://translators.whattypeof.com`
-- `NEXT_PUBLIC_APP_URL=https://translators.whattypeof.com`
-- `NEXTAUTH_URL=https://translators.whattypeof.com`
+Critical for auth/domain:
+- `APP_BASE_URL=https://saytwist.com`
+- `NEXT_PUBLIC_APP_URL=https://saytwist.com`
+- `NEXTAUTH_URL=https://saytwist.com`
 - `NEXTAUTH_SECRET=<strong random value>`
 
 If Hostinger auto-detects your app as `Other` and leaves build settings as `null`, set:
@@ -243,8 +240,8 @@ If Hostinger auto-detects your app as `Other` and leaves build settings as `null
 In Hostinger Node.js app environment variables, add:
 - `GOOGLE_INDEXING_ENABLED=true`
 - `GOOGLE_INDEXING_DRY_RUN=false`
-- `NEXT_PUBLIC_APP_URL=https://translators.whattypeof.com`
-- `NEXTAUTH_URL=https://translators.whattypeof.com`
+- `NEXT_PUBLIC_APP_URL=https://saytwist.com`
+- `NEXTAUTH_URL=https://saytwist.com`
 - `GOOGLE_PROJECT_ID=<project_id from JSON>`
 - `GOOGLE_CLIENT_EMAIL=<client_email from JSON>`
 - `GOOGLE_PRIVATE_KEY_BASE64=<base64 encoded private_key>`
@@ -324,7 +321,7 @@ npm run prisma:seed
 
 - Auth is configured for trusted host deployments (`trustHost`) and secure cookies in production.
 - Use HTTPS in production for proper secure session behavior.
-- `NEXTAUTH_URL` must exactly match your production subdomain URL.
+- `NEXTAUTH_URL` must exactly match your production domain URL.
 - Admin and login routes are `noindex` to prevent indexing.
 
 ---
@@ -367,7 +364,7 @@ Automatic behavior:
 - failures are logged and never block translator create/update flows
 
 Admin message reminder:
-- “Google Indexing API submission requested. Final indexing is not guaranteed.”
+- "Google Indexing API submission requested. Final indexing is not guaranteed."
 
 ## Public Create-Translator Flow
 
@@ -385,7 +382,7 @@ Admin message reminder:
 
 ## Auto-Featured Translators
 
-- What Type Of | Translator can auto-assign the top 3 featured translators from performance analytics.
+- SayTwist can auto-assign the top 3 featured translators from performance analytics.
 - Ranking logic:
   1. highest successful translation usage count (selected window)
   2. highest recent success count (last 7 days)
@@ -427,7 +424,7 @@ Required GitHub secrets for deploy workflow:
 ### App starts but auth fails
 - Check `NEXTAUTH_URL` exactly matches production URL.
 - Check `NEXTAUTH_SECRET` is present and stable.
-- Ensure HTTPS is active on subdomain.
+- Ensure HTTPS is active on domain.
 
 ### Prisma connection errors
 - Verify `DATABASE_URL` with SSL options.

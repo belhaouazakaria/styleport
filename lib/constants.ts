@@ -1,4 +1,6 @@
-export const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || "What Type Of | Translator";
+export const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || "SayTwist";
+export const BRAND_TAGLINE = "Give your words a different twist.";
+export const CANONICAL_URL = "https://saytwist.com";
 export const DEFAULT_MODEL = process.env.OPENAI_MODEL || "gpt-4.1-mini";
 
 export const MAX_INPUT_CHARS = 5000;
@@ -15,7 +17,7 @@ export const RATE_LIMIT_WINDOW_MS = 60_000;
 export const RATE_LIMIT_MAX_REQUESTS = 20;
 
 export const SEO_DESCRIPTION =
-  "AI-powered text translators to rewrite text into different styles, tones, and personalities.";
+  "AI-powered text translators to rewrite text into different styles, tones, and personalities. Give your words a different twist.";
 
 export const DISCOVERY_DEFAULT_PAGE_SIZE = 12;
 export const DISCOVERY_SUGGESTION_LIMIT = 8;

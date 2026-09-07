@@ -57,7 +57,7 @@ export type ServerEnv = z.infer<typeof envSchema>;
 
 let cachedServerEnv: ServerEnv | null = null;
 const FALLBACK_LOCAL_BASE_URL = "http://localhost:3000";
-const FALLBACK_PRODUCTION_BASE_URL = "https://translators.whattypeof.com";
+const FALLBACK_PRODUCTION_BASE_URL = "https://saytwist.com";
 const LOOPBACK_HOSTNAMES = new Set(["localhost", "0.0.0.0", "::1"]);
 
 function formatIssues(issues: z.ZodIssue[]) {

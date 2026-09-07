@@ -19,6 +19,31 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   compress: true,
+  async redirects() {
+    // Old domain redirects for SayTwist migration
+    // These handle permanent redirects from the old whattypeof.com domains
+    const oldHostnames = [
+      "translator.whattypeof.com",
+      "translators.whattypeof.com",
+    ];
+
+    const redirects = oldHostnames.flatMap((hostname) => [
+      {
+        source: "/",
+        has: [{ type: "host" as const, value: hostname }],
+        destination: "https://saytwist.com/",
+        permanent: true,
+      },
+      {
+        source: "/:path+",
+        has: [{ type: "host" as const, value: hostname }],
+        destination: "https://saytwist.com/:path+",
+        permanent: true,
+      },
+    ]);
+
+    return redirects;
+  },
   async headers() {
     return [
       {

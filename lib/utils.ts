@@ -111,7 +111,7 @@ export function toPlainText(text: string): string {
 }
 
 export function hashIp(ip: string): string {
-  const ipSalt = process.env.IP_HASH_SECRET || process.env.NEXTAUTH_SECRET || "styleport-dev-ip-salt";
+  const ipSalt = process.env.IP_HASH_SECRET || process.env.NEXTAUTH_SECRET || "saytwist-dev-ip-salt";
   return crypto.createHash("sha256").update(`${ipSalt}:${ip}`).digest("hex").slice(0, 40);
 }
 

@@ -71,7 +71,7 @@ if (env.EMAIL_FROM) {
   const fromPattern = /^.+<\s*[^\s@]+@[^\s@]+\.[^\s@]+\s*>$/;
   if (!emailPattern.test(env.EMAIL_FROM) && !fromPattern.test(env.EMAIL_FROM)) {
     console.error(
-      "[env] EMAIL_FROM must be a valid email or display format like 'StylePort Team <hello@yourdomain.com>'.",
+      "[env] EMAIL_FROM must be a valid email or display format like 'SayTwist Team <hello@saytwist.com>'.",
     );
     process.exit(1);
   }

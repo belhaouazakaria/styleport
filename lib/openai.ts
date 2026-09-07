@@ -6,12 +6,12 @@ import { logError } from "@/lib/logger";
 import { toPlainText } from "@/lib/utils";
 
 const globalForOpenAI = globalThis as typeof globalThis & {
-  __styleportOpenAIClient?: OpenAI;
+  __saytwistOpenAIClient?: OpenAI;
 };
 
 function getClient(): OpenAI {
-  if (globalForOpenAI.__styleportOpenAIClient) {
-    return globalForOpenAI.__styleportOpenAIClient;
+  if (globalForOpenAI.__saytwistOpenAIClient) {
+    return globalForOpenAI.__saytwistOpenAIClient;
   }
 
   const env = getServerEnv();
@@ -20,7 +20,7 @@ function getClient(): OpenAI {
   }
 
   const client = new OpenAI({ apiKey: env.OPENAI_API_KEY });
-  globalForOpenAI.__styleportOpenAIClient = client;
+  globalForOpenAI.__saytwistOpenAIClient = client;
   return client;
 }
 

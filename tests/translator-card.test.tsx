@@ -102,8 +102,8 @@ describe("TranslatorCard", () => {
   });
 
   it("clears persisted input and output", async () => {
-    localStorage.setItem("styleport:regal-rewrite:last-input", JSON.stringify("hello"));
-    localStorage.setItem("styleport:regal-rewrite:last-output", JSON.stringify("refined"));
+    localStorage.setItem("saytwist:regal-rewrite:last-input", JSON.stringify("hello"));
+    localStorage.setItem("saytwist:regal-rewrite:last-output", JSON.stringify("refined"));
 
     renderCard();
 
