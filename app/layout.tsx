@@ -23,48 +23,59 @@ const displayFont = Fredoka({
   display: "swap",
 });
 
-export const metadata: Metadata = {
-  metadataBase: getAppBaseUrl(),
-  title: {
-    default: APP_NAME,
-    template: `%s | ${APP_NAME}`,
-  },
-  description: SEO_DESCRIPTION,
-  keywords: [
-    "style translator",
-    "tone converter",
-    "text rewrite platform",
-    "writing style transformation",
-    "translator discovery",
-    "SayTwist",
-  ],
-  openGraph: {
-    title: APP_NAME,
+const DEFAULT_FAVICON = "/icon.svg";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const settings = await getAppSettings();
+  const baseUrl = getAppBaseUrl();
+  const faviconUrl = settings.faviconUrl || DEFAULT_FAVICON;
+  const faviconVersion = settings.faviconUrl
+    ? `?v=${encodeURIComponent(settings.faviconUrl)}`
+    : "";
+
+  return {
+    metadataBase: baseUrl,
+    title: {
+      default: APP_NAME,
+      template: `%s | ${APP_NAME}`,
+    },
     description: SEO_DESCRIPTION,
-    type: "website",
-    url: "/",
-    siteName: APP_NAME,
-    images: [
-      {
-        url: "/og-image.png",
-        width: 1200,
-        height: 630,
-        alt: APP_NAME,
-      },
+    keywords: [
+      "style translator",
+      "tone converter",
+      "text rewrite platform",
+      "writing style transformation",
+      "translator discovery",
+      "SayTwist",
     ],
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: APP_NAME,
-    description: SEO_DESCRIPTION,
-    images: ["/og-image.png"],
-  },
-  icons: {
-    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
-    shortcut: ["/icon.svg"],
-    apple: ["/icon.svg"],
-  },
-};
+    openGraph: {
+      title: APP_NAME,
+      description: SEO_DESCRIPTION,
+      type: "website",
+      url: "/",
+      siteName: APP_NAME,
+      images: [
+        {
+          url: "/og-image.png",
+          width: 1200,
+          height: 630,
+          alt: APP_NAME,
+        },
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: APP_NAME,
+      description: SEO_DESCRIPTION,
+      images: ["/og-image.png"],
+    },
+    icons: {
+      icon: [{ url: `${faviconUrl}${faviconVersion}`, type: faviconUrl.endsWith(".svg") ? "image/svg+xml" : "image/png" }],
+      shortcut: [`${faviconUrl}${faviconVersion}`],
+      apple: [`${faviconUrl}${faviconVersion}`],
+    },
+  };
+}
 
 export default async function RootLayout({
   children,

@@ -49,6 +49,10 @@ export async function PUT(request: Request) {
     defaultModelOverride: parsed.data.defaultModelOverride || "",
     adSenseClientId: parsed.data.adSenseClientId || "",
     customHeadCode: parsed.data.customHeadCode || "",
+    logoUrl: parsed.data.logoUrl || "",
+    faviconUrl: parsed.data.faviconUrl || "",
+    logoDesktopHeight: parsed.data.logoDesktopHeight ?? 40,
+    logoMobileHeight: parsed.data.logoMobileHeight ?? 32,
     autoFeaturedLastRecalculatedAt: parsed.data.autoFeaturedEnabled
       ? new Date().toISOString()
       : "",

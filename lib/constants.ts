@@ -38,6 +38,10 @@ export const APP_SETTING_KEYS = {
   ADSENSE_CLIENT_ID: "adSenseClientId",
   CATALOG_INTRO: "catalogIntro",
   CUSTOM_HEAD_CODE: "customHeadCode",
+  LOGO_URL: "logoUrl",
+  FAVICON_URL: "faviconUrl",
+  LOGO_DESKTOP_HEIGHT: "logoDesktopHeight",
+  LOGO_MOBILE_HEIGHT: "logoMobileHeight",
 } as const;
 
 export const DEFAULT_CATEGORY_SLUGS = [

@@ -34,7 +34,7 @@ export default async function NewestTranslatorsPage({ searchParams }: PageProps)
 
   return (
     <div className="relative overflow-x-hidden">
-      <Navbar />
+      <Navbar logoUrl={settings.logoUrl} logoDesktopHeight={settings.logoDesktopHeight} logoMobileHeight={settings.logoMobileHeight} />
       <main className="pb-10">
         <section className="mx-auto w-full max-w-7xl px-4 pb-4 pt-10 sm:px-6 lg:px-8">
           <h1 className="font-display text-4xl font-semibold tracking-tight text-ink sm:text-5xl">

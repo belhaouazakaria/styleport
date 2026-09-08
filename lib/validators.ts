@@ -205,6 +205,10 @@ export const settingsSchema = z.object({
   adsEnabled: z.boolean(),
   adSenseClientId: z.string().trim().max(180).optional().or(z.literal("")),
   customHeadCode: z.string().max(50_000).optional().or(z.literal("")),
+  logoUrl: z.string().trim().max(500).optional().or(z.literal("")),
+  faviconUrl: z.string().trim().max(500).optional().or(z.literal("")),
+  logoDesktopHeight: z.number().int().min(24).max(80).default(40),
+  logoMobileHeight: z.number().int().min(20).max(64).default(32),
 });
 
 export const translatorRequestSchema = z.object({

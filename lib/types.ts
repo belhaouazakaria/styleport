@@ -259,6 +259,10 @@ export interface AppSettings {
   adsEnabled: boolean;
   adSenseClientId: string;
   customHeadCode: string;
+  logoUrl: string;
+  faviconUrl: string;
+  logoDesktopHeight: number;
+  logoMobileHeight: number;
 }
 
 export interface AutoFeaturedTranslatorSummary {

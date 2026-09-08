@@ -1,0 +1,34 @@
+import { APP_NAME } from "@/lib/constants";
+
+const DEFAULT_LOGO_SVG = `data:image/svg+xml,${encodeURIComponent(`<svg width="320" height="64" viewBox="0 0 320 64" fill="none" xmlns="http://www.w3.org/2000/svg"><g transform="translate(2, 2)"><path d="M8 22C8 22 7 20 8 17C9.5 12 14 10 17 10C20 10 23 11 24 14C25 17 24 20 22 22C20 24 16 25 13 24C10 23 9 22 8 22Z" fill="#14B8A6"/><path d="M8 22C7 19.5 8 15.5 12 13C16 10.5 21 11 24 14" stroke="#0D9488" stroke-width="2.5" stroke-linecap="round" fill="none"/><path d="M24 14C26 17 25 21 22 23C18 25.5 12 24.5 9 22" stroke="#14B8A6" stroke-width="2" stroke-linecap="round" fill="none"/><path d="M10 23L8 27L13 24.5" fill="#14B8A6"/><rect x="5" y="4" width="4" height="2.5" rx="1.25" transform="rotate(-30 5 4)" fill="#FF7A59"/><rect x="11" y="2" width="4" height="2.5" rx="1.25" transform="rotate(-10 11 2)" fill="#F59E0B"/><rect x="17" y="4" width="3.5" height="2.5" rx="1.25" transform="rotate(15 17 4)" fill="#60C5F7"/></g><text x="72" y="44" font-family="Fredoka, Arial, Helvetica, sans-serif" font-weight="600" font-size="40"><tspan fill="#0F172A">Say</tspan><tspan fill="#14B8A6">Twist</tspan></text></svg>`)}`;
+
+interface BrandLogoProps {
+  logoUrl?: string;
+  desktopHeight?: number;
+  mobileHeight?: number;
+  className?: string;
+  alt?: string;
+}
+
+export function BrandLogo({
+  logoUrl,
+  desktopHeight = 40,
+  mobileHeight = 32,
+  className = "",
+  alt,
+}: BrandLogoProps) {
+  const src = logoUrl || DEFAULT_LOGO_SVG;
+  const altText = alt || APP_NAME;
+
+  return (
+    <img
+      src={src}
+      alt={altText}
+      className={`brand-logo ${className}`}
+      style={{
+        "--logo-mobile-h": `${mobileHeight}px`,
+        "--logo-desktop-h": `${desktopHeight}px`,
+      } as React.CSSProperties}
+    />
+  );
+}

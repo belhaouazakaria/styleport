@@ -166,3 +166,20 @@ button {
   scrollbar-width: thin;
   scrollbar-color: #d1d5db transparent;
 }
+
+.brand-logo {
+  --logo-mobile-h: 32px;
+  --logo-desktop-h: 40px;
+  height: var(--logo-mobile-h);
+  width: auto;
+  max-width: 180px;
+  object-fit: contain;
+  display: block;
+}
+
+@media (min-width: 768px) {
+  .brand-logo {
+    height: var(--logo-desktop-h);
+    max-width: 240px;
+  }
+}

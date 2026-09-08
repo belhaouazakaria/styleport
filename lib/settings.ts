@@ -28,6 +28,10 @@ const defaultSettings: AppSettings = {
   adsEnabled: false,
   adSenseClientId: "",
   customHeadCode: "",
+  logoUrl: "",
+  faviconUrl: "",
+  logoDesktopHeight: 40,
+  logoMobileHeight: 32,
 };
 
 let appSettingsCache:
@@ -84,6 +88,18 @@ function mapRowsToSettings(rows: Array<{ key: string; value: unknown }>): AppSet
       (map.get(APP_SETTING_KEYS.ADSENSE_CLIENT_ID) as string) || defaultSettings.adSenseClientId,
     customHeadCode:
       (map.get(APP_SETTING_KEYS.CUSTOM_HEAD_CODE) as string) || defaultSettings.customHeadCode,
+    logoUrl:
+      (map.get(APP_SETTING_KEYS.LOGO_URL) as string) || defaultSettings.logoUrl,
+    faviconUrl:
+      (map.get(APP_SETTING_KEYS.FAVICON_URL) as string) || defaultSettings.faviconUrl,
+    logoDesktopHeight:
+      typeof map.get(APP_SETTING_KEYS.LOGO_DESKTOP_HEIGHT) === "number"
+        ? (map.get(APP_SETTING_KEYS.LOGO_DESKTOP_HEIGHT) as number)
+        : defaultSettings.logoDesktopHeight,
+    logoMobileHeight:
+      typeof map.get(APP_SETTING_KEYS.LOGO_MOBILE_HEIGHT) === "number"
+        ? (map.get(APP_SETTING_KEYS.LOGO_MOBILE_HEIGHT) as number)
+        : defaultSettings.logoMobileHeight,
   };
 }
 
@@ -143,6 +159,10 @@ export async function updateAppSettings(settings: AppSettings): Promise<void> {
     [APP_SETTING_KEYS.ADS_ENABLED, settings.adsEnabled],
     [APP_SETTING_KEYS.ADSENSE_CLIENT_ID, settings.adSenseClientId],
     [APP_SETTING_KEYS.CUSTOM_HEAD_CODE, settings.customHeadCode],
+    [APP_SETTING_KEYS.LOGO_URL, settings.logoUrl],
+    [APP_SETTING_KEYS.FAVICON_URL, settings.faviconUrl],
+    [APP_SETTING_KEYS.LOGO_DESKTOP_HEIGHT, settings.logoDesktopHeight],
+    [APP_SETTING_KEYS.LOGO_MOBILE_HEIGHT, settings.logoMobileHeight],
   ] as const;
 
   await prisma.$transaction(
