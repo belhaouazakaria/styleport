@@ -17,7 +17,7 @@ const MAX_TEMP_FILES = 300;
 const PUBLIC_PREFIX = "/generated/result-pins-temp";
 const STORAGE_DIR =
   process.env.RESULT_PIN_TEMP_DIR ||
-  path.join(process.cwd(), "public", PUBLIC_PREFIX.replace(/^\//, ""));
+  path.join(process.cwd(), "storage", "generated", "result-pins-temp");
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 const globalState = globalThis as typeof globalThis & {

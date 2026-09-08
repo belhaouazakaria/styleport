@@ -45,3 +45,7 @@ yarn-error.log*
 next-env.d.ts
 .env.example
 .env.production.example
+
+# persistent runtime storage (generated images, uploads)
+/storage/generated/
+!/storage/generated/**/.gitkeep

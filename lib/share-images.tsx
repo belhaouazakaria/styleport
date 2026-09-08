@@ -43,7 +43,7 @@ const publicPathPrefix = (() => {
 
 const storageDirectory =
   process.env.SHARE_IMAGE_STORAGE_DIR ||
-  path.join(process.cwd(), "public", publicPathPrefix.replace(/^\//, ""));
+  path.join(process.cwd(), "storage", "generated", "pins");
 
 interface ShareImageSnapshot {
   id: string;

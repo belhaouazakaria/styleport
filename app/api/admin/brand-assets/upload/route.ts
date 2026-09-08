@@ -44,7 +44,7 @@ const FAVICON_EXTENSIONS: Record<string, string> = {
   "image/vnd.microsoft.icon": ".ico",
 };
 
-const STORAGE_DIR = path.join(process.cwd(), "public", "generated", "brand-assets");
+const STORAGE_DIR = path.join(process.cwd(), "storage", "generated", "brand-assets");
 const PUBLIC_PREFIX = "/generated/brand-assets";
 
 function jsonError(status: number, code: string, message: string) {
