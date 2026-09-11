@@ -64,12 +64,12 @@ export function TranslatorCommentForm({ translatorSlug }: TranslatorCommentFormP
   }
 
   return (
-    <form onSubmit={onSubmit} className="mt-5 space-y-3 rounded-xl border border-border bg-muted-surface p-4">
+    <form onSubmit={onSubmit} className="mt-7 space-y-4 border-t border-border pt-6">
       <input type="text" name="website" tabIndex={-1} autoComplete="off" className="hidden" aria-hidden="true" />
 
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="space-y-1 text-sm">
-          <span className="font-medium text-muted-ink">Name</span>
+          <span className="font-bold text-ink">Name</span>
           <input
             type="text"
             required
@@ -80,12 +80,12 @@ export function TranslatorCommentForm({ translatorSlug }: TranslatorCommentFormP
                 name: event.target.value,
               }))
             }
-            className="h-11 w-full rounded-xl border border-border bg-surface px-3 text-ink"
+            className="h-12 w-full rounded-2xl border border-border bg-white px-4 text-ink shadow-sm transition placeholder:text-muted-ink/65 focus:border-brand-500"
             placeholder="Your name"
           />
         </label>
         <label className="space-y-1 text-sm">
-          <span className="font-medium text-muted-ink">Email</span>
+          <span className="font-bold text-ink">Email</span>
           <input
             type="email"
             required
@@ -96,14 +96,14 @@ export function TranslatorCommentForm({ translatorSlug }: TranslatorCommentFormP
                 email: event.target.value,
               }))
             }
-            className="h-11 w-full rounded-xl border border-border bg-surface px-3 text-ink"
+            className="h-12 w-full rounded-2xl border border-border bg-white px-4 text-ink shadow-sm transition placeholder:text-muted-ink/65 focus:border-brand-500"
             placeholder="you@example.com"
           />
         </label>
       </div>
 
       <label className="space-y-1 text-sm">
-        <span className="font-medium text-muted-ink">Comment</span>
+        <span className="font-bold text-ink">Your note</span>
         <textarea
           required
           value={form.comment}
@@ -113,7 +113,7 @@ export function TranslatorCommentForm({ translatorSlug }: TranslatorCommentFormP
               comment: event.target.value,
             }))
           }
-          className="min-h-28 w-full rounded-xl border border-border bg-surface px-3 py-2 text-ink"
+          className="min-h-28 w-full rounded-2xl border border-border bg-white px-4 py-3 text-ink shadow-sm transition placeholder:text-muted-ink/65 focus:border-brand-500"
           placeholder="Share your feedback about this translator."
         />
       </label>
@@ -121,8 +121,9 @@ export function TranslatorCommentForm({ translatorSlug }: TranslatorCommentFormP
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
       {message ? <p className="text-sm text-emerald-700">{message}</p> : null}
 
-      <div className="flex justify-end">
-        <Button type="submit" disabled={submitting}>
+      <div className="flex flex-col items-stretch justify-between gap-3 sm:flex-row sm:items-center">
+        <p className="text-xs text-muted-ink">Your note helps shape the next twist.</p>
+        <Button type="submit" disabled={submitting} className="sm:min-w-40">
           {submitting ? "Submitting..." : "Post comment"}
         </Button>
       </div>

@@ -32,22 +32,26 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ searchParams }: PageProps): Promise<Metadata> {
   const params = await searchParams;
+  const settings = await getAppSettings();
   const baseUrl = getAppBaseUrl();
   const ogImageUrl = new URL("/og-image.png", baseUrl).toString();
   const homeUrl = new URL("/", baseUrl).toString();
+  const platformName = settings.platformName?.trim() || "SayTwist";
+  const homepageTitle = settings.homepageTitle?.trim() || "Give Your Words a Different Twist";
+  const siteTitle = `${platformName} | ${homepageTitle}`;
 
   const hasSearch = Boolean(params.q?.trim());
   const hasCategory = Boolean(params.category?.trim());
 
   return {
-    title: "SayTwist",
+    title: homepageTitle,
     description:
       "AI-powered text translators to rewrite text into different styles, tones, and personalities. Give your words a different twist.",
     alternates: {
       canonical: hasCategory || hasSearch ? "/" : "/",
     },
     openGraph: {
-      title: "SayTwist",
+      title: siteTitle,
       description:
         "AI-powered text translators to rewrite text into different styles, tones, and personalities. Give your words a different twist.",
       type: "website",
@@ -63,7 +67,7 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
     },
     twitter: {
       card: "summary_large_image",
-      title: "SayTwist",
+      title: siteTitle,
       description:
         "AI-powered text translators to rewrite text into different styles, tones, and personalities. Give your words a different twist.",
       images: [ogImageUrl],

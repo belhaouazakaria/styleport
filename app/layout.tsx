@@ -28,6 +28,9 @@ const DEFAULT_FAVICON = "/icon.svg";
 export async function generateMetadata(): Promise<Metadata> {
   const settings = await getAppSettings();
   const baseUrl = getAppBaseUrl();
+  const platformName = settings.platformName?.trim() || APP_NAME;
+  const homepageTitle = settings.homepageTitle?.trim() || "Give Your Words a Different Twist";
+  const siteTitle = `${platformName} | ${homepageTitle}`;
   const faviconUrl = settings.faviconUrl || DEFAULT_FAVICON;
   const faviconVersion = settings.faviconUrl
     ? `?v=${encodeURIComponent(settings.faviconUrl)}`
@@ -36,10 +39,10 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     metadataBase: baseUrl,
     title: {
-      default: APP_NAME,
-      template: `%s | ${APP_NAME}`,
+      default: siteTitle,
+      template: `${platformName} | %s`,
     },
-    description: SEO_DESCRIPTION,
+    description: settings.homepageSubtitle?.trim() || SEO_DESCRIPTION,
     keywords: [
       "style translator",
       "tone converter",
@@ -49,24 +52,24 @@ export async function generateMetadata(): Promise<Metadata> {
       "SayTwist",
     ],
     openGraph: {
-      title: APP_NAME,
-      description: SEO_DESCRIPTION,
+      title: siteTitle,
+      description: settings.homepageSubtitle?.trim() || SEO_DESCRIPTION,
       type: "website",
       url: "/",
-      siteName: APP_NAME,
+      siteName: platformName,
       images: [
         {
           url: "/og-image.png",
           width: 1200,
           height: 630,
-          alt: APP_NAME,
+          alt: siteTitle,
         },
       ],
     },
     twitter: {
       card: "summary_large_image",
-      title: APP_NAME,
-      description: SEO_DESCRIPTION,
+      title: siteTitle,
+      description: settings.homepageSubtitle?.trim() || SEO_DESCRIPTION,
       images: ["/og-image.png"],
     },
     icons: {

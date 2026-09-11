@@ -220,6 +220,16 @@ select:focus {
   text-transform: uppercase;
 }
 
+textarea.translator-textarea {
+  min-height: 11.25rem !important;
+}
+
+@media (min-width: 768px) {
+  textarea.translator-textarea {
+    min-height: 14.5rem !important;
+  }
+}
+
 @media (max-width: 767px) {
   body {
     padding-bottom: 5.25rem;

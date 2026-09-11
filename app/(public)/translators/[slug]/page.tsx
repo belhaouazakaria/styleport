@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AdDeviceType, AdPageType } from "@prisma/client";
-import { Sparkles } from "lucide-react";
 import { cache } from "react";
 
 import { Breadcrumbs } from "@/components/public/breadcrumbs";
@@ -11,6 +10,7 @@ import { Navbar } from "@/components/sections/navbar";
 import { TranslatorCard } from "@/components/translator/translator-card";
 import { AdSlot } from "@/components/shared/ad-slot";
 import { TranslatorComments } from "@/components/public/translator-comments";
+import { RelatedTranslators } from "@/components/public/related-translators";
 import { getRenderableAdPlacements } from "@/lib/data/ads";
 import { getPublicTranslatorBySlug, getRelatedPublicTranslators } from "@/lib/data/translators";
 import { getAppBaseUrl } from "@/lib/env";
@@ -35,6 +35,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   }
 
   const baseUrl = getAppBaseUrl();
+  const settings = await getAppSettings();
+  const platformName = settings.platformName?.trim() || "SayTwist";
   const cleanDescription = (translator.seoDescription || translator.shortDescription || "")
     .replace(/\s+/g, " ")
     .trim();
@@ -43,7 +45,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     `Use ${translator.name} to rewrite text in a new tone with SayTwist.`;
   const description =
     descriptionBase.length > 190 ? `${descriptionBase.slice(0, 189).trimEnd()}…` : descriptionBase;
-  const title = `${translator.name} | SayTwist`;
+  const title = translator.name;
   const translatorUrl = new URL(`/translators/${translator.slug}`, baseUrl).toString();
   const fallbackImageUrl = new URL("/og-image.png", baseUrl).toString();
   const imageUrl = translator.shareImagePath
@@ -73,7 +75,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
           url: imageUrl,
           width: 1200,
           height: 630,
-          alt: `${translator.name} | SayTwist`,
+          alt: `${translator.name} | ${platformName}`,
         },
       ],
     },
@@ -168,27 +170,7 @@ export default async function TranslatorSlugPage({ params }: PageProps) {
                 </Link>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {relatedTranslators.map((item) => (
-                  <article
-                    key={item.id}
-                    className="rounded-2xl border border-border bg-muted-surface p-4 transition hover:border-brand-300 hover:bg-surface"
-                  >
-                    <h3 className="text-lg font-semibold text-ink">{item.name}</h3>
-                    <p className="mt-1 line-clamp-3 text-sm text-muted-ink">{item.shortDescription}</p>
-                    {item.primaryCategory ? (
-                      <p className="mt-2 text-xs font-medium text-brand-700">{item.primaryCategory.name}</p>
-                    ) : null}
-                    <Link
-                      href={`/translators/${item.slug}`}
-                      className="mt-4 inline-flex h-10 items-center gap-2 rounded-xl border border-brand-300 bg-brand-50 px-3 text-sm font-semibold text-brand-700 transition hover:border-brand-500 hover:bg-brand-100 hover:text-brand-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60"
-                    >
-                      <Sparkles className="h-4 w-4" />
-                      Try this translator
-                    </Link>
-                  </article>
-                ))}
-              </div>
+              <RelatedTranslators translators={relatedTranslators} />
             </div>
           </section>
         ) : null}

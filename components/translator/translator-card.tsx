@@ -790,7 +790,7 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
         ) : null}
 
         <div className="grid grid-cols-1 gap-5 md:grid-cols-[1fr_auto_1fr] md:items-stretch md:gap-3">
-          <div className="rounded-[1.75rem] border border-border bg-white p-4 shadow-[var(--shadow-soft)] sm:p-6">
+          <div className="flex h-full min-w-0 flex-col rounded-[1.75rem] border border-border bg-white p-4 shadow-[var(--shadow-soft)] sm:p-6">
             <div className="mb-2 flex items-center justify-between">
               <p className="font-display text-lg font-bold text-ink">{activeInputLabel}</p>
               <Button type="button" variant="ghost" size="sm" onClick={() => void handleCopy(inputText, "Input")}>
@@ -798,34 +798,38 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
                 Copy
               </Button>
             </div>
-            <Textarea
-              ref={inputRef}
-              value={inputText}
-              onChange={(event) => setInputText(event.target.value)}
-              onKeyDown={(event) => {
-                if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-                  event.preventDefault();
-                  void translate();
-                }
-              }}
-              placeholder={`Write your ${activeInputLabel.toLowerCase()} text here...`}
-              aria-label="Input text"
-            />
+            <div className="flex flex-1 flex-col">
+              <Textarea
+                ref={inputRef}
+                value={inputText}
+                onChange={(event) => setInputText(event.target.value)}
+                onKeyDown={(event) => {
+                  if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+                    event.preventDefault();
+                    void translate();
+                  }
+                }}
+                placeholder={`Write your ${activeInputLabel.toLowerCase()} text here...`}
+                aria-label="Input text"
+                className="translator-textarea flex-1 md:flex-none"
+              />
 
-            {translator.showExamples && translator.examples.length ? (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {translator.examples.map((example) => (
-                  <button
-                    key={example.id}
-                    type="button"
-                    onClick={() => setInputText(example.value)}
-                    className="rounded-full border border-border bg-muted-surface px-3 py-1.5 text-xs font-medium text-muted-ink hover:border-brand-300 hover:text-ink"
-                  >
-                    {example.label}
-                  </button>
-                ))}
-              </div>
-            ) : null}
+              {translator.showExamples && translator.examples.length ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {translator.examples.map((example) => (
+                    <button
+                      key={example.id}
+                      type="button"
+                      onClick={() => setInputText(example.value)}
+                      className="rounded-full border border-border bg-muted-surface px-3 py-1.5 text-xs font-bold text-muted-ink transition hover:border-brand-300 hover:text-ink"
+                    >
+                      {example.label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+              <div aria-hidden="true" className="mt-3 min-h-14" />
+            </div>
           </div>
 
           {translator.showSwap ? (
@@ -844,7 +848,7 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
             </div>
           ) : null}
 
-          <div className="rounded-[1.75rem] border border-brand-200 bg-brand-50 p-4 shadow-[var(--shadow-soft)] sm:p-6">
+          <div className="flex h-full min-w-0 flex-col rounded-[1.75rem] border border-brand-200 bg-brand-50 p-4 shadow-[var(--shadow-soft)] sm:p-6">
             <div className="mb-2 flex items-center justify-between">
               <p className="font-display text-lg font-bold text-ink">{activeOutputLabel}</p>
               <div className="flex items-center gap-1">
@@ -869,24 +873,26 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
                 </Button>
               </div>
             </div>
-            <Textarea
-              ref={outputRef}
-              value={outputText}
-              onChange={() => undefined}
-              readOnly
-              aria-label="Output text"
-              placeholder={`Your ${activeOutputLabel.toLowerCase()} text appears here...`}
-              className="border-brand-200 bg-white/70"
-            />
+            <div className="flex flex-1 flex-col">
+              <Textarea
+                ref={outputRef}
+                value={outputText}
+                onChange={() => undefined}
+                readOnly
+                aria-label="Output text"
+                placeholder={`Your ${activeOutputLabel.toLowerCase()} text appears here...`}
+                className="translator-textarea flex-1 border-brand-200 bg-white/70 md:flex-none"
+              />
 
-            {!outputText.trim() && !isLoading ? (
-              <p className="mt-3 text-xs text-muted-ink">
-                Translate your text to generate an output in this style.
-              </p>
-            ) : null}
-            {!speechSupported ? (
-              <p className="mt-2 text-xs text-muted-ink">Voice playback is not supported in this browser.</p>
-            ) : null}
+              <div className="mt-3 min-h-8">
+                {!outputText.trim() && !isLoading ? (
+                  <p className="text-xs text-muted-ink">Translate your text to generate an output in this style.</p>
+                ) : null}
+                {!speechSupported ? (
+                  <p className="sr-only">Voice playback is not supported in this browser.</p>
+                ) : null}
+              </div>
+            </div>
           </div>
         </div>
 
@@ -922,6 +928,10 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
               <Trash2 className="h-4 w-4" />
               Clear
             </Button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 border-t border-border/70 pt-3">
+            <p className="mr-auto basis-full text-xs font-bold uppercase tracking-[0.1em] text-muted-ink sm:basis-auto">Share the twist</p>
             <Button
               type="button"
               onClick={() => void handlePinterestResultShare()}
@@ -929,11 +939,7 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
               className="bg-[#E60023] text-white hover:bg-[#cc001f] focus-visible:ring-[#E60023]/60 disabled:bg-[#E60023]/65 disabled:text-white"
             >
               {isPreparingResultPin ? <Loader2 className="h-4 w-4 animate-spin" /> : <PinterestIcon className="h-4 w-4" />}
-              {isPreparingResultPin
-                ? "Preparing Pinterest image..."
-                : resultPinError
-                  ? "Retry result Pinterest image"
-                  : "Share result to Pinterest"}
+              {isPreparingResultPin ? "Preparing image..." : resultPinError ? "Retry result image" : "Share result"}
             </Button>
             <Button
               type="button"
@@ -943,7 +949,7 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
               className="border-[#E60023] text-[#E60023] hover:border-[#E60023] hover:bg-[#E60023]/10 hover:text-[#E60023] focus-visible:ring-[#E60023]/60"
             >
               <PinterestIcon className="h-4 w-4" />
-              Share translator to Pinterest
+              Share translator
             </Button>
           </div>
 
