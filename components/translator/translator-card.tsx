@@ -406,9 +406,7 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
   const [resultPinMediaUrl, setResultPinMediaUrl] = useState<string | null>(null);
   const [resultPinError, setResultPinError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [speechSupported] = useState(
-    () => typeof window !== "undefined" && "speechSynthesis" in window,
-  );
+  const [speechSupported, setSpeechSupported] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
 
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -445,6 +443,13 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
     },
     [],
   );
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setSpeechSupported("speechSynthesis" in window);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   function clearPreparedResultPin() {
     setResultPinMediaUrl(null);
@@ -704,9 +709,9 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
   }
 
   return (
-    <section className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
-      <Card className="overflow-hidden border-border bg-surface">
-        <div className="hidden border-b border-border px-4 py-3 sm:px-6 md:block">
+    <section className="relative mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+      <Card className="overflow-visible border-0 bg-transparent shadow-none">
+        <div className="hidden">
           <div className="grid items-center gap-3 md:grid-cols-[1fr_auto_1fr]">
             <div className="flex items-center justify-between gap-2 text-sm font-semibold uppercase tracking-wide text-muted-ink md:justify-start">
               <span>{activeInputLabel}</span>
@@ -739,7 +744,7 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
         </div>
 
         {hasModeOptions ? (
-          <div className="border-b border-border bg-muted-surface px-4 py-3 sm:px-6">
+          <div className="mb-4 rounded-2xl border border-border bg-[#fff0c7] px-4 py-3 sm:px-6">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="inline-flex items-center gap-2 text-sm font-medium text-muted-ink">
                 <WandSparkles className="h-4 w-4 text-brand-600" />
@@ -784,10 +789,10 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
           </div>
         ) : null}
 
-        <div className="grid grid-cols-1 divide-y divide-border md:grid-cols-2 md:divide-x md:divide-y-0">
-          <div className="p-4 sm:p-6">
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-[1fr_auto_1fr] md:items-stretch md:gap-3">
+          <div className="rounded-[1.75rem] border border-border bg-white p-4 shadow-[var(--shadow-soft)] sm:p-6">
             <div className="mb-2 flex items-center justify-between">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-ink">{activeInputLabel}</p>
+              <p className="font-display text-lg font-bold text-ink">{activeInputLabel}</p>
               <Button type="button" variant="ghost" size="sm" onClick={() => void handleCopy(inputText, "Input")}>
                 <Copy className="h-4 w-4" />
                 Copy
@@ -823,9 +828,25 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
             ) : null}
           </div>
 
-          <div className="p-4 sm:p-6">
+          {translator.showSwap ? (
+            <div className="relative z-10 -my-8 flex items-center justify-center md:my-0">
+              <Button
+                type="button"
+                size="icon"
+                onClick={handleSwap}
+                aria-label="Reverse translation direction"
+                title="Reverse translation direction"
+                disabled={isLoading}
+                className="h-14 w-14 border-4 border-page bg-brand-500 text-white shadow-[0_5px_0_#0d9488] hover:bg-brand-600"
+              >
+                <ArrowRightLeft className="h-5 w-5 rotate-90 md:rotate-0" />
+              </Button>
+            </div>
+          ) : null}
+
+          <div className="rounded-[1.75rem] border border-brand-200 bg-brand-50 p-4 shadow-[var(--shadow-soft)] sm:p-6">
             <div className="mb-2 flex items-center justify-between">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-ink">{activeOutputLabel}</p>
+              <p className="font-display text-lg font-bold text-ink">{activeOutputLabel}</p>
               <div className="flex items-center gap-1">
                 <Button
                   type="button"
@@ -855,7 +876,7 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
               readOnly
               aria-label="Output text"
               placeholder={`Your ${activeOutputLabel.toLowerCase()} text appears here...`}
-              className="bg-muted-surface"
+              className="border-brand-200 bg-white/70"
             />
 
             {!outputText.trim() && !isLoading ? (
@@ -869,11 +890,11 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
           </div>
         </div>
 
-        <div className="flex flex-col gap-3 border-t border-border bg-muted-surface p-4 sm:p-5">
+        <div className="mt-5 flex flex-col gap-3 border-t border-dashed border-border pt-5">
           <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" onClick={() => void translate()} disabled={isLoading} className="hidden md:inline-flex">
+            <Button type="button" aria-label="Translate" onClick={() => void translate()} disabled={isLoading} className="hidden md:inline-flex">
               {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-              Translate
+              Twist my words
             </Button>
             <Button
               type="button"
@@ -946,15 +967,16 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
         </div>
       </Card>
 
-      <div className="sticky bottom-3 z-20 mt-4 md:hidden">
+      <div className="sticky bottom-20 z-20 mt-5 md:hidden">
         <Button
           type="button"
+          aria-label="Translate"
           onClick={() => void translate()}
           disabled={isLoading}
-          className="h-12 w-full rounded-xl text-base"
+          className="h-14 w-full rounded-full text-base"
         >
           {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-          Translate
+          Twist my words
         </Button>
       </div>
     </section>

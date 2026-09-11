@@ -76,9 +76,9 @@ export function DiscoverySearch({ q, category }: DiscoverySearchProps) {
   }, [query]);
 
   return (
-    <div ref={containerRef} className="relative">
-      <form action="/" method="GET" className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-ink" />
+    <div ref={containerRef} className="relative motion-rise-delay">
+      <form action="/" method="GET" className="relative rounded-[1.4rem] bg-brand-500 p-2 shadow-[0_8px_0_#0d9488] sm:rounded-full">
+        <Search className="pointer-events-none absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2 text-ink/55" />
         <input
           name="q"
           value={value}
@@ -95,23 +95,23 @@ export function DiscoverySearch({ q, category }: DiscoverySearchProps) {
             setOpen(true);
           }}
           onFocus={() => setOpen(query.length >= 2)}
-          placeholder="Search translators, categories, or slugs"
-          className="h-12 w-full rounded-xl border border-border bg-surface pl-10 pr-24 text-sm text-ink shadow-sm"
+          placeholder="Search a style, mood, or character"
+          aria-label="Search translators"
+          className="h-14 w-full rounded-[1rem] border-0 bg-white pl-12 pr-16 text-base font-medium text-ink shadow-inner placeholder:text-muted-ink/75 sm:rounded-full sm:pr-44"
         />
         <button
           type="submit"
-          className="absolute right-2 top-1/2 inline-flex h-8 -translate-y-1/2 items-center gap-1 rounded-lg bg-brand-500 px-3 text-xs font-semibold text-white transition hover:bg-brand-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60 active:scale-[0.99] sm:h-9 sm:text-sm"
+          className="absolute right-3 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center gap-1 rounded-full bg-accent-500 text-sm font-extrabold text-white shadow-sm transition hover:bg-accent-600 active:scale-95 sm:w-auto sm:px-5"
         >
           <Search className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">Find translator</span>
-          <span className="sm:hidden">Find</span>
+          <span className="hidden sm:inline">Find your flavor</span>
         </button>
         {category ? <input type="hidden" name="category" value={category} /> : null}
         <input type="hidden" name="page" value="1" />
       </form>
 
       {open && query.length >= 2 ? (
-        <div className="absolute z-30 mt-2 w-full overflow-hidden rounded-xl border border-border bg-surface shadow-lg">
+        <div className="absolute z-30 mt-3 w-full overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl">
           {loading ? (
             <p className="px-3 py-2 text-sm text-muted-ink">Searching…</p>
           ) : suggestions.length ? (

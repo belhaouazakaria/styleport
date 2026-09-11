@@ -56,7 +56,7 @@ export default async function AdminTranslatorsPage({ searchParams }: PageProps) 
           </Link>
         </div>
 
-        <form className="grid gap-2 rounded-2xl border border-border bg-surface p-4 md:grid-cols-[1fr_170px_170px_190px_190px_auto]">
+        <form className="grid gap-2 rounded-2xl border border-border bg-surface p-4 md:grid-cols-2 2xl:grid-cols-[minmax(0,1fr)_170px_170px_190px_190px_auto]">
           <input
             type="text"
             name="q"

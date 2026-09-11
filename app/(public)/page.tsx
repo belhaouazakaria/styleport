@@ -112,7 +112,10 @@ export default async function HomePage({ searchParams }: PageProps) {
         <Hero title={settings.homepageTitle} subtitle={settings.homepageSubtitle} />
 
         <section id="search-translators" className="mx-auto mt-2 w-full max-w-7xl space-y-4 px-4 sm:px-6 lg:px-8">
-          <p className="text-sm text-muted-ink">{settings.catalogIntro}</p>
+          <div>
+            <p className="section-kicker">Find your flavor</p>
+            <p className="mt-1 text-sm text-muted-ink">{settings.catalogIntro}</p>
+          </div>
           <div className="min-w-0">
             <DiscoverySearch q={q || ""} category={category} />
           </div>
@@ -137,9 +140,12 @@ export default async function HomePage({ searchParams }: PageProps) {
           </section>
         ) : null}
 
-        <section id="translator-catalog" className="mx-auto mt-8 w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+        <section id="translator-catalog" className="mx-auto mt-12 w-full max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-            <h2 className="font-display text-3xl font-semibold text-ink">Translator Catalog</h2>
+            <div>
+              <p className="section-kicker">Pick a voice</p>
+              <h2 className="font-display mt-1 text-3xl font-bold tracking-tight text-ink sm:text-4xl">All translators</h2>
+            </div>
             <p className="text-sm text-muted-ink">
               {catalogTotal} result{catalogTotal === 1 ? "" : "s"}
             </p>

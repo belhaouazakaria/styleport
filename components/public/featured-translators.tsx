@@ -14,7 +14,7 @@ interface FeaturedTranslatorsProps {
 
 export function FeaturedTranslators({
   translators,
-  title = "Featured Translators",
+  title = "Featured twists",
   sectionId,
   showBrowseLink = true,
   browseHref = "/translators",
@@ -25,10 +25,13 @@ export function FeaturedTranslators({
   }
 
   return (
-    <section id={sectionId} className="mx-auto mt-8 w-full max-w-7xl px-4 sm:px-6 lg:px-8">
-      <div className="rounded-3xl border border-border bg-surface p-5 shadow-[0_20px_45px_-35px_rgba(17,24,39,0.25)] sm:p-6">
+    <section id={sectionId} className="mx-auto mt-10 w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+      <div>
         <div className="mb-4 flex items-center justify-between gap-2">
-          <h2 className="font-display text-2xl font-semibold text-ink">{title}</h2>
+          <div>
+            <p className="section-kicker">Handpicked for fresh perspective</p>
+            <h2 className="font-display mt-1 text-3xl font-bold tracking-tight text-ink sm:text-4xl">{title}</h2>
+          </div>
           {showBrowseLink ? (
             <Link href={browseHref} className="text-sm font-medium text-brand-700 hover:text-brand-800">
               {browseLabel}
@@ -36,28 +39,28 @@ export function FeaturedTranslators({
           ) : null}
         </div>
 
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {translators.map((translator) => (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {translators.map((translator, index) => (
             <article
               key={translator.id}
-              className="rounded-2xl border border-border bg-muted-surface p-4 transition hover:border-brand-300 hover:bg-surface"
+              className={`twist-ticket min-h-56 p-6 transition hover:-translate-y-1 ${index % 3 === 1 ? "bg-[#ffe079]" : index % 3 === 2 ? "bg-supporting-100" : "bg-brand-500 text-white"}`}
             >
-              <h3 className="font-semibold text-ink">
+              <p className={`text-xs font-extrabold uppercase tracking-[0.16em] ${index % 3 === 0 ? "text-white/75" : "text-ink/60"}`}>
+                {translator.primaryCategory?.name || "Fresh twist"}
+              </p>
+              <h3 className={`font-display mt-3 text-2xl font-bold ${index % 3 === 0 ? "text-white" : "text-ink"}`}>
                 <Link
                   href={`/translators/${translator.slug}`}
-                  className="group inline-flex items-center gap-1 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60"
+                  className="group inline-flex items-center gap-1 rounded-md"
                 >
                   {translator.name}
                   <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
                 </Link>
               </h3>
-              <p className="mt-1 text-sm text-muted-ink">{translator.shortDescription}</p>
-              {translator.primaryCategory ? (
-                <p className="mt-2 text-xs font-medium text-brand-700">{translator.primaryCategory.name}</p>
-              ) : null}
+              <p className={`mt-2 min-h-12 text-sm leading-6 ${index % 3 === 0 ? "text-white/85" : "text-ink/70"}`}>{translator.shortDescription}</p>
               <Link
                 href={`/translators/${translator.slug}`}
-                className="mt-3 inline-flex h-9 items-center gap-1.5 rounded-lg border border-brand-300 bg-brand-50 px-3 text-xs font-semibold text-brand-700 transition hover:border-brand-500 hover:bg-brand-100 hover:text-brand-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60"
+                className="mt-5 inline-flex h-11 items-center gap-1.5 rounded-full bg-white px-5 text-sm font-extrabold text-ink shadow-sm transition hover:translate-x-1"
               >
                 <Sparkles className="h-3.5 w-3.5" />
                 Try this translator

@@ -9,15 +9,21 @@
   --brand-secondary: #60C5F7;
   --brand-secondary-hover: #42AFE6;
   --brand-midnight: #0F172A;
-  --brand-cloud: #FFF9F4;
+  --brand-cloud: #fffaf1;
 
   /* Semantic tokens */
   --color-page: var(--brand-cloud);
   --color-surface: #ffffff;
-  --color-muted-surface: #fffaf7;
-  --color-border: #E2E8F0;
+  --color-muted-surface: #fff4e8;
+  --color-border: #ded9cf;
   --color-ink: var(--brand-midnight);
-  --color-muted-ink: #64748B;
+  --color-muted-ink: #687086;
+
+  --color-success: #168a68;
+  --color-warning: #b76808;
+  --color-error: #c63f48;
+  --shadow-soft: 0 18px 50px -34px rgba(15, 23, 42, 0.32);
+  --shadow-pop: 0 10px 0 rgba(15, 23, 42, 0.08);
 
   /* Brand scale for Tailwind */
   --color-brand-50: #f0fdfa;
@@ -113,7 +119,25 @@ body {
 body {
   font-family: var(--font-body), sans-serif;
   color: var(--color-ink);
-  background: var(--color-page);
+  background:
+    radial-gradient(circle at 12% 8%, rgba(255, 193, 69, 0.12), transparent 22rem),
+    radial-gradient(circle at 92% 18%, rgba(96, 197, 247, 0.14), transparent 26rem),
+    var(--color-page);
+  background-attachment: fixed;
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+body::before {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  content: "";
+  opacity: 0.3;
+  background-image: radial-gradient(rgba(15, 23, 42, 0.15) 0.55px, transparent 0.55px);
+  background-size: 7px 7px;
+  mask-image: linear-gradient(to bottom, black, transparent 75%);
 }
 
 .font-display {
@@ -128,8 +152,98 @@ button {
 }
 
 :focus-visible {
-  outline: 2px solid rgba(20, 184, 166, 0.35);
-  outline-offset: 2px;
+  outline: 3px solid rgba(20, 184, 166, 0.42);
+  outline-offset: 3px;
+}
+
+::selection {
+  color: var(--brand-midnight);
+  background: #ffe08a;
+}
+
+button,
+a,
+input,
+textarea,
+select {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+a {
+  touch-action: manipulation;
+}
+
+input,
+textarea,
+select {
+  border-color: var(--color-border);
+  min-width: 0;
+}
+
+.grid > * {
+  min-width: 0;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--brand-primary);
+}
+
+.twist-ribbon {
+  position: absolute;
+  pointer-events: none;
+  width: 18rem;
+  height: 4rem;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #14b8a6 0 32%, #60c5f7 32% 58%, #ffc145 58% 77%, #ff7a59 77%);
+  filter: saturate(1.08);
+  transform: rotate(-12deg);
+  opacity: 0.9;
+}
+
+.twist-ticket {
+  position: relative;
+  isolation: isolate;
+  clip-path: polygon(0 0, 96% 0, 100% 12%, 100% 88%, 96% 100%, 0 100%, 0 88%, 2.5% 82%, 0 74%, 2.5% 66%, 0 58%, 2.5% 50%, 0 42%, 2.5% 34%, 0 26%, 2.5% 18%, 0 10%);
+}
+
+.section-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--color-brand-800);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 767px) {
+  body {
+    padding-bottom: 5.25rem;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .motion-rise {
+    animation: fadeUp 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .motion-rise-delay {
+    animation: fadeUp 520ms 100ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 .animate-toast-in {

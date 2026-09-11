@@ -8,26 +8,26 @@ export function Footer({ platformName }: FooterProps) {
   const year = new Date().getFullYear();
 
   return (
-    <footer className="border-t border-border bg-white/70 py-10">
+    <footer className="relative border-t border-border bg-ink py-12 text-white">
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
           <div>
-            <p className="font-display text-xl font-semibold text-ink">{platformName}</p>
-            <p className="mt-2 text-sm text-muted-ink">
+            <p className="font-display text-2xl font-bold text-white">{platformName}</p>
+            <p className="mt-2 text-sm text-white/65">
               Discover and use AI translators for tone, voice, and creative rewriting.
             </p>
           </div>
 
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-ink">Explore</p>
+            <p className="text-xs font-bold uppercase tracking-wide text-white/45">Explore</p>
             <ul className="mt-3 space-y-2 text-sm">
               <li>
-                <Link href="/" className="text-ink transition hover:text-brand-700">
+                <Link href="/" className="text-white/80 transition hover:text-brand-300">
                   Home
                 </Link>
               </li>
               <li>
-                <Link href="/translators" className="text-ink transition hover:text-brand-700">
+                <Link href="/translators" className="text-white/80 transition hover:text-brand-300">
                   Translators
                 </Link>
               </li>
@@ -35,25 +35,25 @@ export function Footer({ platformName }: FooterProps) {
           </div>
 
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-ink">Legal</p>
+            <p className="text-xs font-bold uppercase tracking-wide text-white/45">Legal</p>
             <ul className="mt-3 space-y-2 text-sm">
               <li>
-                <Link href="/privacy" className="text-ink transition hover:text-brand-700">
+                <Link href="/privacy" className="text-white/80 transition hover:text-brand-300">
                   Privacy Policy
                 </Link>
               </li>
               <li>
-                <Link href="/terms" className="text-ink transition hover:text-brand-700">
+                <Link href="/terms" className="text-white/80 transition hover:text-brand-300">
                   Terms of Use
                 </Link>
               </li>
               <li>
-                <Link href="/disclaimer" className="text-ink transition hover:text-brand-700">
+                <Link href="/disclaimer" className="text-white/80 transition hover:text-brand-300">
                   Disclaimer
                 </Link>
               </li>
               <li>
-                <Link href="/cookies" className="text-ink transition hover:text-brand-700">
+                <Link href="/cookies" className="text-white/80 transition hover:text-brand-300">
                   Cookie Policy
                 </Link>
               </li>
@@ -61,10 +61,10 @@ export function Footer({ platformName }: FooterProps) {
           </div>
 
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-ink">Support</p>
+            <p className="text-xs font-bold uppercase tracking-wide text-white/45">Support</p>
             <ul className="mt-3 space-y-2 text-sm">
               <li>
-                <Link href="/contact" className="text-ink transition hover:text-brand-700">
+                <Link href="/contact" className="text-white/80 transition hover:text-brand-300">
                   Contact
                 </Link>
               </li>
@@ -72,8 +72,9 @@ export function Footer({ platformName }: FooterProps) {
           </div>
         </div>
 
-        <div className="mt-8 border-t border-border pt-4 text-xs text-muted-ink">
-          (c) {year} {platformName}. All rights reserved.
+        <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4 text-xs text-white/45">
+          <span>© {year} {platformName}. All rights reserved.</span>
+          <a href="https://deerflow.tech" target="_blank" rel="noreferrer" className="transition hover:text-brand-300">Created by Deerflow</a>
         </div>
       </div>
     </footer>

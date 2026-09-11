@@ -1,16 +1,22 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useState } from "react";
 import {
   BarChart3,
   Cog,
   FolderTree,
   Globe,
   LayoutTemplate,
+  Menu,
   MessageCircleMore,
   MessageSquareText,
   PlusSquare,
   ScrollText,
   ShieldAlert,
   Sparkles,
+  X,
 } from "lucide-react";
 
 import { BrandLogo } from "@/components/shared/brand-logo";
@@ -51,15 +57,16 @@ function linkBadgeCount(href: string, props: AdminSidebarProps) {
 }
 
 export function AdminSidebar(props: AdminSidebarProps) {
+  const pathname = usePathname();
   return (
-    <aside className="hidden w-72 border-r border-border bg-surface p-5 lg:block">
-      <Link href="/admin" className="mb-8 flex items-center gap-2">
+    <aside className="hidden w-72 shrink-0 border-r border-white/10 bg-ink p-5 text-white lg:block">
+      <Link href="/admin" className="mb-8 flex items-center gap-2 rounded-2xl bg-white p-3">
         <BrandLogo
           logoUrl={props.logoUrl}
           desktopHeight={props.logoDesktopHeight}
           mobileHeight={props.logoMobileHeight}
         />
-        <p className="text-xs text-muted-ink">Admin Console</p>
+        <p className="text-xs text-white/50">Studio</p>
       </Link>
 
       <nav className="space-y-1">
@@ -67,7 +74,7 @@ export function AdminSidebar(props: AdminSidebarProps) {
           <Link
             key={item.href}
             href={item.href}
-            className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-muted-ink transition hover:bg-muted-surface hover:text-ink"
+            className={`flex min-h-11 items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold transition ${pathname === item.href ? "bg-brand-500 text-white" : "text-white/65 hover:bg-white/10 hover:text-white"}`}
           >
             <item.icon className="h-4 w-4" />
             <span>{item.label}</span>
@@ -84,23 +91,38 @@ export function AdminSidebar(props: AdminSidebarProps) {
 }
 
 export function AdminMobileNav(props: AdminSidebarProps) {
+  const [open, setOpen] = useState(false);
+  const pathname = usePathname();
   return (
-    <nav className="flex gap-2 overflow-x-auto border-b border-border bg-surface px-4 py-2 lg:hidden">
-      {links.map((item) => (
-        <Link
-          key={item.href}
-          href={item.href}
-          className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-border bg-muted-surface px-3 py-1.5 text-xs font-medium text-muted-ink"
-        >
-          <item.icon className="h-3.5 w-3.5" />
-          {item.label}
-          {linkBadgeCount(item.href, props) > 0 ? (
-            <span className="rounded-full bg-brand-500 px-1.5 py-0.5 text-[10px] font-semibold text-white">
-              {linkBadgeCount(item.href, props)}
-            </span>
-          ) : null}
+    <>
+      <nav className="sticky top-0 z-40 flex h-[4.5rem] items-center justify-between border-b border-border bg-page/95 px-4 backdrop-blur-xl lg:hidden">
+        <Link href="/admin" aria-label="Admin overview">
+          <BrandLogo logoUrl={props.logoUrl} desktopHeight={props.logoDesktopHeight} mobileHeight={props.logoMobileHeight} />
         </Link>
-      ))}
-    </nav>
+        <button type="button" onClick={() => setOpen(true)} className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-ink text-white shadow-sm" aria-label="Open admin navigation">
+          <Menu className="h-5 w-5" />
+        </button>
+      </nav>
+      {open ? (
+        <div className="fixed inset-0 z-[80] lg:hidden">
+          <button type="button" className="absolute inset-0 bg-ink/45 backdrop-blur-sm" onClick={() => setOpen(false)} aria-label="Close admin navigation" />
+          <aside className="absolute inset-y-0 right-0 w-[88vw] max-w-sm overflow-y-auto bg-ink p-5 text-white shadow-2xl">
+            <div className="mb-6 flex items-center justify-between">
+              <p className="font-display text-2xl font-bold">SayTwist Studio</p>
+              <button type="button" onClick={() => setOpen(false)} className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10" aria-label="Close admin navigation"><X className="h-5 w-5" /></button>
+            </div>
+            <nav className="space-y-1" aria-label="Admin navigation">
+              {links.map((item) => (
+                <Link key={item.href} href={item.href} onClick={() => setOpen(false)} className={`flex min-h-12 items-center gap-3 rounded-xl px-3 text-sm font-bold ${pathname === item.href ? "bg-brand-500 text-white" : "text-white/70 hover:bg-white/10"}`}>
+                  <item.icon className="h-4 w-4" />
+                  <span>{item.label}</span>
+                  {linkBadgeCount(item.href, props) > 0 ? <span className="ml-auto rounded-full bg-accent-500 px-2 py-0.5 text-xs text-white">{linkBadgeCount(item.href, props)}</span> : null}
+                </Link>
+              ))}
+            </nav>
+          </aside>
+        </div>
+      ) : null}
+    </>
   );
 }

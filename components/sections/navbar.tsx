@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { LayoutGrid, Menu, MessageSquarePlus, Search, X } from "lucide-react";
+import { Compass, Home, LayoutGrid, Menu, MessageSquarePlus, Search, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { BrandLogo } from "@/components/shared/brand-logo";
@@ -46,8 +46,9 @@ export function Navbar({
   }, [mobileOpen]);
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border bg-white/90 backdrop-blur">
-      <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between gap-2 px-4 sm:px-6 lg:px-8">
+    <>
+    <header className="sticky top-0 z-40 border-b border-border/80 bg-page/92 backdrop-blur-xl">
+      <div className="mx-auto flex h-[4.5rem] w-full max-w-7xl items-center justify-between gap-2 px-4 sm:px-6 lg:px-8">
         <Link href="/" className="group flex items-center">
           <BrandLogo
             logoUrl={logoUrl}
@@ -59,28 +60,28 @@ export function Navbar({
         <nav className="hidden items-center gap-2 md:flex">
           <Link
             href={searchHref}
-            className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-border bg-surface px-3 text-sm font-semibold text-ink transition hover:border-brand-300 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60"
+            className="inline-flex h-11 items-center gap-1.5 rounded-full border border-border bg-surface px-4 text-sm font-semibold text-ink shadow-sm transition hover:-translate-y-0.5 hover:border-brand-300 hover:text-brand-700"
           >
             <Search className="h-4 w-4" />
             Search translators
           </Link>
           <Link
             href={categoriesHref}
-            className="inline-flex h-10 items-center gap-1.5 rounded-xl px-3 text-sm font-medium text-muted-ink transition hover:bg-muted-surface hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60"
+            className="inline-flex h-11 items-center gap-1.5 rounded-full px-4 text-sm font-semibold text-muted-ink transition hover:bg-muted-surface hover:text-ink"
           >
             <LayoutGrid className="h-4 w-4" />
             Categories
           </Link>
           <Link
             href="/contact"
-            className="inline-flex h-10 items-center rounded-xl px-3 text-sm font-medium text-muted-ink transition hover:bg-muted-surface hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60"
+            className="inline-flex h-11 items-center rounded-full px-4 text-sm font-semibold text-muted-ink transition hover:bg-muted-surface hover:text-ink"
           >
             Contact
           </Link>
           <button
             type="button"
             onClick={() => openRequestModal()}
-            className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-brand-300 bg-brand-50 px-3 text-sm font-semibold text-brand-700 transition hover:border-brand-500 hover:bg-brand-100 hover:text-brand-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60"
+            className="inline-flex h-11 items-center gap-1.5 rounded-full bg-accent-500 px-5 text-sm font-extrabold text-white shadow-[0_6px_0_#d9563b] transition hover:-translate-y-0.5 hover:bg-accent-600 active:translate-y-1 active:shadow-none"
           >
             <MessageSquarePlus className="h-4 w-4" />
             Create translator
@@ -93,7 +94,7 @@ export function Navbar({
           aria-expanded={mobileOpen}
           aria-controls="mobile-nav-drawer"
           onClick={() => setMobileOpen((prev) => !prev)}
-          className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-surface text-ink transition hover:border-brand-300 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60 md:hidden"
+          className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-border bg-surface text-ink shadow-sm transition active:scale-95 md:hidden"
         >
           {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
@@ -109,7 +110,7 @@ export function Navbar({
           />
           <aside
             id="mobile-nav-drawer"
-            className="fixed right-0 top-0 z-50 flex h-dvh w-[86vw] max-w-sm flex-col gap-3 border-l border-border bg-white p-5 shadow-2xl"
+            className="fixed right-0 top-0 z-50 flex h-dvh w-[86vw] max-w-sm flex-col gap-3 border-l border-border bg-page p-5 shadow-2xl"
           >
             <div className="flex items-center justify-between">
               <BrandLogo
@@ -167,5 +168,19 @@ export function Navbar({
         </div>
       ) : null}
     </header>
+    <nav aria-label="Primary mobile navigation" className="fixed inset-x-3 bottom-3 z-50 grid h-16 grid-cols-3 items-center rounded-[1.35rem] border border-white/70 bg-white/95 px-2 shadow-[0_16px_40px_-18px_rgba(15,23,42,0.48)] backdrop-blur-xl md:hidden">
+      <Link href="/" className="flex h-12 flex-col items-center justify-center gap-0.5 rounded-xl text-[11px] font-bold text-brand-700">
+        <Home className="h-5 w-5" />
+        Home
+      </Link>
+      <button type="button" onClick={() => openRequestModal()} className="mx-auto -mt-7 flex h-14 w-14 items-center justify-center rounded-full border-4 border-page bg-accent-500 text-white shadow-[0_6px_0_#d9563b] active:translate-y-1 active:shadow-none" aria-label="Create translator">
+        <MessageSquarePlus className="h-6 w-6" />
+      </button>
+      <Link href="/#translator-catalog" className="flex h-12 flex-col items-center justify-center gap-0.5 rounded-xl text-[11px] font-bold text-muted-ink">
+        <Compass className="h-5 w-5" />
+        Explore
+      </Link>
+    </nav>
+    </>
   );
 }

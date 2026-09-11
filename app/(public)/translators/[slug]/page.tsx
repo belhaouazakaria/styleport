@@ -115,7 +115,8 @@ export default async function TranslatorSlugPage({ params }: PageProps) {
     <div className="relative overflow-x-hidden">
       <Navbar logoUrl={settings.logoUrl} logoDesktopHeight={settings.logoDesktopHeight} logoMobileHeight={settings.logoMobileHeight} />
       <main className="pb-10">
-        <section className="mx-auto w-full max-w-7xl px-4 pb-6 pt-10 text-center sm:px-6 lg:px-8">
+        <section className="relative mx-auto w-full max-w-7xl overflow-hidden px-4 pb-7 pt-7 sm:px-6 sm:pt-12 lg:px-8">
+          <div className="twist-ribbon -right-28 top-8 hidden lg:block" />
           <Breadcrumbs
             items={[
               { label: "Home", href: "/" },
@@ -123,10 +124,11 @@ export default async function TranslatorSlugPage({ params }: PageProps) {
               { label: translator.name },
             ]}
           />
-          <h1 className="font-display mt-3 text-balance text-4xl font-semibold tracking-tight text-ink sm:text-5xl">
+          <p className="section-kicker mt-5">Ready for a fresh voice?</p>
+          <h1 className="font-display mt-2 max-w-4xl text-balance text-[clamp(2.45rem,8vw,4.8rem)] font-bold leading-[0.98] tracking-[-0.04em] text-ink">
             {translator.title}
           </h1>
-          <p className="mx-auto mt-3 max-w-2xl text-balance text-base text-muted-ink sm:text-lg">
+          <p className="mt-4 max-w-2xl text-balance text-base leading-7 text-muted-ink sm:text-lg">
             {translator.subtitle}
           </p>
         </section>
@@ -140,8 +142,9 @@ export default async function TranslatorSlugPage({ params }: PageProps) {
         <TranslatorCard translator={translator} shareUrl={shareUrl} pinImageUrl={pinImageUrl} />
 
         <section className="mx-auto mt-8 w-full max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="rounded-2xl border border-border bg-surface p-5 sm:p-6">
-            <h2 className="font-display text-2xl font-semibold text-ink">About This Translator</h2>
+          <div className="border-y border-dashed border-border py-7 sm:py-9">
+            <p className="section-kicker">Behind the twist</p>
+            <h2 className="font-display mt-1 text-3xl font-bold text-ink">About this translator</h2>
             <p className="mt-3 text-base leading-7 text-muted-ink">{translator.shortDescription}</p>
             <p className="mt-2 text-sm leading-7 text-muted-ink">
               This translator helps convert {translator.sourceLabel.toLowerCase()} into{" "}
@@ -154,9 +157,9 @@ export default async function TranslatorSlugPage({ params }: PageProps) {
 
         {relatedTranslators.length ? (
           <section className="mx-auto mt-8 w-full max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="rounded-2xl border border-border bg-surface p-5 sm:p-6">
+            <div className="border-y border-border py-7 sm:py-9">
               <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-                <h2 className="font-display text-2xl font-semibold text-ink">Related Translators</h2>
+                <h2 className="font-display text-3xl font-bold text-ink">More twists to try</h2>
                 <Link
                   href="/translators"
                   className="text-sm font-medium text-brand-700 transition hover:text-brand-800"

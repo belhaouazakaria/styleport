@@ -137,21 +137,21 @@ export function RequestTranslatorProvider({ children }: { children: ReactNode })
       {open
         ? createPortal(
             <div
-              className="fixed inset-0 z-[90] overflow-y-auto bg-ink/50 p-4 backdrop-blur-[2px]"
+              className="fixed inset-0 z-[90] flex items-end overflow-y-auto bg-ink/55 pt-4 backdrop-blur-[2px] sm:block sm:p-4"
               onMouseDown={(event) => {
                 if (event.target === event.currentTarget) {
                   closeRequestModal();
                 }
               }}
             >
-              <div className="mx-auto my-8 w-full max-w-xl rounded-2xl border border-border bg-surface shadow-[0_36px_80px_-45px_rgba(17,24,39,0.65)]">
+              <div role="dialog" aria-modal="true" aria-labelledby="request-translator-title" className="mx-auto max-h-[92dvh] w-full max-w-xl overflow-y-auto rounded-t-[2rem] border border-border bg-surface shadow-[0_36px_80px_-30px_rgba(17,24,39,0.65)] sm:my-8 sm:rounded-[2rem]">
                 <div className="flex items-start justify-between gap-3 border-b border-border px-4 py-4 sm:px-6">
                   <div>
                     <p className="inline-flex items-center gap-1 rounded-full border border-brand-300 bg-brand-50 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-brand-700">
                       <Sparkles className="h-3.5 w-3.5" />
                       Create translator
                     </p>
-                    <h2 className="mt-2 font-display text-2xl font-semibold text-ink">Create a Translator Idea</h2>
+                    <h2 id="request-translator-title" className="mt-2 font-display text-2xl font-bold text-ink">Create a translator idea</h2>
                     <p className="mt-1 text-sm text-muted-ink">
                       Share a name and description. We&apos;ll review it and generate the translator with AI.
                     </p>

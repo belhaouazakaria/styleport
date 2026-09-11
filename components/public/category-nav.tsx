@@ -18,10 +18,10 @@ function buildHref(params: { category?: string; q?: string }) {
 
 export function CategoryNav({ categories, activeCategory, q }: CategoryNavProps) {
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="-mx-4 flex snap-x gap-2 overflow-x-auto px-4 pb-2 scrollbar-thin sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0" aria-label="Translator categories">
       <Link
         href={buildHref({ q })}
-        className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+        className={`inline-flex h-11 shrink-0 snap-start items-center rounded-full border px-4 text-sm font-bold transition ${
           !activeCategory
             ? "border-brand-500 bg-brand-500 text-white"
             : "border-border bg-surface text-ink hover:border-brand-300"
@@ -33,7 +33,7 @@ export function CategoryNav({ categories, activeCategory, q }: CategoryNavProps)
         <Link
           key={category.id}
           href={buildHref({ category: category.slug, q })}
-          className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+          className={`inline-flex h-11 shrink-0 snap-start items-center rounded-full border px-4 text-sm font-bold transition ${
             activeCategory === category.slug
               ? "border-brand-500 bg-brand-500 text-white"
               : "border-border bg-surface text-ink hover:border-brand-300"
