@@ -74,7 +74,9 @@ export function Footer({ platformName }: FooterProps) {
 
         <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4 text-xs text-white/45">
           <span>© {year} {platformName}. All rights reserved.</span>
-          <a href="https://deerflow.tech" target="_blank" rel="noreferrer" className="transition hover:text-brand-300">Created by Deerflow</a>
+          <span className="text-right text-[0.7rem] leading-relaxed text-white/45">
+            Made with <span aria-hidden="true" className="mx-0.5 text-brand-300">♥</span> for curious minds
+          </span>
         </div>
       </div>
     </footer>
