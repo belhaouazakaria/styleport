@@ -789,8 +789,8 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
           </div>
         ) : null}
 
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-[1fr_auto_1fr] md:items-stretch md:gap-3">
-          <div className="flex h-full min-w-0 flex-col rounded-[1.75rem] border border-border bg-white p-4 shadow-[var(--shadow-soft)] sm:p-6">
+        <div className="relative grid w-full grid-cols-1 gap-5 md:grid-cols-2 md:items-stretch md:gap-5">
+          <div className="flex h-full w-full min-w-0 flex-col rounded-[1.75rem] border border-border bg-white p-4 shadow-[var(--shadow-soft)] sm:p-6">
             <div className="mb-2 flex items-center justify-between">
               <p className="font-display text-lg font-bold text-ink">{activeInputLabel}</p>
               <Button type="button" variant="ghost" size="sm" onClick={() => void handleCopy(inputText, "Input")}>
@@ -833,7 +833,7 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
           </div>
 
           {translator.showSwap ? (
-            <div className="relative z-10 -my-8 flex items-center justify-center md:my-0">
+            <div className="relative z-10 -my-8 flex items-center justify-center md:absolute md:left-1/2 md:top-1/2 md:my-0 md:-translate-x-1/2 md:-translate-y-1/2">
               <Button
                 type="button"
                 size="icon"
@@ -848,7 +848,7 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
             </div>
           ) : null}
 
-          <div className="flex h-full min-w-0 flex-col rounded-[1.75rem] border border-brand-200 bg-brand-50 p-4 shadow-[var(--shadow-soft)] sm:p-6">
+          <div className="flex h-full w-full min-w-0 flex-col rounded-[1.75rem] border border-brand-200 bg-brand-50 p-4 shadow-[var(--shadow-soft)] sm:p-6">
             <div className="mb-2 flex items-center justify-between">
               <p className="font-display text-lg font-bold text-ink">{activeOutputLabel}</p>
               <div className="flex items-center gap-1">
