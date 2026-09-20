@@ -390,20 +390,22 @@ export async function getEditorialDraftIdsForReviewFilters(params: { status?: Ed
 }
 
 export async function bulkUpdateEditorialDrafts(params: {
-  action: "approve" | "publish" | "discard";
+  action: "approve" | "approve_publish" | "publish" | "discard";
   draftIds: string[];
   reviewedById: string;
 }) {
   const ids = Array.from(new Set(params.draftIds));
-  const result = { requested: ids.length, affected: 0, skipped: 0, failed: [] as Array<{ id: string; error: string }> };
+  const result = { requested: ids.length, succeeded: 0, affected: 0, skipped: 0, failed: [] as Array<{ id: string; error: string }> };
   for (const id of ids) {
     try {
-      if (params.action === "publish") await publishEditorialDraft(id, params.reviewedById);
+      if (params.action === "approve_publish") await approveAndPublishEditorialDraft(id, params.reviewedById);
+      else if (params.action === "publish") await publishEditorialDraft(id, params.reviewedById);
       else await setEditorialDraftStatus(id, params.action === "approve" ? "APPROVED" : "DISCARDED", params.reviewedById);
+      result.succeeded += 1;
       result.affected += 1;
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to update draft.";
-      if (/only drafts|approve the draft/i.test(message)) result.skipped += 1;
+      if (/only drafts|approve the draft|invalid|missing|cannot be approved|cannot be published/i.test(message)) result.skipped += 1;
       else result.failed.push({ id, error: message });
     }
   }
@@ -463,34 +465,74 @@ export async function updateEditorialDraftPayload(id: string, payload: unknown) 
   });
 }
 
-export async function publishEditorialDraft(id: string, reviewedById: string) {
-  const draft = await prisma.translatorEditorialDraft.findUnique({ where: { id }, select: { status: true, translatorId: true, payload: true, validation: true, jobItem: { select: { operation: true } } } });
-  if (!draft) throw new Error("Editorial draft not found.");
-  if (draft.status !== "APPROVED") throw new Error("Approve the draft before publishing it.");
+type PublishableEditorialDraft = {
+  id: string;
+  status: TranslatorEditorialDraftStatus;
+  translatorId: string;
+  payload: Prisma.JsonValue;
+  validation: Prisma.JsonValue;
+  jobItem: { operation: TranslatorEditorialJobType };
+};
+
+function getValidatedPublishPayload(draft: PublishableEditorialDraft) {
   const parsed = translatorEditorialCandidateSchema.safeParse(draft.payload);
-  if (!parsed.success || !validateEditorialDraft(parsed.data, expectedSectionsForStoredDraft(draft.validation, parsed.data, draft.jobItem.operation)).valid) throw new Error("This draft is no longer valid and cannot be published.");
-  const payload = parsed.data;
+  if (!parsed.success || !validateEditorialDraft(parsed.data, expectedSectionsForStoredDraft(draft.validation, parsed.data, draft.jobItem.operation)).valid) {
+    throw new Error("This draft is invalid or missing generated content and cannot be published.");
+  }
+  return parsed.data;
+}
+
+async function writePublishedEditorial(
+  tx: Prisma.TransactionClient,
+  draft: Pick<PublishableEditorialDraft, "id" | "translatorId">,
+  payload: TranslatorEditorialDraft,
+  reviewedById: string,
+) {
+  await tx.translatorEditorialContent.upsert({
+    where: { translatorId: draft.translatorId },
+    create: { translatorId: draft.translatorId, about: payload.about, whatItDoes: payload.whatItDoes, differenceDescription: payload.differenceDescription },
+    update: { about: payload.about, whatItDoes: payload.whatItDoes, differenceDescription: payload.differenceDescription },
+  });
+  await tx.translatorEditorialList.deleteMany({ where: { translatorId: draft.translatorId } });
+  await tx.translatorEditorialList.createMany({
+    data: [
+      ...payload.bestUses.map((content, index) => ({ translatorId: draft.translatorId, kind: "BEST_USE" as const, content, sortOrder: index + 1 })),
+      ...payload.howToUse.map((content, index) => ({ translatorId: draft.translatorId, kind: "HOW_TO_USE" as const, content, sortOrder: index + 1 })),
+      ...payload.tips.map((content, index) => ({ translatorId: draft.translatorId, kind: "TIP" as const, content, sortOrder: index + 1 })),
+    ],
+  });
+  await tx.translatorEditorialExample.deleteMany({ where: { translatorId: draft.translatorId } });
+  await tx.translatorEditorialExample.createMany({ data: payload.examples.map((item, index) => ({ translatorId: draft.translatorId, contextTitle: item.contextTitle || null, originalText: item.originalText, transformedText: item.transformedText, sortOrder: index + 1 })) });
+  await tx.translatorEditorialFaq.deleteMany({ where: { translatorId: draft.translatorId } });
+  await tx.translatorEditorialFaq.createMany({ data: payload.faq.map((item, index) => ({ translatorId: draft.translatorId, question: item.question, answer: item.answer, sortOrder: index + 1 })) });
+  await tx.translatorEditorialDraft.update({ where: { id: draft.id }, data: { status: "PUBLISHED", reviewedById, reviewedAt: new Date(), publishedAt: new Date() } });
+}
+
+export async function approveAndPublishEditorialDraft(id: string, reviewedById: string) {
+  const draft = await prisma.translatorEditorialDraft.findUnique({
+    where: { id },
+    select: { id: true, status: true, translatorId: true, payload: true, validation: true, jobItem: { select: { operation: true } } },
+  });
+  if (!draft) throw new Error("Editorial draft not found.");
+  if (draft.status !== "NEEDS_REVIEW") throw new Error("Only drafts needing review can be approved and published.");
+  const payload = getValidatedPublishPayload(draft);
 
   await prisma.$transaction(async (tx) => {
-    await tx.translatorEditorialContent.upsert({
-      where: { translatorId: draft.translatorId },
-      create: { translatorId: draft.translatorId, about: payload.about, whatItDoes: payload.whatItDoes, differenceDescription: payload.differenceDescription },
-      update: { about: payload.about, whatItDoes: payload.whatItDoes, differenceDescription: payload.differenceDescription },
+    const approved = await tx.translatorEditorialDraft.updateMany({
+      where: { id, status: "NEEDS_REVIEW" },
+      data: { status: "APPROVED", reviewedById, reviewedAt: new Date() },
     });
-    await tx.translatorEditorialList.deleteMany({ where: { translatorId: draft.translatorId } });
-    await tx.translatorEditorialList.createMany({
-      data: [
-        ...payload.bestUses.map((content, index) => ({ translatorId: draft.translatorId, kind: "BEST_USE" as const, content, sortOrder: index + 1 })),
-        ...payload.howToUse.map((content, index) => ({ translatorId: draft.translatorId, kind: "HOW_TO_USE" as const, content, sortOrder: index + 1 })),
-        ...payload.tips.map((content, index) => ({ translatorId: draft.translatorId, kind: "TIP" as const, content, sortOrder: index + 1 })),
-      ],
-    });
-    await tx.translatorEditorialExample.deleteMany({ where: { translatorId: draft.translatorId } });
-    await tx.translatorEditorialExample.createMany({ data: payload.examples.map((item, index) => ({ translatorId: draft.translatorId, contextTitle: item.contextTitle || null, originalText: item.originalText, transformedText: item.transformedText, sortOrder: index + 1 })) });
-    await tx.translatorEditorialFaq.deleteMany({ where: { translatorId: draft.translatorId } });
-    await tx.translatorEditorialFaq.createMany({ data: payload.faq.map((item, index) => ({ translatorId: draft.translatorId, question: item.question, answer: item.answer, sortOrder: index + 1 })) });
-    await tx.translatorEditorialDraft.update({ where: { id }, data: { status: "PUBLISHED", reviewedById, reviewedAt: new Date(), publishedAt: new Date() } });
+    if (approved.count !== 1) throw new Error("This draft changed while it was being reviewed. Refresh and try again.");
+    await writePublishedEditorial(tx, draft, payload, reviewedById);
   });
+}
+
+export async function publishEditorialDraft(id: string, reviewedById: string) {
+  const draft = await prisma.translatorEditorialDraft.findUnique({ where: { id }, select: { id: true, status: true, translatorId: true, payload: true, validation: true, jobItem: { select: { operation: true } } } });
+  if (!draft) throw new Error("Editorial draft not found.");
+  if (draft.status !== "APPROVED") throw new Error("Approve the draft before publishing it.");
+  const payload = getValidatedPublishPayload(draft);
+  await prisma.$transaction((tx) => writePublishedEditorial(tx, draft, payload, reviewedById));
 }
 
 async function claimNextItem() {

@@ -2,7 +2,8 @@ import { afterAll, describe, expect, it } from "vitest";
 
 import { prisma } from "@/lib/prisma";
 import type { TranslatorEditorialDraft } from "@/lib/types";
-import { createAndProcessEditorialDraft, createEditorialJob, getEditorialDraft, publishEditorialDraft, runEditorialWorker, setEditorialDraftStatus } from "@/lib/translator-editorial-jobs";
+import { getEditorialReadiness } from "@/lib/translator-editorial-data";
+import { bulkUpdateEditorialDrafts, createAndProcessEditorialDraft, createEditorialJob, getEditorialDraft, publishEditorialDraft, runEditorialWorker, setEditorialDraftStatus } from "@/lib/translator-editorial-jobs";
 
 const runDatabaseTests = process.env.RUN_EDITORIAL_DB_TESTS === "1";
 const databaseDescribe = runDatabaseTests ? describe : describe.skip;
@@ -67,6 +68,39 @@ databaseDescribe("editorial persistence integration", () => {
     await runEditorialWorker({ once: true });
     expect((await prisma.translatorEditorialJob.findUnique({ where: { id: pending.id } }))?.status).toBe("COMPLETED");
     expect((await prisma.translatorEditorialJobItem.findFirst({ where: { jobId: pending.id } }))?.status).toBe("SKIPPED");
+  });
+
+  it("bulk approves and publishes multiple ready drafts in one request", async () => {
+    const translators = await Promise.all([createTranslator("bulk-one"), createTranslator("bulk-two")]);
+    const generated = await Promise.all(translators.map((translator) => createAndProcessEditorialDraft({
+      translatorId: translator.id,
+      operation: "REGENERATE_FULL",
+      generate: async () => complete,
+    })));
+    createdJobIds.push(...generated.map((result) => result.jobId));
+    const reviewer = await prisma.user.create({ data: { email: `${marker}-bulk@example.test`, passwordHash: "not-used", role: "ADMIN" } });
+    createdUserIds.push(reviewer.id);
+
+    const result = await bulkUpdateEditorialDrafts({
+      action: "approve_publish",
+      draftIds: generated.map((item) => item.draftId),
+      reviewedById: reviewer.id,
+    });
+
+    expect(result).toMatchObject({ requested: 2, succeeded: 2, skipped: 0, failed: [] });
+    const drafts = await prisma.translatorEditorialDraft.findMany({ where: { id: { in: generated.map((item) => item.draftId) } } });
+    expect(drafts.every((draft) => draft.status === "PUBLISHED" && draft.publishedAt)).toBe(true);
+
+    for (const translator of translators) {
+      const published = await prisma.translator.findUniqueOrThrow({
+        where: { id: translator.id },
+        select: { editorialContent: true, editorialLists: true, editorialExamples: true, editorialFaqs: true },
+      });
+      expect(published.editorialContent?.about).toBe(complete.about);
+      expect(published.editorialExamples).toHaveLength(3);
+      expect(published.editorialFaqs).toHaveLength(3);
+      expect(getEditorialReadiness({ content: published.editorialContent, lists: published.editorialLists, examples: published.editorialExamples, faqs: published.editorialFaqs }).status).toBe("READY");
+    }
   });
 
   it("preserves complete sections and fills only missing FAQ and tips", async () => {

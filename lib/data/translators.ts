@@ -78,7 +78,7 @@ const runtimeTranslatorCache = new Map<
 >();
 const runtimeTranslatorInFlight = new Map<string, Promise<RuntimeTranslator | null>>();
 
-function invalidatePublicTranslatorCaches() {
+export function invalidatePublicTranslatorCaches() {
   publicCategoriesCache = null;
   publicCategoriesInFlight = null;
   featuredTranslatorCache.clear();

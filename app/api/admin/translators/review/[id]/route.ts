@@ -1,6 +1,8 @@
 import { auth } from "@/auth";
+import { revalidatePath } from "next/cache";
 import { adminRouteGuard } from "@/lib/permissions";
 import { apiError, apiOk } from "@/lib/api-response";
+import { invalidatePublicTranslatorCaches } from "@/lib/data/translators";
 import { createEditorialJob, getEditorialDraft, publishEditorialDraft, setEditorialDraftStatus, updateEditorialDraftPayload } from "@/lib/translator-editorial-jobs";
 
 export async function GET(_: Request, context: { params: Promise<{ id: string }> }) {
@@ -26,6 +28,10 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     }
     if (payload.action === "publish") {
       await publishEditorialDraft(id, reviewerId);
+      invalidatePublicTranslatorCaches();
+      revalidatePath("/admin/translators");
+      revalidatePath("/admin/translators/review");
+      revalidatePath("/translators", "layout");
       return apiOk({ draft: await getEditorialDraft(id) });
     }
     if (payload.action === "save") {

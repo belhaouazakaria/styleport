@@ -25,6 +25,16 @@ export const dynamic = "force-dynamic";
 
 const loadPublicTranslatorBySlug = cache(async (slug: string) => getPublicTranslatorBySlug(slug));
 
+function deriveUseCaseTitle(content: string, index: number) {
+  const normalized = content.replace(/^[\s•*-]+/, "").trim();
+  const clause = normalized.split(/[:—–.!?]/, 1)[0]?.trim();
+  if (clause && clause.length >= 3 && clause.length <= 42 && clause.length < normalized.length) return clause;
+  const words = normalized.split(/\s+/).filter(Boolean);
+  if (!words.length) return `Use case ${index + 1}`;
+  const label = words.slice(0, 4).join(" ");
+  return words.length > 4 ? `${label}…` : label;
+}
+
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
   const translator = await loadPublicTranslatorBySlug(slug);
@@ -188,9 +198,37 @@ export default async function TranslatorSlugPage({ params }: PageProps) {
         ) : null}
 
         {translator.editorial.bestUses.length || translator.editorial.howToUse.length ? (
-          <section className="mx-auto mt-10 grid w-full max-w-7xl gap-8 border-y border-dashed border-border px-4 py-8 sm:px-6 lg:grid-cols-2 lg:px-8">
-            {translator.editorial.bestUses.length ? <div><p className="section-kicker">Good fit for</p><h2 className="font-display mt-1 text-2xl font-bold text-ink">Best uses</h2><div className="mt-4 flex flex-wrap gap-2">{translator.editorial.bestUses.map((item) => <span key={item.sortOrder} className="rounded-full border border-brand-200 bg-brand-50 px-3 py-2 text-sm font-medium text-brand-900">{item.content}</span>)}</div></div> : null}
-            {translator.editorial.howToUse.length ? <div><p className="section-kicker">A simple starting point</p><h2 className="font-display mt-1 text-2xl font-bold text-ink">How to use it</h2><ol className="mt-4 space-y-3">{translator.editorial.howToUse.map((item, index) => <li key={item.sortOrder} className="flex gap-3 text-sm leading-6 text-muted-ink"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ink text-xs font-bold text-white">{index + 1}</span><span>{item.content}</span></li>)}</ol></div> : null}
+          <section id="best-uses" className="mx-auto mt-10 w-full max-w-7xl border-y border-dashed border-border px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
+            <div className="grid gap-9 lg:grid-cols-[1.15fr_0.85fr] lg:gap-12">
+              {translator.editorial.bestUses.length ? (
+                <div className="min-w-0">
+                  <p className="section-kicker">Good fit for</p>
+                  <h2 className="font-display mt-1 text-3xl font-bold tracking-tight text-ink">Best uses</h2>
+                  <p className="mt-2 max-w-xl text-sm leading-6 text-muted-ink">A few situations where this twist is especially useful.</p>
+                  <ul className="mt-5 grid gap-3 sm:grid-cols-2" aria-label="Best use cases">
+                    {translator.editorial.bestUses.map((item, index) => (
+                      <li key={item.sortOrder} className="group relative min-w-0 overflow-hidden rounded-[1.15rem] border border-brand-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.05)] transition motion-safe:hover:-translate-y-0.5 motion-safe:hover:shadow-[0_12px_30px_rgba(20,184,166,0.12)]">
+                        <span aria-hidden="true" className={`absolute inset-y-0 left-0 w-1 ${index % 3 === 0 ? "bg-brand-500" : index % 3 === 1 ? "bg-[#FF7A59]" : "bg-[#60C5F7]"}`} />
+                        <div className="flex items-start gap-3">
+                          <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl font-display text-xs font-bold ${index % 3 === 0 ? "bg-brand-100 text-brand-900" : index % 3 === 1 ? "bg-[#fff0eb] text-[#b63f22]" : "bg-[#eaf7ff] text-[#17658c]"}`}>{String(index + 1).padStart(2, "0")}</span>
+                          <div className="min-w-0">
+                            <h3 className="font-display break-words text-base font-bold leading-5 text-ink">{deriveUseCaseTitle(item.content, index)}</h3>
+                            <p className="mt-1.5 break-words text-sm leading-5 text-muted-ink">{item.content}</p>
+                          </div>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {translator.editorial.howToUse.length ? (
+                <div className="min-w-0 lg:border-l lg:border-border lg:pl-10">
+                  <p className="section-kicker">A simple starting point</p>
+                  <h2 className="font-display mt-1 text-2xl font-bold text-ink">How to use it</h2>
+                  <ol className="mt-5 space-y-3">{translator.editorial.howToUse.map((item, index) => <li key={item.sortOrder} className="flex gap-3 text-sm leading-6 text-muted-ink"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ink text-xs font-bold text-white">{index + 1}</span><span className="min-w-0 break-words">{item.content}</span></li>)}</ol>
+                </div>
+              ) : null}
+            </div>
           </section>
         ) : null}
 
@@ -201,13 +239,13 @@ export default async function TranslatorSlugPage({ params }: PageProps) {
           </section>
         ) : null}
 
-        {translator.editorial.faq.length ? <section className="mx-auto mt-10 w-full max-w-4xl px-4 sm:px-6 lg:px-8"><p className="section-kicker">Questions, answered</p><h2 className="font-display mt-1 text-3xl font-bold tracking-tight text-ink">FAQ</h2><div className="mt-4"><TranslatorFaq faq={translator.editorial.faq} /></div></section> : null}
+        {translator.editorial.faq.length ? <section className="mx-auto mt-10 w-full max-w-4xl px-4 sm:px-6 lg:px-8"><div className="border-t border-dashed border-border pt-8"><p className="section-kicker">Questions, answered</p><h2 className="font-display mt-1 text-3xl font-bold tracking-tight text-ink">FAQ</h2><div className="mt-4"><TranslatorFaq faq={translator.editorial.faq} /></div></div></section> : null}
 
         <TranslatorComments translatorId={translator.id} translatorSlug={translator.slug} />
 
         {relatedTranslators.length ? (
-          <section className="mx-auto mt-8 w-full max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="border-y border-border py-7 sm:py-9">
+          <section className="mx-auto mt-10 w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="border-y border-dashed border-border py-7 sm:py-9">
               <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
                 <h2 className="font-display text-3xl font-bold text-ink">More twists to try</h2>
                 <Link
