@@ -1,6 +1,6 @@
 import { Prisma, TranslatorEditorialDraftStatus, TranslatorEditorialJobItemStatus, TranslatorEditorialJobType } from "@prisma/client";
 
-import { getAdminTranslatorIdsForBulk, type AdminTranslatorFilters } from "@/lib/data/translators";
+import { getAdminTranslatorIdsForBulk, type AdminTranslatorFilters } from "@/lib/translator-editorial-data";
 import { getAppSettings } from "@/lib/settings";
 import { generateTranslatorEditorialContent } from "@/lib/translator-editorial";
 import type { TranslatorEditorialDraft } from "@/lib/types";
@@ -441,6 +441,7 @@ async function processItem(itemId: string) {
 
 export async function runEditorialWorker(options: { once?: boolean } = {}) {
   const concurrency = Math.min(10, Math.max(1, Number(process.env.TRANSLATOR_EDITORIAL_CONCURRENCY || DEFAULT_CONCURRENCY)));
+  console.log(`[editorial-worker] Polling PostgreSQL jobs (concurrency=${concurrency}, once=${options.once ? "yes" : "no"}).`);
   let stopping = false;
   const stop = () => { stopping = true; };
   process.once("SIGTERM", stop);
