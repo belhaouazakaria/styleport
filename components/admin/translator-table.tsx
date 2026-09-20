@@ -72,6 +72,7 @@ export function TranslatorTable({ dashboard, filters }: TranslatorTableProps) {
   const [preview, setPreview] = useState<PreviewTranslator | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [bulkAction, setBulkAction] = useState("generate-missing");
+  const [bulkConfirm, setBulkConfirm] = useState(false);
   const [confirm, setConfirm] = useState<ConfirmState>(null);
   const pageIds = useMemo(() => dashboard.translators.map((row) => row.id), [dashboard.translators]);
   const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
@@ -149,6 +150,14 @@ export function TranslatorTable({ dashboard, filters }: TranslatorTableProps) {
     }
   }
 
+  function requestBulkAction() {
+    if (bulkAction.startsWith("generate-") || bulkAction.startsWith("regenerate-")) {
+      setBulkConfirm(true);
+      return;
+    }
+    void runBulkAction();
+  }
+
   async function runConfirm() {
     if (!confirm) return;
     const mode = confirm.type === "hard-delete" ? "hard" : confirm.type;
@@ -167,7 +176,7 @@ export function TranslatorTable({ dashboard, filters }: TranslatorTableProps) {
           {allPageSelected && !selectAllMatching && dashboard.totalMatching > pageIds.length ? <button type="button" onClick={() => setSelectAllMatching(true)} className="text-xs font-bold text-brand-700 hover:text-brand-900">Select all {dashboard.totalMatching.toLocaleString()} matching</button> : null}
           {selectedCount ? <span className="rounded-full bg-brand-100 px-2.5 py-1 text-xs font-bold text-brand-800">{selectedCount.toLocaleString()} selected</span> : null}
           <select value={bulkAction} onChange={(event) => setBulkAction(event.target.value)} disabled={!selectedCount || bulkBusy} className="h-10 rounded-xl border border-border bg-white px-3 text-xs font-semibold text-ink"><option value="generate-missing">Generate missing content</option><option value="regenerate-full">Regenerate full content</option><option value="regenerate-about">Regenerate About</option><option value="regenerate-examples">Regenerate Examples</option><option value="regenerate-faq">Regenerate FAQ</option><option value="regenerate-tips">Regenerate Tips</option><option value="activate">Activate</option><option value="deactivate">Deactivate</option></select>
-          <button type="button" onClick={() => void runBulkAction()} disabled={!selectedCount || bulkBusy} className="inline-flex h-10 items-center gap-2 rounded-xl bg-ink px-3 text-xs font-bold text-white transition hover:bg-brand-800 disabled:opacity-50"><RefreshCcw className={`h-3.5 w-3.5 ${bulkBusy ? "animate-spin" : ""}`} />Run action</button>
+          <button type="button" onClick={requestBulkAction} disabled={!selectedCount || bulkBusy} className="inline-flex h-10 items-center gap-2 rounded-xl bg-ink px-3 text-xs font-bold text-white transition hover:bg-brand-800 disabled:opacity-50"><RefreshCcw className={`h-3.5 w-3.5 ${bulkBusy ? "animate-spin" : ""}`} />Run action</button>
         </div>
       </div>
 
@@ -189,6 +198,7 @@ export function TranslatorTable({ dashboard, filters }: TranslatorTableProps) {
 
       {previewId ? <PreviewDrawer preview={preview} loading={previewLoading} onClose={() => { setPreviewId(null); setPreview(null); }} /> : null}
       <ConfirmDialog open={Boolean(confirm)} title={confirm?.type === "hard-delete" ? "Permanently delete translator?" : confirm?.type === "archive" ? "Archive translator?" : "Unarchive translator?"} description={confirm?.type === "hard-delete" ? `This permanently removes ${target?.name || "this translator"} and its related content.` : confirm?.type === "archive" ? `This hides ${target?.name || "this translator"} from public routes.` : `This restores ${target?.name || "this translator"} to public availability.`} confirmLabel={confirm?.type === "hard-delete" ? "Delete forever" : confirm?.type === "archive" ? "Archive" : "Unarchive"} variant={confirm?.type === "hard-delete" ? "danger" : "default"} onConfirm={() => void runConfirm()} onCancel={() => setConfirm(null)} />
+      <ConfirmDialog open={bulkConfirm} title={`${bulkAction.replaceAll("-", " ")} for ${selectedCount.toLocaleString()} translator${selectedCount === 1 ? "" : "s"}?`} description="Existing published content will not be overwritten. Generated content will be stored as a review draft and processed in the background. You must approve and publish it separately." confirmLabel="Queue generation" variant="default" onConfirm={() => { setBulkConfirm(false); void runBulkAction(); }} onCancel={() => setBulkConfirm(false)} />
     </section>
   );
 }

@@ -66,6 +66,13 @@ export function TranslatorDashboard({ dashboard, categories, filters }: Translat
         <Link href={queryHref(filters, { content: "tips", page: "1" })} className="rounded-xl border border-border bg-white px-4 py-3 transition hover:border-brand-300"><span className="text-xs text-muted-ink">Missing tips</span><span className="mt-1 block text-xl font-bold text-ink">{summary.missingTips}</span></Link>
       </section>
 
+      <section className="flex flex-wrap items-center gap-2 rounded-2xl border border-border bg-slate-50/70 p-3 text-sm">
+        <span className="mr-1 text-xs font-bold uppercase tracking-[0.12em] text-muted-ink">Quick scopes</span>
+        <Link href={queryHref(filters, { status: "active", editorial: undefined, page: "1" })} className="rounded-lg border border-border bg-white px-3 py-2 text-xs font-semibold text-ink hover:border-brand-300">All active translators</Link>
+        <Link href={queryHref(filters, { status: "active", editorial: "incomplete", page: "1" })} className="rounded-lg border border-border bg-white px-3 py-2 text-xs font-semibold text-ink hover:border-brand-300">Incomplete active translators</Link>
+        <Link href="/admin/translators/jobs" className="ml-auto rounded-lg px-3 py-2 text-xs font-semibold text-brand-700 hover:bg-brand-50">View job history →</Link>
+      </section>
+
       <form className="rounded-2xl border border-border bg-white p-4 shadow-[0_10px_30px_-28px_rgba(15,23,42,0.45)]">
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1.7fr)_repeat(4,minmax(0,1fr))]">
           <label className="lg:col-span-1"><span className="sr-only">Search translators</span><input name="q" defaultValue={filters.q || ""} placeholder="Search name, slug, category, or description" className="h-11 w-full rounded-xl border border-border bg-page px-3 text-sm text-ink outline-none transition placeholder:text-muted-ink/70 focus:border-brand-400 focus:ring-2 focus:ring-brand-100" /></label>

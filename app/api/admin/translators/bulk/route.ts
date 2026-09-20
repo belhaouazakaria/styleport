@@ -2,6 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { adminRouteGuard } from "@/lib/permissions";
 import { apiError, apiOk } from "@/lib/api-response";
 import { getAdminTranslatorIdsForBulk, type AdminTranslatorFilters } from "@/lib/data/translators";
+import { auth } from "@/auth";
+import { createEditorialJob } from "@/lib/translator-editorial-jobs";
 
 const GENERATION_ACTIONS = new Set([
   "generate-missing",
@@ -38,10 +40,6 @@ export async function POST(request: Request) {
     return apiError(400, "VALIDATION_ERROR", "Choose a valid bulk action.");
   }
 
-  if (GENERATION_ACTIONS.has(action)) {
-    return apiError(501, "UPSTREAM_ERROR", "Background editorial generation is not configured yet. No content was generated.");
-  }
-
   const selectedIds = Array.isArray(input.translatorIds)
     ? input.translatorIds.filter((id): id is string => typeof id === "string" && id.length > 0)
     : [];
@@ -51,6 +49,25 @@ export async function POST(request: Request) {
 
   if (!ids.length) {
     return apiError(400, "VALIDATION_ERROR", "Select at least one translator.");
+  }
+
+  if (GENERATION_ACTIONS.has(action)) {
+    const session = await auth();
+    try {
+      const job = await createEditorialJob({
+        operation: action,
+        translatorIds: selectedIds,
+        selectAllMatching: Boolean(input.selectAllMatching),
+        filters: input.filters,
+        requestedById: session?.user?.id || null,
+      });
+      return apiOk({
+        job,
+        message: `${job.type.replaceAll("_", " ")} queued for ${job.totalItems} translator${job.totalItems === 1 ? "" : "s"}.`,
+      }, 202);
+    } catch (error) {
+      return apiError(409, "CONFLICT", error instanceof Error ? error.message : "Unable to create editorial job.");
+    }
   }
 
   const result = await prisma.translator.updateMany({

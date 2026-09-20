@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "node server.js",
     "start:hostinger": "node server.js",
+    "start:editorial-worker": "tsx workers/editorial-worker.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "check": "npm run lint && npm run typecheck && npm run test",

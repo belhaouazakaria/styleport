@@ -57,6 +57,8 @@ export default async function AdminTranslatorsPage({ searchParams }: PageProps) 
           <div className="flex flex-wrap gap-2">
             <Link href="/admin/translators/new" className="inline-flex min-h-11 items-center rounded-xl bg-brand-500 px-4 text-sm font-bold text-white shadow-sm transition hover:bg-brand-600">Create translator</Link>
             <Link href="/admin/translators/ai/new" className="inline-flex min-h-11 items-center rounded-xl border border-border bg-white px-4 text-sm font-bold text-ink transition hover:border-brand-300 hover:bg-muted-surface">Create with AI</Link>
+            <Link href="/admin/translators/jobs" className="inline-flex min-h-11 items-center rounded-xl border border-border bg-white px-4 text-sm font-bold text-ink transition hover:border-brand-300 hover:bg-muted-surface">Editorial jobs</Link>
+            <Link href="/admin/translators/review" className="inline-flex min-h-11 items-center rounded-xl border border-border bg-white px-4 text-sm font-bold text-ink transition hover:border-brand-300 hover:bg-muted-surface">Review queue</Link>
           </div>
         </div>
         <TranslatorDashboard dashboard={dashboard} categories={categories} filters={filters} />

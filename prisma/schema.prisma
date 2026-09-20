@@ -103,18 +103,55 @@ enum IndexingStatus {
   DRY_RUN
 }
 
+enum TranslatorEditorialJobType {
+  GENERATE_MISSING
+  REGENERATE_FULL
+  REGENERATE_ABOUT
+  REGENERATE_EXAMPLES
+  REGENERATE_FAQ
+  REGENERATE_TIPS
+}
+
+enum TranslatorEditorialJobStatus {
+  PENDING
+  RUNNING
+  PAUSED
+  COMPLETED
+  COMPLETED_WITH_ERRORS
+  FAILED
+  CANCELLED
+}
+
+enum TranslatorEditorialJobItemStatus {
+  PENDING
+  PROCESSING
+  GENERATED
+  FAILED
+  SKIPPED
+  CANCELLED
+}
+
+enum TranslatorEditorialDraftStatus {
+  NEEDS_REVIEW
+  APPROVED
+  DISCARDED
+  PUBLISHED
+}
+
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String    @unique
-  emailVerified DateTime?
-  image         String?
-  passwordHash  String
-  role          Role      @default(USER)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  accounts      Account[]
-  sessions      Session[]
+  id                    String                     @id @default(cuid())
+  name                  String?
+  email                 String                     @unique
+  emailVerified         DateTime?
+  image                 String?
+  passwordHash          String
+  role                  Role                       @default(USER)
+  createdAt             DateTime                   @default(now())
+  updatedAt             DateTime                   @updatedAt
+  accounts              Account[]
+  sessions              Session[]
+  editorialJobs         TranslatorEditorialJob[]   @relation("TranslatorEditorialJobRequester")
+  editorialDraftReviews TranslatorEditorialDraft[] @relation("TranslatorEditorialDraftReviewer")
 }
 
 model Account {
@@ -198,11 +235,77 @@ model Translator {
   editorialLists      TranslatorEditorialList[]
   editorialExamples   TranslatorEditorialExample[]
   editorialFaqs       TranslatorEditorialFaq[]
+  editorialJobItems   TranslatorEditorialJobItem[]
+  editorialDrafts     TranslatorEditorialDraft[]
 
   @@index([isActive, isFeatured, sortOrder])
   @@index([isFeatured, featuredRank])
   @@index([updatedAt])
   @@index([primaryCategoryId])
+}
+
+model TranslatorEditorialJob {
+  id             String                       @id @default(cuid())
+  type           TranslatorEditorialJobType
+  status         TranslatorEditorialJobStatus @default(PENDING)
+  requestedById  String?
+  configuration  Json?
+  totalItems     Int                          @default(0)
+  succeededItems Int                          @default(0)
+  failedItems    Int                          @default(0)
+  skippedItems   Int                          @default(0)
+  createdAt      DateTime                     @default(now())
+  startedAt      DateTime?
+  completedAt    DateTime?
+  updatedAt      DateTime                     @updatedAt
+  requestedBy    User?                        @relation("TranslatorEditorialJobRequester", fields: [requestedById], references: [id], onDelete: SetNull)
+  items          TranslatorEditorialJobItem[]
+
+  @@index([status, createdAt])
+  @@index([requestedById, createdAt])
+}
+
+model TranslatorEditorialJobItem {
+  id           String                           @id @default(cuid())
+  jobId        String
+  translatorId String
+  operation    TranslatorEditorialJobType
+  status       TranslatorEditorialJobItemStatus @default(PENDING)
+  attemptCount Int                              @default(0)
+  lastError    String?
+  startedAt    DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime                         @default(now())
+  updatedAt    DateTime                         @updatedAt
+  job          TranslatorEditorialJob           @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  translator   Translator                       @relation(fields: [translatorId], references: [id], onDelete: Cascade)
+  draft        TranslatorEditorialDraft?
+
+  @@unique([jobId, translatorId])
+  @@index([status, createdAt])
+  @@index([translatorId, status])
+}
+
+model TranslatorEditorialDraft {
+  id           String                         @id @default(cuid())
+  jobItemId    String                         @unique
+  translatorId String
+  status       TranslatorEditorialDraftStatus @default(NEEDS_REVIEW)
+  payload      Json
+  validation   Json
+  generatedAt  DateTime                       @default(now())
+  reviewedById String?
+  reviewedAt   DateTime?
+  publishedAt  DateTime?
+  discardedAt  DateTime?
+  createdAt    DateTime                       @default(now())
+  updatedAt    DateTime                       @updatedAt
+  jobItem      TranslatorEditorialJobItem     @relation(fields: [jobItemId], references: [id], onDelete: Cascade)
+  translator   Translator                     @relation(fields: [translatorId], references: [id], onDelete: Cascade)
+  reviewedBy   User?                          @relation("TranslatorEditorialDraftReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([translatorId, status])
 }
 
 model TranslatorEditorialContent {
