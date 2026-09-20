@@ -231,6 +231,32 @@ export interface TranslatorListItem {
   editorialFaqCount: number;
   editorialWordCount: number;
   editorialUpdatedAt: string | null;
+  editorialCompletionPercent: number;
+  editorialMissing: string[];
+  indexableCandidate: boolean;
+}
+
+export interface AdminTranslatorDashboardSummary {
+  total: number;
+  active: number;
+  inactive: number;
+  ready: number;
+  needsReview: number;
+  incomplete: number;
+  missingAbout: number;
+  missingExamples: number;
+  missingFaq: number;
+  missingTips: number;
+  missingDifference: number;
+}
+
+export interface AdminTranslatorDashboard {
+  translators: TranslatorListItem[];
+  summary: AdminTranslatorDashboardSummary;
+  totalMatching: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
 }
 
 export interface GoogleIndexingStatusSummary {

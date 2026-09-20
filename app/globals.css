@@ -368,6 +368,30 @@ textarea.translator-textarea {
   scrollbar-color: #d1d5db transparent;
 }
 
+.menu-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 0.625rem;
+  padding: 0.55rem 0.65rem;
+  text-align: left;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-ink, #172033);
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.menu-item:hover:not(:disabled) {
+  background: #f1f5f9;
+  color: #0f766e;
+}
+
+.menu-item:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .brand-logo {
   --logo-mobile-h: 32px;
   --logo-desktop-h: 40px;
