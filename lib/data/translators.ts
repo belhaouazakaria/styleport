@@ -117,6 +117,10 @@ const publicTranslatorInclude = {
     },
     orderBy: { sortOrder: "asc" as const },
   },
+  editorialContent: true,
+  editorialLists: { orderBy: [{ kind: "asc" as const }, { sortOrder: "asc" as const }] },
+  editorialExamples: { orderBy: { sortOrder: "asc" as const } },
+  editorialFaqs: { orderBy: { sortOrder: "asc" as const } },
   primaryCategory: {
     select: {
       id: true,
@@ -165,6 +169,16 @@ function mapPublicTranslator(
     categories: translator.categories.map((item) => item.category),
     modes: translator.modes,
     examples: translator.examples,
+    editorial: {
+      about: translator.editorialContent?.about || null,
+      whatItDoes: translator.editorialContent?.whatItDoes || null,
+      differenceDescription: translator.editorialContent?.differenceDescription || null,
+      bestUses: translator.editorialLists.filter((item) => item.kind === "BEST_USE"),
+      howToUse: translator.editorialLists.filter((item) => item.kind === "HOW_TO_USE"),
+      tips: translator.editorialLists.filter((item) => item.kind === "TIP"),
+      examples: translator.editorialExamples,
+      faq: translator.editorialFaqs,
+    },
   };
 }
 
@@ -975,6 +989,10 @@ export async function getAdminTranslatorById(id: string) {
       examples: {
         orderBy: { sortOrder: "asc" },
       },
+      editorialContent: true,
+      editorialLists: { orderBy: [{ kind: "asc" }, { sortOrder: "asc" }] },
+      editorialExamples: { orderBy: { sortOrder: "asc" } },
+      editorialFaqs: { orderBy: { sortOrder: "asc" } },
       categories: {
         include: {
           category: {
@@ -1140,6 +1158,20 @@ function normalizeTranslatorInput(input: TranslatorUpsertInput) {
     input.primaryCategoryId && categoryIds.includes(input.primaryCategoryId)
       ? input.primaryCategoryId
       : categoryIds[0] || null;
+  const editorial = input.editorial || {};
+  const editorialLists = (editorial.lists || []).map((item, index) => ({
+    ...item,
+    sortOrder: item.sortOrder || index + 1,
+  }));
+  const editorialExamples = (editorial.examples || []).map((item, index) => ({
+    ...item,
+    contextTitle: item.contextTitle || null,
+    sortOrder: item.sortOrder || index + 1,
+  }));
+  const editorialFaq = (editorial.faq || []).map((item, index) => ({
+    ...item,
+    sortOrder: item.sortOrder || index + 1,
+  }));
 
   return {
     ...input,
@@ -1151,6 +1183,29 @@ function normalizeTranslatorInput(input: TranslatorUpsertInput) {
     categoryIds,
     modeRows,
     exampleRows,
+    editorial: {
+      about: editorial.about || null,
+      whatItDoes: editorial.whatItDoes || null,
+      differenceDescription: editorial.differenceDescription || null,
+      editorialLists,
+      editorialExamples,
+      editorialFaq,
+    },
+  };
+}
+
+function editorialCreateData(normalized: ReturnType<typeof normalizeTranslatorInput>) {
+  return {
+    editorialContent: {
+      create: {
+        about: normalized.editorial.about,
+        whatItDoes: normalized.editorial.whatItDoes,
+        differenceDescription: normalized.editorial.differenceDescription,
+      },
+    },
+    editorialLists: { createMany: { data: normalized.editorial.editorialLists } },
+    editorialExamples: { createMany: { data: normalized.editorial.editorialExamples } },
+    editorialFaqs: { createMany: { data: normalized.editorial.editorialFaq } },
   };
 }
 
@@ -1203,6 +1258,7 @@ export async function createTranslator(input: TranslatorUpsertInput) {
           sortOrder: index + 1,
         })),
       },
+      ...editorialCreateData(normalized),
     },
     include: {
       modes: { orderBy: { sortOrder: "asc" } },
@@ -1245,6 +1301,7 @@ export async function createTranslator(input: TranslatorUpsertInput) {
 export async function updateTranslator(id: string, input: TranslatorUpsertInput) {
   const slug = await ensureUniqueTranslatorSlug(input.slug, { excludeId: id });
   const normalized = normalizeTranslatorInput(input);
+  const hasEditorial = input.editorial !== undefined;
   const settings = await getAppSettings();
   const allowManualFeatured = !settings.autoFeaturedEnabled;
   const existing = await prisma.translator.findUnique({
@@ -1264,6 +1321,12 @@ export async function updateTranslator(id: string, input: TranslatorUpsertInput)
     await tx.translationMode.deleteMany({ where: { translatorId: id } });
     await tx.translatorExample.deleteMany({ where: { translatorId: id } });
     await tx.translatorCategory.deleteMany({ where: { translatorId: id } });
+    if (hasEditorial) {
+      await tx.translatorEditorialContent.deleteMany({ where: { translatorId: id } });
+      await tx.translatorEditorialList.deleteMany({ where: { translatorId: id } });
+      await tx.translatorEditorialExample.deleteMany({ where: { translatorId: id } });
+      await tx.translatorEditorialFaq.deleteMany({ where: { translatorId: id } });
+    }
 
     return tx.translator.update({
       where: { id },
@@ -1307,6 +1370,7 @@ export async function updateTranslator(id: string, input: TranslatorUpsertInput)
             sortOrder: index + 1,
           })),
         },
+        ...(hasEditorial ? editorialCreateData(normalized) : {}),
       },
       include: {
         modes: { orderBy: { sortOrder: "asc" } },
@@ -1363,6 +1427,10 @@ export async function duplicateTranslator(id: string) {
     include: {
       modes: { orderBy: { sortOrder: "asc" } },
       examples: { orderBy: { sortOrder: "asc" } },
+      editorialContent: true,
+      editorialLists: { orderBy: [{ kind: "asc" }, { sortOrder: "asc" }] },
+      editorialExamples: { orderBy: { sortOrder: "asc" } },
+      editorialFaqs: { orderBy: { sortOrder: "asc" } },
       categories: { orderBy: [{ sortOrder: "asc" }] },
     },
   });
@@ -1425,6 +1493,43 @@ export async function duplicateTranslator(id: string) {
           categoryId: item.categoryId,
           sortOrder: item.sortOrder,
         })),
+      },
+      editorialContent: translator.editorialContent
+        ? {
+            create: {
+              about: translator.editorialContent.about,
+              whatItDoes: translator.editorialContent.whatItDoes,
+              differenceDescription: translator.editorialContent.differenceDescription,
+            },
+          }
+        : undefined,
+      editorialLists: {
+        createMany: {
+          data: translator.editorialLists.map((item) => ({
+            kind: item.kind,
+            content: item.content,
+            sortOrder: item.sortOrder,
+          })),
+        },
+      },
+      editorialExamples: {
+        createMany: {
+          data: translator.editorialExamples.map((item) => ({
+            contextTitle: item.contextTitle,
+            originalText: item.originalText,
+            transformedText: item.transformedText,
+            sortOrder: item.sortOrder,
+          })),
+        },
+      },
+      editorialFaqs: {
+        createMany: {
+          data: translator.editorialFaqs.map((item) => ({
+            question: item.question,
+            answer: item.answer,
+            sortOrder: item.sortOrder,
+          })),
+        },
       },
     },
   });

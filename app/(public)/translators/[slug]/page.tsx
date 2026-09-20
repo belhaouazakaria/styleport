@@ -149,11 +149,26 @@ export default async function TranslatorSlugPage({ params }: PageProps) {
             <h2 className="font-display mt-1 text-3xl font-bold text-ink">About this translator</h2>
             <p className="mt-3 text-base leading-7 text-muted-ink">{translator.shortDescription}</p>
             <p className="mt-2 text-sm leading-7 text-muted-ink">
-              This translator helps convert {translator.sourceLabel.toLowerCase()} into{" "}
-              {translator.targetLabel.toLowerCase()} while preserving your core intent.
+              {translator.editorial.whatItDoes || `This translator helps convert ${translator.sourceLabel.toLowerCase()} into ${translator.targetLabel.toLowerCase()} while preserving your core intent.`}
             </p>
           </div>
         </section>
+
+        {translator.editorial.about || translator.editorial.bestUses.length || translator.editorial.howToUse.length || translator.editorial.tips.length || translator.editorial.examples.length || translator.editorial.faq.length ? (
+          <section className="mx-auto mt-8 grid w-full max-w-7xl gap-6 px-4 sm:px-6 lg:grid-cols-[1.1fr_0.9fr] lg:px-8">
+            <div className="space-y-6">
+              {translator.editorial.about ? <article className="rounded-2xl border border-border bg-surface p-6"><p className="section-kicker">The idea behind it</p><p className="mt-3 whitespace-pre-line text-base leading-7 text-muted-ink">{translator.editorial.about}</p></article> : null}
+              {translator.editorial.examples.length ? <article className="rounded-2xl border border-border bg-surface p-6"><p className="section-kicker">See the twist</p><h2 className="font-display mt-1 text-3xl font-bold text-ink">Example transformations</h2><div className="mt-4 space-y-4">{translator.editorial.examples.map((example) => <div key={`${example.sortOrder}-${example.originalText}`} className="rounded-xl border border-border bg-white p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-ink">{example.contextTitle || "Example"}</p><p className="mt-2 text-sm text-muted-ink">{example.originalText}</p><p className="mt-2 border-l-2 border-brand-400 pl-3 text-sm leading-6 text-ink">{example.transformedText}</p></div>)}</div></article> : null}
+              {translator.editorial.faq.length ? <article className="rounded-2xl border border-border bg-surface p-6"><p className="section-kicker">Questions, answered</p><h2 className="font-display mt-1 text-3xl font-bold text-ink">FAQ</h2><div className="mt-4 space-y-4">{translator.editorial.faq.map((item) => <div key={item.question}><h3 className="font-semibold text-ink">{item.question}</h3><p className="mt-1 text-sm leading-6 text-muted-ink">{item.answer}</p></div>)}</div></article> : null}
+            </div>
+            <aside className="space-y-6">
+              {translator.editorial.bestUses.length ? <div className="rounded-2xl border border-border bg-muted-surface p-6"><p className="section-kicker">Good fit for</p><ul className="mt-3 space-y-2 text-sm leading-6 text-muted-ink">{translator.editorial.bestUses.map((item) => <li key={item.sortOrder}>• {item.content}</li>)}</ul></div> : null}
+              {translator.editorial.howToUse.length ? <div className="rounded-2xl border border-border bg-muted-surface p-6"><p className="section-kicker">How to get started</p><ol className="mt-3 space-y-2 text-sm leading-6 text-muted-ink">{translator.editorial.howToUse.map((item, index) => <li key={item.sortOrder}><span className="mr-2 font-semibold text-ink">{index + 1}.</span>{item.content}</li>)}</ol></div> : null}
+              {translator.editorial.tips.length ? <div className="rounded-2xl border border-border bg-muted-surface p-6"><p className="section-kicker">Tips for better results</p><ul className="mt-3 space-y-2 text-sm leading-6 text-muted-ink">{translator.editorial.tips.map((item) => <li key={item.sortOrder}>• {item.content}</li>)}</ul></div> : null}
+              {translator.editorial.differenceDescription ? <div className="rounded-2xl border border-border bg-muted-surface p-6"><p className="section-kicker">Why this twist</p><p className="mt-3 text-sm leading-6 text-muted-ink">{translator.editorial.differenceDescription}</p></div> : null}
+            </aside>
+          </section>
+        ) : null}
 
         <TranslatorComments translatorId={translator.id} translatorSlug={translator.slug} />
 

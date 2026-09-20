@@ -24,6 +24,17 @@ interface FormExample {
   sortOrder: number;
 }
 
+interface FormEditorial {
+  about: string;
+  whatItDoes: string;
+  differenceDescription: string;
+  bestUses: string[];
+  howToUse: string[];
+  tips: string[];
+  examples: Array<{ contextTitle: string; originalText: string; transformedText: string; sortOrder: number }>;
+  faq: Array<{ question: string; answer: string; sortOrder: number }>;
+}
+
 interface TranslatorFormInitial {
   id: string;
   name: string;
@@ -54,6 +65,7 @@ interface TranslatorFormInitial {
   categoryIds: string[];
   modes: FormMode[];
   examples: FormExample[];
+  editorial: FormEditorial;
 }
 
 interface TranslatorFormProps {
@@ -106,6 +118,16 @@ function createDefaultState(): Omit<
         sortOrder: 1,
       },
     ],
+    editorial: {
+      about: "",
+      whatItDoes: "",
+      differenceDescription: "",
+      bestUses: [],
+      howToUse: [],
+      tips: [],
+      examples: [],
+      faq: [],
+    },
   };
 }
 
@@ -171,6 +193,7 @@ export function TranslatorForm({
     categoryIds: initial?.categoryIds?.length ? initial.categoryIds : defaults.categoryIds,
     modes: initial?.modes?.length ? initial.modes : defaults.modes,
     examples: initial?.examples?.length ? initial.examples : defaults.examples,
+    editorial: initial?.editorial ?? defaults.editorial,
   });
 
   function setField<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
@@ -231,6 +254,18 @@ export function TranslatorForm({
           ...exampleItem,
           sortOrder: Number(exampleItem.sortOrder) || index + 1,
         })),
+      editorial: {
+        about: form.editorial.about,
+        whatItDoes: form.editorial.whatItDoes,
+        differenceDescription: form.editorial.differenceDescription,
+        lists: [
+          ...form.editorial.bestUses.map((content, index) => ({ kind: "BEST_USE", content, sortOrder: index + 1 })),
+          ...form.editorial.howToUse.map((content, index) => ({ kind: "HOW_TO_USE", content, sortOrder: index + 1 })),
+          ...form.editorial.tips.map((content, index) => ({ kind: "TIP", content, sortOrder: index + 1 })),
+        ].filter((item) => item.content.trim()),
+        examples: form.editorial.examples.filter((item) => item.originalText.trim() && item.transformedText.trim()),
+        faq: form.editorial.faq.filter((item) => item.question.trim() && item.answer.trim()),
+      },
       sortOrder: Number(form.sortOrder) || 0,
       primaryCategoryId: form.primaryCategoryId || null,
     };
@@ -360,8 +395,68 @@ export function TranslatorForm({
     router.refresh();
   }
 
+  async function generateEditorial() {
+    if (!initial?.id) return;
+    setBusy(true);
+    const response = await fetch(`/api/admin/translators/${initial.id}/editorial`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ section: "full" }),
+    });
+    const result = await response.json();
+    setBusy(false);
+    if (!response.ok || !result.ok) {
+      toast({ title: "Editorial generation failed", description: result?.error?.message || "Please try again.", variant: "error" });
+      return;
+    }
+    const editorial = result.editorial;
+    setField("editorial", {
+      about: editorial.about,
+      whatItDoes: editorial.whatItDoes,
+      differenceDescription: editorial.differenceDescription,
+      bestUses: editorial.bestUses,
+      howToUse: editorial.howToUse,
+      tips: editorial.tips,
+      examples: editorial.examples.map((item: { contextTitle?: string; originalText: string; transformedText: string }, index: number) => ({ ...item, contextTitle: item.contextTitle || "", sortOrder: index + 1 })),
+      faq: editorial.faq.map((item: { question: string; answer: string }, index: number) => ({ ...item, sortOrder: index + 1 })),
+    });
+    toast({ title: "Editorial pack generated", description: "Review the copy before saving." });
+  }
+
   return (
     <div className="space-y-6">
+      <section className="rounded-2xl border border-border bg-white p-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="font-display text-2xl font-semibold text-ink">Editorial Content</h2>
+            <p className="mt-1 text-sm text-muted-ink">Structured page copy, examples, tips, and FAQs. Existing About copy is preserved until you intentionally replace it.</p>
+          </div>
+          {mode === "edit" ? <Button type="button" variant="outline" onClick={() => void generateEditorial()} disabled={busy}>Generate full pack</Button> : null}
+        </div>
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          {(["about", "whatItDoes", "differenceDescription"] as const).map((key) => (
+            <label key={key} className="space-y-1 text-sm md:col-span-2">
+              <span className="font-medium text-muted-ink">{key === "about" ? "About this translator" : key === "whatItDoes" ? "What it does" : "What makes it different"}</span>
+              <textarea value={form.editorial[key]} onChange={(event) => setField("editorial", { ...form.editorial, [key]: event.target.value })} className="min-h-24 w-full rounded-xl border border-border px-3 py-2" />
+            </label>
+          ))}
+          {(["bestUses", "howToUse", "tips"] as const).map((key) => (
+            <label key={key} className="space-y-1 text-sm">
+              <span className="font-medium text-muted-ink">{key === "bestUses" ? "Best uses (one per line)" : key === "howToUse" ? "How to use (one per line)" : "Tips (one per line)"}</span>
+              <textarea value={form.editorial[key].join("\n")} onChange={(event) => setField("editorial", { ...form.editorial, [key]: event.target.value.split("\n") })} className="min-h-28 w-full rounded-xl border border-border px-3 py-2" />
+            </label>
+          ))}
+          <label className="space-y-1 text-sm md:col-span-2">
+            <span className="font-medium text-muted-ink">Transformation examples JSON</span>
+            <textarea value={JSON.stringify(form.editorial.examples, null, 2)} onChange={(event) => { try { setField("editorial", { ...form.editorial, examples: JSON.parse(event.target.value) }); } catch {} }} className="min-h-36 w-full rounded-xl border border-border px-3 py-2 font-mono text-xs" />
+          </label>
+          <label className="space-y-1 text-sm md:col-span-2">
+            <span className="font-medium text-muted-ink">FAQ JSON</span>
+            <textarea value={JSON.stringify(form.editorial.faq, null, 2)} onChange={(event) => { try { setField("editorial", { ...form.editorial, faq: JSON.parse(event.target.value) }); } catch {} }} className="min-h-32 w-full rounded-xl border border-border px-3 py-2 font-mono text-xs" />
+          </label>
+        </div>
+      </section>
+
       <section className="rounded-2xl border border-border bg-white p-6">
         <h2 className="font-display text-2xl font-semibold text-ink">Basic Info</h2>
         <div className="mt-4 grid gap-4 md:grid-cols-2">

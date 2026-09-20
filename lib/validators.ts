@@ -115,6 +115,34 @@ const exampleInputSchema = z.object({
   sortOrder: z.number().int().min(0),
 });
 
+const editorialListInputSchema = z.object({
+  kind: z.enum(["BEST_USE", "HOW_TO_USE", "TIP"]),
+  content: z.string().trim().min(2).max(600),
+  sortOrder: z.number().int().min(0),
+});
+
+const editorialExampleInputSchema = z.object({
+  contextTitle: z.string().trim().max(120).optional().or(z.literal("")),
+  originalText: z.string().trim().min(2).max(1200),
+  transformedText: z.string().trim().min(2).max(1600),
+  sortOrder: z.number().int().min(0),
+});
+
+const editorialFaqInputSchema = z.object({
+  question: z.string().trim().min(5).max(240),
+  answer: z.string().trim().min(10).max(1000),
+  sortOrder: z.number().int().min(0),
+});
+
+const editorialInputSchema = z.object({
+  about: z.string().trim().max(2400).optional().or(z.literal("")),
+  whatItDoes: z.string().trim().max(1800).optional().or(z.literal("")),
+  differenceDescription: z.string().trim().max(1800).optional().or(z.literal("")),
+  lists: z.array(editorialListInputSchema).max(30).optional(),
+  examples: z.array(editorialExampleInputSchema).max(8).optional(),
+  faq: z.array(editorialFaqInputSchema).max(8).optional(),
+});
+
 export const translatorUpsertSchema = z.object({
   name: z.string().trim().min(2).max(120),
   slug: translatorSlugSchema,
@@ -139,6 +167,7 @@ export const translatorUpsertSchema = z.object({
   categoryIds: z.array(z.string().trim().min(1)).min(1).max(20),
   modes: z.array(modeInputSchema).max(12),
   examples: z.array(exampleInputSchema).max(20),
+  editorial: editorialInputSchema.optional(),
 });
 
 export const categoryUpsertSchema = z.object({
@@ -289,6 +318,32 @@ export const translatorDraftSchema = z.object({
       }),
     )
     .max(12),
+  editorial: z.object({
+    about: z.string().trim().min(20).max(2400),
+    whatItDoes: z.string().trim().min(20).max(1800),
+    differenceDescription: z.string().trim().min(20).max(1800),
+    bestUses: z.array(z.string().trim().min(5).max(600)).min(2).max(6),
+    howToUse: z.array(z.string().trim().min(5).max(600)).min(2).max(6),
+    tips: z.array(z.string().trim().min(5).max(600)).min(2).max(6),
+    examples: z.array(z.object({
+      contextTitle: z.string().trim().max(120).optional().or(z.literal("")),
+      originalText: z.string().trim().min(2).max(1200),
+      transformedText: z.string().trim().min(2).max(1600),
+    })).min(3).max(5),
+    faq: z.array(z.object({
+      question: z.string().trim().min(5).max(240),
+      answer: z.string().trim().min(10).max(1000),
+    })).min(3).max(5),
+  }).optional().default({
+    about: "",
+    whatItDoes: "",
+    differenceDescription: "",
+    bestUses: [],
+    howToUse: [],
+    tips: [],
+    examples: [],
+    faq: [],
+  }),
 });
 
 export const aiDraftInputSchema = z.object({

@@ -67,6 +67,7 @@ async function tryGenerate(params: {
   model: string;
   systemPrompt: string;
   userPrompt: string;
+  maxOutputTokens?: number;
 }) {
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const temperature = attempt === 0 ? 0.7 : 0.45;
@@ -84,7 +85,7 @@ async function tryGenerate(params: {
         },
       ],
       temperature,
-      max_output_tokens: 1000,
+      max_output_tokens: params.maxOutputTokens || 1000,
     });
 
     const result = toPlainText(extractTextFromResponse(response));
@@ -99,6 +100,40 @@ async function tryGenerate(params: {
   return null;
 }
 
+export async function generateOpenAIText(params: {
+  systemPrompt: string;
+  userPrompt: string;
+  model?: string;
+  maxOutputTokens?: number;
+}): Promise<{ text: string; model: string; promptTokens: number | null; completionTokens: number | null; totalTokens: number | null }> {
+  const env = getServerEnv();
+  const client = getClient();
+  const envModel = env.OPENAI_MODEL || DEFAULT_MODEL;
+  const modelCandidates = Array.from(new Set([params.model, envModel, DEFAULT_MODEL].filter(Boolean))) as string[];
+  let lastError: unknown;
+
+  for (const model of modelCandidates) {
+    try {
+      const generated = await tryGenerate({
+        client,
+        model,
+        systemPrompt: params.systemPrompt,
+        userPrompt: params.userPrompt,
+        maxOutputTokens: params.maxOutputTokens,
+      });
+
+      if (generated) {
+        return { text: generated.text, model, ...generated.usage };
+      }
+    } catch (error) {
+      logError("openai_content_generation_error", "OpenAI content generation failed for model candidate.", { model }, error);
+      lastError = error;
+    }
+  }
+
+  throw lastError || new Error("OpenAI generation returned an empty response.");
+}
+
 export async function translateWithOpenAI(params: {
   systemPrompt: string;
   userPrompt: string;
@@ -110,41 +145,5 @@ export async function translateWithOpenAI(params: {
   completionTokens: number | null;
   totalTokens: number | null;
 }> {
-  const env = getServerEnv();
-  const client = getClient();
-  const envModel = env.OPENAI_MODEL || DEFAULT_MODEL;
-  const modelCandidates = Array.from(new Set([params.model, envModel, DEFAULT_MODEL].filter(Boolean))) as string[];
-
-  let lastError: unknown;
-
-  for (const model of modelCandidates) {
-    try {
-      const generated = await tryGenerate({
-        client,
-        model,
-        systemPrompt: params.systemPrompt,
-        userPrompt: params.userPrompt,
-      });
-
-      if (!generated) {
-        continue;
-      }
-
-      return {
-        text: generated.text,
-        model,
-        ...generated.usage,
-      };
-    } catch (error) {
-      logError(
-        "openai_translate_error",
-        "Translation attempt failed for model candidate.",
-        { model },
-        error,
-      );
-      lastError = error;
-    }
-  }
-
-  throw lastError || new Error("Translation generation returned an empty response.");
+  return generateOpenAIText(params);
 }

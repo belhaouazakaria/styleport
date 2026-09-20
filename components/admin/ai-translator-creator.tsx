@@ -128,6 +128,18 @@ export function AiTranslatorCreator({ categories }: AiTranslatorCreatorProps) {
         categoryIds: [selectedCategoryId],
         modes,
         examples,
+        editorial: {
+          about: draft.editorial.about,
+          whatItDoes: draft.editorial.whatItDoes,
+          differenceDescription: draft.editorial.differenceDescription,
+          lists: [
+            ...draft.editorial.bestUses.map((content, index) => ({ kind: "BEST_USE", content, sortOrder: index + 1 })),
+            ...draft.editorial.howToUse.map((content, index) => ({ kind: "HOW_TO_USE", content, sortOrder: index + 1 })),
+            ...draft.editorial.tips.map((content, index) => ({ kind: "TIP", content, sortOrder: index + 1 })),
+          ],
+          examples: draft.editorial.examples.map((item, index) => ({ ...item, sortOrder: index + 1 })),
+          faq: draft.editorial.faq.map((item, index) => ({ ...item, sortOrder: index + 1 })),
+        },
       }),
     });
 

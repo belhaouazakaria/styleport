@@ -89,6 +89,12 @@ enum IndexingSource {
   AUTO_ACTIVE
 }
 
+enum EditorialListKind {
+  BEST_USE
+  HOW_TO_USE
+  TIP
+}
+
 enum IndexingStatus {
   PENDING
   SUBMITTED
@@ -150,9 +156,9 @@ model VerificationToken {
 }
 
 model Translator {
-  id                  String               @id @default(cuid())
+  id                  String                       @id @default(cuid())
   name                String
-  slug                String               @unique
+  slug                String                       @unique
   title               String
   subtitle            String
   shortDescription    String
@@ -165,34 +171,89 @@ model Translator {
   modelOverride       String?
   seoTitle            String?
   seoDescription      String?
-  showModeSelector    Boolean              @default(false)
-  showSwap            Boolean              @default(false)
-  showExamples        Boolean              @default(false)
-  isActive            Boolean              @default(true)
-  isFeatured          Boolean              @default(false)
+  showModeSelector    Boolean                      @default(false)
+  showSwap            Boolean                      @default(false)
+  showExamples        Boolean                      @default(false)
+  isActive            Boolean                      @default(true)
+  isFeatured          Boolean                      @default(false)
   featuredRank        Int?
-  featuredSource      FeaturedSource       @default(MANUAL)
+  featuredSource      FeaturedSource               @default(MANUAL)
   shareImagePath      String?
   shareImageHash      String?
   shareImageUpdatedAt DateTime?
-  sortOrder           Int                  @default(0)
+  sortOrder           Int                          @default(0)
   archivedAt          DateTime?
   primaryCategoryId   String?
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
+  createdAt           DateTime                     @default(now())
+  updatedAt           DateTime                     @updatedAt
   modes               TranslationMode[]
   examples            TranslatorExample[]
   logs                TranslationLog[]
   categories          TranslatorCategory[]
-  primaryCategory     Category?            @relation("PrimaryTranslatorCategory", fields: [primaryCategoryId], references: [id], onDelete: SetNull)
-  fulfilledRequests   TranslatorRequest[]  @relation("RequestCreatedTranslator")
+  primaryCategory     Category?                    @relation("PrimaryTranslatorCategory", fields: [primaryCategoryId], references: [id], onDelete: SetNull)
+  fulfilledRequests   TranslatorRequest[]          @relation("RequestCreatedTranslator")
   comments            TranslatorComment[]
   indexingLogs        IndexingLog[]
+  editorialContent    TranslatorEditorialContent?
+  editorialLists      TranslatorEditorialList[]
+  editorialExamples   TranslatorEditorialExample[]
+  editorialFaqs       TranslatorEditorialFaq[]
 
   @@index([isActive, isFeatured, sortOrder])
   @@index([isFeatured, featuredRank])
   @@index([updatedAt])
   @@index([primaryCategoryId])
+}
+
+model TranslatorEditorialContent {
+  id                    String     @id @default(cuid())
+  translatorId          String     @unique
+  about                 String?
+  whatItDoes            String?
+  differenceDescription String?
+  createdAt             DateTime   @default(now())
+  updatedAt             DateTime   @updatedAt
+  translator            Translator @relation(fields: [translatorId], references: [id], onDelete: Cascade)
+}
+
+model TranslatorEditorialList {
+  id           String            @id @default(cuid())
+  translatorId String
+  kind         EditorialListKind
+  content      String
+  sortOrder    Int               @default(0)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  translator   Translator        @relation(fields: [translatorId], references: [id], onDelete: Cascade)
+
+  @@index([translatorId, kind, sortOrder])
+}
+
+model TranslatorEditorialExample {
+  id              String     @id @default(cuid())
+  translatorId    String
+  contextTitle    String?
+  originalText    String
+  transformedText String
+  sortOrder       Int        @default(0)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  translator      Translator @relation(fields: [translatorId], references: [id], onDelete: Cascade)
+
+  @@index([translatorId, sortOrder])
+}
+
+model TranslatorEditorialFaq {
+  id           String     @id @default(cuid())
+  translatorId String
+  question     String
+  answer       String
+  sortOrder    Int        @default(0)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  translator   Translator @relation(fields: [translatorId], references: [id], onDelete: Cascade)
+
+  @@index([translatorId, sortOrder])
 }
 
 model Category {
@@ -326,28 +387,28 @@ model UsageProtectionEvent {
 }
 
 model TranslatorRequest {
-  id                  String                  @id @default(cuid())
-  requesterEmail      String?
-  emailVerifiedAt     DateTime?
-  verificationTokenHash String?
-  verificationTokenExpiresAt DateTime?
-  verificationEmailSentAt DateTime?
+  id                          String                  @id @default(cuid())
+  requesterEmail              String?
+  emailVerifiedAt             DateTime?
+  verificationTokenHash       String?
+  verificationTokenExpiresAt  DateTime?
+  verificationEmailSentAt     DateTime?
   publishedNotificationSentAt DateTime?
-  requestedName       String
-  description         String
-  exampleInput        String?
-  desiredStyle        String?
-  suggestedCategory   String?
-  audience            String?
-  notes               String?
-  adminNotes          String?
-  status              TranslatorRequestStatus @default(PENDING_EMAIL_VERIFICATION)
-  aiDraftJson         Json?
-  aiDraftGeneratedAt  DateTime?
-  createdTranslatorId String?
-  createdTranslator   Translator?             @relation("RequestCreatedTranslator", fields: [createdTranslatorId], references: [id], onDelete: SetNull)
-  createdAt           DateTime                @default(now())
-  updatedAt           DateTime                @updatedAt
+  requestedName               String
+  description                 String
+  exampleInput                String?
+  desiredStyle                String?
+  suggestedCategory           String?
+  audience                    String?
+  notes                       String?
+  adminNotes                  String?
+  status                      TranslatorRequestStatus @default(PENDING_EMAIL_VERIFICATION)
+  aiDraftJson                 Json?
+  aiDraftGeneratedAt          DateTime?
+  createdTranslatorId         String?
+  createdTranslator           Translator?             @relation("RequestCreatedTranslator", fields: [createdTranslatorId], references: [id], onDelete: SetNull)
+  createdAt                   DateTime                @default(now())
+  updatedAt                   DateTime                @updatedAt
 
   @@index([status, createdAt])
   @@index([createdAt])

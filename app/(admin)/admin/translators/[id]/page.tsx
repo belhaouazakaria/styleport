@@ -80,6 +80,25 @@ export default async function AdminTranslatorEditPage({ params }: PageProps) {
               value: example.value,
               sortOrder: example.sortOrder,
             })),
+            editorial: {
+              about: translator.editorialContent?.about || "",
+              whatItDoes: translator.editorialContent?.whatItDoes || "",
+              differenceDescription: translator.editorialContent?.differenceDescription || "",
+              bestUses: translator.editorialLists.filter((item) => item.kind === "BEST_USE").map((item) => item.content),
+              howToUse: translator.editorialLists.filter((item) => item.kind === "HOW_TO_USE").map((item) => item.content),
+              tips: translator.editorialLists.filter((item) => item.kind === "TIP").map((item) => item.content),
+              examples: translator.editorialExamples.map((item) => ({
+                contextTitle: item.contextTitle || "",
+                originalText: item.originalText,
+                transformedText: item.transformedText,
+                sortOrder: item.sortOrder,
+              })),
+              faq: translator.editorialFaqs.map((item) => ({
+                question: item.question,
+                answer: item.answer,
+                sortOrder: item.sortOrder,
+              })),
+            },
           }}
         />
       </main>

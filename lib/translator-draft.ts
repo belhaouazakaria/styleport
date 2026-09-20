@@ -110,6 +110,16 @@ function buildUserPrompt(brief: string) {
             sortOrder: 1,
           },
         ],
+        editorial: {
+          about: "",
+          whatItDoes: "",
+          differenceDescription: "",
+          bestUses: ["", "", ""],
+          howToUse: ["", "", ""],
+          tips: ["", "", ""],
+          examples: [{ contextTitle: "", originalText: "", transformedText: "" }],
+          faq: [{ question: "", answer: "" }],
+        },
       },
       null,
       2,
@@ -118,6 +128,8 @@ function buildUserPrompt(brief: string) {
     "Constraints:",
     "- Keep 1-4 useful modes.",
     "- Keep 0-6 examples.",
+    "- Editorial content should be specific to this translator: write 3-5 distinct transformation examples and 3-5 realistic FAQs, plus practical uses, steps, tips, and a comparison note.",
+    "- Do not reuse generic stock sentences across different translator concepts; examples should demonstrate the requested tone.",
     "- Make title and subtitle clear, marketable, and specific.",
     "- Choose the best category suggestion from: Fancy, Funny, Professional, Historical, Roleplay, Casual, Social, Marketing.",
     "- Slug must be lowercase-kebab-case.",
@@ -222,5 +234,17 @@ export function draftToTranslatorInput(params: {
       ...example,
       sortOrder: example.sortOrder || index + 1,
     })),
+    editorial: {
+      about: params.draft.editorial.about,
+      whatItDoes: params.draft.editorial.whatItDoes,
+      differenceDescription: params.draft.editorial.differenceDescription,
+      lists: [
+        ...params.draft.editorial.bestUses.map((content, index) => ({ kind: "BEST_USE" as const, content, sortOrder: index + 1 })),
+        ...params.draft.editorial.howToUse.map((content, index) => ({ kind: "HOW_TO_USE" as const, content, sortOrder: index + 1 })),
+        ...params.draft.editorial.tips.map((content, index) => ({ kind: "TIP" as const, content, sortOrder: index + 1 })),
+      ],
+      examples: params.draft.editorial.examples.map((example, index) => ({ ...example, sortOrder: index + 1 })),
+      faq: params.draft.editorial.faq.map((item, index) => ({ ...item, sortOrder: index + 1 })),
+    },
   };
 }

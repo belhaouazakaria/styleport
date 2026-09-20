@@ -61,6 +61,37 @@ export interface PublicExample {
   sortOrder: number;
 }
 
+export type EditorialListKind = "BEST_USE" | "HOW_TO_USE" | "TIP";
+
+export interface EditorialListItem {
+  content: string;
+  sortOrder: number;
+}
+
+export interface EditorialExample {
+  contextTitle: string | null;
+  originalText: string;
+  transformedText: string;
+  sortOrder: number;
+}
+
+export interface EditorialFaq {
+  question: string;
+  answer: string;
+  sortOrder: number;
+}
+
+export interface TranslatorEditorialContent {
+  about: string | null;
+  whatItDoes: string | null;
+  differenceDescription: string | null;
+  bestUses: EditorialListItem[];
+  howToUse: EditorialListItem[];
+  tips: EditorialListItem[];
+  examples: EditorialExample[];
+  faq: EditorialFaq[];
+}
+
 export interface PublicCategory {
   id: string;
   name: string;
@@ -94,6 +125,7 @@ export interface PublicTranslator {
   categories: Array<Pick<PublicCategory, "id" | "name" | "slug">>;
   modes: PublicMode[];
   examples: PublicExample[];
+  editorial: TranslatorEditorialContent;
 }
 
 export interface RuntimeTranslator {
@@ -124,6 +156,25 @@ export interface TranslatorExampleInput {
   sortOrder: number;
 }
 
+export interface EditorialListInput {
+  kind: EditorialListKind;
+  content: string;
+  sortOrder: number;
+}
+
+export interface EditorialExampleInput {
+  contextTitle?: string;
+  originalText: string;
+  transformedText: string;
+  sortOrder: number;
+}
+
+export interface EditorialFaqInput {
+  question: string;
+  answer: string;
+  sortOrder: number;
+}
+
 export interface TranslatorUpsertInput {
   name: string;
   slug: string;
@@ -148,6 +199,14 @@ export interface TranslatorUpsertInput {
   categoryIds: string[];
   modes: TranslatorModeInput[];
   examples: TranslatorExampleInput[];
+  editorial?: {
+    about?: string;
+    whatItDoes?: string;
+    differenceDescription?: string;
+    lists?: EditorialListInput[];
+    examples?: EditorialExampleInput[];
+    faq?: EditorialFaqInput[];
+  };
 }
 
 export interface TranslatorListItem {
@@ -326,6 +385,17 @@ export interface TranslatorDraftExampleInput {
   sortOrder: number;
 }
 
+export interface TranslatorEditorialDraft {
+  about: string;
+  whatItDoes: string;
+  differenceDescription: string;
+  bestUses: string[];
+  howToUse: string[];
+  tips: string[];
+  examples: Array<{ contextTitle?: string; originalText: string; transformedText: string }>;
+  faq: Array<{ question: string; answer: string }>;
+}
+
 export interface TranslatorDraft {
   name: string;
   slug: string;
@@ -341,6 +411,7 @@ export interface TranslatorDraft {
   categorySuggestion?: string;
   modes: TranslatorDraftModeInput[];
   examples: TranslatorDraftExampleInput[];
+  editorial: TranslatorEditorialDraft;
 }
 
 export interface AdminTranslatorRequestListItem {
