@@ -68,6 +68,69 @@ const runtimeTranslatorCache = new Map<
 >();
 const runtimeTranslatorInFlight = new Map<string, Promise<RuntimeTranslator | null>>();
 
+export type EditorialStatus = "INCOMPLETE" | "NEEDS_REVIEW" | "READY";
+
+interface EditorialReadinessInput {
+  content?: {
+    about: string | null;
+    whatItDoes: string | null;
+    differenceDescription: string | null;
+  } | null;
+  lists: Array<{ kind: string; content: string }>;
+  examples: Array<{ originalText: string; transformedText: string }>;
+  faqs: Array<{ question: string; answer: string }>;
+}
+
+function normalizedEditorialText(value: string | null | undefined) {
+  return (value || "").replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function hasDistinctValues(values: Array<string | null | undefined>) {
+  const normalized = values.map(normalizedEditorialText).filter(Boolean);
+  return normalized.length === new Set(normalized).size;
+}
+
+export function getEditorialReadiness(input: EditorialReadinessInput): {
+  status: EditorialStatus;
+  wordCount: number;
+} {
+  const lists = input.lists.filter((item) => normalizedEditorialText(item.content));
+  const bestUses = lists.filter((item) => item.kind === "BEST_USE");
+  const howToUse = lists.filter((item) => item.kind === "HOW_TO_USE");
+  const tips = lists.filter((item) => item.kind === "TIP");
+  const coreValues = [input.content?.about, input.content?.whatItDoes, input.content?.differenceDescription];
+  const hasCore = coreValues.every((value) => normalizedEditorialText(value).length >= 40);
+  const hasMeaningfulLists = [...bestUses, ...howToUse, ...tips].every(
+    (item) => normalizedEditorialText(item.content).length >= 16,
+  );
+  const hasMeaningfulExamples = input.examples.length >= 3 && input.examples.every(
+    (item) => normalizedEditorialText(item.originalText).length >= 8 && normalizedEditorialText(item.transformedText).length >= 8,
+  );
+  const hasMeaningfulFaqs = input.faqs.length >= 3 && input.faqs.every(
+    (item) => normalizedEditorialText(item.question).length >= 12 && normalizedEditorialText(item.answer).length >= 24,
+  );
+  const allEditorialValues = [
+    ...coreValues,
+    ...lists.map((item) => item.content),
+    ...input.examples.flatMap((item) => [item.originalText, item.transformedText]),
+    ...input.faqs.flatMap((item) => [item.question, item.answer]),
+  ];
+  const hasNoRepeatedEditorialValues = hasDistinctValues(allEditorialValues);
+  const complete = hasCore && bestUses.length >= 2 && howToUse.length >= 2 && tips.length >= 2 && hasMeaningfulLists && hasMeaningfulExamples && hasMeaningfulFaqs && hasNoRepeatedEditorialValues;
+  const hasAny = allEditorialValues.some((value) => normalizedEditorialText(value));
+  const wordCount = allEditorialValues
+    .filter(Boolean)
+    .join(" ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length;
+
+  return {
+    status: complete ? "READY" : hasAny ? "NEEDS_REVIEW" : "INCOMPLETE",
+    wordCount,
+  };
+}
+
 function invalidatePublicTranslatorCaches() {
   publicCategoriesCache = null;
   publicCategoriesInFlight = null;
@@ -145,6 +208,13 @@ const publicTranslatorInclude = {
 function mapPublicTranslator(
   translator: Prisma.TranslatorGetPayload<{ include: typeof publicTranslatorInclude }>,
 ): PublicTranslator {
+  const editorialReadiness = getEditorialReadiness({
+    content: translator.editorialContent,
+    lists: translator.editorialLists,
+    examples: translator.editorialExamples,
+    faqs: translator.editorialFaqs,
+  });
+
   return {
     id: translator.id,
     name: translator.name,
@@ -179,6 +249,7 @@ function mapPublicTranslator(
       examples: translator.editorialExamples,
       faq: translator.editorialFaqs,
     },
+    editorialStatus: editorialReadiness.status,
   };
 }
 
@@ -774,7 +845,7 @@ export async function getNewestPublicTranslators(limit = 3): Promise<PublicTrans
 }
 
 export async function getIndexableTranslatorSlugsForSitemap() {
-  return prisma.translator.findMany({
+  const translators = await prisma.translator.findMany({
     where: {
       isActive: true,
       archivedAt: null,
@@ -782,9 +853,20 @@ export async function getIndexableTranslatorSlugsForSitemap() {
     select: {
       slug: true,
       updatedAt: true,
+      editorialContent: true,
+      editorialLists: { select: { kind: true, content: true } },
+      editorialExamples: { select: { originalText: true, transformedText: true } },
+      editorialFaqs: { select: { question: true, answer: true } },
     },
     orderBy: [{ updatedAt: "desc" }],
   });
+
+  return translators.filter((translator) => getEditorialReadiness({
+    content: translator.editorialContent,
+    lists: translator.editorialLists,
+    examples: translator.editorialExamples,
+    faqs: translator.editorialFaqs,
+  }).status === "READY");
 }
 
 export async function getRelatedPublicTranslators(params: {
@@ -1118,23 +1200,12 @@ export async function listAdminTranslators(filters: {
   });
 
   const mappedRows = rows.map((row) => {
-    const listCounts = {
-      bestUses: row.editorialLists.filter((item) => item.kind === "BEST_USE").length,
-      howToUse: row.editorialLists.filter((item) => item.kind === "HOW_TO_USE").length,
-      tips: row.editorialLists.filter((item) => item.kind === "TIP").length,
-    };
-    const hasCore = Boolean(row.editorialContent?.about && row.editorialContent.whatItDoes && row.editorialContent.differenceDescription);
-    const complete = hasCore && listCounts.bestUses >= 2 && listCounts.howToUse >= 2 && listCounts.tips >= 2 && row.editorialExamples.length >= 3 && row.editorialFaqs.length >= 3;
-    const hasAny = Boolean(row.editorialContent) || row.editorialLists.length > 0 || row.editorialExamples.length > 0 || row.editorialFaqs.length > 0;
-    const editorialStatus: TranslatorListItem["editorialStatus"] = complete ? "READY" : hasAny ? "NEEDS_REVIEW" : "INCOMPLETE";
-    const wordCount = [
-      row.editorialContent?.about,
-      row.editorialContent?.whatItDoes,
-      row.editorialContent?.differenceDescription,
-      ...row.editorialLists.map((item) => item.content),
-      ...row.editorialExamples.flatMap((item) => [item.originalText, item.transformedText]),
-      ...row.editorialFaqs.flatMap((item) => [item.question, item.answer]),
-    ].filter(Boolean).join(" ").trim().split(/\s+/).filter(Boolean).length;
+    const editorialReadiness = getEditorialReadiness({
+      content: row.editorialContent,
+      lists: row.editorialLists,
+      examples: row.editorialExamples,
+      faqs: row.editorialFaqs,
+    });
     const editorialUpdatedAt = [
       row.editorialContent?.updatedAt,
       row.updatedAt,
@@ -1148,10 +1219,10 @@ export async function listAdminTranslators(filters: {
     shareImageUpdatedAt: row.shareImageUpdatedAt ? row.shareImageUpdatedAt.toISOString() : null,
     latestIndexingStatus: row.indexingLogs[0]?.status || null,
     latestIndexingAt: row.indexingLogs[0]?.createdAt ? row.indexingLogs[0].createdAt.toISOString() : null,
-      editorialStatus,
+      editorialStatus: editorialReadiness.status,
       editorialExampleCount: row.editorialExamples.length,
       editorialFaqCount: row.editorialFaqs.length,
-      editorialWordCount: wordCount,
+      editorialWordCount: editorialReadiness.wordCount,
       editorialUpdatedAt: editorialUpdatedAt ? editorialUpdatedAt.toISOString() : null,
     };
   });

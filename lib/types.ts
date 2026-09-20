@@ -126,6 +126,7 @@ export interface PublicTranslator {
   modes: PublicMode[];
   examples: PublicExample[];
   editorial: TranslatorEditorialContent;
+  editorialStatus: "INCOMPLETE" | "NEEDS_REVIEW" | "READY";
 }
 
 export interface RuntimeTranslator {

@@ -5,8 +5,7 @@ import { getAppBaseUrl } from "@/lib/env";
 
 const STATIC_INDEXABLE_ROUTES = [
   "/",
-  "/translators",
-  "/translators/new",
+  "/about",
   "/contact",
   "/privacy",
   "/terms",
@@ -21,8 +20,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   const staticEntries: MetadataRoute.Sitemap = STATIC_INDEXABLE_ROUTES.map((path) => ({
     url: `${base}${path}`,
-    changeFrequency: path === "/" || path === "/translators" ? "daily" : "monthly",
-    priority: path === "/" ? 1 : path === "/translators" ? 0.9 : 0.6,
+    changeFrequency: path === "/" ? "daily" : "monthly",
+    priority: path === "/" ? 1 : 0.6,
     lastModified: now,
   }));
 

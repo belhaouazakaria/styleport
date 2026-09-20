@@ -10,6 +10,7 @@ export const metadata: Metadata = {
   title: "Contact",
   description:
     "Contact the SayTwist team for support, partnership requests, bug reports, or privacy and policy questions.",
+  alternates: { canonical: "/contact" },
 };
 
 export default async function ContactPage() {

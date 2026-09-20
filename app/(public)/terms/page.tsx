@@ -9,6 +9,7 @@ export const metadata: Metadata = {
   title: "Terms of Use",
   description:
     "Read the terms governing your use of SayTwist, including acceptable use, account responsibilities, and service limitations.",
+  alternates: { canonical: "/terms" },
 };
 
 export default async function TermsOfUsePage() {

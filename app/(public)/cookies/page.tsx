@@ -9,6 +9,7 @@ export const metadata: Metadata = {
   title: "Cookie Policy",
   description:
     "Understand how SayTwist uses cookies and similar technologies for authentication, security, analytics, and performance.",
+  alternates: { canonical: "/cookies" },
 };
 
 export default async function CookiesPage() {

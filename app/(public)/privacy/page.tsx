@@ -9,6 +9,7 @@ export const metadata: Metadata = {
   title: "Privacy Policy",
   description:
     "Learn how SayTwist collects, uses, and protects personal data across translator discovery, usage analytics, and support workflows.",
+  alternates: { canonical: "/privacy" },
 };
 
 export default async function PrivacyPolicyPage() {

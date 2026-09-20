@@ -86,6 +86,10 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       description,
       images: [imageUrl],
     },
+    robots: {
+      index: translator.editorialStatus === "READY",
+      follow: true,
+    },
   };
 }
 

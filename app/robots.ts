@@ -10,7 +10,16 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: "*",
         allow: "/",
-        disallow: ["/admin", "/admin/*", "/api", "/api/*", "/login", "/create-translator/verify"],
+        disallow: [
+          "/admin",
+          "/admin/*",
+          "/api",
+          "/api/*",
+          "/login",
+          "/create-translator/verify",
+          "/generated/result-pins-temp",
+          "/generated/result-pins-temp/*",
+        ],
       },
     ],
     sitemap: [`${base}/sitemap.xml`],

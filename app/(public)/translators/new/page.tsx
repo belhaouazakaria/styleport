@@ -23,6 +23,10 @@ export const metadata: Metadata = {
   alternates: {
     canonical: "/translators/new",
   },
+  robots: {
+    index: false,
+    follow: true,
+  },
 };
 
 export default async function NewestTranslatorsPage({ searchParams }: PageProps) {

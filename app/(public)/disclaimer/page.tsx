@@ -9,6 +9,7 @@ export const metadata: Metadata = {
   title: "Disclaimer",
   description:
     "Important limitations and responsibility notices for AI-generated translator outputs on SayTwist.",
+  alternates: { canonical: "/disclaimer" },
 };
 
 export default async function DisclaimerPage() {

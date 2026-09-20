@@ -31,6 +31,11 @@ export function Footer({ platformName }: FooterProps) {
                   Translators
                 </Link>
               </li>
+              <li>
+                <Link href="/about" className="text-white/80 transition hover:text-brand-300">
+                  About SayTwist
+                </Link>
+              </li>
             </ul>
           </div>
 

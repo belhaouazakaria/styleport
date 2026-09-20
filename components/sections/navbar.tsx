@@ -78,6 +78,12 @@ export function Navbar({
           >
             Contact
           </Link>
+          <Link
+            href="/about"
+            className="inline-flex h-11 items-center rounded-full px-4 text-sm font-semibold text-muted-ink transition hover:bg-muted-surface hover:text-ink"
+          >
+            About
+          </Link>
           <button
             type="button"
             onClick={() => openRequestModal()}
@@ -151,6 +157,13 @@ export function Navbar({
                 className="inline-flex h-11 w-full items-center rounded-xl border border-border bg-surface px-3 text-sm font-medium text-ink transition hover:border-brand-300 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60"
               >
                 Contact
+              </Link>
+              <Link
+                href="/about"
+                onClick={() => setMobileOpen(false)}
+                className="inline-flex h-11 w-full items-center rounded-xl border border-border bg-surface px-3 text-sm font-medium text-ink transition hover:border-brand-300 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60"
+              >
+                About SayTwist
               </Link>
               <button
                 type="button"
