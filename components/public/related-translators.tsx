@@ -7,21 +7,15 @@ interface RelatedTranslatorsProps {
   translators: PublicTranslator[];
 }
 
-const accents = [
-  "bg-brand-100 text-brand-800",
-  "bg-[#fff0c7] text-[#8a5b00]",
-  "bg-supporting-100 text-supporting-800",
-];
-
 export function RelatedTranslators({ translators }: RelatedTranslatorsProps) {
   return (
-    <div className="-mx-1 grid gap-3 px-1 sm:grid-cols-2 xl:grid-cols-3">
-      {translators.map((translator, index) => (
+    <div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-3 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:pb-0 xl:grid-cols-4">
+      {translators.map((translator) => (
         <article
           key={translator.id}
-          className="group relative flex min-h-0 flex-col rounded-[1.4rem] border border-border bg-white/75 p-4 shadow-[var(--shadow-soft)] transition hover:-translate-y-1 hover:bg-white"
+          className="group relative flex min-h-0 min-w-[17rem] snap-start flex-col rounded-[1.25rem] border border-border bg-white/75 p-4 shadow-[var(--shadow-soft)] transition hover:-translate-y-1 hover:bg-white sm:min-w-0"
         >
-          <span aria-hidden="true" className={`absolute right-4 top-4 flex h-9 w-9 rotate-6 items-center justify-center rounded-xl ${accents[index % accents.length]}`}>
+          <span aria-hidden="true" className="absolute right-4 top-4 flex h-9 w-9 rotate-6 items-center justify-center rounded-xl bg-brand-100 text-brand-800">
             <Sparkles className="h-4 w-4" />
           </span>
           <p className="section-kicker pr-12">{translator.primaryCategory?.name || "Fresh twist"}</p>

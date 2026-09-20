@@ -220,6 +220,83 @@ select:focus {
   text-transform: uppercase;
 }
 
+.twist-strip {
+  width: 100%;
+}
+
+.twist-strip-option {
+  position: relative;
+  display: flex;
+  min-height: 3.7rem;
+  align-items: center;
+  gap: 0.65rem;
+  overflow: hidden;
+  border: 1px solid rgba(20, 184, 166, 0.22);
+  border-radius: 1rem 1.35rem 1rem 1.35rem;
+  background: rgba(255, 255, 255, 0.78);
+  padding: 0.65rem 0.8rem;
+  color: var(--color-ink);
+  text-align: left;
+  transition: transform 160ms ease, border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
+}
+
+.twist-strip-option::after {
+  position: absolute;
+  right: -1.2rem;
+  top: -1.5rem;
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: 999px;
+  background: rgba(96, 197, 247, 0.18);
+  content: "";
+  transform: rotate(22deg);
+}
+
+.twist-strip-option:hover {
+  border-color: var(--brand-primary);
+  transform: translateY(-1px) rotate(-0.4deg);
+}
+
+.twist-strip-option:active {
+  transform: translateY(1px) rotate(0.2deg);
+}
+
+.twist-strip-option-active {
+  border-color: var(--brand-primary);
+  background: linear-gradient(135deg, var(--brand-primary), #0f9f91);
+  color: white;
+  box-shadow: 0 4px 0 #0d9488, 0 12px 24px -18px rgba(15, 118, 110, 0.9);
+}
+
+.twist-strip-option-active::after {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.twist-strip-icon {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  height: 2rem;
+  width: 2rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.8rem 1rem 0.8rem 1rem;
+  background: rgba(255, 193, 69, 0.32);
+  color: #9a5b00;
+}
+
+.twist-strip-option-active .twist-strip-icon {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .twist-strip-option {
+    transition: none;
+  }
+}
+
 textarea.translator-textarea {
   min-height: 11.25rem !important;
 }

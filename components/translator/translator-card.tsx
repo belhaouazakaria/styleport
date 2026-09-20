@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRightLeft, Copy, Loader2, RefreshCcw, Sparkles, Square, Trash2, Volume2, WandSparkles } from "lucide-react";
+import { ArrowRightLeft, Copy, Loader2, RefreshCcw, Sparkles, Square, Trash2, Volume2 } from "lucide-react";
 
 import { useAutoResizeTextarea } from "@/hooks/use-auto-resize";
 import { useLocalStorage } from "@/hooks/use-local-storage";
@@ -10,8 +10,8 @@ import type { PublicTranslator, TranslateResponse } from "@/lib/types";
 import { useToast } from "@/components/providers/toast-provider";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { ModeSelector } from "@/components/translator/mode-selector";
 
 const LOADING_COPY = "Composing your translation...";
 const RESULT_PIN_TRANSLATOR_MAX = 96;
@@ -415,7 +415,6 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
 
   const { toast } = useToast();
   const hasModeOptions = translator.showModeSelector && translator.modes.length > 1;
-  const useModeChips = hasModeOptions && translator.modes.length <= 4;
   const isReverse = direction === "reverse";
   const activeInputLabel = isReverse ? translator.targetLabel : translator.sourceLabel;
   const activeOutputLabel = isReverse ? translator.sourceLabel : translator.targetLabel;
@@ -744,48 +743,8 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
         </div>
 
         {hasModeOptions ? (
-          <div className="mb-4 rounded-2xl border border-border bg-[#fff0c7] px-4 py-3 sm:px-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="inline-flex items-center gap-2 text-sm font-medium text-muted-ink">
-                <WandSparkles className="h-4 w-4 text-brand-600" />
-                <span>Style mode</span>
-              </div>
-
-              {useModeChips ? (
-                <div className="flex flex-wrap gap-2">
-                  {translator.modes.map((mode) => {
-                    const active = mode.key === modeKey;
-                    return (
-                      <button
-                        key={mode.id}
-                        type="button"
-                        onClick={() => setModeKey(mode.key)}
-                        className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-                          active
-                            ? "border-brand-500 bg-brand-500 text-white"
-                            : "border-border bg-surface text-muted-ink hover:border-brand-300 hover:text-ink"
-                        }`}
-                        aria-pressed={active}
-                        title={mode.label}
-                      >
-                        {mode.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : (
-                <Select
-                  aria-label="Style mode"
-                  value={modeKey}
-                  onChange={(event) => setModeKey(event.target.value)}
-                  options={translator.modes.map((mode) => ({
-                    value: mode.key,
-                    label: mode.label,
-                  }))}
-                  className="w-full sm:w-[260px]"
-                />
-              )}
-            </div>
+          <div className="mb-4 rounded-[1.5rem] border border-accent-200 bg-[#fff0c7] px-4 py-3 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.4)] sm:px-6">
+            <ModeSelector value={modeKey} modes={translator.modes} onChange={setModeKey} />
           </div>
         ) : null}
 

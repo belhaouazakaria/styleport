@@ -11,6 +11,7 @@ import { TranslatorCard } from "@/components/translator/translator-card";
 import { AdSlot } from "@/components/shared/ad-slot";
 import { TranslatorComments } from "@/components/public/translator-comments";
 import { RelatedTranslators } from "@/components/public/related-translators";
+import { TranslatorFaq } from "@/components/public/translator-faq";
 import { getRenderableAdPlacements } from "@/lib/data/ads";
 import { getPublicTranslatorBySlug, getRelatedPublicTranslators } from "@/lib/data/translators";
 import { getAppBaseUrl } from "@/lib/env";
@@ -106,7 +107,7 @@ export default async function TranslatorSlugPage({ params }: PageProps) {
     getRelatedPublicTranslators({
       currentTranslatorId: translator.id,
       categorySlug: translator.primaryCategory?.slug,
-      limit: 12,
+      limit: 15,
     }),
   ]);
   const baseUrl = getAppBaseUrl();
@@ -145,30 +146,58 @@ export default async function TranslatorSlugPage({ params }: PageProps) {
 
         <section className="mx-auto mt-8 w-full max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="border-y border-dashed border-border py-7 sm:py-9">
-            <p className="section-kicker">Behind the twist</p>
-            <h2 className="font-display mt-1 text-3xl font-bold text-ink">About this translator</h2>
-            <p className="mt-3 text-base leading-7 text-muted-ink">{translator.shortDescription}</p>
-            <p className="mt-2 text-sm leading-7 text-muted-ink">
-              {translator.editorial.whatItDoes || `This translator helps convert ${translator.sourceLabel.toLowerCase()} into ${translator.targetLabel.toLowerCase()} while preserving your core intent.`}
-            </p>
+            <p className="section-kicker">The quick take</p>
+            <h2 className="font-display mt-1 max-w-3xl text-3xl font-bold tracking-tight text-ink">What this twist does</h2>
+            <p className="mt-3 max-w-3xl text-base leading-7 text-muted-ink">{translator.editorial.whatItDoes || `Turn ${translator.sourceLabel.toLowerCase()} into ${translator.targetLabel.toLowerCase()} while keeping your meaning intact.`}</p>
           </div>
         </section>
 
-        {translator.editorial.about || translator.editorial.bestUses.length || translator.editorial.howToUse.length || translator.editorial.tips.length || translator.editorial.examples.length || translator.editorial.faq.length ? (
-          <section className="mx-auto mt-8 grid w-full max-w-7xl gap-6 px-4 sm:px-6 lg:grid-cols-[1.1fr_0.9fr] lg:px-8">
-            <div className="space-y-6">
-              {translator.editorial.about ? <article className="rounded-2xl border border-border bg-surface p-6"><p className="section-kicker">The idea behind it</p><p className="mt-3 whitespace-pre-line text-base leading-7 text-muted-ink">{translator.editorial.about}</p></article> : null}
-              {translator.editorial.examples.length ? <article className="rounded-2xl border border-border bg-surface p-6"><p className="section-kicker">See the twist</p><h2 className="font-display mt-1 text-3xl font-bold text-ink">Example transformations</h2><div className="mt-4 space-y-4">{translator.editorial.examples.map((example) => <div key={`${example.sortOrder}-${example.originalText}`} className="rounded-xl border border-border bg-white p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-ink">{example.contextTitle || "Example"}</p><p className="mt-2 text-sm text-muted-ink">{example.originalText}</p><p className="mt-2 border-l-2 border-brand-400 pl-3 text-sm leading-6 text-ink">{example.transformedText}</p></div>)}</div></article> : null}
-              {translator.editorial.faq.length ? <article className="rounded-2xl border border-border bg-surface p-6"><p className="section-kicker">Questions, answered</p><h2 className="font-display mt-1 text-3xl font-bold text-ink">FAQ</h2><div className="mt-4 space-y-4">{translator.editorial.faq.map((item) => <div key={item.question}><h3 className="font-semibold text-ink">{item.question}</h3><p className="mt-1 text-sm leading-6 text-muted-ink">{item.answer}</p></div>)}</div></article> : null}
+        {translator.editorial.examples.length ? (
+          <section className="mx-auto mt-8 w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="rounded-[1.6rem] border border-brand-200 bg-brand-50 p-5 sm:p-7">
+              <p className="section-kicker">See the twist in action</p>
+              <h2 className="font-display mt-1 text-3xl font-bold tracking-tight text-ink">Before → after</h2>
+              <div className="mt-5 grid gap-3 lg:grid-cols-2">
+                {translator.editorial.examples.map((example, index) => (
+                  <article key={`${example.sortOrder}-${example.originalText}`} className="relative overflow-hidden rounded-[1.2rem] border border-brand-200 bg-white p-4 sm:p-5">
+                    <div className="flex items-center justify-between gap-3"><p className="text-xs font-extrabold uppercase tracking-[0.14em] text-brand-800">{example.contextTitle || `Example ${index + 1}`}</p><span aria-hidden="true" className="text-lg text-accent-500">↗</span></div>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-[0.86fr_auto_1.14fr] sm:items-center">
+                      <div><p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-muted-ink">Original</p><p className="mt-1 break-words text-sm leading-6 text-muted-ink">{example.originalText}</p></div>
+                      <span aria-hidden="true" className="hidden text-xl font-bold text-accent-500 sm:block">→</span>
+                      <div className="border-l-2 border-accent-300 pl-3 sm:border-l-0 sm:pl-0"><p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-accent-700">Twisted result</p><p className="mt-1 break-words text-sm font-medium leading-6 text-ink">{example.transformedText}</p></div>
+                    </div>
+                  </article>
+                ))}
+              </div>
             </div>
-            <aside className="space-y-6">
-              {translator.editorial.bestUses.length ? <div className="rounded-2xl border border-border bg-muted-surface p-6"><p className="section-kicker">Good fit for</p><ul className="mt-3 space-y-2 text-sm leading-6 text-muted-ink">{translator.editorial.bestUses.map((item) => <li key={item.sortOrder}>• {item.content}</li>)}</ul></div> : null}
-              {translator.editorial.howToUse.length ? <div className="rounded-2xl border border-border bg-muted-surface p-6"><p className="section-kicker">How to get started</p><ol className="mt-3 space-y-2 text-sm leading-6 text-muted-ink">{translator.editorial.howToUse.map((item, index) => <li key={item.sortOrder}><span className="mr-2 font-semibold text-ink">{index + 1}.</span>{item.content}</li>)}</ol></div> : null}
-              {translator.editorial.tips.length ? <div className="rounded-2xl border border-border bg-muted-surface p-6"><p className="section-kicker">Tips for better results</p><ul className="mt-3 space-y-2 text-sm leading-6 text-muted-ink">{translator.editorial.tips.map((item) => <li key={item.sortOrder}>• {item.content}</li>)}</ul></div> : null}
-              {translator.editorial.differenceDescription ? <div className="rounded-2xl border border-border bg-muted-surface p-6"><p className="section-kicker">Why this twist</p><p className="mt-3 text-sm leading-6 text-muted-ink">{translator.editorial.differenceDescription}</p></div> : null}
-            </aside>
           </section>
         ) : null}
+
+        {translator.editorial.about || translator.shortDescription ? (
+          <section className="mx-auto mt-8 w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+            <article className="max-w-3xl border-l-4 border-accent-400 py-1 pl-5 sm:pl-7">
+              <p className="section-kicker">Behind the twist</p>
+              <h2 className="font-display mt-1 text-3xl font-bold tracking-tight text-ink">About this translator</h2>
+              <p className="mt-3 whitespace-pre-line text-base leading-7 text-muted-ink">{translator.editorial.about || translator.shortDescription}</p>
+            </article>
+          </section>
+        ) : null}
+
+        {translator.editorial.bestUses.length || translator.editorial.howToUse.length ? (
+          <section className="mx-auto mt-10 grid w-full max-w-7xl gap-8 border-y border-dashed border-border px-4 py-8 sm:px-6 lg:grid-cols-2 lg:px-8">
+            {translator.editorial.bestUses.length ? <div><p className="section-kicker">Good fit for</p><h2 className="font-display mt-1 text-2xl font-bold text-ink">Best uses</h2><div className="mt-4 flex flex-wrap gap-2">{translator.editorial.bestUses.map((item) => <span key={item.sortOrder} className="rounded-full border border-brand-200 bg-brand-50 px-3 py-2 text-sm font-medium text-brand-900">{item.content}</span>)}</div></div> : null}
+            {translator.editorial.howToUse.length ? <div><p className="section-kicker">A simple starting point</p><h2 className="font-display mt-1 text-2xl font-bold text-ink">How to use it</h2><ol className="mt-4 space-y-3">{translator.editorial.howToUse.map((item, index) => <li key={item.sortOrder} className="flex gap-3 text-sm leading-6 text-muted-ink"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ink text-xs font-bold text-white">{index + 1}</span><span>{item.content}</span></li>)}</ol></div> : null}
+          </section>
+        ) : null}
+
+        {translator.editorial.tips.length || translator.editorial.differenceDescription ? (
+          <section className="mx-auto mt-10 grid w-full max-w-7xl gap-8 px-4 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:px-8">
+            {translator.editorial.tips.length ? <div className="rounded-[1.4rem] bg-[#fff0c7] p-5 sm:p-6"><p className="section-kicker">Tiny moves, better results</p><h2 className="font-display mt-1 text-2xl font-bold text-ink">Tips for better results</h2><ul className="mt-4 space-y-3 text-sm leading-6 text-ink/75">{translator.editorial.tips.map((item) => <li key={item.sortOrder} className="flex gap-2"><span className="text-accent-600">✦</span><span>{item.content}</span></li>)}</ul></div> : null}
+            {translator.editorial.differenceDescription ? <div className="border-t border-border pt-5 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0"><p className="section-kicker">The SayTwist angle</p><h2 className="font-display mt-1 text-2xl font-bold text-ink">What makes this twist different</h2><p className="mt-3 text-sm leading-7 text-muted-ink">{translator.editorial.differenceDescription}</p></div> : null}
+          </section>
+        ) : null}
+
+        {translator.editorial.faq.length ? <section className="mx-auto mt-10 w-full max-w-4xl px-4 sm:px-6 lg:px-8"><p className="section-kicker">Questions, answered</p><h2 className="font-display mt-1 text-3xl font-bold tracking-tight text-ink">FAQ</h2><div className="mt-4"><TranslatorFaq faq={translator.editorial.faq} /></div></section> : null}
 
         <TranslatorComments translatorId={translator.id} translatorSlug={translator.slug} />
 
