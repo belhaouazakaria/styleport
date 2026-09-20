@@ -14,6 +14,7 @@ interface PageProps {
     featured?: string;
     category?: string;
     sort?: string;
+    editorial?: string;
   }>;
 }
 
@@ -33,6 +34,10 @@ export default async function AdminTranslatorsPage({ searchParams }: PageProps) 
           : "all",
       category: params.category || undefined,
       sort: params.sort === "newest" ? "newest" : "updated",
+      editorialStatus:
+        params.editorial === "incomplete" || params.editorial === "needs-review" || params.editorial === "ready"
+          ? params.editorial
+          : "all",
     }),
     getCategoryChoices(),
   ]);
@@ -73,6 +78,16 @@ export default async function AdminTranslatorsPage({ searchParams }: PageProps) 
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
             <option value="archived">Archived</option>
+          </select>
+          <select
+            name="editorial"
+            defaultValue={params.editorial || "all"}
+            className="h-11 rounded-xl border border-border bg-surface px-3 text-ink"
+          >
+            <option value="all">All editorial states</option>
+            <option value="incomplete">Incomplete</option>
+            <option value="needs-review">Needs review</option>
+            <option value="ready">Ready</option>
           </select>
           <select
             name="featured"

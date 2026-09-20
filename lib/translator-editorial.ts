@@ -27,6 +27,7 @@ export interface TranslatorEditorialContext {
   promptSystem: string;
   promptInstructions: string;
   existingAbout?: string | null;
+  focus?: string;
 }
 
 function contextPrompt(context: TranslatorEditorialContext) {
@@ -72,6 +73,7 @@ export async function generateTranslatorEditorialContent(params: {
     userPrompt: [
       "Create a complete editorial content pack for this translator.",
       contextPrompt(params.context),
+      params.context.focus ? `Regenerate only the ${params.context.focus} section; make it substantially useful and specific to this translator.` : "",
       "Target roughly 500–900 useful words overall, but prefer concise substance over padding.",
       "Produce 3–5 distinct examples and 3–5 realistic FAQs.",
       "Use this exact JSON shape:",

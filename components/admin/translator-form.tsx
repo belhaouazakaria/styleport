@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { Copy, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Copy, Plus, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/providers/toast-provider";
@@ -33,6 +33,55 @@ interface FormEditorial {
   tips: string[];
   examples: Array<{ contextTitle: string; originalText: string; transformedText: string; sortOrder: number }>;
   faq: Array<{ question: string; answer: string; sortOrder: number }>;
+}
+
+function EditorialListEditor({
+  label,
+  items,
+  onChange,
+}: {
+  label: string;
+  items: string[];
+  onChange: (items: string[]) => void;
+}) {
+  return (
+    <div className="space-y-2 rounded-xl border border-border p-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm font-medium text-muted-ink">{label}</span>
+        <Button type="button" size="sm" variant="outline" onClick={() => onChange([...items, ""])}>
+          <Plus className="h-3.5 w-3.5" /> Add item
+        </Button>
+      </div>
+      {items.length ? items.map((item, index) => (
+        <div key={`${label}-${index}`} className="flex items-start gap-2">
+          <textarea value={item} onChange={(event) => onChange(items.map((value, itemIndex) => itemIndex === index ? event.target.value : value))} className="min-h-16 flex-1 rounded-lg border border-border px-3 py-2 text-sm" />
+          <div className="flex flex-col gap-1">
+            <button type="button" aria-label="Move item up" disabled={index === 0} onClick={() => { const next = [...items]; [next[index - 1], next[index]] = [next[index], next[index - 1]]; onChange(next); }} className="rounded border border-border p-1 disabled:opacity-30"><ArrowUp className="h-3 w-3" /></button>
+            <button type="button" aria-label="Move item down" disabled={index === items.length - 1} onClick={() => { const next = [...items]; [next[index], next[index + 1]] = [next[index + 1], next[index]]; onChange(next); }} className="rounded border border-border p-1 disabled:opacity-30"><ArrowDown className="h-3 w-3" /></button>
+            <button type="button" aria-label="Delete item" onClick={() => onChange(items.filter((_, itemIndex) => itemIndex !== index))} className="rounded border border-red-200 p-1 text-red-600"><Trash2 className="h-3 w-3" /></button>
+          </div>
+        </div>
+      )) : <p className="text-xs text-muted-ink">No items yet.</p>}
+    </div>
+  );
+}
+
+function EditorialExamplesEditor({
+  examples,
+  onChange,
+}: {
+  examples: FormEditorial["examples"];
+  onChange: (examples: FormEditorial["examples"]) => void;
+}) {
+  return <div className="space-y-3 rounded-xl border border-border p-3">
+    <div className="flex items-center justify-between gap-2"><span className="text-sm font-medium text-muted-ink">Transformation examples</span><Button type="button" size="sm" variant="outline" onClick={() => onChange([...examples, { contextTitle: "", originalText: "", transformedText: "", sortOrder: examples.length + 1 }])}><Plus className="h-3.5 w-3.5" /> Add example</Button></div>
+    {examples.map((example, index) => <div key={`editorial-example-${index}`} className="rounded-lg border border-border bg-muted-surface p-3"><div className="grid gap-2 md:grid-cols-2"><input value={example.contextTitle} onChange={(event) => onChange(examples.map((item, itemIndex) => itemIndex === index ? { ...item, contextTitle: event.target.value } : item))} placeholder="Context or title (optional)" className="h-10 rounded-lg border border-border bg-white px-3 text-sm md:col-span-2" /><textarea value={example.originalText} onChange={(event) => onChange(examples.map((item, itemIndex) => itemIndex === index ? { ...item, originalText: event.target.value } : item))} placeholder="Original text" className="min-h-20 rounded-lg border border-border bg-white px-3 py-2 text-sm" /><textarea value={example.transformedText} onChange={(event) => onChange(examples.map((item, itemIndex) => itemIndex === index ? { ...item, transformedText: event.target.value } : item))} placeholder="Transformed text" className="min-h-20 rounded-lg border border-border bg-white px-3 py-2 text-sm" /></div><div className="mt-2 flex justify-end gap-1"><button type="button" disabled={index === 0} onClick={() => { const next = [...examples]; [next[index - 1], next[index]] = [next[index], next[index - 1]]; onChange(next); }} className="rounded border border-border p-1 disabled:opacity-30"><ArrowUp className="h-3 w-3" /></button><button type="button" disabled={index === examples.length - 1} onClick={() => { const next = [...examples]; [next[index], next[index + 1]] = [next[index + 1], next[index]]; onChange(next); }} className="rounded border border-border p-1 disabled:opacity-30"><ArrowDown className="h-3 w-3" /></button><button type="button" onClick={() => onChange(examples.filter((_, itemIndex) => itemIndex !== index))} className="rounded border border-red-200 p-1 text-red-600"><Trash2 className="h-3 w-3" /></button></div></div>)}
+    {!examples.length ? <p className="text-xs text-muted-ink">No examples yet.</p> : null}
+  </div>;
+}
+
+function EditorialFaqEditor({ faq, onChange }: { faq: FormEditorial["faq"]; onChange: (faq: FormEditorial["faq"]) => void }) {
+  return <div className="space-y-3 rounded-xl border border-border p-3"><div className="flex items-center justify-between gap-2"><span className="text-sm font-medium text-muted-ink">FAQ</span><Button type="button" size="sm" variant="outline" onClick={() => onChange([...faq, { question: "", answer: "", sortOrder: faq.length + 1 }])}><Plus className="h-3.5 w-3.5" /> Add FAQ</Button></div>{faq.map((item, index) => <div key={`editorial-faq-${index}`} className="rounded-lg border border-border bg-muted-surface p-3"><input value={item.question} onChange={(event) => onChange(faq.map((faqItem, itemIndex) => itemIndex === index ? { ...faqItem, question: event.target.value } : faqItem))} placeholder="Question" className="h-10 w-full rounded-lg border border-border bg-white px-3 text-sm" /><textarea value={item.answer} onChange={(event) => onChange(faq.map((faqItem, itemIndex) => itemIndex === index ? { ...faqItem, answer: event.target.value } : faqItem))} placeholder="Answer" className="mt-2 min-h-20 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm" /><div className="mt-2 flex justify-end gap-1"><button type="button" disabled={index === 0} onClick={() => { const next = [...faq]; [next[index - 1], next[index]] = [next[index], next[index - 1]]; onChange(next); }} className="rounded border border-border p-1 disabled:opacity-30"><ArrowUp className="h-3 w-3" /></button><button type="button" disabled={index === faq.length - 1} onClick={() => { const next = [...faq]; [next[index], next[index + 1]] = [next[index + 1], next[index]]; onChange(next); }} className="rounded border border-border p-1 disabled:opacity-30"><ArrowDown className="h-3 w-3" /></button><button type="button" onClick={() => onChange(faq.filter((_, itemIndex) => itemIndex !== index))} className="rounded border border-red-200 p-1 text-red-600"><Trash2 className="h-3 w-3" /></button></div></div>)}{!faq.length ? <p className="text-xs text-muted-ink">No FAQs yet.</p> : null}</div>;
 }
 
 interface TranslatorFormInitial {
@@ -145,6 +194,9 @@ export function TranslatorForm({
 
   const [slugTouched, setSlugTouched] = useState(Boolean(initial?.slug));
   const [busy, setBusy] = useState(false);
+  const [generatedEditorial, setGeneratedEditorial] = useState<Partial<FormEditorial> | null>(null);
+  const [generatedSection, setGeneratedSection] = useState<string | null>(null);
+  const [generatingSection, setGeneratingSection] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [shareImagePath, setShareImagePath] = useState<string | null>(initial?.shareImagePath || null);
   const [shareImageUpdatedAt, setShareImageUpdatedAt] = useState<string | null>(
@@ -235,39 +287,39 @@ export function TranslatorForm({
     });
   }
 
-  async function submit() {
+  async function submit(candidate = form) {
     setBusy(true);
 
     const payload = {
-      ...form,
-      slug: slugify(form.slug || form.name),
-      modes: form.modes
+      ...candidate,
+      slug: slugify(candidate.slug || candidate.name),
+      modes: candidate.modes
         .filter((modeItem) => modeItem.label.trim() && modeItem.instruction.trim())
         .map((modeItem, index) => ({
           ...modeItem,
           key: slugify(modeItem.key || modeItem.label),
           sortOrder: Number(modeItem.sortOrder) || index + 1,
         })),
-      examples: form.examples
+      examples: candidate.examples
         .filter((exampleItem) => exampleItem.label.trim() && exampleItem.value.trim())
         .map((exampleItem, index) => ({
           ...exampleItem,
           sortOrder: Number(exampleItem.sortOrder) || index + 1,
         })),
       editorial: {
-        about: form.editorial.about,
-        whatItDoes: form.editorial.whatItDoes,
-        differenceDescription: form.editorial.differenceDescription,
+        about: candidate.editorial.about,
+        whatItDoes: candidate.editorial.whatItDoes,
+        differenceDescription: candidate.editorial.differenceDescription,
         lists: [
-          ...form.editorial.bestUses.map((content, index) => ({ kind: "BEST_USE", content, sortOrder: index + 1 })),
-          ...form.editorial.howToUse.map((content, index) => ({ kind: "HOW_TO_USE", content, sortOrder: index + 1 })),
-          ...form.editorial.tips.map((content, index) => ({ kind: "TIP", content, sortOrder: index + 1 })),
+          ...candidate.editorial.bestUses.map((content, index) => ({ kind: "BEST_USE", content, sortOrder: index + 1 })),
+          ...candidate.editorial.howToUse.map((content, index) => ({ kind: "HOW_TO_USE", content, sortOrder: index + 1 })),
+          ...candidate.editorial.tips.map((content, index) => ({ kind: "TIP", content, sortOrder: index + 1 })),
         ].filter((item) => item.content.trim()),
-        examples: form.editorial.examples.filter((item) => item.originalText.trim() && item.transformedText.trim()),
-        faq: form.editorial.faq.filter((item) => item.question.trim() && item.answer.trim()),
+        examples: candidate.editorial.examples.filter((item) => item.originalText.trim() && item.transformedText.trim()),
+        faq: candidate.editorial.faq.filter((item) => item.question.trim() && item.answer.trim()),
       },
-      sortOrder: Number(form.sortOrder) || 0,
-      primaryCategoryId: form.primaryCategoryId || null,
+      sortOrder: Number(candidate.sortOrder) || 0,
+      primaryCategoryId: candidate.primaryCategoryId || null,
     };
 
     const endpoint = mode === "create" ? "/api/admin/translators" : `/api/admin/translators/${initial?.id}`;
@@ -395,32 +447,56 @@ export function TranslatorForm({
     router.refresh();
   }
 
-  async function generateEditorial() {
+  function setGeneratedValue(section: string, value: unknown) {
+    setGeneratedEditorial((current) => ({ ...(current || {}), [section]: value }));
+  }
+
+  async function generateEditorial(section: string) {
     if (!initial?.id) return;
+    setGeneratingSection(section);
     setBusy(true);
     const response = await fetch(`/api/admin/translators/${initial.id}/editorial`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ section: "full" }),
+      body: JSON.stringify({ section }),
     });
     const result = await response.json();
     setBusy(false);
+    setGeneratingSection(null);
     if (!response.ok || !result.ok) {
       toast({ title: "Editorial generation failed", description: result?.error?.message || "Please try again.", variant: "error" });
       return;
     }
-    const editorial = result.editorial;
-    setField("editorial", {
-      about: editorial.about,
-      whatItDoes: editorial.whatItDoes,
-      differenceDescription: editorial.differenceDescription,
-      bestUses: editorial.bestUses,
-      howToUse: editorial.howToUse,
-      tips: editorial.tips,
-      examples: editorial.examples.map((item: { contextTitle?: string; originalText: string; transformedText: string }, index: number) => ({ ...item, contextTitle: item.contextTitle || "", sortOrder: index + 1 })),
-      faq: editorial.faq.map((item: { question: string; answer: string }, index: number) => ({ ...item, sortOrder: index + 1 })),
-    });
-    toast({ title: "Editorial pack generated", description: "Review the copy before saving." });
+    const value = section === "full" ? result.editorial : result.value;
+    setGeneratedSection(section);
+    if (section === "full") {
+      setGeneratedEditorial({
+        about: value.about,
+        whatItDoes: value.whatItDoes,
+        differenceDescription: value.differenceDescription,
+        bestUses: value.bestUses,
+        howToUse: value.howToUse,
+        tips: value.tips,
+        examples: value.examples.map((item: { contextTitle?: string; originalText: string; transformedText: string }, index: number) => ({ ...item, contextTitle: item.contextTitle || "", sortOrder: index + 1 })),
+        faq: value.faq.map((item: { question: string; answer: string }, index: number) => ({ ...item, sortOrder: index + 1 })),
+      });
+    } else if (["examples", "faq"].includes(section)) {
+      setGeneratedValue(section, value.map((item: Record<string, string>, index: number) => ({ ...item, contextTitle: item.contextTitle || "", sortOrder: index + 1 })));
+    } else if (["bestUses", "howToUse", "tips"].includes(section)) {
+      setGeneratedValue(section, value);
+    } else {
+      setGeneratedValue(section, value);
+    }
+    toast({ title: "Draft generated", description: "Review, edit, then approve and publish it." });
+  }
+
+  async function approveGenerated() {
+    if (!generatedEditorial) return;
+    const nextForm = { ...form, editorial: { ...form.editorial, ...generatedEditorial } };
+    setForm(nextForm);
+    await submit(nextForm);
+    setGeneratedEditorial(null);
+    setGeneratedSection(null);
   }
 
   return (
@@ -429,32 +505,17 @@ export function TranslatorForm({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="font-display text-2xl font-semibold text-ink">Editorial Content</h2>
-            <p className="mt-1 text-sm text-muted-ink">Structured page copy, examples, tips, and FAQs. Existing About copy is preserved until you intentionally replace it.</p>
+            <p className="mt-1 text-sm text-muted-ink">Edit published copy below. AI drafts stay separate until you approve them.</p>
           </div>
-          {mode === "edit" ? <Button type="button" variant="outline" onClick={() => void generateEditorial()} disabled={busy}>Generate full pack</Button> : null}
+          {mode === "edit" ? <Button type="button" variant="outline" onClick={() => void generateEditorial("full")} disabled={busy}><Copy className="h-3.5 w-3.5" />{generatingSection === "full" ? "Generating..." : "Regenerate full pack"}</Button> : null}
         </div>
-        <div className="mt-4 grid gap-4 md:grid-cols-2">
-          {(["about", "whatItDoes", "differenceDescription"] as const).map((key) => (
-            <label key={key} className="space-y-1 text-sm md:col-span-2">
-              <span className="font-medium text-muted-ink">{key === "about" ? "About this translator" : key === "whatItDoes" ? "What it does" : "What makes it different"}</span>
-              <textarea value={form.editorial[key]} onChange={(event) => setField("editorial", { ...form.editorial, [key]: event.target.value })} className="min-h-24 w-full rounded-xl border border-border px-3 py-2" />
-            </label>
-          ))}
-          {(["bestUses", "howToUse", "tips"] as const).map((key) => (
-            <label key={key} className="space-y-1 text-sm">
-              <span className="font-medium text-muted-ink">{key === "bestUses" ? "Best uses (one per line)" : key === "howToUse" ? "How to use (one per line)" : "Tips (one per line)"}</span>
-              <textarea value={form.editorial[key].join("\n")} onChange={(event) => setField("editorial", { ...form.editorial, [key]: event.target.value.split("\n") })} className="min-h-28 w-full rounded-xl border border-border px-3 py-2" />
-            </label>
-          ))}
-          <label className="space-y-1 text-sm md:col-span-2">
-            <span className="font-medium text-muted-ink">Transformation examples JSON</span>
-            <textarea value={JSON.stringify(form.editorial.examples, null, 2)} onChange={(event) => { try { setField("editorial", { ...form.editorial, examples: JSON.parse(event.target.value) }); } catch {} }} className="min-h-36 w-full rounded-xl border border-border px-3 py-2 font-mono text-xs" />
-          </label>
-          <label className="space-y-1 text-sm md:col-span-2">
-            <span className="font-medium text-muted-ink">FAQ JSON</span>
-            <textarea value={JSON.stringify(form.editorial.faq, null, 2)} onChange={(event) => { try { setField("editorial", { ...form.editorial, faq: JSON.parse(event.target.value) }); } catch {} }} className="min-h-32 w-full rounded-xl border border-border px-3 py-2 font-mono text-xs" />
-          </label>
+        <div className="mt-4 space-y-3">
+          {(["about", "whatItDoes", "differenceDescription"] as const).map((key) => <details key={key} open className="rounded-xl border border-border p-4"><summary className="flex cursor-pointer list-none items-center justify-between gap-3 font-medium text-ink"><span>{key === "about" ? "About this translator" : key === "whatItDoes" ? "What it does" : "What makes this twist different"}</span>{mode === "edit" ? <Button type="button" size="sm" variant="outline" onClick={(event) => { event.preventDefault(); void generateEditorial(key); }} disabled={busy}>{generatingSection === key ? "Generating..." : "Regenerate"}</Button> : null}</summary><textarea value={form.editorial[key]} onChange={(event) => setField("editorial", { ...form.editorial, [key]: event.target.value })} className="mt-3 min-h-24 w-full rounded-xl border border-border px-3 py-2 text-sm" /></details>)}
+          {(["bestUses", "howToUse", "tips"] as const).map((key) => <details key={key} className="rounded-xl border border-border p-4"><summary className="flex cursor-pointer list-none items-center justify-between gap-3 font-medium text-ink"><span>{key === "bestUses" ? "Best uses" : key === "howToUse" ? "How to use" : "Tips for better results"}</span>{mode === "edit" ? <Button type="button" size="sm" variant="outline" onClick={(event) => { event.preventDefault(); void generateEditorial(key); }} disabled={busy}>{generatingSection === key ? "Generating..." : "Regenerate"}</Button> : null}</summary><div className="mt-3"><EditorialListEditor label="Items" items={form.editorial[key]} onChange={(items) => setField("editorial", { ...form.editorial, [key]: items })} /></div></details>)}
+          <details className="rounded-xl border border-border p-4"><summary className="flex cursor-pointer list-none items-center justify-between gap-3 font-medium text-ink"><span>Transformation examples</span>{mode === "edit" ? <Button type="button" size="sm" variant="outline" onClick={(event) => { event.preventDefault(); void generateEditorial("examples"); }} disabled={busy}>{generatingSection === "examples" ? "Generating..." : "Regenerate"}</Button> : null}</summary><div className="mt-3"><EditorialExamplesEditor examples={form.editorial.examples} onChange={(examples) => setField("editorial", { ...form.editorial, examples })} /></div></details>
+          <details className="rounded-xl border border-border p-4"><summary className="flex cursor-pointer list-none items-center justify-between gap-3 font-medium text-ink"><span>FAQ</span>{mode === "edit" ? <Button type="button" size="sm" variant="outline" onClick={(event) => { event.preventDefault(); void generateEditorial("faq"); }} disabled={busy}>{generatingSection === "faq" ? "Generating..." : "Regenerate"}</Button> : null}</summary><div className="mt-3"><EditorialFaqEditor faq={form.editorial.faq} onChange={(faq) => setField("editorial", { ...form.editorial, faq })} /></div></details>
         </div>
+        {generatedEditorial ? <div className="mt-5 rounded-2xl border-2 border-brand-200 bg-brand-50 p-4"><div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand-700">Generated draft{generatedSection ? ` · ${generatedSection}` : ""}</p><p className="mt-1 text-sm text-muted-ink">This is not published yet. Review and edit it, then approve when ready.</p></div><div className="flex gap-2"><Button type="button" size="sm" variant="outline" onClick={() => { setGeneratedEditorial(null); setGeneratedSection(null); }}>Discard</Button><Button type="button" size="sm" onClick={() => void approveGenerated()} disabled={busy}>Approve & publish</Button></div></div><div className="mt-4 space-y-3">{(["about", "whatItDoes", "differenceDescription"] as const).filter((key) => generatedEditorial[key] !== undefined).map((key) => <label key={key} className="block text-sm"><span className="font-medium text-ink">{key === "about" ? "About" : key === "whatItDoes" ? "What it does" : "Difference"}</span><textarea value={generatedEditorial[key] as string} onChange={(event) => setGeneratedValue(key, event.target.value)} className="mt-1 min-h-20 w-full rounded-lg border border-brand-200 bg-white px-3 py-2" /></label>)}{(["bestUses", "howToUse", "tips"] as const).filter((key) => generatedEditorial[key] !== undefined).map((key) => <EditorialListEditor key={key} label={key === "bestUses" ? "Best uses" : key === "howToUse" ? "How to use" : "Tips"} items={generatedEditorial[key] as string[]} onChange={(items) => setGeneratedValue(key, items)} />)}{generatedEditorial.examples ? <EditorialExamplesEditor examples={generatedEditorial.examples} onChange={(examples) => setGeneratedValue("examples", examples)} /> : null}{generatedEditorial.faq ? <EditorialFaqEditor faq={generatedEditorial.faq} onChange={(faq) => setGeneratedValue("faq", faq)} /> : null}</div></div> : null}
       </section>
 
       <section className="rounded-2xl border border-border bg-white p-6">

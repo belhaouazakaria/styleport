@@ -225,6 +225,11 @@ export interface TranslatorListItem {
   latestIndexingStatus: IndexingStatus | null;
   latestIndexingAt: string | null;
   categories: Array<{ id: string; name: string; slug: string }>;
+  editorialStatus: "INCOMPLETE" | "NEEDS_REVIEW" | "READY";
+  editorialExampleCount: number;
+  editorialFaqCount: number;
+  editorialWordCount: number;
+  editorialUpdatedAt: string | null;
 }
 
 export interface GoogleIndexingStatusSummary {

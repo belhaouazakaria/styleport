@@ -1027,6 +1027,7 @@ export async function listAdminTranslators(filters: {
   status?: "all" | "active" | "inactive" | "archived";
   featured?: "all" | "featured" | "non-featured";
   category?: string;
+  editorialStatus?: "all" | "incomplete" | "needs-review" | "ready";
   sort?: "updated" | "newest";
 }): Promise<TranslatorListItem[]> {
   const where: Prisma.TranslatorWhereInput = {};
@@ -1106,11 +1107,40 @@ export async function listAdminTranslators(filters: {
           },
         },
       },
+      editorialContent: {
+        select: { about: true, whatItDoes: true, differenceDescription: true, updatedAt: true },
+      },
+      editorialLists: { select: { content: true, kind: true } },
+      editorialExamples: { select: { originalText: true, transformedText: true } },
+      editorialFaqs: { select: { question: true, answer: true } },
     },
     orderBy,
   });
 
-  return rows.map((row) => ({
+  const mappedRows = rows.map((row) => {
+    const listCounts = {
+      bestUses: row.editorialLists.filter((item) => item.kind === "BEST_USE").length,
+      howToUse: row.editorialLists.filter((item) => item.kind === "HOW_TO_USE").length,
+      tips: row.editorialLists.filter((item) => item.kind === "TIP").length,
+    };
+    const hasCore = Boolean(row.editorialContent?.about && row.editorialContent.whatItDoes && row.editorialContent.differenceDescription);
+    const complete = hasCore && listCounts.bestUses >= 2 && listCounts.howToUse >= 2 && listCounts.tips >= 2 && row.editorialExamples.length >= 3 && row.editorialFaqs.length >= 3;
+    const hasAny = Boolean(row.editorialContent) || row.editorialLists.length > 0 || row.editorialExamples.length > 0 || row.editorialFaqs.length > 0;
+    const editorialStatus: TranslatorListItem["editorialStatus"] = complete ? "READY" : hasAny ? "NEEDS_REVIEW" : "INCOMPLETE";
+    const wordCount = [
+      row.editorialContent?.about,
+      row.editorialContent?.whatItDoes,
+      row.editorialContent?.differenceDescription,
+      ...row.editorialLists.map((item) => item.content),
+      ...row.editorialExamples.flatMap((item) => [item.originalText, item.transformedText]),
+      ...row.editorialFaqs.flatMap((item) => [item.question, item.answer]),
+    ].filter(Boolean).join(" ").trim().split(/\s+/).filter(Boolean).length;
+    const editorialUpdatedAt = [
+      row.editorialContent?.updatedAt,
+      row.updatedAt,
+    ].filter(Boolean).sort((a, b) => b!.getTime() - a!.getTime())[0] || null;
+
+    return {
     ...row,
     categories: row.categories.map((item) => item.category),
     archivedAt: row.archivedAt ? row.archivedAt.toISOString() : null,
@@ -1118,7 +1148,20 @@ export async function listAdminTranslators(filters: {
     shareImageUpdatedAt: row.shareImageUpdatedAt ? row.shareImageUpdatedAt.toISOString() : null,
     latestIndexingStatus: row.indexingLogs[0]?.status || null,
     latestIndexingAt: row.indexingLogs[0]?.createdAt ? row.indexingLogs[0].createdAt.toISOString() : null,
-  }));
+      editorialStatus,
+      editorialExampleCount: row.editorialExamples.length,
+      editorialFaqCount: row.editorialFaqs.length,
+      editorialWordCount: wordCount,
+      editorialUpdatedAt: editorialUpdatedAt ? editorialUpdatedAt.toISOString() : null,
+    };
+  });
+
+  if (filters.editorialStatus && filters.editorialStatus !== "all") {
+    const expected = filters.editorialStatus === "needs-review" ? "NEEDS_REVIEW" : filters.editorialStatus.toUpperCase();
+    return mappedRows.filter((row) => row.editorialStatus === expected);
+  }
+
+  return mappedRows;
 }
 
 export async function getNewestPublicTranslatorsPage(params: { page: number; pageSize: number }) {

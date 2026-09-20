@@ -279,6 +279,8 @@ export function TranslatorTable({ translators }: TranslatorTableProps) {
               <th className="px-4 py-3 font-medium">Slug</th>
               <th className="px-4 py-3 font-medium">Categories</th>
               <th className="px-4 py-3 font-medium">Status</th>
+              <th className="px-4 py-3 font-medium">Editorial</th>
+              <th className="px-4 py-3 font-medium">Content</th>
               <th className="px-4 py-3 font-medium">Featured</th>
               <th className="px-4 py-3 font-medium">Share Image</th>
               <th className="px-4 py-3 font-medium">Indexing</th>
@@ -301,6 +303,16 @@ export function TranslatorTable({ translators }: TranslatorTableProps) {
                       onChange={(event) => toggleSelected(row.id, event.target.checked)}
                       aria-label={`Select ${row.name}`}
                     />
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={`rounded-full px-2 py-1 text-xs font-medium ${row.editorialStatus === "READY" ? "bg-emerald-100 text-emerald-700" : row.editorialStatus === "NEEDS_REVIEW" ? "bg-amber-100 text-amber-700" : "bg-muted-surface text-muted-ink"}`}>
+                      {row.editorialStatus === "NEEDS_REVIEW" ? "Needs review" : row.editorialStatus === "READY" ? "Ready" : "Incomplete"}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-xs text-muted-ink">
+                    <div>{row.editorialExampleCount} examples · {row.editorialFaqCount} FAQs</div>
+                    <div>{row.editorialWordCount} words</div>
+                    <div className="mt-1">{row.editorialUpdatedAt ? formatDateTime(row.editorialUpdatedAt) : "No editorial update"}</div>
                   </td>
                   <td className="px-4 py-3 font-medium text-ink">{row.name}</td>
                   <td className="px-4 py-3 text-muted-ink">/{row.slug}</td>
