@@ -4,15 +4,17 @@ import { getAdminTranslatorIdsForBulk, type AdminTranslatorFilters } from "@/lib
 import { getAppSettings } from "@/lib/settings";
 import { generateTranslatorEditorialContent } from "@/lib/translator-editorial";
 import type { TranslatorEditorialDraft } from "@/lib/types";
-import { translatorDraftSchema } from "@/lib/validators";
+import { translatorEditorialCandidateSchema } from "@/lib/validators";
 import { prisma } from "@/lib/prisma";
-import { mergeEditorialDraft, validateEditorialDraft } from "@/lib/editorial-job-utils";
+import { getExpectedEditorialSections, mergeEditorialDraft, validateEditorialDraft } from "@/lib/editorial-job-utils";
 
 export { getMissingEditorialSections, mergeEditorialDraft, validateEditorialDraft } from "@/lib/editorial-job-utils";
 
 const MAX_ATTEMPTS = 3;
 const DEFAULT_CONCURRENCY = 3;
 const DEFAULT_RETRY_BASE_MS = 1500;
+
+class EditorialContentValidationError extends Error {}
 
 export type EditorialJobOperation = keyof typeof TranslatorEditorialJobType;
 
@@ -71,6 +73,7 @@ function safeError(error: unknown) {
 }
 
 function isRetryable(error: unknown) {
+  if (error instanceof EditorialContentValidationError) return false;
   const candidate = error as { status?: number; code?: string; message?: string };
   const message = candidate.message?.toLowerCase() || "";
   return candidate.status === 429 || candidate.status === 408 || Boolean(candidate.status && candidate.status >= 500) || /timeout|network|fetch|temporar|rate limit|429|malformed|valid json|validation/.test(message);
@@ -134,6 +137,56 @@ export async function createEditorialJob(params: {
     },
     select: { id: true, type: true, status: true, totalItems: true },
   });
+}
+
+export async function createAndProcessEditorialDraft(params: {
+  translatorId: string;
+  operation: string;
+  requestedById?: string | null;
+  generate?: typeof generateTranslatorEditorialContent;
+}) {
+  const operation = asOperation(params.operation);
+  const duplicate = await prisma.translatorEditorialJobItem.findFirst({
+    where: {
+      translatorId: params.translatorId,
+      operation,
+      status: { in: ["PENDING", "PROCESSING"] },
+      job: { status: { in: ["PENDING", "RUNNING", "PAUSED"] } },
+    },
+    select: { id: true },
+  });
+  if (duplicate) throw new Error("An identical active editorial job already covers this translator.");
+
+  const item = await prisma.$transaction(async (tx) => {
+    const job = await tx.translatorEditorialJob.create({
+      data: {
+        type: operation,
+        status: "RUNNING",
+        requestedById: params.requestedById || null,
+        configuration: toJson({ selectionMode: "individual" }),
+        totalItems: 1,
+        startedAt: new Date(),
+      },
+      select: { id: true },
+    });
+    return tx.translatorEditorialJobItem.create({
+      data: {
+        jobId: job.id,
+        translatorId: params.translatorId,
+        operation,
+        status: "PROCESSING",
+        attemptCount: 1,
+        startedAt: new Date(),
+      },
+      select: { id: true, jobId: true },
+    });
+  });
+
+  const result = await processEditorialJobItem(item.id, { generate: params.generate });
+  if (result.status !== "GENERATED") {
+    throw new Error("error" in result && result.error ? result.error : `Editorial generation ended with status ${result.status}.`);
+  }
+  return { jobId: item.jobId, draftId: result.draft.id, editorial: result.draft.payload };
 }
 
 export async function getEditorialJobProgress(id: string) {
@@ -255,22 +308,106 @@ export async function listEditorialJobs(limit = 50) {
   }));
 }
 
-export async function listEditorialDrafts(status?: "NEEDS_REVIEW" | "APPROVED" | "DISCARDED" | "PUBLISHED") {
-  const drafts = await prisma.translatorEditorialDraft.findMany({
-    where: status ? { status } : { status: { in: ["NEEDS_REVIEW", "APPROVED"] } },
+export type EditorialDraftReviewStatus = "NEEDS_REVIEW" | "APPROVED" | "DISCARDED" | "PUBLISHED";
+
+function validationExpectedSections(validation: Prisma.JsonValue): Array<keyof TranslatorEditorialDraft> {
+  if (!validation || typeof validation !== "object" || Array.isArray(validation)) return [];
+  const sections = (validation as { expectedSections?: unknown }).expectedSections;
+  return Array.isArray(sections) ? sections.filter((value): value is keyof TranslatorEditorialDraft => typeof value === "string" && ["about", "whatItDoes", "differenceDescription", "bestUses", "howToUse", "tips", "examples", "faq"].includes(value)) : [];
+}
+
+function expectedSectionsForStoredDraft(validation: Prisma.JsonValue, payload: TranslatorEditorialDraft, operation: TranslatorEditorialJobType) {
+  const stored = validationExpectedSections(validation);
+  return stored.length ? stored : [...getExpectedEditorialSections(payload, operation)];
+}
+
+export async function listEditorialDrafts(params: { status?: EditorialDraftReviewStatus; q?: string; page?: number; pageSize?: number } = {}) {
+  const pageSize = [25, 50, 100].includes(params.pageSize || 0) ? params.pageSize! : 25;
+  const page = Math.max(1, params.page || 1);
+  const where: Prisma.TranslatorEditorialDraftWhereInput = {
+    ...(params.status ? { status: params.status } : { status: { in: ["NEEDS_REVIEW", "APPROVED"] } }),
+    ...(params.q?.trim() ? { translator: { OR: [{ name: { contains: params.q.trim(), mode: "insensitive" } }, { slug: { contains: params.q.trim(), mode: "insensitive" } }, { categories: { some: { category: { name: { contains: params.q.trim(), mode: "insensitive" } } } } }] } } : {}),
+  };
+  const [total, drafts] = await prisma.$transaction([
+    prisma.translatorEditorialDraft.count({ where }),
+    prisma.translatorEditorialDraft.findMany({
+    where,
     orderBy: { createdAt: "asc" },
+    skip: (page - 1) * pageSize,
+    take: pageSize,
     select: {
       id: true, status: true, payload: true, validation: true, generatedAt: true, reviewedAt: true, publishedAt: true,
-      translator: { select: { id: true, name: true, slug: true } },
+      translator: { select: { id: true, name: true, slug: true, categories: { take: 1, select: { category: { select: { name: true } } } } } },
       jobItem: { select: { operation: true, attemptCount: true, lastError: true } },
     },
-  });
-  return drafts.map((draft) => ({
-    ...draft,
+  }),
+  ]);
+  return { drafts: drafts.map((draft) => {
+    const parsed = translatorEditorialCandidateSchema.safeParse(draft.payload);
+    const expected = parsed.success ? expectedSectionsForStoredDraft(draft.validation, parsed.data, draft.jobItem.operation) : [];
+    const validation = parsed.success ? validateEditorialDraft(parsed.data, expected) : { valid: false, errors: ["Stored draft payload is malformed."], duplicateFlags: [], readiness: { status: "INCOMPLETE", completionPercent: 0 }, generatedSections: [] };
+    return {
+    id: draft.id, status: draft.status, validation, jobItem: draft.jobItem,
+    translator: { id: draft.translator.id, name: draft.translator.name, slug: draft.translator.slug, category: draft.translator.categories[0]?.category.name || "Uncategorized" },
     generatedAt: draft.generatedAt.toISOString(),
     reviewedAt: draft.reviewedAt?.toISOString() || null,
     publishedAt: draft.publishedAt?.toISOString() || null,
-  }));
+  }; }), total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) };
+}
+
+export async function listFailedEditorialItems(params: { q?: string; page?: number; pageSize?: number } = {}) {
+  const pageSize = [25, 50, 100].includes(params.pageSize || 0) ? params.pageSize! : 25;
+  const page = Math.max(1, params.page || 1);
+  const where: Prisma.TranslatorEditorialJobItemWhereInput = {
+    status: "FAILED",
+    ...(params.q?.trim() ? { translator: { OR: [{ name: { contains: params.q.trim(), mode: "insensitive" } }, { slug: { contains: params.q.trim(), mode: "insensitive" } }, { categories: { some: { category: { name: { contains: params.q.trim(), mode: "insensitive" } } } } }] } } : {}),
+  };
+  const [total, items] = await prisma.$transaction([
+    prisma.translatorEditorialJobItem.count({ where }),
+    prisma.translatorEditorialJobItem.findMany({
+      where, orderBy: { completedAt: "desc" }, skip: (page - 1) * pageSize, take: pageSize,
+      select: { id: true, jobId: true, operation: true, attemptCount: true, lastError: true, completedAt: true, translator: { select: { id: true, name: true, slug: true, categories: { take: 1, select: { category: { select: { name: true } } } } } } },
+    }),
+  ]);
+  return {
+    drafts: items.map((item) => ({
+      id: item.id, isDraft: false, status: "FAILED", generatedAt: (item.completedAt || new Date()).toISOString(),
+      translator: { id: item.translator.id, name: item.translator.name, slug: item.translator.slug, category: item.translator.categories[0]?.category.name || "Uncategorized" },
+      jobItem: { operation: item.operation, attemptCount: item.attemptCount, lastError: item.lastError, jobId: item.jobId },
+      validation: { valid: false, duplicateFlags: [], errors: [item.lastError || "Editorial generation failed."], generatedSections: [], readiness: { status: "INCOMPLETE", completionPercent: 0 } },
+    })),
+    total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)),
+  };
+}
+
+export async function getEditorialDraftIdsForReviewFilters(params: { status?: EditorialDraftReviewStatus; q?: string }) {
+  return prisma.translatorEditorialDraft.findMany({
+    where: {
+      ...(params.status ? { status: params.status } : { status: { in: ["NEEDS_REVIEW", "APPROVED"] } }),
+      ...(params.q?.trim() ? { translator: { OR: [{ name: { contains: params.q.trim(), mode: "insensitive" } }, { slug: { contains: params.q.trim(), mode: "insensitive" } }, { categories: { some: { category: { name: { contains: params.q.trim(), mode: "insensitive" } } } } }] } } : {}),
+    }, select: { id: true }, orderBy: { createdAt: "asc" },
+  }).then((rows) => rows.map((row) => row.id));
+}
+
+export async function bulkUpdateEditorialDrafts(params: {
+  action: "approve" | "publish" | "discard";
+  draftIds: string[];
+  reviewedById: string;
+}) {
+  const ids = Array.from(new Set(params.draftIds));
+  const result = { requested: ids.length, affected: 0, skipped: 0, failed: [] as Array<{ id: string; error: string }> };
+  for (const id of ids) {
+    try {
+      if (params.action === "publish") await publishEditorialDraft(id, params.reviewedById);
+      else await setEditorialDraftStatus(id, params.action === "approve" ? "APPROVED" : "DISCARDED", params.reviewedById);
+      result.affected += 1;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to update draft.";
+      if (/only drafts|approve the draft/i.test(message)) result.skipped += 1;
+      else result.failed.push({ id, error: message });
+    }
+  }
+  return result;
 }
 
 export async function getEditorialDraft(id: string) {
@@ -292,7 +429,21 @@ export async function getEditorialDraft(id: string) {
   });
 }
 
+export async function getNextEditorialDraftId(id: string, status: EditorialDraftReviewStatus) {
+  const current = await prisma.translatorEditorialDraft.findUnique({ where: { id }, select: { createdAt: true } });
+  if (!current) return null;
+  const next = await prisma.translatorEditorialDraft.findFirst({ where: { status, id: { not: id }, createdAt: { gte: current.createdAt } }, orderBy: { createdAt: "asc" }, select: { id: true } });
+  return next?.id || null;
+}
+
 export async function setEditorialDraftStatus(id: string, status: "APPROVED" | "DISCARDED", reviewedById: string) {
+  const draft = await prisma.translatorEditorialDraft.findUnique({ where: { id }, select: { status: true, payload: true, validation: true, jobItem: { select: { operation: true } } } });
+  if (!draft) throw new Error("Editorial draft not found.");
+  if (status === "APPROVED") {
+    if (draft.status !== "NEEDS_REVIEW") throw new Error("Only drafts needing review can be approved.");
+    const parsed = translatorEditorialCandidateSchema.safeParse(draft.payload);
+    if (!parsed.success || !validateEditorialDraft(parsed.data, expectedSectionsForStoredDraft(draft.validation, parsed.data, draft.jobItem.operation)).valid) throw new Error("This draft has missing or invalid generated sections and cannot be approved.");
+  }
   return prisma.translatorEditorialDraft.update({
     where: { id },
     data: { status, reviewedById, reviewedAt: new Date(), discardedAt: status === "DISCARDED" ? new Date() : null },
@@ -300,9 +451,12 @@ export async function setEditorialDraftStatus(id: string, status: "APPROVED" | "
 }
 
 export async function updateEditorialDraftPayload(id: string, payload: unknown) {
-  const parsed = translatorDraftSchema.shape.editorial.safeParse(payload);
+  const draft = await prisma.translatorEditorialDraft.findUnique({ where: { id }, select: { validation: true, jobItem: { select: { operation: true } } } });
+  if (!draft) throw new Error("Editorial draft not found.");
+  const parsed = translatorEditorialCandidateSchema.safeParse(payload);
   if (!parsed.success) throw new Error("Draft content is invalid. Fix the highlighted JSON before saving.");
-  const validation = validateEditorialDraft(parsed.data);
+  const validation = validateEditorialDraft(parsed.data, expectedSectionsForStoredDraft(draft.validation, parsed.data, draft.jobItem.operation));
+  if (!validation.valid) throw new Error(validation.errors[0] || "Draft content is invalid.");
   return prisma.translatorEditorialDraft.update({
     where: { id },
     data: { payload: toJson(parsed.data), validation: toJson(validation), status: "NEEDS_REVIEW", reviewedAt: null, publishedAt: null, discardedAt: null },
@@ -310,11 +464,11 @@ export async function updateEditorialDraftPayload(id: string, payload: unknown) 
 }
 
 export async function publishEditorialDraft(id: string, reviewedById: string) {
-  const draft = await prisma.translatorEditorialDraft.findUnique({ where: { id }, select: { status: true, translatorId: true, payload: true } });
+  const draft = await prisma.translatorEditorialDraft.findUnique({ where: { id }, select: { status: true, translatorId: true, payload: true, validation: true, jobItem: { select: { operation: true } } } });
   if (!draft) throw new Error("Editorial draft not found.");
   if (draft.status !== "APPROVED") throw new Error("Approve the draft before publishing it.");
-  const parsed = translatorDraftSchema.shape.editorial.safeParse(draft.payload);
-  if (!parsed.success) throw new Error("This draft is no longer valid and cannot be published.");
+  const parsed = translatorEditorialCandidateSchema.safeParse(draft.payload);
+  if (!parsed.success || !validateEditorialDraft(parsed.data, expectedSectionsForStoredDraft(draft.validation, parsed.data, draft.jobItem.operation)).valid) throw new Error("This draft is no longer valid and cannot be published.");
   const payload = parsed.data;
 
   await prisma.$transaction(async (tx) => {
@@ -374,7 +528,10 @@ async function recoverStaleItems() {
   }
 }
 
-async function processItem(itemId: string) {
+export async function processEditorialJobItem(
+  itemId: string,
+  options: { generate?: typeof generateTranslatorEditorialContent } = {},
+) {
   const item = await prisma.translatorEditorialJobItem.findUnique({
     where: { id: itemId },
     include: {
@@ -391,12 +548,21 @@ async function processItem(itemId: string) {
       },
     },
   });
-  if (!item) return;
+  if (!item) return { status: "NOT_FOUND" as const };
 
   try {
     const settings = await getAppSettings();
     const current = currentEditorialDraft(item.translator);
-    const generated = await generateTranslatorEditorialContent({
+    const expectedSections = getExpectedEditorialSections(current, item.operation);
+    if (!expectedSections.size) {
+      await prisma.translatorEditorialJobItem.update({
+        where: { id: item.id },
+        data: { status: "SKIPPED", lastError: null, completedAt: new Date() },
+      });
+      return { status: "SKIPPED" as const };
+    }
+
+    const generated = await (options.generate || generateTranslatorEditorialContent)({
       model: settings.defaultModelOverride || item.translator.modelOverride || undefined,
       context: {
         name: item.translator.name,
@@ -410,18 +576,39 @@ async function processItem(itemId: string) {
         focus: item.operation === "GENERATE_MISSING" ? "the missing sections only" : item.operation.toLowerCase().replaceAll("_", " "),
       },
     });
+    const generatedValidation = validateEditorialDraft(generated, expectedSections);
+    if (!generatedValidation.valid) {
+      throw new EditorialContentValidationError(
+        generatedValidation.missingExpectedSections.length
+          ? "Generated editorial draft contained no content for the requested missing sections."
+          : `Generated editorial output failed validation: ${generatedValidation.errors.slice(0, 2).join("; ")}`,
+      );
+    }
     const merged = mergeEditorialDraft(current, generated, item.operation);
-    const validation = validateEditorialDraft(merged);
-    if (!validation.valid) throw new Error(`Generated editorial draft failed validation: ${validation.errors.slice(0, 2).join("; ")}`);
+    const validation = validateEditorialDraft(merged, expectedSections);
+    if (!validation.valid) {
+      throw new EditorialContentValidationError(
+        validation.missingExpectedSections.length
+          ? "Generated editorial draft contained no content for the requested missing sections."
+          : `Generated editorial draft failed validation: ${validation.errors.slice(0, 2).join("; ")}`,
+      );
+    }
 
-    await prisma.$transaction(async (tx) => {
-      await tx.translatorEditorialDraft.upsert({
+    const persistedDraft = await prisma.$transaction(async (tx) => {
+      const saved = await tx.translatorEditorialDraft.upsert({
         where: { jobItemId: item.id },
         create: { jobItemId: item.id, translatorId: item.translatorId, payload: toJson(merged), validation: toJson(validation), status: TranslatorEditorialDraftStatus.NEEDS_REVIEW },
         update: { payload: toJson(merged), validation: toJson(validation), status: TranslatorEditorialDraftStatus.NEEDS_REVIEW, generatedAt: new Date(), reviewedAt: null, publishedAt: null, discardedAt: null },
       });
+      const readBack = await tx.translatorEditorialDraft.findUnique({ where: { id: saved.id }, select: { id: true, payload: true, validation: true } });
+      const parsedPayload = translatorEditorialCandidateSchema.safeParse(readBack?.payload);
+      if (!readBack || !parsedPayload.success || !validateEditorialDraft(parsedPayload.data, expectedSections).valid) {
+        throw new EditorialContentValidationError("Persisted editorial draft could not be verified after saving.");
+      }
       await tx.translatorEditorialJobItem.update({ where: { id: item.id }, data: { status: TranslatorEditorialJobItemStatus.GENERATED, lastError: null, completedAt: new Date() } });
+      return { id: readBack.id, payload: parsedPayload.data, validation: readBack.validation };
     });
+    return { status: "GENERATED" as const, draft: persistedDraft };
   } catch (error) {
     const latest = await prisma.translatorEditorialJobItem.findUnique({ where: { id: item.id }, select: { attemptCount: true } });
     const attemptCount = latest?.attemptCount || MAX_ATTEMPTS;
@@ -434,6 +621,7 @@ async function processItem(itemId: string) {
       },
     });
     if (attemptCount < MAX_ATTEMPTS && isRetryable(error)) await new Promise((resolve) => setTimeout(resolve, retryDelay(attemptCount)));
+    return { status: attemptCount < MAX_ATTEMPTS && isRetryable(error) ? "PENDING" as const : "FAILED" as const, error: safeError(error) };
   } finally {
     await refreshJobCounters(item.jobId);
   }
@@ -455,7 +643,7 @@ export async function runEditorialWorker(options: { once?: boolean } = {}) {
       await new Promise((resolve) => setTimeout(resolve, 2000));
       continue;
     }
-    await Promise.all(itemIds.map((id) => processItem(id)));
+    await Promise.all(itemIds.map((id) => processEditorialJobItem(id)));
     if (options.once) break;
   }
   await prisma.$disconnect();

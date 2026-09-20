@@ -1,8 +1,10 @@
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import type { TranslatorEditorialDraft } from "@/lib/types";
 
 export type EditorialStatus = "INCOMPLETE" | "NEEDS_REVIEW" | "READY";
+export type EditorialSectionKey = keyof TranslatorEditorialDraft;
 
 export interface AdminTranslatorFilters {
   q?: string;
@@ -61,9 +63,9 @@ export function getEditorialReadiness(input: EditorialReadinessInput): {
   const hasAny = allEditorialValues.some((value) => normalizedEditorialText(value));
   const wordCount = allEditorialValues.filter(Boolean).join(" ").trim().split(/\s+/).filter(Boolean).length;
   const missing = corePresent.flatMap((present, index) => (present ? [] : [coreLabels[index]]));
-  if (bestUses.length < 2) missing.push("Best uses");
-  if (howToUse.length < 2) missing.push("How to use");
-  if (tips.length < 2) missing.push("Tips");
+  if (bestUses.length < 2 || bestUses.some((item) => normalizedEditorialText(item.content).length < 16)) missing.push("Best uses");
+  if (howToUse.length < 2 || howToUse.some((item) => normalizedEditorialText(item.content).length < 16)) missing.push("How to use");
+  if (tips.length < 2 || tips.some((item) => normalizedEditorialText(item.content).length < 16)) missing.push("Tips");
   if (!hasMeaningfulExamples) missing.push("Examples");
   if (!hasMeaningfulFaqs) missing.push("FAQ");
   if (!hasNoRepeatedEditorialValues && !missing.includes("Original editorial phrasing")) missing.push("Original editorial phrasing");
@@ -74,6 +76,38 @@ export function getEditorialReadiness(input: EditorialReadinessInput): {
     completionPercent: Math.round((completionUnits.filter(Boolean).length / completionUnits.length) * 100),
     missing,
   };
+}
+
+const sectionByMissingLabel: Record<string, EditorialSectionKey | undefined> = {
+  About: "about",
+  "What it does": "whatItDoes",
+  "Difference description": "differenceDescription",
+  "Best uses": "bestUses",
+  "How to use": "howToUse",
+  Tips: "tips",
+  Examples: "examples",
+  FAQ: "faq",
+};
+
+export function getEditorialDraftReadiness(draft: TranslatorEditorialDraft) {
+  return getEditorialReadiness({
+    content: { about: draft.about, whatItDoes: draft.whatItDoes, differenceDescription: draft.differenceDescription },
+    lists: [
+      ...draft.bestUses.map((content) => ({ kind: "BEST_USE", content })),
+      ...draft.howToUse.map((content) => ({ kind: "HOW_TO_USE", content })),
+      ...draft.tips.map((content) => ({ kind: "TIP", content })),
+    ],
+    examples: draft.examples,
+    faqs: draft.faq,
+  });
+}
+
+export function getMissingEditorialSections(draft: TranslatorEditorialDraft) {
+  return new Set(
+    getEditorialDraftReadiness(draft).missing
+      .map((label) => sectionByMissingLabel[label])
+      .filter((section): section is EditorialSectionKey => Boolean(section)),
+  );
 }
 
 export function buildAdminTranslatorWhere(filters: AdminTranslatorFilters): Prisma.TranslatorWhereInput {

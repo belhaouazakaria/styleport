@@ -7,9 +7,9 @@ const complete: TranslatorEditorialDraft = {
   about: "A useful translator description that is comfortably longer than the editorial readiness threshold.",
   whatItDoes: "It changes the tone and phrasing of text while preserving meaning, intent, and the original facts.",
   differenceDescription: "This translator is grounded in a specific voice instead of generic rewriting or keyword filler.",
-  bestUses: ["Social captions", "Short announcements"],
-  howToUse: ["Paste a draft", "Review the twist"],
-  tips: ["Use clear input", "Keep the key detail"],
+  bestUses: ["Polished social media captions", "Concise public announcements"],
+  howToUse: ["Paste a complete source draft", "Review the transformed result"],
+  tips: ["Use clear and specific input", "Keep every important factual detail"],
   examples: [
     { contextTitle: "One", originalText: "Hello there", transformedText: "Well hello, superstar" },
     { contextTitle: "Two", originalText: "Please reply", transformedText: "Send a reply when you can" },
@@ -40,5 +40,27 @@ describe("editorial generation safety", () => {
     expect(result.valid).toBe(true);
     expect(result.errors).toEqual([]);
     expect(result.duplicateFlags.length).toBeGreaterThanOrEqual(0);
+  });
+
+  it.each([
+    ["REGENERATE_ABOUT", "about"],
+    ["REGENERATE_EXAMPLES", "examples"],
+    ["REGENERATE_FAQ", "faq"],
+    ["REGENERATE_TIPS", "tips"],
+  ] as const)("maps %s to only its requested persisted section", (operation, section) => {
+    const current = { ...complete, about: `${complete.about} Existing.` };
+    const generated = { ...complete, about: `${complete.about} Generated.` };
+    const merged = mergeEditorialDraft(current, generated, operation);
+    expect(merged[section]).toEqual(generated[section]);
+    for (const key of Object.keys(current) as Array<keyof TranslatorEditorialDraft>) {
+      if (key !== section) expect(merged[key]).toEqual(current[key]);
+    }
+  });
+
+  it("rejects a generated success when an expected section remains empty", () => {
+    const result = validateEditorialDraft({ ...complete, faq: [] }, new Set(["faq"]));
+    expect(result.valid).toBe(false);
+    expect(result.missingExpectedSections).toEqual(["faq"]);
+    expect(result.errors).toContain("Generated editorial draft contained no content for the requested missing sections.");
   });
 });

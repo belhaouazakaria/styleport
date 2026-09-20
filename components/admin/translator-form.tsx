@@ -31,7 +31,12 @@ interface FormEditorial {
   bestUses: string[];
   howToUse: string[];
   tips: string[];
-  examples: Array<{ contextTitle: string; originalText: string; transformedText: string; sortOrder: number }>;
+  examples: Array<{
+    contextTitle: string;
+    originalText: string;
+    transformedText: string;
+    sortOrder: number;
+  }>;
   faq: Array<{ question: string; answer: string; sortOrder: number }>;
 }
 
@@ -45,23 +50,81 @@ function EditorialListEditor({
   onChange: (items: string[]) => void;
 }) {
   return (
-    <div className="space-y-2 rounded-xl border border-border p-3">
+    <div className="border-border space-y-2 rounded-xl border p-3">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-medium text-muted-ink">{label}</span>
-        <Button type="button" size="sm" variant="outline" onClick={() => onChange([...items, ""])}>
+        <span className="text-muted-ink text-sm font-medium">{label}</span>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => onChange([...items, ""])}
+        >
           <Plus className="h-3.5 w-3.5" /> Add item
         </Button>
       </div>
-      {items.length ? items.map((item, index) => (
-        <div key={`${label}-${index}`} className="flex items-start gap-2">
-          <textarea value={item} onChange={(event) => onChange(items.map((value, itemIndex) => itemIndex === index ? event.target.value : value))} className="min-h-16 flex-1 rounded-lg border border-border px-3 py-2 text-sm" />
-          <div className="flex flex-col gap-1">
-            <button type="button" aria-label="Move item up" disabled={index === 0} onClick={() => { const next = [...items]; [next[index - 1], next[index]] = [next[index], next[index - 1]]; onChange(next); }} className="rounded border border-border p-1 disabled:opacity-30"><ArrowUp className="h-3 w-3" /></button>
-            <button type="button" aria-label="Move item down" disabled={index === items.length - 1} onClick={() => { const next = [...items]; [next[index], next[index + 1]] = [next[index + 1], next[index]]; onChange(next); }} className="rounded border border-border p-1 disabled:opacity-30"><ArrowDown className="h-3 w-3" /></button>
-            <button type="button" aria-label="Delete item" onClick={() => onChange(items.filter((_, itemIndex) => itemIndex !== index))} className="rounded border border-red-200 p-1 text-red-600"><Trash2 className="h-3 w-3" /></button>
+      {items.length ? (
+        items.map((item, index) => (
+          <div key={`${label}-${index}`} className="flex items-start gap-2">
+            <textarea
+              value={item}
+              onChange={(event) =>
+                onChange(
+                  items.map((value, itemIndex) =>
+                    itemIndex === index ? event.target.value : value,
+                  ),
+                )
+              }
+              className="border-border min-h-16 flex-1 rounded-lg border px-3 py-2 text-sm"
+            />
+            <div className="flex flex-col gap-1">
+              <button
+                type="button"
+                aria-label="Move item up"
+                disabled={index === 0}
+                onClick={() => {
+                  const next = [...items];
+                  [next[index - 1], next[index]] = [
+                    next[index],
+                    next[index - 1],
+                  ];
+                  onChange(next);
+                }}
+                className="border-border rounded border p-1 disabled:opacity-30"
+              >
+                <ArrowUp className="h-3 w-3" />
+              </button>
+              <button
+                type="button"
+                aria-label="Move item down"
+                disabled={index === items.length - 1}
+                onClick={() => {
+                  const next = [...items];
+                  [next[index], next[index + 1]] = [
+                    next[index + 1],
+                    next[index],
+                  ];
+                  onChange(next);
+                }}
+                className="border-border rounded border p-1 disabled:opacity-30"
+              >
+                <ArrowDown className="h-3 w-3" />
+              </button>
+              <button
+                type="button"
+                aria-label="Delete item"
+                onClick={() =>
+                  onChange(items.filter((_, itemIndex) => itemIndex !== index))
+                }
+                className="rounded border border-red-200 p-1 text-red-600"
+              >
+                <Trash2 className="h-3 w-3" />
+              </button>
+            </div>
           </div>
-        </div>
-      )) : <p className="text-xs text-muted-ink">No items yet.</p>}
+        ))
+      ) : (
+        <p className="text-muted-ink text-xs">No items yet.</p>
+      )}
     </div>
   );
 }
@@ -73,15 +136,224 @@ function EditorialExamplesEditor({
   examples: FormEditorial["examples"];
   onChange: (examples: FormEditorial["examples"]) => void;
 }) {
-  return <div className="space-y-3 rounded-xl border border-border p-3">
-    <div className="flex items-center justify-between gap-2"><span className="text-sm font-medium text-muted-ink">Transformation examples</span><Button type="button" size="sm" variant="outline" onClick={() => onChange([...examples, { contextTitle: "", originalText: "", transformedText: "", sortOrder: examples.length + 1 }])}><Plus className="h-3.5 w-3.5" /> Add example</Button></div>
-    {examples.map((example, index) => <div key={`editorial-example-${index}`} className="rounded-lg border border-border bg-muted-surface p-3"><div className="grid gap-2 md:grid-cols-2"><input value={example.contextTitle} onChange={(event) => onChange(examples.map((item, itemIndex) => itemIndex === index ? { ...item, contextTitle: event.target.value } : item))} placeholder="Context or title (optional)" className="h-10 rounded-lg border border-border bg-white px-3 text-sm md:col-span-2" /><textarea value={example.originalText} onChange={(event) => onChange(examples.map((item, itemIndex) => itemIndex === index ? { ...item, originalText: event.target.value } : item))} placeholder="Original text" className="min-h-20 rounded-lg border border-border bg-white px-3 py-2 text-sm" /><textarea value={example.transformedText} onChange={(event) => onChange(examples.map((item, itemIndex) => itemIndex === index ? { ...item, transformedText: event.target.value } : item))} placeholder="Transformed text" className="min-h-20 rounded-lg border border-border bg-white px-3 py-2 text-sm" /></div><div className="mt-2 flex justify-end gap-1"><button type="button" disabled={index === 0} onClick={() => { const next = [...examples]; [next[index - 1], next[index]] = [next[index], next[index - 1]]; onChange(next); }} className="rounded border border-border p-1 disabled:opacity-30"><ArrowUp className="h-3 w-3" /></button><button type="button" disabled={index === examples.length - 1} onClick={() => { const next = [...examples]; [next[index], next[index + 1]] = [next[index + 1], next[index]]; onChange(next); }} className="rounded border border-border p-1 disabled:opacity-30"><ArrowDown className="h-3 w-3" /></button><button type="button" onClick={() => onChange(examples.filter((_, itemIndex) => itemIndex !== index))} className="rounded border border-red-200 p-1 text-red-600"><Trash2 className="h-3 w-3" /></button></div></div>)}
-    {!examples.length ? <p className="text-xs text-muted-ink">No examples yet.</p> : null}
-  </div>;
+  return (
+    <div className="border-border space-y-3 rounded-xl border p-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-muted-ink text-sm font-medium">
+          Transformation examples
+        </span>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() =>
+            onChange([
+              ...examples,
+              {
+                contextTitle: "",
+                originalText: "",
+                transformedText: "",
+                sortOrder: examples.length + 1,
+              },
+            ])
+          }
+        >
+          <Plus className="h-3.5 w-3.5" /> Add example
+        </Button>
+      </div>
+      {examples.map((example, index) => (
+        <div
+          key={`editorial-example-${index}`}
+          className="border-border bg-muted-surface rounded-lg border p-3"
+        >
+          <div className="grid gap-2 md:grid-cols-2">
+            <input
+              value={example.contextTitle}
+              onChange={(event) =>
+                onChange(
+                  examples.map((item, itemIndex) =>
+                    itemIndex === index
+                      ? { ...item, contextTitle: event.target.value }
+                      : item,
+                  ),
+                )
+              }
+              placeholder="Context or title (optional)"
+              className="border-border h-10 rounded-lg border bg-white px-3 text-sm md:col-span-2"
+            />
+            <textarea
+              value={example.originalText}
+              onChange={(event) =>
+                onChange(
+                  examples.map((item, itemIndex) =>
+                    itemIndex === index
+                      ? { ...item, originalText: event.target.value }
+                      : item,
+                  ),
+                )
+              }
+              placeholder="Original text"
+              className="border-border min-h-20 rounded-lg border bg-white px-3 py-2 text-sm"
+            />
+            <textarea
+              value={example.transformedText}
+              onChange={(event) =>
+                onChange(
+                  examples.map((item, itemIndex) =>
+                    itemIndex === index
+                      ? { ...item, transformedText: event.target.value }
+                      : item,
+                  ),
+                )
+              }
+              placeholder="Transformed text"
+              className="border-border min-h-20 rounded-lg border bg-white px-3 py-2 text-sm"
+            />
+          </div>
+          <div className="mt-2 flex justify-end gap-1">
+            <button
+              type="button"
+              disabled={index === 0}
+              onClick={() => {
+                const next = [...examples];
+                [next[index - 1], next[index]] = [next[index], next[index - 1]];
+                onChange(next);
+              }}
+              className="border-border rounded border p-1 disabled:opacity-30"
+            >
+              <ArrowUp className="h-3 w-3" />
+            </button>
+            <button
+              type="button"
+              disabled={index === examples.length - 1}
+              onClick={() => {
+                const next = [...examples];
+                [next[index], next[index + 1]] = [next[index + 1], next[index]];
+                onChange(next);
+              }}
+              className="border-border rounded border p-1 disabled:opacity-30"
+            >
+              <ArrowDown className="h-3 w-3" />
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                onChange(examples.filter((_, itemIndex) => itemIndex !== index))
+              }
+              className="rounded border border-red-200 p-1 text-red-600"
+            >
+              <Trash2 className="h-3 w-3" />
+            </button>
+          </div>
+        </div>
+      ))}
+      {!examples.length ? (
+        <p className="text-muted-ink text-xs">No examples yet.</p>
+      ) : null}
+    </div>
+  );
 }
 
-function EditorialFaqEditor({ faq, onChange }: { faq: FormEditorial["faq"]; onChange: (faq: FormEditorial["faq"]) => void }) {
-  return <div className="space-y-3 rounded-xl border border-border p-3"><div className="flex items-center justify-between gap-2"><span className="text-sm font-medium text-muted-ink">FAQ</span><Button type="button" size="sm" variant="outline" onClick={() => onChange([...faq, { question: "", answer: "", sortOrder: faq.length + 1 }])}><Plus className="h-3.5 w-3.5" /> Add FAQ</Button></div>{faq.map((item, index) => <div key={`editorial-faq-${index}`} className="rounded-lg border border-border bg-muted-surface p-3"><input value={item.question} onChange={(event) => onChange(faq.map((faqItem, itemIndex) => itemIndex === index ? { ...faqItem, question: event.target.value } : faqItem))} placeholder="Question" className="h-10 w-full rounded-lg border border-border bg-white px-3 text-sm" /><textarea value={item.answer} onChange={(event) => onChange(faq.map((faqItem, itemIndex) => itemIndex === index ? { ...faqItem, answer: event.target.value } : faqItem))} placeholder="Answer" className="mt-2 min-h-20 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm" /><div className="mt-2 flex justify-end gap-1"><button type="button" disabled={index === 0} onClick={() => { const next = [...faq]; [next[index - 1], next[index]] = [next[index], next[index - 1]]; onChange(next); }} className="rounded border border-border p-1 disabled:opacity-30"><ArrowUp className="h-3 w-3" /></button><button type="button" disabled={index === faq.length - 1} onClick={() => { const next = [...faq]; [next[index], next[index + 1]] = [next[index + 1], next[index]]; onChange(next); }} className="rounded border border-border p-1 disabled:opacity-30"><ArrowDown className="h-3 w-3" /></button><button type="button" onClick={() => onChange(faq.filter((_, itemIndex) => itemIndex !== index))} className="rounded border border-red-200 p-1 text-red-600"><Trash2 className="h-3 w-3" /></button></div></div>)}{!faq.length ? <p className="text-xs text-muted-ink">No FAQs yet.</p> : null}</div>;
+function EditorialFaqEditor({
+  faq,
+  onChange,
+}: {
+  faq: FormEditorial["faq"];
+  onChange: (faq: FormEditorial["faq"]) => void;
+}) {
+  return (
+    <div className="border-border space-y-3 rounded-xl border p-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-muted-ink text-sm font-medium">FAQ</span>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() =>
+            onChange([
+              ...faq,
+              { question: "", answer: "", sortOrder: faq.length + 1 },
+            ])
+          }
+        >
+          <Plus className="h-3.5 w-3.5" /> Add FAQ
+        </Button>
+      </div>
+      {faq.map((item, index) => (
+        <div
+          key={`editorial-faq-${index}`}
+          className="border-border bg-muted-surface rounded-lg border p-3"
+        >
+          <input
+            value={item.question}
+            onChange={(event) =>
+              onChange(
+                faq.map((faqItem, itemIndex) =>
+                  itemIndex === index
+                    ? { ...faqItem, question: event.target.value }
+                    : faqItem,
+                ),
+              )
+            }
+            placeholder="Question"
+            className="border-border h-10 w-full rounded-lg border bg-white px-3 text-sm"
+          />
+          <textarea
+            value={item.answer}
+            onChange={(event) =>
+              onChange(
+                faq.map((faqItem, itemIndex) =>
+                  itemIndex === index
+                    ? { ...faqItem, answer: event.target.value }
+                    : faqItem,
+                ),
+              )
+            }
+            placeholder="Answer"
+            className="border-border mt-2 min-h-20 w-full rounded-lg border bg-white px-3 py-2 text-sm"
+          />
+          <div className="mt-2 flex justify-end gap-1">
+            <button
+              type="button"
+              disabled={index === 0}
+              onClick={() => {
+                const next = [...faq];
+                [next[index - 1], next[index]] = [next[index], next[index - 1]];
+                onChange(next);
+              }}
+              className="border-border rounded border p-1 disabled:opacity-30"
+            >
+              <ArrowUp className="h-3 w-3" />
+            </button>
+            <button
+              type="button"
+              disabled={index === faq.length - 1}
+              onClick={() => {
+                const next = [...faq];
+                [next[index], next[index + 1]] = [next[index + 1], next[index]];
+                onChange(next);
+              }}
+              className="border-border rounded border p-1 disabled:opacity-30"
+            >
+              <ArrowDown className="h-3 w-3" />
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                onChange(faq.filter((_, itemIndex) => itemIndex !== index))
+              }
+              className="rounded border border-red-200 p-1 text-red-600"
+            >
+              <Trash2 className="h-3 w-3" />
+            </button>
+          </div>
+        </div>
+      ))}
+      {!faq.length ? (
+        <p className="text-muted-ink text-xs">No FAQs yet.</p>
+      ) : null}
+    </div>
+  );
 }
 
 interface TranslatorFormInitial {
@@ -127,7 +399,12 @@ interface TranslatorFormProps {
 
 function createDefaultState(): Omit<
   TranslatorFormInitial,
-  "id" | "archivedAt" | "featuredRank" | "featuredSource" | "shareImagePath" | "shareImageUpdatedAt"
+  | "id"
+  | "archivedAt"
+  | "featuredRank"
+  | "featuredSource"
+  | "shareImagePath"
+  | "shareImageUpdatedAt"
 > {
   return {
     name: "",
@@ -139,7 +416,8 @@ function createDefaultState(): Omit<
     targetLabel: "Output",
     iconName: "",
     promptSystem: "You are an expert stylistic translator.",
-    promptInstructions: "Preserve meaning while rewriting for the requested style.",
+    promptInstructions:
+      "Preserve meaning while rewriting for the requested style.",
     seoTitle: "",
     seoDescription: "",
     modelOverride: "",
@@ -194,11 +472,17 @@ export function TranslatorForm({
 
   const [slugTouched, setSlugTouched] = useState(Boolean(initial?.slug));
   const [busy, setBusy] = useState(false);
-  const [generatedEditorial, setGeneratedEditorial] = useState<Partial<FormEditorial> | null>(null);
+  const [generatedEditorial, setGeneratedEditorial] =
+    useState<Partial<FormEditorial> | null>(null);
+  const [generatedDraftId, setGeneratedDraftId] = useState<string | null>(null);
   const [generatedSection, setGeneratedSection] = useState<string | null>(null);
-  const [generatingSection, setGeneratingSection] = useState<string | null>(null);
+  const [generatingSection, setGeneratingSection] = useState<string | null>(
+    null,
+  );
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [shareImagePath, setShareImagePath] = useState<string | null>(initial?.shareImagePath || null);
+  const [shareImagePath, setShareImagePath] = useState<string | null>(
+    initial?.shareImagePath || null,
+  );
   const [shareImageUpdatedAt, setShareImageUpdatedAt] = useState<string | null>(
     initial?.shareImageUpdatedAt || null,
   );
@@ -231,7 +515,8 @@ export function TranslatorForm({
     targetLabel: initial?.targetLabel ?? defaults.targetLabel,
     iconName: initial?.iconName ?? defaults.iconName,
     promptSystem: initial?.promptSystem ?? defaults.promptSystem,
-    promptInstructions: initial?.promptInstructions ?? defaults.promptInstructions,
+    promptInstructions:
+      initial?.promptInstructions ?? defaults.promptInstructions,
     seoTitle: initial?.seoTitle ?? defaults.seoTitle,
     seoDescription: initial?.seoDescription ?? defaults.seoDescription,
     modelOverride: initial?.modelOverride ?? defaults.modelOverride,
@@ -242,13 +527,18 @@ export function TranslatorForm({
     showExamples: initial?.showExamples ?? defaults.showExamples,
     sortOrder: initial?.sortOrder ?? defaults.sortOrder,
     primaryCategoryId: initial?.primaryCategoryId ?? defaults.primaryCategoryId,
-    categoryIds: initial?.categoryIds?.length ? initial.categoryIds : defaults.categoryIds,
+    categoryIds: initial?.categoryIds?.length
+      ? initial.categoryIds
+      : defaults.categoryIds,
     modes: initial?.modes?.length ? initial.modes : defaults.modes,
     examples: initial?.examples?.length ? initial.examples : defaults.examples,
     editorial: initial?.editorial ?? defaults.editorial,
   });
 
-  function setField<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
+  function setField<K extends keyof typeof form>(
+    key: K,
+    value: (typeof form)[K],
+  ) {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
@@ -280,7 +570,8 @@ export function TranslatorForm({
         ...current,
         categoryIds: nextIds,
         primaryCategoryId:
-          current.primaryCategoryId && nextIds.includes(current.primaryCategoryId)
+          current.primaryCategoryId &&
+          nextIds.includes(current.primaryCategoryId)
             ? current.primaryCategoryId
             : nextIds[0] || null,
       };
@@ -294,14 +585,18 @@ export function TranslatorForm({
       ...candidate,
       slug: slugify(candidate.slug || candidate.name),
       modes: candidate.modes
-        .filter((modeItem) => modeItem.label.trim() && modeItem.instruction.trim())
+        .filter(
+          (modeItem) => modeItem.label.trim() && modeItem.instruction.trim(),
+        )
         .map((modeItem, index) => ({
           ...modeItem,
           key: slugify(modeItem.key || modeItem.label),
           sortOrder: Number(modeItem.sortOrder) || index + 1,
         })),
       examples: candidate.examples
-        .filter((exampleItem) => exampleItem.label.trim() && exampleItem.value.trim())
+        .filter(
+          (exampleItem) => exampleItem.label.trim() && exampleItem.value.trim(),
+        )
         .map((exampleItem, index) => ({
           ...exampleItem,
           sortOrder: Number(exampleItem.sortOrder) || index + 1,
@@ -311,18 +606,37 @@ export function TranslatorForm({
         whatItDoes: candidate.editorial.whatItDoes,
         differenceDescription: candidate.editorial.differenceDescription,
         lists: [
-          ...candidate.editorial.bestUses.map((content, index) => ({ kind: "BEST_USE", content, sortOrder: index + 1 })),
-          ...candidate.editorial.howToUse.map((content, index) => ({ kind: "HOW_TO_USE", content, sortOrder: index + 1 })),
-          ...candidate.editorial.tips.map((content, index) => ({ kind: "TIP", content, sortOrder: index + 1 })),
+          ...candidate.editorial.bestUses.map((content, index) => ({
+            kind: "BEST_USE",
+            content,
+            sortOrder: index + 1,
+          })),
+          ...candidate.editorial.howToUse.map((content, index) => ({
+            kind: "HOW_TO_USE",
+            content,
+            sortOrder: index + 1,
+          })),
+          ...candidate.editorial.tips.map((content, index) => ({
+            kind: "TIP",
+            content,
+            sortOrder: index + 1,
+          })),
         ].filter((item) => item.content.trim()),
-        examples: candidate.editorial.examples.filter((item) => item.originalText.trim() && item.transformedText.trim()),
-        faq: candidate.editorial.faq.filter((item) => item.question.trim() && item.answer.trim()),
+        examples: candidate.editorial.examples.filter(
+          (item) => item.originalText.trim() && item.transformedText.trim(),
+        ),
+        faq: candidate.editorial.faq.filter(
+          (item) => item.question.trim() && item.answer.trim(),
+        ),
       },
       sortOrder: Number(candidate.sortOrder) || 0,
       primaryCategoryId: candidate.primaryCategoryId || null,
     };
 
-    const endpoint = mode === "create" ? "/api/admin/translators" : `/api/admin/translators/${initial?.id}`;
+    const endpoint =
+      mode === "create"
+        ? "/api/admin/translators"
+        : `/api/admin/translators/${initial?.id}`;
     const method = mode === "create" ? "POST" : "PATCH";
 
     const response = await fetch(endpoint, {
@@ -337,13 +651,17 @@ export function TranslatorForm({
     if (!response.ok || !result.ok) {
       toast({
         title: "Save failed",
-        description: result?.error?.message || "Please review form values and try again.",
+        description:
+          result?.error?.message || "Please review form values and try again.",
         variant: "error",
       });
       return;
     }
 
-    toast({ title: "Translator saved", description: "Changes are now live in your dashboard." });
+    toast({
+      title: "Translator saved",
+      description: "Changes are now live in your dashboard.",
+    });
 
     if (mode === "create") {
       router.push(`/admin/translators/${result.translator.id}`);
@@ -356,14 +674,21 @@ export function TranslatorForm({
     if (!initial?.id) return;
 
     setBusy(true);
-    const response = await fetch(`/api/admin/translators/${initial.id}/duplicate`, {
-      method: "POST",
-    });
+    const response = await fetch(
+      `/api/admin/translators/${initial.id}/duplicate`,
+      {
+        method: "POST",
+      },
+    );
     const result = await response.json();
     setBusy(false);
 
     if (!response.ok || !result.ok) {
-      toast({ title: "Duplicate failed", description: "Please try again.", variant: "error" });
+      toast({
+        title: "Duplicate failed",
+        description: "Please try again.",
+        variant: "error",
+      });
       return;
     }
 
@@ -375,14 +700,21 @@ export function TranslatorForm({
     if (!initial?.id) return;
 
     setBusy(true);
-    const response = await fetch(`/api/admin/translators/${initial.id}?mode=hard`, {
-      method: "DELETE",
-    });
+    const response = await fetch(
+      `/api/admin/translators/${initial.id}?mode=hard`,
+      {
+        method: "DELETE",
+      },
+    );
     const result = await response.json();
     setBusy(false);
 
     if (!response.ok || !result.ok) {
-      toast({ title: "Delete failed", description: "Please try again.", variant: "error" });
+      toast({
+        title: "Delete failed",
+        description: "Please try again.",
+        variant: "error",
+      });
       return;
     }
 
@@ -395,18 +727,27 @@ export function TranslatorForm({
 
     const modeValue = initial.archivedAt ? "unarchive" : "archive";
     setBusy(true);
-    const response = await fetch(`/api/admin/translators/${initial.id}?mode=${modeValue}`, {
-      method: "DELETE",
-    });
+    const response = await fetch(
+      `/api/admin/translators/${initial.id}?mode=${modeValue}`,
+      {
+        method: "DELETE",
+      },
+    );
     const result = await response.json();
     setBusy(false);
 
     if (!response.ok || !result.ok) {
-      toast({ title: "Action failed", description: "Please try again.", variant: "error" });
+      toast({
+        title: "Action failed",
+        description: "Please try again.",
+        variant: "error",
+      });
       return;
     }
 
-    toast({ title: initial.archivedAt ? "Translator restored" : "Translator archived" });
+    toast({
+      title: initial.archivedAt ? "Translator restored" : "Translator archived",
+    });
     router.refresh();
   }
 
@@ -414,22 +755,30 @@ export function TranslatorForm({
     if (!initial?.id) return;
 
     setBusy(true);
-    const response = await fetch(`/api/admin/translators/${initial.id}/regenerate-share-image`, {
-      method: "POST",
-    });
+    const response = await fetch(
+      `/api/admin/translators/${initial.id}/regenerate-share-image`,
+      {
+        method: "POST",
+      },
+    );
     const result = await response.json();
     setBusy(false);
 
     if (!response.ok || !result.ok) {
       toast({
         title: "Regeneration failed",
-        description: result?.error?.message || "Unable to regenerate share image.",
+        description:
+          result?.error?.message || "Unable to regenerate share image.",
         variant: "error",
       });
       return;
     }
 
-    if (!result.shareImagePath || !result.shareImageUrl || !result.shareImageUpdatedAt) {
+    if (
+      !result.shareImagePath ||
+      !result.shareImageUrl ||
+      !result.shareImageUpdatedAt
+    ) {
       toast({
         title: "Regeneration failed",
         description: "Share image generation did not return a usable image.",
@@ -448,81 +797,404 @@ export function TranslatorForm({
   }
 
   function setGeneratedValue(section: string, value: unknown) {
-    setGeneratedEditorial((current) => ({ ...(current || {}), [section]: value }));
+    setGeneratedEditorial((current) => ({
+      ...(current || {}),
+      [section]: value,
+    }));
   }
 
   async function generateEditorial(section: string) {
     if (!initial?.id) return;
     setGeneratingSection(section);
     setBusy(true);
-    const response = await fetch(`/api/admin/translators/${initial.id}/editorial`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ section }),
-    });
+    const response = await fetch(
+      `/api/admin/translators/${initial.id}/editorial`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ section }),
+      },
+    );
     const result = await response.json();
     setBusy(false);
     setGeneratingSection(null);
     if (!response.ok || !result.ok) {
-      toast({ title: "Editorial generation failed", description: result?.error?.message || "Please try again.", variant: "error" });
+      toast({
+        title: "Editorial generation failed",
+        description: result?.error?.message || "Please try again.",
+        variant: "error",
+      });
       return;
     }
-    const value = section === "full" ? result.editorial : result.value;
+    const value = result.editorial;
+    setGeneratedDraftId(result.draftId);
     setGeneratedSection(section);
-    if (section === "full") {
-      setGeneratedEditorial({
-        about: value.about,
-        whatItDoes: value.whatItDoes,
-        differenceDescription: value.differenceDescription,
-        bestUses: value.bestUses,
-        howToUse: value.howToUse,
-        tips: value.tips,
-        examples: value.examples.map((item: { contextTitle?: string; originalText: string; transformedText: string }, index: number) => ({ ...item, contextTitle: item.contextTitle || "", sortOrder: index + 1 })),
-        faq: value.faq.map((item: { question: string; answer: string }, index: number) => ({ ...item, sortOrder: index + 1 })),
-      });
-    } else if (["examples", "faq"].includes(section)) {
-      setGeneratedValue(section, value.map((item: Record<string, string>, index: number) => ({ ...item, contextTitle: item.contextTitle || "", sortOrder: index + 1 })));
-    } else if (["bestUses", "howToUse", "tips"].includes(section)) {
-      setGeneratedValue(section, value);
-    } else {
-      setGeneratedValue(section, value);
-    }
-    toast({ title: "Draft generated", description: "Review, edit, then approve and publish it." });
+    setGeneratedEditorial({
+      about: value.about,
+      whatItDoes: value.whatItDoes,
+      differenceDescription: value.differenceDescription,
+      bestUses: value.bestUses,
+      howToUse: value.howToUse,
+      tips: value.tips,
+      examples: value.examples.map(
+        (
+          item: {
+            contextTitle?: string;
+            originalText: string;
+            transformedText: string;
+          },
+          index: number,
+        ) => ({
+          ...item,
+          contextTitle: item.contextTitle || "",
+          sortOrder: index + 1,
+        }),
+      ),
+      faq: value.faq.map(
+        (item: { question: string; answer: string }, index: number) => ({
+          ...item,
+          sortOrder: index + 1,
+        }),
+      ),
+    });
+    toast({
+      title: "Draft persisted",
+      description:
+        "It is safely stored in the review queue until you approve and publish it.",
+    });
   }
 
   async function approveGenerated() {
-    if (!generatedEditorial) return;
-    const nextForm = { ...form, editorial: { ...form.editorial, ...generatedEditorial } };
-    setForm(nextForm);
-    await submit(nextForm);
+    if (!generatedEditorial || !generatedDraftId) return;
+    setBusy(true);
+    const draftPayload = { ...form.editorial, ...generatedEditorial };
+    for (const body of [
+      { action: "save", draft: draftPayload },
+      { action: "approve" },
+      { action: "publish" },
+    ]) {
+      const response = await fetch(
+        `/api/admin/translators/review/${generatedDraftId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        },
+      );
+      const result = await response.json();
+      if (!response.ok || !result.ok) {
+        setBusy(false);
+        toast({
+          title: "Draft publish failed",
+          description:
+            result?.error?.message ||
+            "The persisted draft remains in the review queue.",
+          variant: "error",
+        });
+        return;
+      }
+    }
+    setForm((current) => ({
+      ...current,
+      editorial: draftPayload as FormEditorial,
+    }));
+    setBusy(false);
     setGeneratedEditorial(null);
+    setGeneratedDraftId(null);
+    setGeneratedSection(null);
+    toast({
+      title: "Editorial content published",
+      description: "The reviewed draft is now live.",
+    });
+    router.refresh();
+  }
+
+  async function discardGenerated() {
+    if (generatedDraftId) {
+      await fetch(`/api/admin/translators/review/${generatedDraftId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "discard" }),
+      });
+    }
+    setGeneratedEditorial(null);
+    setGeneratedDraftId(null);
     setGeneratedSection(null);
   }
 
   return (
     <div className="space-y-6">
-      <section className="rounded-2xl border border-border bg-white p-6">
+      <section className="border-border rounded-2xl border bg-white p-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="font-display text-2xl font-semibold text-ink">Editorial Content</h2>
-            <p className="mt-1 text-sm text-muted-ink">Edit published copy below. AI drafts stay separate until you approve them.</p>
+            <h2 className="font-display text-ink text-2xl font-semibold">
+              Editorial Content
+            </h2>
+            <p className="text-muted-ink mt-1 text-sm">
+              Edit published copy below. AI drafts stay separate until you
+              approve them.
+            </p>
           </div>
-          {mode === "edit" ? <Button type="button" variant="outline" onClick={() => void generateEditorial("full")} disabled={busy}><Copy className="h-3.5 w-3.5" />{generatingSection === "full" ? "Generating..." : "Regenerate full pack"}</Button> : null}
+          {mode === "edit" ? (
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void generateEditorial("missing")}
+                disabled={busy}
+              >
+                {generatingSection === "missing"
+                  ? "Generating..."
+                  : "Generate missing"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void generateEditorial("full")}
+                disabled={busy}
+              >
+                <Copy className="h-3.5 w-3.5" />
+                {generatingSection === "full"
+                  ? "Generating..."
+                  : "Regenerate full pack"}
+              </Button>
+            </div>
+          ) : null}
         </div>
         <div className="mt-4 space-y-3">
-          {(["about", "whatItDoes", "differenceDescription"] as const).map((key) => <details key={key} open className="rounded-xl border border-border p-4"><summary className="flex cursor-pointer list-none items-center justify-between gap-3 font-medium text-ink"><span>{key === "about" ? "About this translator" : key === "whatItDoes" ? "What it does" : "What makes this twist different"}</span>{mode === "edit" ? <Button type="button" size="sm" variant="outline" onClick={(event) => { event.preventDefault(); void generateEditorial(key); }} disabled={busy}>{generatingSection === key ? "Generating..." : "Regenerate"}</Button> : null}</summary><textarea value={form.editorial[key]} onChange={(event) => setField("editorial", { ...form.editorial, [key]: event.target.value })} className="mt-3 min-h-24 w-full rounded-xl border border-border px-3 py-2 text-sm" /></details>)}
-          {(["bestUses", "howToUse", "tips"] as const).map((key) => <details key={key} className="rounded-xl border border-border p-4"><summary className="flex cursor-pointer list-none items-center justify-between gap-3 font-medium text-ink"><span>{key === "bestUses" ? "Best uses" : key === "howToUse" ? "How to use" : "Tips for better results"}</span>{mode === "edit" ? <Button type="button" size="sm" variant="outline" onClick={(event) => { event.preventDefault(); void generateEditorial(key); }} disabled={busy}>{generatingSection === key ? "Generating..." : "Regenerate"}</Button> : null}</summary><div className="mt-3"><EditorialListEditor label="Items" items={form.editorial[key]} onChange={(items) => setField("editorial", { ...form.editorial, [key]: items })} /></div></details>)}
-          <details className="rounded-xl border border-border p-4"><summary className="flex cursor-pointer list-none items-center justify-between gap-3 font-medium text-ink"><span>Transformation examples</span>{mode === "edit" ? <Button type="button" size="sm" variant="outline" onClick={(event) => { event.preventDefault(); void generateEditorial("examples"); }} disabled={busy}>{generatingSection === "examples" ? "Generating..." : "Regenerate"}</Button> : null}</summary><div className="mt-3"><EditorialExamplesEditor examples={form.editorial.examples} onChange={(examples) => setField("editorial", { ...form.editorial, examples })} /></div></details>
-          <details className="rounded-xl border border-border p-4"><summary className="flex cursor-pointer list-none items-center justify-between gap-3 font-medium text-ink"><span>FAQ</span>{mode === "edit" ? <Button type="button" size="sm" variant="outline" onClick={(event) => { event.preventDefault(); void generateEditorial("faq"); }} disabled={busy}>{generatingSection === "faq" ? "Generating..." : "Regenerate"}</Button> : null}</summary><div className="mt-3"><EditorialFaqEditor faq={form.editorial.faq} onChange={(faq) => setField("editorial", { ...form.editorial, faq })} /></div></details>
+          {(["about", "whatItDoes", "differenceDescription"] as const).map(
+            (key) => (
+              <details
+                key={key}
+                open
+                className="border-border rounded-xl border p-4"
+              >
+                <summary className="text-ink flex cursor-pointer list-none items-center justify-between gap-3 font-medium">
+                  <span>
+                    {key === "about"
+                      ? "About this translator"
+                      : key === "whatItDoes"
+                        ? "What it does"
+                        : "What makes this twist different"}
+                  </span>
+                  {mode === "edit" ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        void generateEditorial(key);
+                      }}
+                      disabled={busy}
+                    >
+                      {generatingSection === key
+                        ? "Generating..."
+                        : "Regenerate"}
+                    </Button>
+                  ) : null}
+                </summary>
+                <textarea
+                  value={form.editorial[key]}
+                  onChange={(event) =>
+                    setField("editorial", {
+                      ...form.editorial,
+                      [key]: event.target.value,
+                    })
+                  }
+                  className="border-border mt-3 min-h-24 w-full rounded-xl border px-3 py-2 text-sm"
+                />
+              </details>
+            ),
+          )}
+          {(["bestUses", "howToUse", "tips"] as const).map((key) => (
+            <details key={key} className="border-border rounded-xl border p-4">
+              <summary className="text-ink flex cursor-pointer list-none items-center justify-between gap-3 font-medium">
+                <span>
+                  {key === "bestUses"
+                    ? "Best uses"
+                    : key === "howToUse"
+                      ? "How to use"
+                      : "Tips for better results"}
+                </span>
+                {mode === "edit" ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      void generateEditorial(key);
+                    }}
+                    disabled={busy}
+                  >
+                    {generatingSection === key ? "Generating..." : "Regenerate"}
+                  </Button>
+                ) : null}
+              </summary>
+              <div className="mt-3">
+                <EditorialListEditor
+                  label="Items"
+                  items={form.editorial[key]}
+                  onChange={(items) =>
+                    setField("editorial", { ...form.editorial, [key]: items })
+                  }
+                />
+              </div>
+            </details>
+          ))}
+          <details className="border-border rounded-xl border p-4">
+            <summary className="text-ink flex cursor-pointer list-none items-center justify-between gap-3 font-medium">
+              <span>Transformation examples</span>
+              {mode === "edit" ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    void generateEditorial("examples");
+                  }}
+                  disabled={busy}
+                >
+                  {generatingSection === "examples"
+                    ? "Generating..."
+                    : "Regenerate"}
+                </Button>
+              ) : null}
+            </summary>
+            <div className="mt-3">
+              <EditorialExamplesEditor
+                examples={form.editorial.examples}
+                onChange={(examples) =>
+                  setField("editorial", { ...form.editorial, examples })
+                }
+              />
+            </div>
+          </details>
+          <details className="border-border rounded-xl border p-4">
+            <summary className="text-ink flex cursor-pointer list-none items-center justify-between gap-3 font-medium">
+              <span>FAQ</span>
+              {mode === "edit" ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    void generateEditorial("faq");
+                  }}
+                  disabled={busy}
+                >
+                  {generatingSection === "faq" ? "Generating..." : "Regenerate"}
+                </Button>
+              ) : null}
+            </summary>
+            <div className="mt-3">
+              <EditorialFaqEditor
+                faq={form.editorial.faq}
+                onChange={(faq) =>
+                  setField("editorial", { ...form.editorial, faq })
+                }
+              />
+            </div>
+          </details>
         </div>
-        {generatedEditorial ? <div className="mt-5 rounded-2xl border-2 border-brand-200 bg-brand-50 p-4"><div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand-700">Generated draft{generatedSection ? ` · ${generatedSection}` : ""}</p><p className="mt-1 text-sm text-muted-ink">This is not published yet. Review and edit it, then approve when ready.</p></div><div className="flex gap-2"><Button type="button" size="sm" variant="outline" onClick={() => { setGeneratedEditorial(null); setGeneratedSection(null); }}>Discard</Button><Button type="button" size="sm" onClick={() => void approveGenerated()} disabled={busy}>Approve & publish</Button></div></div><div className="mt-4 space-y-3">{(["about", "whatItDoes", "differenceDescription"] as const).filter((key) => generatedEditorial[key] !== undefined).map((key) => <label key={key} className="block text-sm"><span className="font-medium text-ink">{key === "about" ? "About" : key === "whatItDoes" ? "What it does" : "Difference"}</span><textarea value={generatedEditorial[key] as string} onChange={(event) => setGeneratedValue(key, event.target.value)} className="mt-1 min-h-20 w-full rounded-lg border border-brand-200 bg-white px-3 py-2" /></label>)}{(["bestUses", "howToUse", "tips"] as const).filter((key) => generatedEditorial[key] !== undefined).map((key) => <EditorialListEditor key={key} label={key === "bestUses" ? "Best uses" : key === "howToUse" ? "How to use" : "Tips"} items={generatedEditorial[key] as string[]} onChange={(items) => setGeneratedValue(key, items)} />)}{generatedEditorial.examples ? <EditorialExamplesEditor examples={generatedEditorial.examples} onChange={(examples) => setGeneratedValue("examples", examples)} /> : null}{generatedEditorial.faq ? <EditorialFaqEditor faq={generatedEditorial.faq} onChange={(faq) => setGeneratedValue("faq", faq)} /> : null}</div></div> : null}
+        {generatedEditorial ? (
+          <div className="border-brand-200 bg-brand-50 mt-5 rounded-2xl border-2 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-brand-700 text-xs font-semibold tracking-[0.14em] uppercase">
+                  Persisted draft
+                  {generatedSection ? ` · ${generatedSection}` : ""}
+                </p>
+                <p className="text-muted-ink mt-1 text-sm">
+                  Stored in the review queue. Review and edit it, then approve
+                  when ready.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void discardGenerated()}
+                >
+                  Discard
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => void approveGenerated()}
+                  disabled={busy}
+                >
+                  Approve & publish
+                </Button>
+              </div>
+            </div>
+            <div className="mt-4 space-y-3">
+              {(["about", "whatItDoes", "differenceDescription"] as const)
+                .filter((key) => generatedEditorial[key] !== undefined)
+                .map((key) => (
+                  <label key={key} className="block text-sm">
+                    <span className="text-ink font-medium">
+                      {key === "about"
+                        ? "About"
+                        : key === "whatItDoes"
+                          ? "What it does"
+                          : "Difference"}
+                    </span>
+                    <textarea
+                      value={generatedEditorial[key] as string}
+                      onChange={(event) =>
+                        setGeneratedValue(key, event.target.value)
+                      }
+                      className="border-brand-200 mt-1 min-h-20 w-full rounded-lg border bg-white px-3 py-2"
+                    />
+                  </label>
+                ))}
+              {(["bestUses", "howToUse", "tips"] as const)
+                .filter((key) => generatedEditorial[key] !== undefined)
+                .map((key) => (
+                  <EditorialListEditor
+                    key={key}
+                    label={
+                      key === "bestUses"
+                        ? "Best uses"
+                        : key === "howToUse"
+                          ? "How to use"
+                          : "Tips"
+                    }
+                    items={generatedEditorial[key] as string[]}
+                    onChange={(items) => setGeneratedValue(key, items)}
+                  />
+                ))}
+              {generatedEditorial.examples ? (
+                <EditorialExamplesEditor
+                  examples={generatedEditorial.examples}
+                  onChange={(examples) =>
+                    setGeneratedValue("examples", examples)
+                  }
+                />
+              ) : null}
+              {generatedEditorial.faq ? (
+                <EditorialFaqEditor
+                  faq={generatedEditorial.faq}
+                  onChange={(faq) => setGeneratedValue("faq", faq)}
+                />
+              ) : null}
+            </div>
+          </div>
+        ) : null}
       </section>
 
-      <section className="rounded-2xl border border-border bg-white p-6">
-        <h2 className="font-display text-2xl font-semibold text-ink">Basic Info</h2>
+      <section className="border-border rounded-2xl border bg-white p-6">
+        <h2 className="font-display text-ink text-2xl font-semibold">
+          Basic Info
+        </h2>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           <label className="space-y-1 text-sm">
-            <span className="font-medium text-muted-ink">Name</span>
+            <span className="text-muted-ink font-medium">Name</span>
             <input
               value={form.name}
               onChange={(event) => {
@@ -532,87 +1204,99 @@ export function TranslatorForm({
                   setField("slug", slugify(value));
                 }
               }}
-              className="h-11 w-full rounded-xl border border-border px-3"
+              className="border-border h-11 w-full rounded-xl border px-3"
             />
           </label>
           <label className="space-y-1 text-sm">
-            <span className="font-medium text-muted-ink">Slug</span>
+            <span className="text-muted-ink font-medium">Slug</span>
             <input
               value={form.slug}
               onChange={(event) => {
                 setSlugTouched(true);
                 setField("slug", slugify(event.target.value));
               }}
-              className="h-11 w-full rounded-xl border border-border px-3"
+              className="border-border h-11 w-full rounded-xl border px-3"
             />
           </label>
           <label className="space-y-1 text-sm md:col-span-2">
-            <span className="font-medium text-muted-ink">Public Title</span>
+            <span className="text-muted-ink font-medium">Public Title</span>
             <input
               value={form.title}
               onChange={(event) => setField("title", event.target.value)}
-              className="h-11 w-full rounded-xl border border-border px-3"
+              className="border-border h-11 w-full rounded-xl border px-3"
             />
           </label>
           <label className="space-y-1 text-sm md:col-span-2">
-            <span className="font-medium text-muted-ink">Public Subtitle</span>
+            <span className="text-muted-ink font-medium">Public Subtitle</span>
             <textarea
               value={form.subtitle}
               onChange={(event) => setField("subtitle", event.target.value)}
-              className="min-h-20 w-full rounded-xl border border-border px-3 py-2"
+              className="border-border min-h-20 w-full rounded-xl border px-3 py-2"
             />
           </label>
           <label className="space-y-1 text-sm md:col-span-2">
-            <span className="font-medium text-muted-ink">Short Description</span>
+            <span className="text-muted-ink font-medium">
+              Short Description
+            </span>
             <textarea
               value={form.shortDescription}
-              onChange={(event) => setField("shortDescription", event.target.value)}
-              className="min-h-20 w-full rounded-xl border border-border px-3 py-2"
+              onChange={(event) =>
+                setField("shortDescription", event.target.value)
+              }
+              className="border-border min-h-20 w-full rounded-xl border px-3 py-2"
             />
           </label>
         </div>
       </section>
 
-      <section className="rounded-2xl border border-border bg-white p-6">
-        <h2 className="font-display text-2xl font-semibold text-ink">Categories & Labels</h2>
+      <section className="border-border rounded-2xl border bg-white p-6">
+        <h2 className="font-display text-ink text-2xl font-semibold">
+          Categories & Labels
+        </h2>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           <label className="space-y-1 text-sm">
-            <span className="font-medium text-muted-ink">Source Label</span>
+            <span className="text-muted-ink font-medium">Source Label</span>
             <input
               value={form.sourceLabel}
               onChange={(event) => setField("sourceLabel", event.target.value)}
-              className="h-11 w-full rounded-xl border border-border px-3"
+              className="border-border h-11 w-full rounded-xl border px-3"
             />
           </label>
           <label className="space-y-1 text-sm">
-            <span className="font-medium text-muted-ink">Target Label</span>
+            <span className="text-muted-ink font-medium">Target Label</span>
             <input
               value={form.targetLabel}
               onChange={(event) => setField("targetLabel", event.target.value)}
-              className="h-11 w-full rounded-xl border border-border px-3"
+              className="border-border h-11 w-full rounded-xl border px-3"
             />
           </label>
           <label className="space-y-1 text-sm md:col-span-2">
-            <span className="font-medium text-muted-ink">Icon Key (optional)</span>
+            <span className="text-muted-ink font-medium">
+              Icon Key (optional)
+            </span>
             <input
               value={form.iconName || ""}
               onChange={(event) => setField("iconName", event.target.value)}
-              className="h-11 w-full rounded-xl border border-border px-3"
+              className="border-border h-11 w-full rounded-xl border px-3"
             />
           </label>
 
-          <div className="space-y-2 rounded-xl border border-border p-3 md:col-span-2">
-            <p className="text-sm font-medium text-muted-ink">Category Assignment</p>
+          <div className="border-border space-y-2 rounded-xl border p-3 md:col-span-2">
+            <p className="text-muted-ink text-sm font-medium">
+              Category Assignment
+            </p>
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {categories.map((category) => (
                 <label
                   key={category.id}
-                  className="flex items-center gap-2 rounded-lg border border-border bg-muted-surface px-3 py-2 text-sm"
+                  className="border-border bg-muted-surface flex items-center gap-2 rounded-lg border px-3 py-2 text-sm"
                 >
                   <input
                     type="checkbox"
                     checked={form.categoryIds.includes(category.id)}
-                    onChange={(event) => toggleCategory(category.id, event.target.checked)}
+                    onChange={(event) =>
+                      toggleCategory(category.id, event.target.checked)
+                    }
                   />
                   {category.name}
                 </label>
@@ -621,11 +1305,13 @@ export function TranslatorForm({
           </div>
 
           <label className="space-y-1 text-sm md:col-span-2">
-            <span className="font-medium text-muted-ink">Primary Category</span>
+            <span className="text-muted-ink font-medium">Primary Category</span>
             <select
               value={form.primaryCategoryId || ""}
-              onChange={(event) => setField("primaryCategoryId", event.target.value || null)}
-              className="h-11 w-full rounded-xl border border-border px-3"
+              onChange={(event) =>
+                setField("primaryCategoryId", event.target.value || null)
+              }
+              className="border-border h-11 w-full rounded-xl border px-3"
             >
               <option value="">Choose primary category</option>
               {categories
@@ -640,31 +1326,41 @@ export function TranslatorForm({
         </div>
       </section>
 
-      <section className="rounded-2xl border border-border bg-white p-6">
-        <h2 className="font-display text-2xl font-semibold text-ink">AI Prompting & Model</h2>
+      <section className="border-border rounded-2xl border bg-white p-6">
+        <h2 className="font-display text-ink text-2xl font-semibold">
+          AI Prompting & Model
+        </h2>
         <div className="mt-4 space-y-4">
           <label className="space-y-1 text-sm">
-            <span className="font-medium text-muted-ink">System Prompt</span>
+            <span className="text-muted-ink font-medium">System Prompt</span>
             <textarea
               value={form.promptSystem}
               onChange={(event) => setField("promptSystem", event.target.value)}
-              className="min-h-28 w-full rounded-xl border border-border px-3 py-2"
+              className="border-border min-h-28 w-full rounded-xl border px-3 py-2"
             />
           </label>
           <label className="space-y-1 text-sm">
-            <span className="font-medium text-muted-ink">Prompt Instructions</span>
+            <span className="text-muted-ink font-medium">
+              Prompt Instructions
+            </span>
             <textarea
               value={form.promptInstructions}
-              onChange={(event) => setField("promptInstructions", event.target.value)}
-              className="min-h-28 w-full rounded-xl border border-border px-3 py-2"
+              onChange={(event) =>
+                setField("promptInstructions", event.target.value)
+              }
+              className="border-border min-h-28 w-full rounded-xl border px-3 py-2"
             />
           </label>
           <label className="space-y-1 text-sm">
-            <span className="font-medium text-muted-ink">Model Override (optional)</span>
+            <span className="text-muted-ink font-medium">
+              Model Override (optional)
+            </span>
             <select
               value={form.modelOverride || ""}
-              onChange={(event) => setField("modelOverride", event.target.value)}
-              className="h-11 w-full rounded-xl border border-border px-3"
+              onChange={(event) =>
+                setField("modelOverride", event.target.value)
+              }
+              className="border-border h-11 w-full rounded-xl border px-3"
             >
               <option value="">Use global default model</option>
               {modelOptions.map((model) => (
@@ -677,18 +1373,22 @@ export function TranslatorForm({
         </div>
       </section>
 
-      <section className="rounded-2xl border border-border bg-white p-6">
-        <h2 className="font-display text-2xl font-semibold text-ink">Public UX Controls</h2>
+      <section className="border-border rounded-2xl border bg-white p-6">
+        <h2 className="font-display text-ink text-2xl font-semibold">
+          Public UX Controls
+        </h2>
         <div className="mt-4 grid gap-3 md:grid-cols-2">
-          <label className="flex items-center gap-2 rounded-xl border border-border p-3 text-sm font-medium text-muted-ink">
+          <label className="border-border text-muted-ink flex items-center gap-2 rounded-xl border p-3 text-sm font-medium">
             <input
               type="checkbox"
               checked={form.showModeSelector}
-              onChange={(event) => setField("showModeSelector", event.target.checked)}
+              onChange={(event) =>
+                setField("showModeSelector", event.target.checked)
+              }
             />
             Show mode selector publicly
           </label>
-          <label className="flex items-center gap-2 rounded-xl border border-border p-3 text-sm font-medium text-muted-ink">
+          <label className="border-border text-muted-ink flex items-center gap-2 rounded-xl border p-3 text-sm font-medium">
             <input
               type="checkbox"
               checked={form.showSwap}
@@ -696,56 +1396,77 @@ export function TranslatorForm({
             />
             Show swap action publicly
           </label>
-          <label className="flex items-center gap-2 rounded-xl border border-border p-3 text-sm font-medium text-muted-ink md:col-span-2">
+          <label className="border-border text-muted-ink flex items-center gap-2 rounded-xl border p-3 text-sm font-medium md:col-span-2">
             <input
               type="checkbox"
               checked={form.showExamples}
-              onChange={(event) => setField("showExamples", event.target.checked)}
+              onChange={(event) =>
+                setField("showExamples", event.target.checked)
+              }
             />
             Show example prompt chips publicly
           </label>
         </div>
       </section>
 
-      <section className="rounded-2xl border border-border bg-white p-6">
+      <section className="border-border rounded-2xl border bg-white p-6">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="font-display text-2xl font-semibold text-ink">Modes & Examples</h2>
+          <h2 className="font-display text-ink text-2xl font-semibold">
+            Modes & Examples
+          </h2>
         </div>
 
         <div className="space-y-3">
-          <p className="text-sm font-medium text-muted-ink">Translation Modes</p>
+          <p className="text-muted-ink text-sm font-medium">
+            Translation Modes
+          </p>
           {form.modes.map((modeItem, index) => (
-            <div key={`mode-${index}`} className="rounded-xl border border-border bg-muted-surface p-3">
+            <div
+              key={`mode-${index}`}
+              className="border-border bg-muted-surface rounded-xl border p-3"
+            >
               <div className="grid gap-3 md:grid-cols-2">
                 <input
                   value={modeItem.label}
-                  onChange={(event) => updateMode(index, { label: event.target.value })}
+                  onChange={(event) =>
+                    updateMode(index, { label: event.target.value })
+                  }
                   placeholder="Mode label"
-                  className="h-10 rounded-lg border border-border px-3"
+                  className="border-border h-10 rounded-lg border px-3"
                 />
                 <input
                   value={modeItem.key}
-                  onChange={(event) => updateMode(index, { key: slugify(event.target.value) })}
+                  onChange={(event) =>
+                    updateMode(index, { key: slugify(event.target.value) })
+                  }
                   placeholder="mode-key"
-                  className="h-10 rounded-lg border border-border px-3"
+                  className="border-border h-10 rounded-lg border px-3"
                 />
                 <input
                   value={modeItem.description || ""}
-                  onChange={(event) => updateMode(index, { description: event.target.value })}
+                  onChange={(event) =>
+                    updateMode(index, { description: event.target.value })
+                  }
                   placeholder="Mode description"
-                  className="h-10 rounded-lg border border-border px-3 md:col-span-2"
+                  className="border-border h-10 rounded-lg border px-3 md:col-span-2"
                 />
                 <textarea
                   value={modeItem.instruction}
-                  onChange={(event) => updateMode(index, { instruction: event.target.value })}
+                  onChange={(event) =>
+                    updateMode(index, { instruction: event.target.value })
+                  }
                   placeholder="Instruction"
-                  className="min-h-20 rounded-lg border border-border px-3 py-2 md:col-span-2"
+                  className="border-border min-h-20 rounded-lg border px-3 py-2 md:col-span-2"
                 />
                 <input
                   type="number"
                   value={modeItem.sortOrder}
-                  onChange={(event) => updateMode(index, { sortOrder: Number(event.target.value) || 0 })}
-                  className="h-10 rounded-lg border border-border px-3"
+                  onChange={(event) =>
+                    updateMode(index, {
+                      sortOrder: Number(event.target.value) || 0,
+                    })
+                  }
+                  className="border-border h-10 rounded-lg border px-3"
                 />
                 <Button
                   type="button"
@@ -790,29 +1511,38 @@ export function TranslatorForm({
         </div>
 
         <div className="mt-8 space-y-3">
-          <p className="text-sm font-medium text-muted-ink">Example Inputs</p>
+          <p className="text-muted-ink text-sm font-medium">Example Inputs</p>
           {form.examples.map((exampleItem, index) => (
-            <div key={`example-${index}`} className="rounded-xl border border-border bg-muted-surface p-3">
+            <div
+              key={`example-${index}`}
+              className="border-border bg-muted-surface rounded-xl border p-3"
+            >
               <div className="grid gap-3 md:grid-cols-2">
                 <input
                   value={exampleItem.label}
-                  onChange={(event) => updateExample(index, { label: event.target.value })}
+                  onChange={(event) =>
+                    updateExample(index, { label: event.target.value })
+                  }
                   placeholder="Example label"
-                  className="h-10 rounded-lg border border-border px-3"
+                  className="border-border h-10 rounded-lg border px-3"
                 />
                 <input
                   type="number"
                   value={exampleItem.sortOrder}
                   onChange={(event) =>
-                    updateExample(index, { sortOrder: Number(event.target.value) || 0 })
+                    updateExample(index, {
+                      sortOrder: Number(event.target.value) || 0,
+                    })
                   }
-                  className="h-10 rounded-lg border border-border px-3"
+                  className="border-border h-10 rounded-lg border px-3"
                 />
                 <textarea
                   value={exampleItem.value}
-                  onChange={(event) => updateExample(index, { value: event.target.value })}
+                  onChange={(event) =>
+                    updateExample(index, { value: event.target.value })
+                  }
                   placeholder="Example input"
-                  className="min-h-20 rounded-lg border border-border px-3 py-2 md:col-span-2"
+                  className="border-border min-h-20 rounded-lg border px-3 py-2 md:col-span-2"
                 />
                 <Button
                   type="button"
@@ -820,7 +1550,9 @@ export function TranslatorForm({
                   onClick={() =>
                     setForm((current) => ({
                       ...current,
-                      examples: current.examples.filter((_, idx) => idx !== index),
+                      examples: current.examples.filter(
+                        (_, idx) => idx !== index,
+                      ),
                     }))
                   }
                   disabled={form.examples.length <= 1}
@@ -855,67 +1587,81 @@ export function TranslatorForm({
         </div>
       </section>
 
-      <section className="rounded-2xl border border-border bg-white p-6">
+      <section className="border-border rounded-2xl border bg-white p-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="font-display text-2xl font-semibold text-ink">Pinterest Share Image</h2>
-            <p className="mt-1 text-sm text-muted-ink">
+            <h2 className="font-display text-ink text-2xl font-semibold">
+              Pinterest Share Image
+            </h2>
+            <p className="text-muted-ink mt-1 text-sm">
               Stored, pre-generated image used for Pinterest sharing.
             </p>
             {shareImageUpdatedAt ? (
-              <p className="mt-1 text-xs text-muted-ink">Last generated: {shareImageUpdatedAt}</p>
+              <p className="text-muted-ink mt-1 text-xs">
+                Last generated: {shareImageUpdatedAt}
+              </p>
             ) : null}
           </div>
           {mode === "edit" ? (
-            <Button type="button" variant="outline" onClick={() => void regenerateShareImage()} disabled={busy}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void regenerateShareImage()}
+              disabled={busy}
+            >
               Regenerate share image
             </Button>
           ) : null}
         </div>
 
-        <div className="mt-4 rounded-xl border border-border bg-muted-surface p-3">
+        <div className="border-border bg-muted-surface mt-4 rounded-xl border p-3">
           {shareImagePreviewSrc ? (
             <div className="space-y-3">
               <Image
                 src={shareImagePreviewSrc}
                 alt="Stored Pinterest share preview"
-                className="w-full max-w-xs rounded-lg border border-border bg-white object-cover"
+                className="border-border w-full max-w-xs rounded-lg border bg-white object-cover"
                 width={300}
                 height={450}
                 loading="lazy"
                 unoptimized
               />
-              <p className="text-xs text-muted-ink">{shareImagePath}</p>
+              <p className="text-muted-ink text-xs">{shareImagePath}</p>
             </div>
           ) : (
-            <p className="text-sm text-muted-ink">
-              No stored share image yet. It will be generated automatically when the translator is saved.
+            <p className="text-muted-ink text-sm">
+              No stored share image yet. It will be generated automatically when
+              the translator is saved.
             </p>
           )}
         </div>
       </section>
 
-      <section className="rounded-2xl border border-border bg-white p-6">
-        <h2 className="font-display text-2xl font-semibold text-ink">SEO & Visibility</h2>
+      <section className="border-border rounded-2xl border bg-white p-6">
+        <h2 className="font-display text-ink text-2xl font-semibold">
+          SEO & Visibility
+        </h2>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           <label className="space-y-1 text-sm md:col-span-2">
-            <span className="font-medium text-muted-ink">SEO Title</span>
+            <span className="text-muted-ink font-medium">SEO Title</span>
             <input
               value={form.seoTitle || ""}
               onChange={(event) => setField("seoTitle", event.target.value)}
-              className="h-11 w-full rounded-xl border border-border px-3"
+              className="border-border h-11 w-full rounded-xl border px-3"
             />
           </label>
           <label className="space-y-1 text-sm md:col-span-2">
-            <span className="font-medium text-muted-ink">SEO Description</span>
+            <span className="text-muted-ink font-medium">SEO Description</span>
             <textarea
               value={form.seoDescription || ""}
-              onChange={(event) => setField("seoDescription", event.target.value)}
-              className="min-h-20 w-full rounded-xl border border-border px-3 py-2"
+              onChange={(event) =>
+                setField("seoDescription", event.target.value)
+              }
+              className="border-border min-h-20 w-full rounded-xl border px-3 py-2"
             />
           </label>
 
-          <label className="flex items-center gap-2 rounded-xl border border-border p-3 text-sm font-medium text-muted-ink">
+          <label className="border-border text-muted-ink flex items-center gap-2 rounded-xl border p-3 text-sm font-medium">
             <input
               type="checkbox"
               checked={form.isActive}
@@ -924,7 +1670,7 @@ export function TranslatorForm({
             Active
           </label>
 
-          <label className="flex items-center gap-2 rounded-xl border border-border p-3 text-sm font-medium text-muted-ink">
+          <label className="border-border text-muted-ink flex items-center gap-2 rounded-xl border p-3 text-sm font-medium">
             <input
               type="checkbox"
               checked={form.isFeatured}
@@ -935,18 +1681,21 @@ export function TranslatorForm({
           </label>
 
           {autoFeaturedEnabled ? (
-            <p className="text-xs text-muted-ink md:col-span-2">
-              Auto-featured mode is enabled globally. Top 3 featured slots are assigned by performance.
+            <p className="text-muted-ink text-xs md:col-span-2">
+              Auto-featured mode is enabled globally. Top 3 featured slots are
+              assigned by performance.
             </p>
           ) : null}
 
           <label className="space-y-1 text-sm">
-            <span className="font-medium text-muted-ink">Sort Order</span>
+            <span className="text-muted-ink font-medium">Sort Order</span>
             <input
               type="number"
               value={form.sortOrder}
-              onChange={(event) => setField("sortOrder", Number(event.target.value) || 0)}
-              className="h-11 w-full rounded-xl border border-border px-3"
+              onChange={(event) =>
+                setField("sortOrder", Number(event.target.value) || 0)
+              }
+              className="border-border h-11 w-full rounded-xl border px-3"
             />
           </label>
         </div>
@@ -954,16 +1703,30 @@ export function TranslatorForm({
 
       <div className="flex flex-wrap items-center gap-2">
         <Button type="button" onClick={() => void submit()} disabled={busy}>
-          {busy ? "Saving..." : mode === "create" ? "Create Translator" : "Save Changes"}
+          {busy
+            ? "Saving..."
+            : mode === "create"
+              ? "Create Translator"
+              : "Save Changes"}
         </Button>
 
         {mode === "edit" ? (
           <>
-            <Button type="button" variant="outline" onClick={() => void duplicate()} disabled={busy}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void duplicate()}
+              disabled={busy}
+            >
               <Copy className="h-4 w-4" />
               Duplicate
             </Button>
-            <Button type="button" variant="outline" onClick={() => void archiveToggle()} disabled={busy}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void archiveToggle()}
+              disabled={busy}
+            >
               {initial?.archivedAt ? "Unarchive" : "Archive"}
             </Button>
             <Button

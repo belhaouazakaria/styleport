@@ -346,6 +346,24 @@ export const translatorDraftSchema = z.object({
   }),
 });
 
+export const translatorEditorialCandidateSchema = z.object({
+  about: z.string().trim().max(2400),
+  whatItDoes: z.string().trim().max(1800),
+  differenceDescription: z.string().trim().max(1800),
+  bestUses: z.array(z.string().trim().max(600)).max(6),
+  howToUse: z.array(z.string().trim().max(600)).max(6),
+  tips: z.array(z.string().trim().max(600)).max(6),
+  examples: z.array(z.object({
+    contextTitle: z.string().trim().max(120).optional().or(z.literal("")),
+    originalText: z.string().trim().max(1200),
+    transformedText: z.string().trim().max(1600),
+  })).max(5),
+  faq: z.array(z.object({
+    question: z.string().trim().max(240),
+    answer: z.string().trim().max(1000),
+  })).max(5),
+});
+
 export const aiDraftInputSchema = z.object({
   brief: z.string().trim().min(12).max(2400),
 });

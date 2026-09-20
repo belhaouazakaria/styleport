@@ -1,21 +1,23 @@
-import { adminRouteGuard } from "@/lib/permissions";
+import { auth } from "@/auth";
 import { apiError, apiOk } from "@/lib/api-response";
-import { getAdminTranslatorById } from "@/lib/data/translators";
-import { getAppSettings } from "@/lib/settings";
-import { generateTranslatorEditorialContent } from "@/lib/translator-editorial";
+import { adminRouteGuard } from "@/lib/permissions";
+import { createAndProcessEditorialDraft } from "@/lib/translator-editorial-jobs";
 import { z } from "zod";
 
 const inputSchema = z.object({
-  section: z.enum(["about", "whatItDoes", "bestUses", "howToUse", "tips", "examples", "faq", "differenceDescription", "full"]),
+  section: z.enum(["about", "whatItDoes", "bestUses", "howToUse", "tips", "examples", "faq", "differenceDescription", "full", "missing"]),
 });
+
+const operationBySection = {
+  about: "REGENERATE_ABOUT", whatItDoes: "REGENERATE_WHAT_IT_DOES", differenceDescription: "REGENERATE_DIFFERENCE",
+  bestUses: "REGENERATE_BEST_USES", howToUse: "REGENERATE_HOW_TO_USE", tips: "REGENERATE_TIPS",
+  examples: "REGENERATE_EXAMPLES", faq: "REGENERATE_FAQ", full: "REGENERATE_FULL", missing: "GENERATE_MISSING",
+} as const;
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   const guard = await adminRouteGuard();
   if (guard) return guard;
-
-  const { id } = await context.params;
-  const translator = await getAdminTranslatorById(id);
-  if (!translator) return apiError(404, "NOT_FOUND", "Translator not found.");
+  const session = await auth();
 
   let payload: unknown;
   try {
@@ -30,27 +32,15 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   }
 
   try {
-    const settings = await getAppSettings();
     const section = parsed.data.section;
-    const category = translator.categories[0]?.category.name || translator.primaryCategoryId || null;
-    const editorial = await generateTranslatorEditorialContent({
-      model: settings.defaultModelOverride || translator.modelOverride || undefined,
-      context: {
-        name: translator.name,
-        description: `${translator.title}. ${translator.subtitle} ${translator.shortDescription}`,
-        category,
-        tone: translator.promptSystem,
-        style: translator.promptInstructions,
-        promptSystem: translator.promptSystem,
-        promptInstructions: translator.promptInstructions,
-        existingAbout: translator.editorialContent?.about || translator.shortDescription,
-        focus: section === "full" ? undefined : section,
-      },
+    const result = await createAndProcessEditorialDraft({
+      translatorId: (await context.params).id,
+      operation: operationBySection[section],
+      requestedById: session?.user?.id || null,
     });
-
-    if (section === "full") return apiOk({ section, editorial });
-    return apiOk({ section, value: editorial[section] });
-  } catch {
-    return apiError(502, "UPSTREAM_ERROR", "Unable to generate editorial content right now.");
+    return apiOk({ section, draftId: result.draftId, jobId: result.jobId, editorial: result.editorial, value: section === "full" || section === "missing" ? result.editorial : result.editorial[section] });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to generate editorial content right now.";
+    return apiError(message.includes("not found") ? 404 : 502, "UPSTREAM_ERROR", message);
   }
 }
