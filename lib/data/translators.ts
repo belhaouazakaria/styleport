@@ -13,6 +13,11 @@ import { deleteStoredShareImage, ensureTranslatorShareImageById } from "@/lib/sh
 import { ensureUniqueTranslatorSlug } from "@/lib/slug";
 import { getAppSettings } from "@/lib/settings";
 import {
+  assertNoEmDash,
+  sanitizeGeneratedString,
+  sanitizeGeneratedText,
+} from "@/lib/text-sanitizer";
+import {
   buildAdminTranslatorWhere,
   getEditorialReadiness,
   type AdminTranslatorFilters,
@@ -792,28 +797,20 @@ export async function getNewestPublicTranslators(limit = 3): Promise<PublicTrans
 }
 
 export async function getIndexableTranslatorSlugsForSitemap() {
-  const translators = await prisma.translator.findMany({
+  return prisma.translator.findMany({
     where: {
       isActive: true,
       archivedAt: null,
+      slug: {
+        not: "",
+      },
     },
     select: {
       slug: true,
       updatedAt: true,
-      editorialContent: true,
-      editorialLists: { select: { kind: true, content: true } },
-      editorialExamples: { select: { originalText: true, transformedText: true } },
-      editorialFaqs: { select: { question: true, answer: true } },
     },
     orderBy: [{ updatedAt: "desc" }],
   });
-
-  return translators.filter((translator) => getEditorialReadiness({
-    content: translator.editorialContent,
-    lists: translator.editorialLists,
-    examples: translator.editorialExamples,
-    faqs: translator.editorialFaqs,
-  }).status === "READY");
 }
 
 export async function getRelatedPublicTranslators(params: {
@@ -1365,7 +1362,9 @@ export async function getNewestPublicTranslatorsPage(params: { page: number; pag
   };
 }
 
-function normalizeTranslatorInput(input: TranslatorUpsertInput) {
+function normalizeTranslatorInput(rawInput: TranslatorUpsertInput) {
+  const input = sanitizeGeneratedText(rawInput);
+  assertNoEmDash(input, "Translator public copy");
   const modeRows = input.modes || [];
   const exampleRows = input.examples || [];
 
@@ -1873,10 +1872,12 @@ export async function createTranslationLog(data: {
   ipHash?: string;
   userAgent?: string;
 }) {
+  const outputText = data.outputText ? sanitizeGeneratedString(data.outputText) : null;
+  assertNoEmDash(outputText, "Persisted generated translator output");
   return prisma.translationLog.create({
     data: {
       ...data,
-      outputText: data.outputText || null,
+      outputText,
       modeUsed: data.modeUsed || null,
       model: data.model || null,
       promptTokens: data.promptTokens ?? null,
