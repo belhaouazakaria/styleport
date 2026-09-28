@@ -49,3 +49,6 @@ next-env.d.ts
 # persistent runtime storage (generated images, uploads)
 /storage/generated/
 !/storage/generated/**/.gitkeep
+
+# Runtime generated assets
+/public/generated/
