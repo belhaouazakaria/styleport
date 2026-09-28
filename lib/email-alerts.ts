@@ -1,5 +1,6 @@
 import { getServerEnv } from "@/lib/env";
 import { logError, logWarn } from "@/lib/logger";
+import { assertNoEmDash, sanitizeGeneratedString } from "@/lib/text-sanitizer";
 
 const BREVO_API_URL = "https://api.brevo.com/v3/smtp/email";
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -102,6 +103,10 @@ async function sendBrevoEmail(params: {
   html: string;
   replyTo?: string;
 }): Promise<{ ok: true } | { ok: false; status?: number; error: string }> {
+  const subject = sanitizeGeneratedString(params.subject);
+  const text = sanitizeGeneratedString(params.text);
+  const html = sanitizeGeneratedString(params.html);
+  assertNoEmDash({ subject, text, html }, "Email copy");
   const recipients = params.to.map((value) => parseEmailAddress(value)).filter(Boolean) as BrevoAddress[];
   if (!recipients.length || recipients.length !== params.to.length) {
     return { ok: false, error: "Invalid recipient email address." };
@@ -124,9 +129,9 @@ async function sendBrevoEmail(params: {
         sender: params.sender,
         to: recipients,
         ...(replyTo ? { replyTo } : {}),
-        subject: params.subject,
-        textContent: params.text,
-        htmlContent: params.html,
+        subject,
+        textContent: text,
+        htmlContent: html,
       }),
     });
 

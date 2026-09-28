@@ -576,7 +576,7 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
       return;
     }
 
-    const description = `${translator.name} — ${translator.shortDescription}`;
+    const description = `${translator.name}: ${translator.shortDescription}`;
     const intentUrl = new URL("https://www.pinterest.com/pin/create/button/");
     intentUrl.searchParams.set("url", pageUrl);
     intentUrl.searchParams.set("media", mediaUrl);

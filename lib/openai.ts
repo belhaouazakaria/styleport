@@ -3,6 +3,11 @@ import OpenAI from "openai";
 import { DEFAULT_MODEL } from "@/lib/constants";
 import { getServerEnv } from "@/lib/env";
 import { logError } from "@/lib/logger";
+import {
+  assertNoEmDash,
+  EM_DASH_PROHIBITION_INSTRUCTION,
+  sanitizeGeneratedString,
+} from "@/lib/text-sanitizer";
 import { toPlainText } from "@/lib/utils";
 
 const globalForOpenAI = globalThis as typeof globalThis & {
@@ -88,8 +93,9 @@ async function tryGenerate(params: {
       max_output_tokens: params.maxOutputTokens || 1000,
     });
 
-    const result = toPlainText(extractTextFromResponse(response));
+    const result = sanitizeGeneratedString(toPlainText(extractTextFromResponse(response)));
     if (result) {
+      assertNoEmDash(result);
       return {
         text: result,
         usage: extractUsage(response),
@@ -117,7 +123,7 @@ export async function generateOpenAIText(params: {
       const generated = await tryGenerate({
         client,
         model,
-        systemPrompt: params.systemPrompt,
+        systemPrompt: [params.systemPrompt, EM_DASH_PROHIBITION_INSTRUCTION].filter(Boolean).join("\n"),
         userPrompt: params.userPrompt,
         maxOutputTokens: params.maxOutputTokens,
       });

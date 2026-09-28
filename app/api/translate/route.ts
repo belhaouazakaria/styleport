@@ -14,6 +14,7 @@ import {
 } from "@/lib/data/translators";
 import { prisma } from "@/lib/prisma";
 import { getAppSettings } from "@/lib/settings";
+import { assertNoEmDash, sanitizeGeneratedString } from "@/lib/text-sanitizer";
 import {
   evaluatePostSuccessTokenCap,
   getRequestIdentity,
@@ -114,6 +115,8 @@ export async function POST(request: Request) {
       userPrompt,
       model,
     });
+    const outputText = sanitizeGeneratedString(generated.text);
+    assertNoEmDash(outputText, "Generated translator output");
 
     const estimatedCost = estimateCost({
       model: generated.model,
@@ -126,11 +129,11 @@ export async function POST(request: Request) {
       await createTranslationLog({
         translatorId: translator.id,
         inputText: validation.data.text,
-        outputText: generated.text,
+        outputText,
         modeUsed: resolvedModeKey,
         status: TranslationStatus.SUCCESS,
         inputLength: validation.data.text.length,
-        outputLength: generated.text.length,
+        outputLength: outputText.length,
         model: generated.model,
         promptTokens: generated.promptTokens,
         completionTokens: generated.completionTokens,
@@ -153,7 +156,7 @@ export async function POST(request: Request) {
 
     void maybeRecalculateAutoFeaturedTranslators("translation-success");
 
-    return apiOk({ result: generated.text });
+    return apiOk({ result: outputText });
   } catch {
     logError("translate_upstream_failure", "Translation generation failed in upstream call.", {
       translatorId: translator.id,

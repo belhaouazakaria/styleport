@@ -1,4 +1,5 @@
 import type { RuntimeTranslator } from "@/lib/types";
+import { EM_DASH_PROHIBITION_INSTRUCTION } from "@/lib/text-sanitizer";
 
 export function buildTranslatorPrompts(params: {
   translator: RuntimeTranslator;
@@ -21,6 +22,7 @@ export function buildTranslatorPrompts(params: {
           "Remove stylistic persona/tone effects and rewrite into clear natural plain text.",
           "Do not add details that were not in the input.",
           "Output plain text only. Do not use markdown, bullets, or quote wrappers.",
+          EM_DASH_PROHIBITION_INSTRUCTION,
         ]
           .filter(Boolean)
           .join("\n")
@@ -29,6 +31,7 @@ export function buildTranslatorPrompts(params: {
           "Preserve names, meaning, facts, and intent while transforming style.",
           "Output plain text only. Do not use markdown, bullets, or quote wrappers.",
           "Avoid invented content and avoid unnecessary expansion.",
+          EM_DASH_PROHIBITION_INSTRUCTION,
           translator.promptSystem,
         ]
           .filter(Boolean)

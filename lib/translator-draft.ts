@@ -1,18 +1,12 @@
-import OpenAI from "openai";
-
-import { DEFAULT_MODEL } from "@/lib/constants";
+import { generateOpenAIText } from "@/lib/openai";
 import { slugify } from "@/lib/slugify";
+import {
+  assertNoEmDash,
+  EM_DASH_PROHIBITION_INSTRUCTION,
+  sanitizeGeneratedText,
+} from "@/lib/text-sanitizer";
 import type { TranslatorDraft, TranslatorUpsertInput } from "@/lib/types";
 import { translatorDraftSchema } from "@/lib/validators";
-
-function getClient(): OpenAI {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new Error("OPENAI_API_KEY is missing.");
-  }
-
-  return new OpenAI({ apiKey });
-}
 
 function extractJson(text: string): unknown {
   const trimmed = text.trim();
@@ -71,6 +65,7 @@ function buildSystemPrompt() {
     "Ensure prompts preserve meaning and facts while transforming style.",
     "Default translator output tone should be playful, witty, and entertaining unless the brief clearly requests a different tone (for example: professional, formal, legal, academic, romantic, poetic, or corporate).",
     "Do not force category selection to Funny when the brief points to another category or use case.",
+    EM_DASH_PROHIBITION_INSTRUCTION,
   ].join("\n");
 }
 
@@ -150,30 +145,20 @@ export async function generateTranslatorDraft(input: {
   brief: string;
   model?: string;
 }) {
-  const client = getClient();
-  const model = input.model || process.env.OPENAI_MODEL || DEFAULT_MODEL;
-
-  const response = await client.responses.create({
-    model,
-    temperature: 0.4,
-    max_output_tokens: 2000,
-    input: [
-      {
-        role: "system",
-        content: [{ type: "input_text", text: buildSystemPrompt() }],
-      },
-      {
-        role: "user",
-        content: [{ type: "input_text", text: buildUserPrompt(input.brief) }],
-      },
-    ],
+  const response = await generateOpenAIText({
+    model: input.model,
+    systemPrompt: buildSystemPrompt(),
+    userPrompt: buildUserPrompt(input.brief),
+    maxOutputTokens: 2000,
   });
 
-  const text = response.output_text || "";
-  const parsed = extractJson(text);
+  const parsed = sanitizeGeneratedText(extractJson(response.text));
+  assertNoEmDash(parsed, "Generated translator draft");
   const validated = translatorDraftSchema.parse(parsed);
 
-  return normalizeDraft(validated);
+  const normalized = normalizeDraft(validated);
+  assertNoEmDash(normalized, "Normalized translator draft");
+  return normalized;
 }
 
 export function buildTranslatorDraftBriefFromRequest(input: {

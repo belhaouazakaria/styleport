@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { getMissingEditorialSections, mergeEditorialDraft, validateEditorialDraft } from "@/lib/editorial-job-utils";
 import type { TranslatorEditorialDraft } from "@/lib/types";
+import { EM_DASH_CHARACTER, sanitizeGeneratedText } from "@/lib/text-sanitizer";
 
 const complete: TranslatorEditorialDraft = {
   about: "A useful translator description that is comfortably longer than the editorial readiness threshold.",
@@ -62,5 +63,17 @@ describe("editorial generation safety", () => {
     expect(result.valid).toBe(false);
     expect(result.missingExpectedSections).toEqual(["faq"]);
     expect(result.errors).toContain("Generated editorial draft contained no content for the requested missing sections.");
+  });
+
+  it("rejects unsanitized editorial payloads and accepts their sanitized form", () => {
+    const unsafe = {
+      ...complete,
+      faq: complete.faq.map((item, index) => index === 0
+        ? { ...item, answer: `${item.answer}${EM_DASH_CHARACTER}This must be normalized.` }
+        : item),
+    };
+
+    expect(validateEditorialDraft(unsafe).valid).toBe(false);
+    expect(validateEditorialDraft(sanitizeGeneratedText(unsafe)).valid).toBe(true);
   });
 });

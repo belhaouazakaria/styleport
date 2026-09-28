@@ -58,8 +58,8 @@ function DraftLifecycle({ status }: { status: DraftStatus }) {
 }
 
 function stateLabel(status: DraftStatus) {
-  if (status === "APPROVED") return "Approved — waiting to be published";
-  if (status === "NEEDS_REVIEW") return "Generated — needs review";
+  if (status === "APPROVED") return "Approved, waiting to be published";
+  if (status === "NEEDS_REVIEW") return "Generated, needs review";
   if (status === "PUBLISHED") return "Published to translator";
   if (status === "DISCARDED") return "Discarded";
   return "Generation failed";
@@ -181,7 +181,7 @@ export function EditorialReviewQueue() {
           <input value={q} onChange={(event) => { setQ(event.target.value); resetSelection(); }} placeholder="Search translator or category" aria-label="Search review drafts" className="h-10 min-w-56 flex-1 rounded-xl border border-border bg-white px-3 text-sm sm:max-w-sm" />
           <select value={status} onChange={(event) => { setStatus(event.target.value as DraftStatus); resetSelection(); }} aria-label="Filter by lifecycle state" className="h-10 rounded-xl border border-border bg-white px-3 text-sm">
             <option value="NEEDS_REVIEW">Needs review</option>
-            <option value="APPROVED">Approved — waiting to publish</option>
+            <option value="APPROVED">Approved, waiting to publish</option>
             <option value="FAILED">Failed</option>
             <option value="PUBLISHED">Published</option>
             <option value="DISCARDED">Discarded</option>
@@ -222,7 +222,7 @@ export function EditorialReviewQueue() {
                     <span className="text-muted-ink">{draft.validation.readiness.completionPercent}% complete</span>
                     <span className="text-muted-ink">{draft.validation.generatedSections.join(", ") || "No generated sections"}</span>
                   </div>
-                  {draft.status === "APPROVED" ? <p className="mt-3 rounded-xl border border-amber-300 bg-amber-100 px-3 py-2 text-sm font-bold text-amber-950">Approved — waiting to be published. The public translator has not changed yet.</p> : null}
+                  {draft.status === "APPROVED" ? <p className="mt-3 rounded-xl border border-amber-300 bg-amber-100 px-3 py-2 text-sm font-bold text-amber-950">Approved, waiting to be published. The public translator has not changed yet.</p> : null}
                   {draft.validation.errors.length ? <p className="mt-2 text-xs text-red-700">{draft.validation.errors[0]}</p> : null}
                 </div>
               </div>

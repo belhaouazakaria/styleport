@@ -153,10 +153,10 @@ Use dry-run to test safely without sending requests to Google:
 ## Scripts
 
 Core scripts:
-- `npm run dev` — local development
-- `npm run build` — production build
-- `npm run start` — production start (`next start -p ${PORT:-3000}`)
-- `npm run check` — lint + typecheck + tests
+- `npm run dev`: local development
+- `npm run build`: production build
+- `npm run start`: production start (`next start -p ${PORT:-3000}`)
+- `npm run check`: lint + typecheck + tests
 - `npm run prisma:generate`
 - `npm run prisma:migrate` (dev)
 - `npm run prisma:deploy` (production-safe migration apply)
@@ -397,8 +397,8 @@ Admin message reminder:
 
 ## Health Endpoints
 
-- `GET /api/healthz` — liveness (process-level)
-- `GET /api/readyz` — readiness (database connectivity)
+- `GET /api/healthz`: liveness (process-level)
+- `GET /api/readyz`: readiness (database connectivity)
 
 Use these for deployment checks and uptime monitors.
 

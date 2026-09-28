@@ -47,7 +47,7 @@ export function IndexingLogTable({ logs }: IndexingLogTableProps) {
                     {log.translatorName}
                   </Link>
                 ) : (
-                  <span className="text-muted-ink">—</span>
+                  <span className="text-muted-ink">Not available</span>
                 )}
                 {log.translatorSlug ? (
                   <p className="text-xs text-muted-ink">/{log.translatorSlug}</p>
@@ -64,7 +64,7 @@ export function IndexingLogTable({ logs }: IndexingLogTableProps) {
                   {log.status}
                 </span>
               </td>
-              <td className="max-w-[380px] px-4 py-3 text-muted-ink">{log.message || "—"}</td>
+              <td className="max-w-[380px] px-4 py-3 text-muted-ink">{log.message || "Not available"}</td>
             </tr>
           ))}
         </tbody>

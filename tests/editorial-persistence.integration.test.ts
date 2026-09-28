@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import type { TranslatorEditorialDraft } from "@/lib/types";
 import { getEditorialReadiness } from "@/lib/translator-editorial-data";
 import { bulkUpdateEditorialDrafts, createAndProcessEditorialDraft, createEditorialJob, getEditorialDraft, publishEditorialDraft, runEditorialWorker, setEditorialDraftStatus } from "@/lib/translator-editorial-jobs";
+import { containsEmDash } from "@/lib/text-sanitizer";
 
 const runDatabaseTests = process.env.RUN_EDITORIAL_DB_TESTS === "1";
 const databaseDescribe = runDatabaseTests ? describe : describe.skip;
@@ -20,7 +21,7 @@ const complete: TranslatorEditorialDraft = {
   howToUse: ["Paste a complete source draft first", "Review the transformed result carefully"],
   tips: ["Use clear and specific source language", "Keep every important factual detail visible"],
   examples: [
-    { contextTitle: "Greeting", originalText: "Hello, thanks for joining us today.", transformedText: "Welcome—we are delighted you could join us today." },
+    { contextTitle: "Greeting", originalText: "Hello, thanks for joining us today.", transformedText: `Welcome${String.fromCodePoint(0x2014)}we are delighted you could join us today.` },
     { contextTitle: "Request", originalText: "Please send the report this afternoon.", transformedText: "Could you share the report with us this afternoon?" },
     { contextTitle: "Update", originalText: "The launch date moved to Friday.", transformedText: "A quick update: the launch is now scheduled for Friday." },
   ],
@@ -54,7 +55,9 @@ databaseDescribe("editorial persistence integration", () => {
     const translator = await createTranslator("full");
     const result = await createAndProcessEditorialDraft({ translatorId: translator.id, operation: "REGENERATE_FULL", generate: async () => complete });
     createdJobIds.push(result.jobId);
-    expect((await getEditorialDraft(result.draftId))?.payload).toMatchObject({ about: complete.about, faq: complete.faq });
+    const persistedDraft = await getEditorialDraft(result.draftId);
+    expect(persistedDraft?.payload).toMatchObject({ about: complete.about, faq: complete.faq });
+    expect(containsEmDash(persistedDraft?.payload)).toBe(false);
     expect(await prisma.translatorEditorialContent.findUnique({ where: { translatorId: translator.id } })).toBeNull();
     const reviewer = await prisma.user.create({ data: { email: `${marker}@example.test`, passwordHash: "not-used", role: "ADMIN" } });
     createdUserIds.push(reviewer.id);
@@ -62,6 +65,8 @@ databaseDescribe("editorial persistence integration", () => {
     await publishEditorialDraft(result.draftId, reviewer.id);
     const published = await prisma.translatorEditorialContent.findUnique({ where: { translatorId: translator.id } });
     expect(published?.about).toBe(complete.about);
+    const publishedExample = await prisma.translatorEditorialExample.findFirst({ where: { translatorId: translator.id }, orderBy: { sortOrder: "asc" } });
+    expect(containsEmDash(publishedExample)).toBe(false);
     expect(await prisma.translatorEditorialFaq.count({ where: { translatorId: translator.id } })).toBe(3);
     const pending = await createEditorialJob({ operation: "GENERATE_MISSING", translatorIds: [translator.id] });
     createdJobIds.push(pending.id);

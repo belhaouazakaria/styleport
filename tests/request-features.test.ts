@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { aiDraftInputSchema, translatorDraftSchema, translatorRequestSchema } from "@/lib/validators";
+import { EM_DASH_CHARACTER } from "@/lib/text-sanitizer";
 
 describe("translatorRequestSchema", () => {
   it("accepts valid public request payload", () => {
@@ -60,6 +61,24 @@ describe("translatorDraftSchema", () => {
     });
 
     expect(parsed.success).toBe(true);
+  });
+
+  it("rejects an em dash anywhere in generated translator copy", () => {
+    const parsed = translatorDraftSchema.safeParse({
+      name: "Pitch Polisher",
+      slug: "pitch-polisher",
+      title: "Sharpen Startup Pitches",
+      subtitle: `Clear${EM_DASH_CHARACTER}confident copy`,
+      shortDescription: "Polish startup pitch text quickly.",
+      sourceLabel: "Rough Pitch",
+      targetLabel: "Refined Pitch",
+      systemPrompt: "You are a startup storytelling expert who rewrites text with clarity and accuracy.",
+      promptInstructions: "Preserve meaning and facts while improving structure and confidence.",
+      modes: [{ key: "classic", label: "Classic", instruction: "Use concise, polished business tone.", sortOrder: 1 }],
+      examples: [],
+    });
+
+    expect(parsed.success).toBe(false);
   });
 });
 

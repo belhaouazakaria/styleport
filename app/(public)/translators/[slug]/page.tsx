@@ -27,7 +27,7 @@ const loadPublicTranslatorBySlug = cache(async (slug: string) => getPublicTransl
 
 function deriveUseCaseTitle(content: string, index: number) {
   const normalized = content.replace(/^[\s•*-]+/, "").trim();
-  const clause = normalized.split(/[:—–.!?]/, 1)[0]?.trim();
+  const clause = normalized.split(/[:\u2014–.!?]/, 1)[0]?.trim();
   if (clause && clause.length >= 3 && clause.length <= 42 && clause.length < normalized.length) return clause;
   const words = normalized.split(/\s+/).filter(Boolean);
   if (!words.length) return `Use case ${index + 1}`;

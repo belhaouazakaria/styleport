@@ -1,6 +1,11 @@
 import { z } from "zod";
 
 import { generateOpenAIText } from "@/lib/openai";
+import {
+  assertNoEmDash,
+  EM_DASH_PROHIBITION_INSTRUCTION,
+  sanitizeGeneratedText,
+} from "@/lib/text-sanitizer";
 import { translatorDraftSchema } from "@/lib/validators";
 import type { TranslatorEditorialDraft } from "@/lib/types";
 
@@ -48,6 +53,7 @@ function buildSystemPrompt() {
     "Write useful, natural, translator-specific content grounded in the supplied metadata and behavior.",
     "Do not use keyword stuffing, generic SEO filler, or claims the translator cannot support.",
     "Examples must use varied source sentences that fit this translator's actual tone; do not reuse stock examples across translators.",
+    EM_DASH_PROHIBITION_INSTRUCTION,
     "Return JSON only. Do not include markdown fences.",
   ].join("\n");
 }
@@ -82,7 +88,9 @@ export async function generateTranslatorEditorialContent(params: {
     maxOutputTokens: 4500,
   });
 
-  return editorialSchema.parse(extractJson(generated.text)) as TranslatorEditorialDraft;
+  const sanitized = sanitizeGeneratedText(extractJson(generated.text));
+  assertNoEmDash(sanitized, "Generated editorial payload");
+  return editorialSchema.parse(sanitized) as TranslatorEditorialDraft;
 }
 
 export async function generateAbout(context: TranslatorEditorialContext, model?: string) {

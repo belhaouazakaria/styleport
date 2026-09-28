@@ -10,6 +10,7 @@ import type {
   TranslatorRequestInput,
 } from "@/lib/types";
 import { translatorDraftSchema } from "@/lib/validators";
+import { assertNoEmDash, sanitizeGeneratedText } from "@/lib/text-sanitizer";
 
 const REQUEST_VERIFICATION_TOKEN_BYTES = 32;
 const REQUEST_VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
@@ -233,10 +234,13 @@ export async function deleteTranslatorRequestById(id: string) {
 }
 
 export async function saveTranslatorRequestDraft(id: string, draft: TranslatorDraft) {
+  const sanitizedDraft = sanitizeGeneratedText(draft);
+  assertNoEmDash(sanitizedDraft, "Translator request AI draft");
+  const validatedDraft = translatorDraftSchema.parse(sanitizedDraft);
   return prisma.translatorRequest.update({
     where: { id },
     data: {
-      aiDraftJson: JSON.parse(JSON.stringify(draft)) as Prisma.InputJsonValue,
+      aiDraftJson: JSON.parse(JSON.stringify(validatedDraft)) as Prisma.InputJsonValue,
       aiDraftGeneratedAt: new Date(),
       status: TranslatorRequestStatus.DRAFT_GENERATED,
     },

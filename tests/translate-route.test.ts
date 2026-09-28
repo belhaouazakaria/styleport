@@ -41,6 +41,7 @@ vi.mock("@/lib/prisma", () => ({
 }));
 
 import { POST } from "@/app/api/translate/route";
+import { EM_DASH_CHARACTER } from "@/lib/text-sanitizer";
 
 describe("POST /api/translate", () => {
   beforeEach(() => {
@@ -170,7 +171,7 @@ describe("POST /api/translate", () => {
     });
 
     mockTranslate.mockResolvedValue({
-      text: "Pray tell, how fare you?",
+      text: `Pray tell${EM_DASH_CHARACTER}how fare you?`,
       model: "gpt-4.1-mini",
       promptTokens: 20,
       completionTokens: 16,
@@ -189,6 +190,10 @@ describe("POST /api/translate", () => {
     expect(response.status).toBe(200);
     expect(body.ok).toBe(true);
     expect(body.result).toContain("Pray tell");
+    expect(body.result).not.toContain(EM_DASH_CHARACTER);
+    expect(mockCreateLog).toHaveBeenCalledWith(expect.objectContaining({
+      outputText: expect.not.stringContaining(EM_DASH_CHARACTER),
+    }));
   });
 
   it("returns 404 when translator missing", async () => {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { buildTranslatorPrompts } from "@/lib/prompt-builder";
+import { EM_DASH_CHARACTER } from "@/lib/text-sanitizer";
 
 describe("buildTranslatorPrompts", () => {
   const translator = {
@@ -32,6 +33,7 @@ describe("buildTranslatorPrompts", () => {
     });
 
     expect(prompt.systemPrompt).toContain("Custom system prompt");
+    expect(prompt.systemPrompt).toContain(`Do not use the character ${EM_DASH_CHARACTER} under any circumstances.`);
     expect(prompt.userPrompt).toContain("Rewrite elegantly.");
     expect(prompt.userPrompt).toContain("Mode: Formal");
     expect(prompt.userPrompt).toContain("hello there");

@@ -8,7 +8,16 @@ import {
 
 import { MAX_INPUT_CHARS } from "@/lib/constants";
 import type { ApiError } from "@/lib/types";
+import { containsEmDash } from "@/lib/text-sanitizer";
 import { safeTrim } from "@/lib/utils";
+
+const EM_DASH_VALIDATION_MESSAGE = "Em dashes are not allowed in public-facing text.";
+
+export function addNoEmDashValidation(value: unknown, context: z.RefinementCtx): void {
+  if (containsEmDash(value)) {
+    context.addIssue({ code: "custom", message: EM_DASH_VALIDATION_MESSAGE });
+  }
+}
 
 export const modeKeySchema = z
   .string()
@@ -168,7 +177,7 @@ export const translatorUpsertSchema = z.object({
   modes: z.array(modeInputSchema).max(12),
   examples: z.array(exampleInputSchema).max(20),
   editorial: editorialInputSchema.optional(),
-});
+}).superRefine(addNoEmDashValidation);
 
 export const categoryUpsertSchema = z.object({
   name: z.string().trim().min(2).max(120),
@@ -179,7 +188,7 @@ export const categoryUpsertSchema = z.object({
   iconKey: z.string().trim().max(80).optional().or(z.literal("")),
   seoTitle: z.string().trim().max(180).optional().or(z.literal("")),
   seoDescription: z.string().trim().max(320).optional().or(z.literal("")),
-});
+}).superRefine(addNoEmDashValidation);
 
 export const adPlacementUpsertSchema = z.object({
   name: z.string().trim().min(2).max(120),
@@ -203,7 +212,7 @@ export const adPlacementUpsertSchema = z.object({
   categoryId: z.string().trim().min(1).optional().nullable().or(z.literal("")),
   isActive: z.boolean(),
   sortOrder: z.number().int().min(0).max(9999),
-});
+}).superRefine(addNoEmDashValidation);
 
 export const adminTranslatorFilterSchema = z.object({
   q: z.string().optional(),
@@ -238,7 +247,7 @@ export const settingsSchema = z.object({
   faviconUrl: z.string().trim().max(500).optional().or(z.literal("")),
   logoDesktopHeight: z.number().int().min(24).max(80).default(40),
   logoMobileHeight: z.number().int().min(20).max(64).default(32),
-});
+}).superRefine(addNoEmDashValidation);
 
 export const translatorRequestSchema = z.object({
   requesterEmail: z
@@ -344,7 +353,7 @@ export const translatorDraftSchema = z.object({
     examples: [],
     faq: [],
   }),
-});
+}).superRefine(addNoEmDashValidation);
 
 export const translatorEditorialCandidateSchema = z.object({
   about: z.string().trim().max(2400),
@@ -362,7 +371,7 @@ export const translatorEditorialCandidateSchema = z.object({
     question: z.string().trim().max(240),
     answer: z.string().trim().max(1000),
   })).max(5),
-});
+}).superRefine(addNoEmDashValidation);
 
 export const aiDraftInputSchema = z.object({
   brief: z.string().trim().min(12).max(2400),
