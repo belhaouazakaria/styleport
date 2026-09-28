@@ -7,6 +7,7 @@ import type { TranslatorEditorialDraft } from "@/lib/types";
 import { translatorEditorialCandidateSchema } from "@/lib/validators";
 import { prisma } from "@/lib/prisma";
 import { getExpectedEditorialSections, mergeEditorialDraft, validateEditorialDraft } from "@/lib/editorial-job-utils";
+import { assertNoEmDash, sanitizeGeneratedText } from "@/lib/text-sanitizer";
 
 export { getMissingEditorialSections, mergeEditorialDraft, validateEditorialDraft } from "@/lib/editorial-job-utils";
 
@@ -455,7 +456,9 @@ export async function setEditorialDraftStatus(id: string, status: "APPROVED" | "
 export async function updateEditorialDraftPayload(id: string, payload: unknown) {
   const draft = await prisma.translatorEditorialDraft.findUnique({ where: { id }, select: { validation: true, jobItem: { select: { operation: true } } } });
   if (!draft) throw new Error("Editorial draft not found.");
-  const parsed = translatorEditorialCandidateSchema.safeParse(payload);
+  const sanitized = sanitizeGeneratedText(payload);
+  assertNoEmDash(sanitized, "Editorial draft");
+  const parsed = translatorEditorialCandidateSchema.safeParse(sanitized);
   if (!parsed.success) throw new Error("Draft content is invalid. Fix the highlighted JSON before saving.");
   const validation = validateEditorialDraft(parsed.data, expectedSectionsForStoredDraft(draft.validation, parsed.data, draft.jobItem.operation));
   if (!validation.valid) throw new Error(validation.errors[0] || "Draft content is invalid.");
@@ -475,7 +478,9 @@ type PublishableEditorialDraft = {
 };
 
 function getValidatedPublishPayload(draft: PublishableEditorialDraft) {
-  const parsed = translatorEditorialCandidateSchema.safeParse(draft.payload);
+  const sanitized = sanitizeGeneratedText(draft.payload);
+  assertNoEmDash(sanitized, "Editorial publish payload");
+  const parsed = translatorEditorialCandidateSchema.safeParse(sanitized);
   if (!parsed.success || !validateEditorialDraft(parsed.data, expectedSectionsForStoredDraft(draft.validation, parsed.data, draft.jobItem.operation)).valid) {
     throw new Error("This draft is invalid or missing generated content and cannot be published.");
   }
@@ -488,24 +493,29 @@ async function writePublishedEditorial(
   payload: TranslatorEditorialDraft,
   reviewedById: string,
 ) {
+  const sanitizedPayload = sanitizeGeneratedText(payload);
+  assertNoEmDash(sanitizedPayload, "Published editorial content");
+  const payloadValidation = translatorEditorialCandidateSchema.safeParse(sanitizedPayload);
+  if (!payloadValidation.success) throw new EditorialContentValidationError("Published editorial content failed validation.");
+  const safePayload = payloadValidation.data;
   await tx.translatorEditorialContent.upsert({
     where: { translatorId: draft.translatorId },
-    create: { translatorId: draft.translatorId, about: payload.about, whatItDoes: payload.whatItDoes, differenceDescription: payload.differenceDescription },
-    update: { about: payload.about, whatItDoes: payload.whatItDoes, differenceDescription: payload.differenceDescription },
+    create: { translatorId: draft.translatorId, about: safePayload.about, whatItDoes: safePayload.whatItDoes, differenceDescription: safePayload.differenceDescription },
+    update: { about: safePayload.about, whatItDoes: safePayload.whatItDoes, differenceDescription: safePayload.differenceDescription },
   });
   await tx.translatorEditorialList.deleteMany({ where: { translatorId: draft.translatorId } });
   await tx.translatorEditorialList.createMany({
     data: [
-      ...payload.bestUses.map((content, index) => ({ translatorId: draft.translatorId, kind: "BEST_USE" as const, content, sortOrder: index + 1 })),
-      ...payload.howToUse.map((content, index) => ({ translatorId: draft.translatorId, kind: "HOW_TO_USE" as const, content, sortOrder: index + 1 })),
-      ...payload.tips.map((content, index) => ({ translatorId: draft.translatorId, kind: "TIP" as const, content, sortOrder: index + 1 })),
+      ...safePayload.bestUses.map((content, index) => ({ translatorId: draft.translatorId, kind: "BEST_USE" as const, content, sortOrder: index + 1 })),
+      ...safePayload.howToUse.map((content, index) => ({ translatorId: draft.translatorId, kind: "HOW_TO_USE" as const, content, sortOrder: index + 1 })),
+      ...safePayload.tips.map((content, index) => ({ translatorId: draft.translatorId, kind: "TIP" as const, content, sortOrder: index + 1 })),
     ],
   });
   await tx.translatorEditorialExample.deleteMany({ where: { translatorId: draft.translatorId } });
-  await tx.translatorEditorialExample.createMany({ data: payload.examples.map((item, index) => ({ translatorId: draft.translatorId, contextTitle: item.contextTitle || null, originalText: item.originalText, transformedText: item.transformedText, sortOrder: index + 1 })) });
+  await tx.translatorEditorialExample.createMany({ data: safePayload.examples.map((item, index) => ({ translatorId: draft.translatorId, contextTitle: item.contextTitle || null, originalText: item.originalText, transformedText: item.transformedText, sortOrder: index + 1 })) });
   await tx.translatorEditorialFaq.deleteMany({ where: { translatorId: draft.translatorId } });
-  await tx.translatorEditorialFaq.createMany({ data: payload.faq.map((item, index) => ({ translatorId: draft.translatorId, question: item.question, answer: item.answer, sortOrder: index + 1 })) });
-  await tx.translatorEditorialDraft.update({ where: { id: draft.id }, data: { status: "PUBLISHED", reviewedById, reviewedAt: new Date(), publishedAt: new Date() } });
+  await tx.translatorEditorialFaq.createMany({ data: safePayload.faq.map((item, index) => ({ translatorId: draft.translatorId, question: item.question, answer: item.answer, sortOrder: index + 1 })) });
+  await tx.translatorEditorialDraft.update({ where: { id: draft.id }, data: { payload: toJson(safePayload), status: "PUBLISHED", reviewedById, reviewedAt: new Date(), publishedAt: new Date() } });
 }
 
 export async function approveAndPublishEditorialDraft(id: string, reviewedById: string) {
@@ -604,7 +614,7 @@ export async function processEditorialJobItem(
       return { status: "SKIPPED" as const };
     }
 
-    const generated = await (options.generate || generateTranslatorEditorialContent)({
+    const generated = sanitizeGeneratedText(await (options.generate || generateTranslatorEditorialContent)({
       model: settings.defaultModelOverride || item.translator.modelOverride || undefined,
       context: {
         name: item.translator.name,
@@ -617,7 +627,8 @@ export async function processEditorialJobItem(
         existingAbout: current.about || item.translator.shortDescription,
         focus: item.operation === "GENERATE_MISSING" ? "the missing sections only" : item.operation.toLowerCase().replaceAll("_", " "),
       },
-    });
+    }));
+    assertNoEmDash(generated, "Generated editorial content");
     const generatedValidation = validateEditorialDraft(generated, expectedSections);
     if (!generatedValidation.valid) {
       throw new EditorialContentValidationError(
@@ -626,7 +637,8 @@ export async function processEditorialJobItem(
           : `Generated editorial output failed validation: ${generatedValidation.errors.slice(0, 2).join("; ")}`,
       );
     }
-    const merged = mergeEditorialDraft(current, generated, item.operation);
+    const merged = sanitizeGeneratedText(mergeEditorialDraft(current, generated, item.operation));
+    assertNoEmDash(merged, "Merged editorial draft");
     const validation = validateEditorialDraft(merged, expectedSections);
     if (!validation.valid) {
       throw new EditorialContentValidationError(
@@ -669,24 +681,75 @@ export async function processEditorialJobItem(
   }
 }
 
+function getEditorialWorkerPollIntervalMs() {
+  const raw = Number(process.env.TRANSLATOR_EDITORIAL_POLL_INTERVAL_MS || 300000);
+  if (!Number.isFinite(raw)) return 300000;
+  return Math.min(Math.max(raw, 60000), 3600000);
+}
+
+function isDatabaseQuotaError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.toLowerCase().includes("exceeded the quota");
+}
+
 export async function runEditorialWorker(options: { once?: boolean } = {}) {
-  const concurrency = Math.min(10, Math.max(1, Number(process.env.TRANSLATOR_EDITORIAL_CONCURRENCY || DEFAULT_CONCURRENCY)));
-  console.log(`[editorial-worker] Polling PostgreSQL jobs (concurrency=${concurrency}, once=${options.once ? "yes" : "no"}).`);
+  const concurrency = Math.min(3, Math.max(1, Number(process.env.TRANSLATOR_EDITORIAL_CONCURRENCY || DEFAULT_CONCURRENCY)));
+  const pollIntervalMs = getEditorialWorkerPollIntervalMs();
+
+  console.log(
+    `[editorial-worker] Polling PostgreSQL jobs (concurrency=${concurrency}, intervalMs=${pollIntervalMs}, once=${options.once ? "yes" : "no"}).`,
+  );
+
   let stopping = false;
-  const stop = () => { stopping = true; };
+  let consecutiveFailures = 0;
+
+  const stop = () => {
+    stopping = true;
+  };
+
   process.once("SIGTERM", stop);
   process.once("SIGINT", stop);
 
   while (!stopping) {
-    await recoverStaleItems();
-    const itemIds = (await Promise.all(Array.from({ length: concurrency }, () => claimNextItem()))).filter(Boolean) as string[];
-    if (!itemIds.length) {
+    try {
+      await recoverStaleItems();
+
+      const itemIds = (
+        await Promise.all(Array.from({ length: concurrency }, () => claimNextItem()))
+      ).filter(Boolean) as string[];
+
+      consecutiveFailures = 0;
+
+      if (!itemIds.length) {
+        if (options.once) break;
+        await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+        continue;
+      }
+
+      await Promise.all(itemIds.map((id) => processEditorialJobItem(id)));
+
       if (options.once) break;
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      continue;
+    } catch (error) {
+      consecutiveFailures += 1;
+
+      console.error("[editorial-worker] Poll failed", error);
+
+      if (isDatabaseQuotaError(error)) {
+        console.error("[editorial-worker] Database quota exceeded. Stopping worker to avoid repeated failed polling.");
+        break;
+      }
+
+      if (consecutiveFailures >= 5) {
+        console.error("[editorial-worker] Too many consecutive failures. Stopping worker.");
+        break;
+      }
+
+      const backoffMs = Math.min(pollIntervalMs * consecutiveFailures, 1800000);
+      await new Promise((resolve) => setTimeout(resolve, backoffMs));
+
+      if (options.once) break;
     }
-    await Promise.all(itemIds.map((id) => processEditorialJobItem(id)));
-    if (options.once) break;
   }
+
   await prisma.$disconnect();
 }
