@@ -415,7 +415,7 @@ export async function recalculateAutoFeaturedTranslators(options?: {
   };
 }
 
-export async function maybeRecalculateAutoFeaturedTranslators(source: "translation-success" | "settings-save") {
+export async function maybeRecalculateAutoFeaturedTranslators(source: "translation-success" | "settings-save" | "daily-featured-recalculation") {
   const now = Date.now();
   if (
     source === "translation-success" &&

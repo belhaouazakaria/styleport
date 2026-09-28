@@ -22,7 +22,8 @@
     "prisma:studio": "node node_modules/prisma/build/index.js studio",
     "validate:env:production": "tsx scripts/validate-production-env.ts",
     "prepare:production": "npm run validate:env:production && npm run prisma:generate && npm run prisma:deploy && npm run build",
-    "deploy:hostinger": "sh ./scripts/hostinger-deploy.sh"
+    "deploy:hostinger": "sh ./scripts/hostinger-deploy.sh",
+    "featured:recalculate": "tsx scripts/recalculate-featured-translators.ts"
   },
   "postinstall": "node node_modules/prisma/build/index.js generate",
   "dependencies": {
