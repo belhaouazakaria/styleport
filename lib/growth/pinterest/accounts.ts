@@ -109,7 +109,13 @@ export async function disconnectPinterestAccount(accountId: string, adminUserId:
     await tx.$executeRaw`
       UPDATE "GrowthJob"
       SET "status" = 'CANCELLED'::"GrowthJobStatus", "completedAt" = CURRENT_TIMESTAMP, "updatedAt" = CURRENT_TIMESTAMP
-      WHERE "type" IN ('PINTEREST_ACCOUNT_SYNC'::"GrowthJobType", 'PINTEREST_BOARD_SYNC'::"GrowthJobType")
+      WHERE "type" IN (
+        'PINTEREST_ACCOUNT_SYNC'::"GrowthJobType",
+        'PINTEREST_BOARD_SYNC'::"GrowthJobType",
+        'PINTEREST_PIN_INVENTORY_SYNC'::"GrowthJobType",
+        'PINTEREST_ACCOUNT_ANALYTICS_SYNC'::"GrowthJobType",
+        'PINTEREST_PIN_ANALYTICS_SYNC'::"GrowthJobType"
+      )
         AND "status" IN ('PENDING'::"GrowthJobStatus", 'FAILED_RETRYABLE'::"GrowthJobStatus")
         AND "payload"->>'accountId' = ${accountId}
     `;

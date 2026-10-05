@@ -23,12 +23,12 @@ export default async function AdminGrowthPage() {
     <>
       <AdminTopbar
         title="Growth"
-        subtitle="Phase 2 foundation status, bounded jobs, worker health, and audited configuration."
+        subtitle="Growth controls, bounded jobs, Pinterest connection, and organic analytics health."
       />
       <main className="space-y-6 p-4 sm:p-6">
-        <div className="flex justify-end"><Link href="/admin/growth/accounts" className={cn(buttonVariants({ variant: "outline" }))}>Pinterest accounts</Link></div>
+        <div className="flex flex-wrap justify-end gap-3"><Link href="/admin/growth/analytics" className={cn(buttonVariants({ variant: "outline" }))}>Pinterest analytics</Link><Link href="/admin/growth/accounts" className={cn(buttonVariants({ variant: "outline" }))}>Pinterest accounts</Link></div>
         <div className="rounded-2xl border border-brand-200 bg-brand-50 p-4 text-sm leading-6 text-brand-950">
-          Pinterest account connection and read-only board sync are available. Analytics, attribution, Ideas, publishing, and autonomous content remain inactive.
+          Pinterest account, board, Pin inventory, and organic analytics synchronization are available through bounded jobs. Attribution, Ideas, publishing, and autonomous content remain inactive.
         </div>
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Growth foundation status">
@@ -36,6 +36,13 @@ export default async function AdminGrowthPage() {
           <KpiCard label="Queued jobs" value={overview.jobs.queued.toLocaleString()} hint={overview.jobs.oldestRunnableJob ? `Oldest due ${formatDate(overview.jobs.oldestRunnableJob.runAfter)}` : "No runnable work"} />
           <KpiCard label="Active jobs" value={activeJobs.toLocaleString()} hint={`${overview.jobs.claimed} claimed · ${overview.jobs.running} running`} />
           <KpiCard label="Failed jobs" value={failedJobs.toLocaleString()} hint={`${overview.jobs.retryable} retryable · ${overview.jobs.terminalFailed} terminal`} />
+        </section>
+
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Pinterest analytics status">
+          <KpiCard label="Analytics state" value={overview.pinterestAnalytics.status} hint="Across connected Pinterest accounts" />
+          <KpiCard label="Pins inventoried" value={overview.pinterestAnalytics.pinsInventoried.toLocaleString()} hint="Active locally synchronized Pins" />
+          <KpiCard label="Pin backfill" value={`${overview.pinterestAnalytics.backfillPinsProcessed}/${overview.pinterestAnalytics.backfillPinsTotal}`} hint="Detailed Pin history progress" />
+          <KpiCard label="Analytics retrieved" value={formatDate(overview.pinterestAnalytics.lastSuccessfulSyncAt)} hint="Latest successful API retrieval" />
         </section>
 
         <GrowthSettingsForm initial={{ enabled: overview.settings.enabled, intensity: overview.settings.intensity, workerBatchSize: overview.settings.workerBatchSize }} />

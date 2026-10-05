@@ -190,6 +190,14 @@ Production Trial-access validation connected the main SayTwist Business account 
 
 `npm run growth:worker` is a bounded standalone process. Its bootstrap uses `@next/env` before dynamically importing Growth/Pinterest modules, so production obtains `.env.production.local`, `.env.local`, `.env.production` and `.env` with explicit process variables taking precedence. Pinterest configuration status is calculated server-side from one required-name list and exposes only safe operational state. Missing or invalid local configuration is terminal for a claimed sync job because retrying cannot repair server configuration.
 
+## D-026 — Phase 4 uses daily organic history and bounded single-Pin reads
+
+**Status:** Accepted and implemented; pending live validation
+
+Persist Pinterest-specific account and Pin daily `BigInt` metrics with deterministic account/date and Pin/date UPSERT keys. Initial backfill requests 90 inclusive UTC dates; incremental retrieval refreshes seven inclusive dates so settling data can be corrected. Inventory and detailed Pin work resume through existing persistent jobs with fixed request/page/Pin caps. Outbound clicks are the default Pinterest-side ranking metric, but Phase 4 creates no winner, viral, opportunity or conversion classification.
+
+Use official `GET /pins`, user-account analytics/top Pins, and individual Pin analytics. Do not call or depend on the closed-beta multiple-Pin analytics endpoint. Do not store rolling/lifetime `pin_metrics` as daily history. Growth stays disabled and no scheduler is added until a later rollout decision.
+
 ## Open implementation checks
 
 1. Whether the remaining existing Pinterest accounts are eligible to connect with the required scopes when their roles are activated.

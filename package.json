@@ -16,6 +16,7 @@
     "test": "vitest run",
     "test:growth-db": "test -n \"$GROWTH_TEST_DATABASE_URL\" && DATABASE_URL=\"$GROWTH_TEST_DATABASE_URL\" RUN_GROWTH_DB_TESTS=1 vitest run tests/growth-persistence.integration.test.ts",
     "test:growth-pinterest-db": "test -n \"$GROWTH_PINTEREST_TEST_DATABASE_URL\" && DATABASE_URL=\"$GROWTH_PINTEREST_TEST_DATABASE_URL\" RUN_GROWTH_PINTEREST_DB_TESTS=1 vitest run tests/pinterest-persistence.integration.test.ts",
+    "test:growth-analytics-db": "test -n \"$GROWTH_ANALYTICS_TEST_DATABASE_URL\" && DATABASE_URL=\"$GROWTH_ANALYTICS_TEST_DATABASE_URL\" RUN_GROWTH_ANALYTICS_DB_TESTS=1 vitest run tests/pinterest-analytics-persistence.integration.test.ts",
     "test:watch": "vitest",
     "prisma:generate": "node node_modules/prisma/build/index.js generate",
     "prisma:migrate": "node node_modules/prisma/build/index.js migrate dev",

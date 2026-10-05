@@ -23,6 +23,7 @@ const overview = {
   jobs: { queued: 2, claimed: 1, running: 0, retryable: 1, terminalFailed: 0, succeeded: 3, cancelled: 0, oldestRunnableJob: null },
   recentActivity: [],
   worker: null,
+  pinterestAnalytics: { pinsInventoried: 0, status: "NEVER_SYNCED", lastSuccessfulSyncAt: null, backfillPinsProcessed: 0, backfillPinsTotal: 0 },
 };
 
 describe("Growth admin foundation", () => {

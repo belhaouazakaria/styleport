@@ -1,6 +1,6 @@
 # SayTwist Growth Agent
 
-**Status:** Phase 3 complete with live Pinterest OAuth/account/board validation; Growth disabled by default
+**Status:** Phase 4 implemented, pending live Pinterest analytics validation; Growth disabled by default
 **Scope:** Pinterest-first autonomous growth system inside SayTwist  
 **Primary admin surface:** `/admin/growth`  
 **Primary public expansion:** `/ideas`  
@@ -72,7 +72,7 @@ If implementation changes behavior described here, update the relevant document 
 ## Remaining implementation checks
 
 - Only static/image Pins are in scope initially. Video is out of scope.
-- Pinterest Developer/API access has not yet been obtained.
+- Pinterest Trial access is approved. The main `@saytwist` Business account is connected and Phase 3 account/board reads were live validated; Phase 4 organic analytics is implemented but has not yet been live validated.
 - WhatsApp reporting is desired for one recipient, but provider setup and current pricing must be verified before implementation.
 
-See `IMPLEMENTATION_MAP.md` for verified repository facts and `DATA_MODEL.md` for the proposed schema and state contracts. Phase 1 changes documentation only.
+See `IMPLEMENTATION_MAP.md` for verified repository facts and `DATA_MODEL.md` for implemented and proposed schema/state contracts.

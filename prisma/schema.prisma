@@ -153,6 +153,9 @@ enum GrowthJobType {
   FOUNDATION_NOOP
   PINTEREST_ACCOUNT_SYNC
   PINTEREST_BOARD_SYNC
+  PINTEREST_PIN_INVENTORY_SYNC
+  PINTEREST_ACCOUNT_ANALYTICS_SYNC
+  PINTEREST_PIN_ANALYTICS_SYNC
 }
 
 enum GrowthJobStatus {
@@ -193,6 +196,15 @@ enum GrowthPinterestConnectionStatus {
 enum GrowthPinterestApiEnvironment {
   SANDBOX
   PRODUCTION
+}
+
+enum GrowthPinterestAnalyticsStatus {
+  NEVER_SYNCED
+  BACKFILLING
+  FRESH
+  STALE
+  PARTIAL
+  FAILED
 }
 
 model User {
@@ -700,20 +712,20 @@ model GrowthWorkerHeartbeat {
 }
 
 model GrowthPinterestAccount {
-  id                      String                          @id @default(cuid())
-  pinterestAccountId      String                          @unique
+  id                      String                              @id @default(cuid())
+  pinterestAccountId      String                              @unique
   publicationRole         GrowthPinterestPublicationRole
-  activeRole              GrowthPinterestPublicationRole? @unique
+  activeRole              GrowthPinterestPublicationRole?     @unique
   username                String
   businessName            String?
   profileImageUrl         String?
   websiteUrl              String?
   pinterestAccountType    String?
   apiEnvironment          GrowthPinterestApiEnvironment
-  connectionStatus        GrowthPinterestConnectionStatus @default(CONNECTED)
+  connectionStatus        GrowthPinterestConnectionStatus     @default(CONNECTED)
   grantedScopes           String[]
   encryptedCredentials    String?
-  credentialVersion       Int                             @default(1)
+  credentialVersion       Int                                 @default(1)
   accessTokenExpiresAt    DateTime?
   refreshTokenExpiresAt   DateTime?
   lastAccountSyncAt       DateTime?
@@ -721,9 +733,12 @@ model GrowthPinterestAccount {
   lastSuccessfulApiCallAt DateTime?
   lastConnectionError     String?
   disconnectedAt          DateTime?
-  createdAt               DateTime                        @default(now())
-  updatedAt               DateTime                        @updatedAt
+  createdAt               DateTime                            @default(now())
+  updatedAt               DateTime                            @updatedAt
   boards                  GrowthPinterestBoard[]
+  pins                    GrowthPinterestPin[]
+  dailyMetrics            GrowthPinterestAccountMetricDaily[]
+  analyticsState          GrowthPinterestAnalyticsState?
 
   @@index([connectionStatus, publicationRole])
   @@index([apiEnvironment, connectionStatus])
@@ -743,10 +758,120 @@ model GrowthPinterestBoard {
   createdAt        DateTime               @default(now())
   updatedAt        DateTime               @updatedAt
   account          GrowthPinterestAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  pins             GrowthPinterestPin[]
 
   @@unique([accountId, pinterestBoardId])
   @@index([accountId, isActive])
   @@index([pinterestBoardId])
+}
+
+model GrowthPinterestPin {
+  id                    String                          @id @default(cuid())
+  pinterestPinId        String                          @unique
+  accountId             String
+  boardId               String?
+  pinterestBoardId      String?
+  title                 String?
+  description           String?
+  destinationUrl        String?
+  creativeType          String?
+  mediaType             String?
+  previewImageUrl       String?
+  publishedAt           DateTime?
+  isActive              Boolean                         @default(true)
+  lastSeenAt            DateTime
+  lastSyncedAt          DateTime
+  lastAnalyticsSyncAt   DateTime?
+  analyticsPriorityAt   DateTime?
+  summaryStartDate      DateTime?
+  summaryEndDate        DateTime?
+  summaryFetchedAt      DateTime?
+  summaryImpressions    BigInt?
+  summarySaves          BigInt?
+  summaryPinClicks      BigInt?
+  summaryOutboundClicks BigInt?
+  createdAt             DateTime                        @default(now())
+  updatedAt             DateTime                        @updatedAt
+  account               GrowthPinterestAccount          @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  board                 GrowthPinterestBoard?           @relation(fields: [boardId], references: [id], onDelete: SetNull)
+  dailyMetrics          GrowthPinterestPinMetricDaily[]
+
+  @@index([accountId, isActive])
+  @@index([accountId, lastAnalyticsSyncAt])
+  @@index([accountId, analyticsPriorityAt])
+  @@index([pinterestBoardId])
+}
+
+model GrowthPinterestAccountMetricDaily {
+  id             String                 @id @default(cuid())
+  accountId      String
+  metricDate     DateTime
+  impressions    BigInt                 @default(0)
+  saves          BigInt                 @default(0)
+  pinClicks      BigInt                 @default(0)
+  outboundClicks BigInt                 @default(0)
+  engagements    BigInt                 @default(0)
+  dataStatus     String
+  fetchedAt      DateTime
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  account        GrowthPinterestAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([accountId, metricDate])
+  @@index([metricDate])
+  @@index([accountId, outboundClicks])
+}
+
+model GrowthPinterestPinMetricDaily {
+  id             String             @id @default(cuid())
+  pinId          String
+  metricDate     DateTime
+  impressions    BigInt             @default(0)
+  saves          BigInt             @default(0)
+  pinClicks      BigInt             @default(0)
+  outboundClicks BigInt             @default(0)
+  dataStatus     String
+  fetchedAt      DateTime
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  pin            GrowthPinterestPin @relation(fields: [pinId], references: [id], onDelete: Cascade)
+
+  @@unique([pinId, metricDate])
+  @@index([metricDate])
+  @@index([pinId, outboundClicks])
+  @@index([outboundClicks, metricDate])
+}
+
+model GrowthPinterestAnalyticsState {
+  id                         String                         @id @default(cuid())
+  accountId                  String                         @unique
+  status                     GrowthPinterestAnalyticsStatus @default(NEVER_SYNCED)
+  inventoryBookmark          String?
+  inventoryStartedAt         DateTime?
+  inventoryPageCount         Int                            @default(0)
+  inventoryPinCount          Int                            @default(0)
+  inventorySeenBookmarks     String[]                       @default([])
+  backfillStartDate          DateTime?
+  backfillEndDate            DateTime?
+  backfillStartedAt          DateTime?
+  backfillCompletedAt        DateTime?
+  backfillPinsTotal          Int                            @default(0)
+  backfillPinsProcessed      Int                            @default(0)
+  lastInventorySyncAt        DateTime?
+  lastAccountAnalyticsSyncAt DateTime?
+  lastPinAnalyticsSyncAt     DateTime?
+  lastSuccessfulSyncAt       DateTime?
+  lastAttemptAt              DateTime?
+  lastError                  String?
+  lastRateLimitLimit         String?
+  lastRateLimitRemaining     String?
+  lastRateLimitReset         String?
+  rateLimitObservedAt        DateTime?
+  createdAt                  DateTime                       @default(now())
+  updatedAt                  DateTime                       @updatedAt
+  account                    GrowthPinterestAccount         @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([status, lastSuccessfulSyncAt])
 }
 
 model GrowthPinterestOAuthState {
