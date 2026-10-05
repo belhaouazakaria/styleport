@@ -15,13 +15,12 @@ Do not implement:
 
 ## 2. Developer access
 
-Pinterest API access has not yet been obtained.
+Pinterest Trial access is approved and was used for Phase 3 production connection validation.
 
-Implementation must begin with:
+Production publishing preparation still requires:
 
 - Pinterest developer application;
 - current API documentation verification;
-- Trial access testing;
 - preparation for Standard access if required for normal production publishing.
 
 Planning baseline from current Pinterest documentation:
@@ -202,4 +201,4 @@ State is random 256-bit data; only its SHA-256 hash is stored with admin ID, rol
 
 `npm run growth:worker` is a one-shot process. Its bootstrap loads Next environment files before importing Growth/Pinterest code: `.env.production.local`, `.env.local`, `.env.production`, then `.env`, while explicitly supplied process environment values retain precedence. Operators do not need to export Pinterest variables manually when production values are in `.env.local`. A local configuration failure is terminal for a claimed sync job and does not enter a retry cycle; deploy the corrected configuration/bootstrap before manually running another worker batch.
 
-Live status: **OAuth connection validated; board synchronization pending worker-fix deployment and controlled rerun**. Standard access is an operator review process and is never inferred from API data.
+Live status: **Phase 3 complete**. With approved Trial access, the main `@saytwist` Pinterest Business account connected successfully in the production API environment. The granted scope set was complete, access and refresh credentials were healthy, the bounded worker completed `claimed=5`, `succeeded=5`, `failed=0`, and both account and board synchronization succeeded. The live validation synchronized 18 boards; this count records that validation run and is not a permanent product assumption. No Pin or board was created, changed or deleted. Growth was disabled again after testing and remains the production baseline until later phases make scheduled Growth execution ready. Standard access is an operator review process and is never inferred from API data.

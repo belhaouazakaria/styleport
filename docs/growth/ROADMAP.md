@@ -46,7 +46,7 @@ Implemented in migration `20261005140000_growth_platform_foundation` and `lib/gr
 
 ## Phase 3 — Pinterest integration
 
-**Status:** Implemented / pending live Pinterest validation
+**Status:** Complete
 
 Deliver:
 - developer app setup guidance;
@@ -61,7 +61,7 @@ Deliver:
 Exit:
 - at least one account can connect and sync safely.
 
-Implemented in migration `20261005170000_growth_pinterest_integration`, `lib/growth/pinterest/*`, `/api/admin/growth/pinterest/*`, and `/admin/growth/accounts`. Mocked HTTP/OAuth tests and disposable PostgreSQL tests pass. Live exit validation remains pending approved Pinterest credentials; no live account has been connected by this phase run.
+Implemented in migration `20261005170000_growth_pinterest_integration`, `lib/growth/pinterest/*`, `/api/admin/growth/pinterest/*`, and `/admin/growth/accounts`. Mocked HTTP/OAuth tests and disposable PostgreSQL tests pass. Production validation completed with Pinterest Trial access: the main SayTwist Business account connected through OAuth with the complete required scope set, account synchronization succeeded, and a bounded worker completed account and board synchronization successfully. Growth was disabled again after validation and remains disabled until later phases make scheduled execution ready.
 
 ## Phase 4 — Analytics ingestion
 

@@ -176,11 +176,13 @@ Use dedicated `GrowthSettings`, `GrowthJob`, `GrowthActivity` and `GrowthWorkerH
 
 ## D-024 — Phase 3 Pinterest connection boundary
 
-**Status:** Accepted and implemented; pending live Pinterest validation
+**Status:** Accepted, implemented and live validated
 
 Use Pinterest API v5 Authorization Code OAuth for existing accounts. Request exactly `user_accounts:read`, `boards:read`, `pins:read` and `pins:write`. OAuth state is a ten-minute, hashed, admin-bound database record consumed atomically once. Credentials use versioned AES-256-GCM envelopes under `GROWTH_CREDENTIAL_ENCRYPTION_KEY`; continuous refresh rotation replaces access and refresh credentials together while holding an account row lock.
 
 Exactly one connected account may hold each SayTwist publication role, and a Pinterest account ID is globally unique. Disconnect erases local ciphertext, releases the active-role slot, cancels pending Phase 3 sync work and retains non-secret identity/audit history. Pinterest documents no suitable application token-revocation endpoint for this flow, so Phase 3 does not invent one. Account and public-board reads are the only Pinterest resource operations in this phase.
+
+Production Trial-access validation connected the main SayTwist Business account with the complete required scope set and successfully synchronized account metadata and boards through the bounded worker. Growth remains disabled after validation until later phases establish scheduled execution.
 
 ## D-025 — Standalone Growth workers load Next environment files before service imports
 
@@ -190,7 +192,7 @@ Exactly one connected account may hold each SayTwist publication role, and a Pin
 
 ## Open implementation checks
 
-1. Pinterest developer access/scopes and whether all existing accounts are eligible to connect.
+1. Whether the remaining existing Pinterest accounts are eligible to connect with the required scopes when their roles are activated.
 2. Persistent image storage path, host scheduler and PM2 process list before any worker is deployed.
 3. WhatsApp provider/setup, current pricing and eligibility; email fallback remains required.
 4. Attribution consent and retention details across served jurisdictions before collection starts.
