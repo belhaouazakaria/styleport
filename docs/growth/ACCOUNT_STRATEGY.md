@@ -174,3 +174,5 @@ The operator decides whether to create/connect any recommended new account.
 ## Launch inventory and targeting
 
 The two additional accounts already exist and will later be rebranded SayTwist Ideas and SayTwist Playground. Launch requires connection/rebranding, not creation. Start with three accounts. Worldwide English is the audience; cold-start scheduling/content tests prioritize US signals, then first-party performance controls the mix. A winning topic may yield a direct translator tool Pin on SayTwist, a useful save-worthy `/ideas` list on Ideas, and a genuinely interactive/relatable concept on Playground, each with distinct creative, copy and destination value. Similarity checks prevent superficial cross-posting.
+
+Phase 3 models the roles as `SAYTWIST`, `SAYTWIST_IDEAS` and `SAYTWIST_PLAYGROUND`. PostgreSQL permits only one connected account per active role and one record per Pinterest account ID. Role changes are explicit audited admin actions. Disconnect retains historical role metadata but releases the active slot and never assigns another account automatically.

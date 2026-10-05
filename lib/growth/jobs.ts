@@ -12,6 +12,7 @@ import {
   growthJobPayloadSchema,
 } from "@/lib/growth/contracts";
 import { recordGrowthActivity } from "@/lib/growth/activity";
+import { NonRetryableGrowthJobError, RetryableGrowthJobError } from "@/lib/growth/errors";
 import { toSafeGrowthError, toSafeGrowthPayload } from "@/lib/growth/safe-data";
 import { prisma } from "@/lib/prisma";
 
@@ -317,10 +318,12 @@ export async function completeGrowthJob(job: GrowthJob, workerId: string, summar
 }
 
 export async function failGrowthJob(job: GrowthJob, workerId: string, error: unknown) {
-  const retryable = job.attemptCount < job.maxAttempts;
+  const retryable = !(error instanceof NonRetryableGrowthJobError) && job.attemptCount < job.maxAttempts;
   const status = retryable ? GrowthJobStatus.FAILED_RETRYABLE : GrowthJobStatus.FAILED_TERMINAL;
   const now = new Date();
-  const retryDelayMs = Math.min(30 * 60_000, 30_000 * 2 ** Math.max(0, job.attemptCount - 1));
+  const retryDelayMs = error instanceof RetryableGrowthJobError && error.retryAfterMs
+    ? Math.min(30 * 60_000, Math.max(30_000, error.retryAfterMs))
+    : Math.min(30 * 60_000, 30_000 * 2 ** Math.max(0, job.attemptCount - 1));
   const safeError = toSafeGrowthError(error);
   await prisma.$transaction(async (tx) => {
     const updated = await tx.growthJob.updateMany({

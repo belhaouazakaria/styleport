@@ -151,6 +151,8 @@ enum GrowthIntensity {
 
 enum GrowthJobType {
   FOUNDATION_NOOP
+  PINTEREST_ACCOUNT_SYNC
+  PINTEREST_BOARD_SYNC
 }
 
 enum GrowthJobStatus {
@@ -175,22 +177,41 @@ enum GrowthWorkerStatus {
   FAILED
 }
 
+enum GrowthPinterestPublicationRole {
+  SAYTWIST
+  SAYTWIST_IDEAS
+  SAYTWIST_PLAYGROUND
+}
+
+enum GrowthPinterestConnectionStatus {
+  CONNECTED
+  DEGRADED
+  REAUTH_REQUIRED
+  DISCONNECTED
+}
+
+enum GrowthPinterestApiEnvironment {
+  SANDBOX
+  PRODUCTION
+}
+
 model User {
-  id                    String                     @id @default(cuid())
+  id                    String                      @id @default(cuid())
   name                  String?
-  email                 String                     @unique
+  email                 String                      @unique
   emailVerified         DateTime?
   image                 String?
   passwordHash          String
-  role                  Role                       @default(USER)
-  createdAt             DateTime                   @default(now())
-  updatedAt             DateTime                   @updatedAt
+  role                  Role                        @default(USER)
+  createdAt             DateTime                    @default(now())
+  updatedAt             DateTime                    @updatedAt
   accounts              Account[]
   sessions              Session[]
-  editorialJobs         TranslatorEditorialJob[]   @relation("TranslatorEditorialJobRequester")
-  editorialDraftReviews TranslatorEditorialDraft[] @relation("TranslatorEditorialDraftReviewer")
-  growthSettingsUpdates GrowthSettings[]           @relation("GrowthSettingsUpdater")
-  growthActivities      GrowthActivity[]           @relation("GrowthActivityUser")
+  editorialJobs         TranslatorEditorialJob[]    @relation("TranslatorEditorialJobRequester")
+  editorialDraftReviews TranslatorEditorialDraft[]  @relation("TranslatorEditorialDraftReviewer")
+  growthSettingsUpdates GrowthSettings[]            @relation("GrowthSettingsUpdater")
+  growthActivities      GrowthActivity[]            @relation("GrowthActivityUser")
+  growthPinterestStates GrowthPinterestOAuthState[] @relation("GrowthPinterestOAuthStateAdmin")
 }
 
 model Account {
@@ -676,6 +697,71 @@ model GrowthWorkerHeartbeat {
   updatedAt    DateTime           @updatedAt
 
   @@index([status, heartbeatAt])
+}
+
+model GrowthPinterestAccount {
+  id                      String                          @id @default(cuid())
+  pinterestAccountId      String                          @unique
+  publicationRole         GrowthPinterestPublicationRole
+  activeRole              GrowthPinterestPublicationRole? @unique
+  username                String
+  businessName            String?
+  profileImageUrl         String?
+  websiteUrl              String?
+  pinterestAccountType    String?
+  apiEnvironment          GrowthPinterestApiEnvironment
+  connectionStatus        GrowthPinterestConnectionStatus @default(CONNECTED)
+  grantedScopes           String[]
+  encryptedCredentials    String?
+  credentialVersion       Int                             @default(1)
+  accessTokenExpiresAt    DateTime?
+  refreshTokenExpiresAt   DateTime?
+  lastAccountSyncAt       DateTime?
+  lastBoardSyncAt         DateTime?
+  lastSuccessfulApiCallAt DateTime?
+  lastConnectionError     String?
+  disconnectedAt          DateTime?
+  createdAt               DateTime                        @default(now())
+  updatedAt               DateTime                        @updatedAt
+  boards                  GrowthPinterestBoard[]
+
+  @@index([connectionStatus, publicationRole])
+  @@index([apiEnvironment, connectionStatus])
+}
+
+model GrowthPinterestBoard {
+  id               String                 @id @default(cuid())
+  accountId        String
+  pinterestBoardId String
+  name             String
+  description      String?
+  privacy          String?
+  ownerUsername    String?
+  isActive         Boolean                @default(true)
+  lastSeenAt       DateTime
+  lastSyncedAt     DateTime
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  account          GrowthPinterestAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([accountId, pinterestBoardId])
+  @@index([accountId, isActive])
+  @@index([pinterestBoardId])
+}
+
+model GrowthPinterestOAuthState {
+  id              String                         @id @default(cuid())
+  stateHash       String                         @unique
+  adminUserId     String
+  publicationRole GrowthPinterestPublicationRole
+  apiEnvironment  GrowthPinterestApiEnvironment
+  expiresAt       DateTime
+  consumedAt      DateTime?
+  createdAt       DateTime                       @default(now())
+  adminUser       User                           @relation("GrowthPinterestOAuthStateAdmin", fields: [adminUserId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt, consumedAt])
+  @@index([adminUserId, createdAt])
 }
 
 model IndexingLog {

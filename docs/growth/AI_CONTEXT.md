@@ -97,3 +97,5 @@ Phase 1 audit findings and exact future module paths live in `IMPLEMENTATION_MAP
 ## Implemented foundation
 
 Phase 2 foundation uses migration `20261005140000_growth_platform_foundation`, `lib/growth/*`, the one-shot `npm run growth:worker` command, and `/admin/growth`. Growth is disabled by default. No cron/PM2 entry exists, and no Pinterest, Ideas or attribution implementation exists. Future work must extend the job enum/handler registry and schema only in its assigned phase.
+
+Phase 3 uses migration `20261005170000_growth_pinterest_integration`, `lib/growth/pinterest/*`, OAuth routes under `/api/admin/growth/pinterest`, and `/admin/growth/accounts`. It connects existing Pinterest accounts through API v5 Authorization Code OAuth, stores AES-256-GCM encrypted rotating credentials, and synchronizes account metadata and public boards through bounded jobs. Live Pinterest validation is pending credentials. No analytics, Pin creation/publication, Ideas, attribution, cron or PM2 Growth process exists.

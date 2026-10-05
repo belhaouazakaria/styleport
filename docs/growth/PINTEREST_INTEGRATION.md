@@ -190,6 +190,14 @@ Official references to re-check during implementation:
 - Pinterest community guidelines: https://policy.pinterest.com/en-gb/community-guidelines
 - Pinterest website claims: https://help.pinterest.com/en/business/article/claim-your-website
 
-## Current repository boundary
+## Phase 3 implemented connection boundary
 
-The only Pinterest-specific API route now is `/api/pinterest/result-image`, accepting a browser-generated temporary PNG for a user-initiated Pinterest share intent. There is no OAuth connection, official API publisher, board sync or metrics ingest. Future adapter must use official API, encrypted per-account credentials, state/redirect validation, rate-limit handling and unknown-result reconciliation. Current production gate remains exact per-Pin approval. `DATA_MODEL.md` defines approval/publication states. The main account already claims `saytwist.com`; satellite accounts already exist and will be rebranded later.
+Phase 3 uses Pinterest API v5 Authorization Code OAuth. Production base is `https://api.pinterest.com/v5`; Sandbox is `https://api-sandbox.pinterest.com/v5`; authorization is `https://www.pinterest.com/oauth/`. Routes are `GET /api/admin/growth/pinterest/oauth/start?role=...` and `GET /api/admin/growth/pinterest/oauth/callback`. Requested scopes are exactly `user_accounts:read`, `boards:read`, `pins:read`, `pins:write`.
+
+Required server variables are `PINTEREST_APP_ID`, `PINTEREST_APP_SECRET`, `PINTEREST_REDIRECT_URI`, `PINTEREST_API_ENVIRONMENT` (`sandbox` or `production`) and `GROWTH_CREDENTIAL_ENCRYPTION_KEY` (generate with `openssl rand -base64 32`). The redirect must use `/api/admin/growth/pinterest/oauth/callback` exactly. Missing values show Not configured without breaking ordinary build/tests.
+
+State is random 256-bit data; only its SHA-256 hash is stored with admin ID, role, environment and ten-minute expiry, then consumed atomically once. Credentials use AES-256-GCM envelope version 1 with random 12-byte IV, authentication tag and fixed versioned AAD. Access tokens refresh five minutes before expiry. Continuous refresh rotates the refresh token, so both tokens and expiries are replaced atomically under an account row lock.
+
+`GET /user_account` synchronizes identity. `GET /boards?page_size=100` follows bookmarks with ten-page and 1,000-board caps plus loop detection. Only a complete sync upserts and marks unseen boards inactive. Phase 3 never creates, edits or deletes a Pinterest board or Pin. Official documentation exposes no suitable app-driven revoke operation here; local disconnect erases ciphertext, prevents token use, cancels pending sync jobs and retains non-secret history.
+
+Live status: **implemented / pending live Pinterest validation**. Approved app credentials, an exact registered redirect URI, configured environment and encryption key remain required. Standard access is an operator review process and is never inferred from API data.

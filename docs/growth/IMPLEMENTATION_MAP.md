@@ -65,3 +65,12 @@ Use a host scheduler or controlled PM2 cron invocation only after actual host ca
 - `lib/growth/activity.ts`: structured, append-only activity records written transactionally with state changes where possible.
 - `lib/growth/admin.ts`: bounded status counts, oldest runnable job, latest worker execution and 12 recent activities.
 - Admin routes use the existing ADMIN guard; settings mutation additionally requires same-origin headers and strict input validation.
+
+## Phase 3 implemented Pinterest boundary
+
+- Migration `20261005170000_growth_pinterest_integration` adds account, board and durable OAuth state storage; publication-role, connection-status and API-environment enums; account/active-role uniqueness; and two sync job enum values.
+- `lib/growth/pinterest/*` centralizes configuration, exact scopes, AES-256-GCM credentials, serialized refresh, validated API reads, and complete-only board synchronization.
+- OAuth routes are `GET /api/admin/growth/pinterest/oauth/start` and `/oauth/callback`. Ten-minute SHA-256 state records bind admin, role and environment and are atomically consumed once.
+- `/admin/growth/accounts` and its mutation routes show real non-secret connection data, enqueue bounded account/board sync, change roles and disconnect.
+- Board reads cap at ten pages and 1,000 boards with bookmark-loop detection. Minute-bucket job keys deduplicate repeated manual syncs. No scheduler or polling was added.
+- `npm run test:growth-pinterest-db` accepts only loopback `saytwist_growth_phase3_test`. Mocked HTTP tests are the current external verification; live OAuth remains pending approved credentials.

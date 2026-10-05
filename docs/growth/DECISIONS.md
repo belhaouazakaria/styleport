@@ -174,6 +174,14 @@ Growth is designed around the existing local PostgreSQL production architecture 
 
 Use dedicated `GrowthSettings`, `GrowthJob`, `GrowthActivity` and `GrowthWorkerHeartbeat` tables. Growth defaults to disabled. Workers run only through explicit bounded invocation, claim one bounded batch atomically with PostgreSQL row locking, cap retries and exit when disabled or empty. Attempts increment on committed claim; stale recovery does not increment, and exhausted leases/failures become terminal. A stable heartbeat row represents each configured worker identity while a random invocation ID fences heartbeat updates and job transitions. Required unique idempotency keys identify a logical job for its entire lifetime. Phase 2 exposes no generic job creation API and registers only the internal `FOUNDATION_NOOP` handler.
 
+## D-024 — Phase 3 Pinterest connection boundary
+
+**Status:** Accepted and implemented; pending live Pinterest validation
+
+Use Pinterest API v5 Authorization Code OAuth for existing accounts. Request exactly `user_accounts:read`, `boards:read`, `pins:read` and `pins:write`. OAuth state is a ten-minute, hashed, admin-bound database record consumed atomically once. Credentials use versioned AES-256-GCM envelopes under `GROWTH_CREDENTIAL_ENCRYPTION_KEY`; continuous refresh rotation replaces access and refresh credentials together while holding an account row lock.
+
+Exactly one connected account may hold each SayTwist publication role, and a Pinterest account ID is globally unique. Disconnect erases local ciphertext, releases the active-role slot, cancels pending Phase 3 sync work and retains non-secret identity/audit history. Pinterest documents no suitable application token-revocation endpoint for this flow, so Phase 3 does not invent one. Account and public-board reads are the only Pinterest resource operations in this phase.
+
 ## Open implementation checks
 
 1. Pinterest developer access/scopes and whether all existing accounts are eligible to connect.

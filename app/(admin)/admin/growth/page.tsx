@@ -1,6 +1,9 @@
 import { AdminTopbar } from "@/components/admin/admin-topbar";
 import { GrowthSettingsForm } from "@/components/admin/growth-settings-form";
 import { KpiCard } from "@/components/admin/kpi-card";
+import { buttonVariants } from "@/components/ui/button";
+import Link from "next/link";
+import { cn } from "@/lib/utils";
 import { requireAdminRoute } from "@/lib/auth";
 import { getGrowthFoundationOverview } from "@/lib/growth/admin";
 
@@ -23,8 +26,9 @@ export default async function AdminGrowthPage() {
         subtitle="Phase 2 foundation status, bounded jobs, worker health, and audited configuration."
       />
       <main className="space-y-6 p-4 sm:p-6">
+        <div className="flex justify-end"><Link href="/admin/growth/accounts" className={cn(buttonVariants({ variant: "outline" }))}>Pinterest accounts</Link></div>
         <div className="rounded-2xl border border-brand-200 bg-brand-50 p-4 text-sm leading-6 text-brand-950">
-          Pinterest, attribution, Ideas, publishing, and autonomous content features are not active in this foundation phase.
+          Pinterest account connection and read-only board sync are available. Analytics, attribution, Ideas, publishing, and autonomous content remain inactive.
         </div>
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Growth foundation status">
