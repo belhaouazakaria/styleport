@@ -61,7 +61,7 @@ Use a host scheduler or controlled PM2 cron invocation only after actual host ca
 - `lib/growth/settings.ts`: dedicated singleton `GrowthSettings` (`id=global`), disabled by default, `BALANCED`, batch size 5, versioned updates.
 - `lib/growth/jobs.ts`: idempotent enqueue, one-statement bounded PostgreSQL batch claim using `FOR UPDATE SKIP LOCKED`, lease recovery, cancellation, bounded exponential retry and terminal failure. The unique, required idempotency key identifies one logical job for its full lifetime; reuse returns the existing row regardless of its state, so callers must namespace keys by operation/resource/version.
 - `lib/growth/handlers.ts`: registry with only `FOUNDATION_NOOP`; unknown types fail visibly.
-- `lib/growth/worker.ts` and `workers/growth-worker.ts`: explicit bounded invocation, maximum batch size 25, no timer or idle polling. A stable configured worker ID upserts one heartbeat row, while each invocation gets a unique lease-owner suffix so overlapping invocations cannot complete each other's jobs.
+- `lib/growth/worker.ts` and `workers/growth-worker.ts`: explicit bounded invocation, maximum batch size 25, no timer or idle polling. The worker bootstrap calls Next's `loadEnvConfig` before dynamically importing any Growth module, so `npm run growth:worker` uses `.env.production.local`, `.env.local`, `.env.production` and `.env` with existing process variables retaining precedence. A stable configured worker ID upserts one heartbeat row, while each invocation gets a unique lease-owner suffix so overlapping invocations cannot complete each other's jobs.
 - `lib/growth/activity.ts`: structured, append-only activity records written transactionally with state changes where possible.
 - `lib/growth/admin.ts`: bounded status counts, oldest runnable job, latest worker execution and 12 recent activities.
 - Admin routes use the existing ADMIN guard; Growth mutations require an Origin that exactly matches the trusted server-side `APP_BASE_URL` canonical public origin, so nginx's loopback listener cannot cause legitimate browser requests to fail. They also use strict input validation.
@@ -69,7 +69,7 @@ Use a host scheduler or controlled PM2 cron invocation only after actual host ca
 ## Phase 3 implemented Pinterest boundary
 
 - Migration `20261005170000_growth_pinterest_integration` adds account, board and durable OAuth state storage; publication-role, connection-status and API-environment enums; account/active-role uniqueness; and two sync job enum values.
-- `lib/growth/pinterest/*` centralizes configuration, exact scopes, AES-256-GCM credentials, serialized refresh, validated API reads, and complete-only board synchronization.
+- `lib/growth/pinterest/*` centralizes configuration, exact scopes, AES-256-GCM credentials, serialized refresh, validated API reads, and complete-only board synchronization. Its server-only configuration status exposes only `configured`, missing variable names and `sandbox`/`production`; secrets never cross the admin page boundary.
 - OAuth routes are `GET /api/admin/growth/pinterest/oauth/start` and `/oauth/callback`. Ten-minute SHA-256 state records bind admin, role and environment and are atomically consumed once.
 - `/admin/growth/accounts` and its mutation routes show real non-secret connection data, enqueue bounded account/board sync, change roles and disconnect.
 - Board reads cap at ten pages and 1,000 boards with bookmark-loop detection. Minute-bucket job keys deduplicate repeated manual syncs. No scheduler or polling was added.

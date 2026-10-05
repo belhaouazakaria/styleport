@@ -2,6 +2,7 @@
 import { GrowthActivityActorKind, GrowthPinterestConnectionStatus } from "@prisma/client";
 
 import { recordGrowthActivity } from "@/lib/growth/activity";
+import { PinterestConfigurationError } from "@/lib/growth/errors";
 import { getPinterestBoardsPage, getPinterestUserAccount } from "@/lib/growth/pinterest/api";
 import { toSafeGrowthError } from "@/lib/growth/safe-data";
 import { prisma } from "@/lib/prisma";
@@ -96,12 +97,14 @@ export async function syncPinterestBoards(accountId: string, fetchImpl?: typeof 
 async function recordSyncFailure(accountId: string, action: string, error: unknown) {
   const safeError = toSafeGrowthError(error);
   await prisma.$transaction(async (tx) => {
-    await tx.growthPinterestAccount.updateMany({ where: {
-      id: accountId,
-      connectionStatus: { notIn: [GrowthPinterestConnectionStatus.DISCONNECTED, GrowthPinterestConnectionStatus.REAUTH_REQUIRED] },
-    }, data: {
-      connectionStatus: GrowthPinterestConnectionStatus.DEGRADED, lastConnectionError: safeError,
-    } });
+    if (!(error instanceof PinterestConfigurationError)) {
+      await tx.growthPinterestAccount.updateMany({ where: {
+        id: accountId,
+        connectionStatus: { notIn: [GrowthPinterestConnectionStatus.DISCONNECTED, GrowthPinterestConnectionStatus.REAUTH_REQUIRED] },
+      }, data: {
+        connectionStatus: GrowthPinterestConnectionStatus.DEGRADED, lastConnectionError: safeError,
+      } });
+    }
     await recordGrowthActivity({ actorKind: GrowthActivityActorKind.WORKER,
       entityType: "GrowthPinterestAccount", entityId: accountId, action,
       summary: { error: safeError },

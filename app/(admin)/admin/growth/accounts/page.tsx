@@ -37,12 +37,12 @@ export default async function PinterestAccountsPage({ searchParams }: { searchPa
       <main className="space-y-6 p-4 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Link href="/admin/growth" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>← Growth overview</Link>
-          <span className={cn("rounded-full px-3 py-1 text-xs font-bold", configuration.configured && configuration.config.environment === "sandbox" ? "bg-amber-100 text-amber-900" : "bg-brand-100 text-brand-900")}>{configuration.configured ? configuration.config.environment.toUpperCase() : "NOT CONFIGURED"}</span>
+          <span className={cn("rounded-full px-3 py-1 text-xs font-bold", configuration.configured && configuration.environment === "sandbox" ? "bg-amber-100 text-amber-900" : "bg-brand-100 text-brand-900")}>{configuration.configured ? configuration.environment.toUpperCase() : "NOT CONFIGURED"}</span>
         </div>
 
         {params.status ? <div className="rounded-xl border border-border bg-white p-4 text-sm text-ink">OAuth result: <strong>{params.status.replaceAll("_", " ")}</strong></div> : null}
         {!configuration.configured ? <div className="rounded-2xl border border-amber-300 bg-amber-50 p-5 text-sm leading-6 text-amber-950">
-          Pinterest is not configured. Add the documented server-only environment variables to enable OAuth. Normal application behavior remains available.
+          Pinterest is not configured. Missing or invalid server-only values: {configuration.missingNames.length ? configuration.missingNames.join(", ") : "invalid configuration"}. Normal application behavior remains available.
         </div> : null}
 
         <section className="rounded-2xl border border-border bg-white p-5 sm:p-6">

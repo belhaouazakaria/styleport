@@ -21,6 +21,7 @@ vi.mock("@/lib/prisma", () => ({
 vi.mock("@/lib/growth/activity", () => ({ recordGrowthActivity: mocks.activity }));
 
 import { claimGrowthJobs, claimNextGrowthJob, enqueueGrowthJob, failGrowthJob, recoverStaleGrowthJobs } from "@/lib/growth/jobs";
+import { PinterestConfigurationError } from "@/lib/growth/errors";
 
 const job = {
   id: "job-1",
@@ -98,5 +99,12 @@ describe("Growth job persistence", () => {
     mocks.updateMany.mockResolvedValue({ count: 1 });
     await expect(failGrowthJob(retryable, "worker-a", new Error("retry"))).resolves.toBe(GrowthJobStatus.FAILED_RETRYABLE);
     expect(mocks.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: GrowthJobStatus.FAILED_RETRYABLE, runAfter: expect.any(Date) }) }));
+  });
+
+  it("makes missing local Pinterest configuration terminal without another retry", async () => {
+    const retryable = { ...job, status: GrowthJobStatus.RUNNING, attemptCount: 1, maxAttempts: 3 };
+    mocks.updateMany.mockResolvedValue({ count: 1 });
+    await expect(failGrowthJob(retryable, "worker-a", new PinterestConfigurationError("Pinterest is not configured (PINTEREST_APP_ID)."))).resolves.toBe(GrowthJobStatus.FAILED_TERMINAL);
+    expect(mocks.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: GrowthJobStatus.FAILED_TERMINAL }) }));
   });
 });

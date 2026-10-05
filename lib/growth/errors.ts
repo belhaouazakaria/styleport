@@ -1,5 +1,7 @@
 export class NonRetryableGrowthJobError extends Error {}
 
+export class PinterestConfigurationError extends NonRetryableGrowthJobError {}
+
 export class RetryableGrowthJobError extends Error {
   constructor(message: string, readonly retryAfterMs?: number) {
     super(message);

@@ -182,6 +182,12 @@ Use Pinterest API v5 Authorization Code OAuth for existing accounts. Request exa
 
 Exactly one connected account may hold each SayTwist publication role, and a Pinterest account ID is globally unique. Disconnect erases local ciphertext, releases the active-role slot, cancels pending Phase 3 sync work and retains non-secret identity/audit history. Pinterest documents no suitable application token-revocation endpoint for this flow, so Phase 3 does not invent one. Account and public-board reads are the only Pinterest resource operations in this phase.
 
+## D-025 — Standalone Growth workers load Next environment files before service imports
+
+**Status:** Accepted and implemented
+
+`npm run growth:worker` is a bounded standalone process. Its bootstrap uses `@next/env` before dynamically importing Growth/Pinterest modules, so production obtains `.env.production.local`, `.env.local`, `.env.production` and `.env` with explicit process variables taking precedence. Pinterest configuration status is calculated server-side from one required-name list and exposes only safe operational state. Missing or invalid local configuration is terminal for a claimed sync job because retrying cannot repair server configuration.
+
 ## Open implementation checks
 
 1. Pinterest developer access/scopes and whether all existing accounts are eligible to connect.
