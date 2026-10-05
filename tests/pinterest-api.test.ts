@@ -47,8 +47,8 @@ describe("Pinterest API adapter", () => {
     await getPinterestBoardsPage("account", "cursor value", pageFetch);
     expect(pageFetch.mock.calls[0][0]).toContain("bookmark=cursor+value");
 
-    await expect(fetchPinterestUserAccountWithToken("token", vi.fn().mockResolvedValue(new Response(JSON.stringify({ wrong: true }), { status: 200 })))).rejects.toThrow("unexpected response shape");
-    await expect(fetchPinterestUserAccountWithToken("token", vi.fn().mockResolvedValue(new Response("not-json", { status: 200 })))).rejects.toThrow("unexpected response shape");
+    await expect(fetchPinterestUserAccountWithToken("token", vi.fn().mockResolvedValue(new Response(JSON.stringify({ wrong: true }), { status: 200 })))).rejects.toThrow("Pinterest user account response was invalid at id");
+    await expect(fetchPinterestUserAccountWithToken("token", vi.fn().mockResolvedValue(new Response("not-json", { status: 200 })))).rejects.toThrow("Pinterest user account response was invalid at response");
     await expect(fetchPinterestUserAccountWithToken("token", vi.fn().mockResolvedValue(new Response(JSON.stringify({ code: 8 }), { status: 429, headers: { "retry-after": "12" } })))).rejects.toMatchObject<PinterestApiError>({ status: 429, retryable: true, retryAfterMs: 12_000 });
   });
 
@@ -105,10 +105,26 @@ describe("Pinterest API adapter", () => {
     expect(result.data.items[0].title).toBe("Pin");
   });
 
+  it("reports safe Pin inventory issue paths without including response values", async () => {
+    vi.stubEnv("PINTEREST_API_ENVIRONMENT", "production");
+    const secretContent = "private-title-that-must-not-appear";
+    const missingId = getPinterestPinsPage("account", undefined, vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      items: [{ title: secretContent, media: { media_type: "multiple_images", items: [] } }], bookmark: null,
+    }), { status: 200 })));
+    const error = await missingId.catch((value) => value);
+    expect(error.message).toContain("Pinterest Pin inventory response was invalid at items.0.id (invalid_type)");
+    expect(error.message).not.toContain(secretContent);
+    expect(error.message.length).toBeLessThanOrEqual(500);
+
+    await expect(getPinterestPinsPage("account", undefined, vi.fn().mockResolvedValue(new Response(JSON.stringify({ items: "not-an-array" }), { status: 200 })))).rejects.toThrow("Pinterest Pin inventory response was invalid at items (invalid_type)");
+  });
+
   it("rejects malformed analytics and classifies authenticated 401, 403, 429, and 5xx", async () => {
     vi.stubEnv("PINTEREST_API_ENVIRONMENT", "production");
     const range = defaultRefreshRange();
-    await expect(getPinterestAccountAnalytics({ accountId: "account", ...range, fetchImpl: vi.fn().mockResolvedValue(new Response(JSON.stringify({ all: { daily_metrics: [{ date: "bad", data_status: "READY", metrics: {} }] } }), { status: 200 })) })).rejects.toThrow("unexpected response shape");
+    await expect(getPinterestAccountAnalytics({ accountId: "account", ...range, fetchImpl: vi.fn().mockResolvedValue(new Response(JSON.stringify({ all: { daily_metrics: [{ date: "bad", data_status: "READY", metrics: {} }] } }), { status: 200 })) })).rejects.toThrow("Pinterest account analytics response was invalid at all.daily_metrics.0.date");
+    await expect(getPinterestTopPinsAnalytics({ accountId: "account", ...range, fetchImpl: vi.fn().mockResolvedValue(new Response(JSON.stringify({ pins: "bad", sort_by: "OUTBOUND_CLICK" }), { status: 200 })) })).rejects.toThrow("Pinterest top Pins response was invalid at pins");
+    await expect(getPinterestPinAnalytics({ accountId: "account", pinterestPinId: "123", ...range, fetchImpl: vi.fn().mockResolvedValue(new Response(JSON.stringify({ all: { daily_metrics: "bad" } }), { status: 200 })) })).rejects.toThrow("Pinterest Pin analytics response was invalid at all.daily_metrics");
     for (const status of [401, 403, 429, 500]) {
       const headers = status === 429 ? { "retry-after": "7" } : undefined;
       const error = await getPinterestAccountAnalytics({ accountId: "account", ...range, fetchImpl: vi.fn().mockResolvedValue(new Response("{}", { status, headers })) }).catch((value) => value);

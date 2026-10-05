@@ -77,18 +77,16 @@ export const pinterestTopPinsAnalyticsSchema = z.object({
   sort_by: z.enum(["ENGAGEMENT", "SAVE", "IMPRESSION", "OUTBOUND_CLICK", "PIN_CLICK"]),
 }).passthrough();
 
-const pinterestImageDetailsSchema = z.object({ url: z.string().url() }).passthrough();
 export const pinterestPinSchema = z.object({
   id: z.string().min(1),
   board_id: z.string().nullable().optional(),
   title: z.string().nullable().optional(),
   description: z.string().nullable().optional(),
   link: z.string().nullable().optional(),
-  created_at: z.string().datetime({ offset: true }).nullable().optional(),
+  created_at: z.string().nullable().optional(),
   creative_type: z.string().nullable().optional(),
   media: z.object({
-    media_type: z.string().optional(),
-    images: z.record(z.string(), pinterestImageDetailsSchema).optional(),
+    media_type: z.string().nullable().optional(),
   }).passthrough().nullable().optional(),
 }).passthrough();
 

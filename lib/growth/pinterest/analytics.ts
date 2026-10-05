@@ -24,7 +24,7 @@ import {
   getPinterestTopPinsAnalytics,
   type PinterestRateLimitMetadata,
 } from "@/lib/growth/pinterest/api";
-import type { PinterestPin } from "@/lib/growth/pinterest/schemas";
+import { extractPinterestPreviewImageUrl, pinterestPublishedAt } from "@/lib/growth/pinterest/pin-media";
 import { toSafeGrowthError } from "@/lib/growth/safe-data";
 import { prisma } from "@/lib/prisma";
 
@@ -45,18 +45,6 @@ function rateLimitData(metadata: PinterestRateLimitMetadata, now = new Date()) {
     lastRateLimitReset: metadata.reset?.slice(0, 191) || null,
     rateLimitObservedAt: now,
   };
-}
-
-function previewUrl(pin: PinterestPin) {
-  const images = pin.media?.images;
-  const candidate = images?.["150x150"]?.url || images?.["400x300"]?.url || images?.["600x"]?.url;
-  if (!candidate) return null;
-  try {
-    const url = new URL(candidate);
-    return url.protocol === "https:" && (url.hostname === "pinimg.com" || url.hostname.endsWith(".pinimg.com")) ? url.toString() : null;
-  } catch {
-    return null;
-  }
 }
 
 function blockDailyMetrics(data: Record<string, { daily_metrics: Array<{ date: string; data_status: string; metrics: Record<string, number> }> }>) {
@@ -151,8 +139,8 @@ export async function syncPinterestPinInventory(params: {
             destinationUrl: pin.link || null,
             creativeType: pin.creative_type || null,
             mediaType: pin.media?.media_type || null,
-            previewImageUrl: previewUrl(pin),
-            publishedAt: pin.created_at ? new Date(pin.created_at) : null,
+            previewImageUrl: extractPinterestPreviewImageUrl(pin),
+            publishedAt: pinterestPublishedAt(pin.created_at),
             isActive: true,
             lastSeenAt: syncedAt,
             lastSyncedAt: syncedAt,

@@ -33,7 +33,7 @@ function rateLimitMetadata(headers: Headers): PinterestRateLimitMetadata {
 }
 
 async function pinterestFetch<T>(params: {
-  path: string; schema: z.ZodType<T>; accessToken: string; fetchImpl?: typeof fetch;
+  path: string; responseName: string; schema: z.ZodType<T>; accessToken: string; fetchImpl?: typeof fetch;
 }): Promise<{ data: T; rateLimit: PinterestRateLimitMetadata }> {
   const config = requirePinterestConfiguration();
   if (!params.path.startsWith("/") || params.path.startsWith("//")) throw new Error("Invalid Pinterest API path.");
@@ -48,16 +48,26 @@ async function pinterestFetch<T>(params: {
     throw new PinterestApiError(response.status, response.status === 429 || response.status >= 500, Number.isFinite(retryAfter) ? retryAfter * 1000 : undefined);
   }
   const parsed = params.schema.safeParse(raw);
-  if (!parsed.success) throw new NonRetryableGrowthJobError("Pinterest returned an unexpected response shape.");
+  if (!parsed.success) throw new NonRetryableGrowthJobError(pinterestSchemaError(params.responseName, parsed.error.issues));
   return { data: parsed.data, rateLimit: metadata };
 }
 
+function pinterestSchemaError(responseName: string, issues: z.core.$ZodIssue[]) {
+  const details = issues.slice(0, 3).map((issue) => {
+    const path = issue.path.length
+      ? issue.path.map((part) => typeof part === "number" ? String(part) : String(part).replace(/[^A-Za-z0-9_-]/g, "?").slice(0, 48)).join(".")
+      : "response";
+    return `${path} (${issue.code})`;
+  }).join("; ");
+  return `Pinterest ${responseName} was invalid at ${details || "response"}.`.slice(0, 500);
+}
+
 async function authenticatedPinterestGet<T>(params: {
-  accountId: string; path: string; schema: z.ZodType<T>; fetchImpl?: typeof fetch;
+  accountId: string; path: string; responseName: string; schema: z.ZodType<T>; fetchImpl?: typeof fetch;
 }) {
   const accessToken = await getValidPinterestAccessToken(params.accountId, params.fetchImpl);
   try {
-    return await pinterestFetch({ path: params.path, schema: params.schema, accessToken, fetchImpl: params.fetchImpl });
+    return await pinterestFetch({ path: params.path, responseName: params.responseName, schema: params.schema, accessToken, fetchImpl: params.fetchImpl });
   } catch (error) {
     if (error instanceof PinterestApiError) {
       if (error.status === 401) {
@@ -75,7 +85,7 @@ async function authenticatedPinterestGet<T>(params: {
 }
 
 export async function fetchPinterestUserAccountWithToken(accessToken: string, fetchImpl?: typeof fetch) {
-  return pinterestFetch({ path: "/user_account", schema: pinterestUserAccountSchema, accessToken, fetchImpl });
+  return pinterestFetch({ path: "/user_account", responseName: "user account response", schema: pinterestUserAccountSchema, accessToken, fetchImpl });
 }
 
 export async function getPinterestUserAccount(accountId: string, fetchImpl?: typeof fetch) {
@@ -100,7 +110,7 @@ export async function getPinterestBoardsPage(accountId: string, bookmark?: strin
   const query = new URLSearchParams({ page_size: "100" });
   if (bookmark) query.set("bookmark", bookmark);
   try {
-    return await pinterestFetch({ path: `/boards?${query}`, schema: pinterestBoardsPageSchema, accessToken, fetchImpl });
+    return await pinterestFetch({ path: `/boards?${query}`, responseName: "board inventory response", schema: pinterestBoardsPageSchema, accessToken, fetchImpl });
   } catch (error) {
     if (error instanceof PinterestApiError) {
       if (error.status === 401) {
@@ -118,7 +128,7 @@ export async function getPinterestPinsPage(accountId: string, bookmark?: string,
   const query = new URLSearchParams({ page_size: "250", pin_metrics: "false" });
   if (bookmark) query.set("bookmark", bookmark);
   return authenticatedPinterestGet({
-    accountId, path: `/pins?${query}`, schema: pinterestPinsPageSchema, fetchImpl,
+    accountId, path: `/pins?${query}`, responseName: "Pin inventory response", schema: pinterestPinsPageSchema, fetchImpl,
   });
 }
 
@@ -144,6 +154,7 @@ export async function getPinterestAccountAnalytics(params: {
   return authenticatedPinterestGet({
     accountId: params.accountId,
     path: `/user_account/analytics?${query}`,
+    responseName: "account analytics response",
     schema: pinterestAccountAnalyticsSchema,
     fetchImpl: params.fetchImpl,
   });
@@ -158,6 +169,7 @@ export async function getPinterestTopPinsAnalytics(params: {
   return authenticatedPinterestGet({
     accountId: params.accountId,
     path: `/user_account/analytics/top_pins?${query}`,
+    responseName: "top Pins response",
     schema: pinterestTopPinsAnalyticsSchema,
     fetchImpl: params.fetchImpl,
   });
@@ -178,6 +190,7 @@ export async function getPinterestPinAnalytics(params: {
   return authenticatedPinterestGet({
     accountId: params.accountId,
     path: `/pins/${params.pinterestPinId}/analytics?${query}`,
+    responseName: "Pin analytics response",
     schema: pinterestPinAnalyticsSchema,
     fetchImpl: params.fetchImpl,
   });

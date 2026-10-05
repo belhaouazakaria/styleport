@@ -82,16 +82,54 @@ databaseDescribe("Pinterest Phase 4 PostgreSQL persistence", () => {
     await expect(prisma.growthPinterestPin.create({ data: { accountId: account.id, pinterestPinId: "200", lastSeenAt: new Date(), lastSyncedAt: new Date() } })).rejects.toMatchObject({ code: "P2002" });
   });
 
-  it("preserves existing active Pins and resumable progress after a partial inventory failure", async () => {
+  it("resumes after a later-page failure and accepts polymorphic media without duplicate or premature deactivation", async () => {
     const account = await createAccount();
     const existing = await prisma.growthPinterestPin.create({ data: { accountId: account.id, pinterestPinId: "300", lastSeenAt: new Date(0), lastSyncedAt: new Date(0) } });
     await enqueuePinterestAnalyticsSync(account.id, new Date("2026-10-05T12:00:00Z"));
+    const firstPagePins = Array.from({ length: 50 }, (_, index) => ({ id: String(1_000 + index), media: { media_type: "image" } }));
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(response({ items: [{ id: "301" }], bookmark: "next" }))
+      .mockResolvedValueOnce(response({ items: firstPagePins, bookmark: "next" }))
       .mockResolvedValueOnce(new Response("{}", { status: 500 }));
     await expect(syncPinterestPinInventory({ accountId: account.id, startDate: "2026-07-08", endDate: "2026-10-05", runStartedAt: "2026-10-05T12:00:00.000Z", fetchImpl: fetchMock })).rejects.toThrow("HTTP 500");
     expect((await prisma.growthPinterestPin.findUniqueOrThrow({ where: { id: existing.id } })).isActive).toBe(true);
-    expect(await prisma.growthPinterestAnalyticsState.findUniqueOrThrow({ where: { accountId: account.id } })).toMatchObject({ inventoryBookmark: "next", inventoryPageCount: 1, status: GrowthPinterestAnalyticsStatus.PARTIAL });
+    expect(await prisma.growthPinterestAnalyticsState.findUniqueOrThrow({ where: { accountId: account.id } })).toMatchObject({ inventoryBookmark: "next", inventoryPageCount: 1, inventoryPinCount: 50, status: GrowthPinterestAnalyticsStatus.PARTIAL });
+
+    await enqueuePinterestAnalyticsSync(account.id, new Date("2026-10-05T12:05:00Z"));
+    const resumeFetch = vi.fn().mockResolvedValue(response({
+      items: [
+        { id: "1000", media: { media_type: "image" } },
+        { id: "302", media: { media_type: "multiple_images", items: [{ item_type: "image", images: { "600x": { width: 600, height: 900, url: "https://i.pinimg.com/resumed.jpg" } } }] } },
+      ],
+      bookmark: null,
+    }));
+    await expect(syncPinterestPinInventory({ accountId: account.id, startDate: "2026-07-08", endDate: "2026-10-05", runStartedAt: "2026-10-05T12:05:00.000Z", fetchImpl: resumeFetch })).resolves.toMatchObject({ complete: true });
+    expect(String(resumeFetch.mock.calls[0][0])).toContain("bookmark=next");
+    expect(await prisma.growthPinterestPin.count({ where: { accountId: account.id, pinterestPinId: "1000" } })).toBe(1);
+    expect((await prisma.growthPinterestPin.findUniqueOrThrow({ where: { pinterestPinId: "1000" } })).isActive).toBe(true);
+    expect((await prisma.growthPinterestPin.findUniqueOrThrow({ where: { pinterestPinId: "302" } })).previewImageUrl).toBe("https://i.pinimg.com/resumed.jpg");
+    expect((await prisma.growthPinterestPin.findUniqueOrThrow({ where: { id: existing.id } })).isActive).toBe(false);
+    expect(await prisma.growthPinterestAnalyticsState.findUniqueOrThrow({ where: { accountId: account.id } })).toMatchObject({ inventoryBookmark: null, inventoryPageCount: 0 });
+  });
+
+  it("continues from a 50-Pin page through a polymorphic-media page that the former parser rejected", async () => {
+    const account = await createAccount();
+    await enqueuePinterestAnalyticsSync(account.id, new Date("2026-10-05T13:00:00Z"));
+    const firstPagePins = Array.from({ length: 50 }, (_, index) => ({ id: String(2_000 + index), media: { media_type: "image" } }));
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response({ items: firstPagePins, bookmark: "page-two" }))
+      .mockResolvedValueOnce(response({ items: [{
+        id: "2050",
+        media: {
+          media_type: "video",
+          images: { "600x": { width: 600, height: 900, url: "pinterest-image-reference" } },
+          cover_image_url: "https://i.pinimg.com/video-cover.jpg",
+        },
+      }], bookmark: null }));
+
+    await expect(syncPinterestPinInventory({ accountId: account.id, startDate: "2026-07-08", endDate: "2026-10-05", runStartedAt: "2026-10-05T13:00:00.000Z", fetchImpl: fetchMock })).resolves.toMatchObject({ complete: true, pins: 51 });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(await prisma.growthPinterestPin.count({ where: { accountId: account.id } })).toBe(51);
+    expect((await prisma.growthPinterestPin.findUniqueOrThrow({ where: { pinterestPinId: "2050" } })).previewImageUrl).toBe("https://i.pinimg.com/video-cover.jpg");
   });
 
   it("detects repeated inventory bookmarks without deactivating Pins", async () => {
