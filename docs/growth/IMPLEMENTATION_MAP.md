@@ -64,7 +64,7 @@ Use a host scheduler or controlled PM2 cron invocation only after actual host ca
 - `lib/growth/worker.ts` and `workers/growth-worker.ts`: explicit bounded invocation, maximum batch size 25, no timer or idle polling. A stable configured worker ID upserts one heartbeat row, while each invocation gets a unique lease-owner suffix so overlapping invocations cannot complete each other's jobs.
 - `lib/growth/activity.ts`: structured, append-only activity records written transactionally with state changes where possible.
 - `lib/growth/admin.ts`: bounded status counts, oldest runnable job, latest worker execution and 12 recent activities.
-- Admin routes use the existing ADMIN guard; settings mutation additionally requires same-origin headers and strict input validation.
+- Admin routes use the existing ADMIN guard; Growth mutations require an Origin that exactly matches the trusted server-side `APP_BASE_URL` canonical public origin, so nginx's loopback listener cannot cause legitimate browser requests to fail. They also use strict input validation.
 
 ## Phase 3 implemented Pinterest boundary
 

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   guard: vi.fn(),
@@ -19,7 +19,7 @@ vi.mock("@/lib/api-response", () => ({
 import { PUT } from "@/app/api/admin/growth/settings/route";
 
 function request(body: unknown, origin = "https://saytwist.com") {
-  return new Request("https://saytwist.com/api/admin/growth/settings", {
+  return new Request("http://127.0.0.1:3001/api/admin/growth/settings", {
     method: "PUT",
     headers: { "content-type": "application/json", origin, "sec-fetch-site": origin === "https://saytwist.com" ? "same-origin" : "cross-site" },
     body: JSON.stringify(body),
@@ -29,10 +29,12 @@ function request(body: unknown, origin = "https://saytwist.com") {
 describe("Growth settings API", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubEnv("APP_BASE_URL", "https://saytwist.com");
     mocks.guard.mockResolvedValue(null);
     mocks.session.mockResolvedValue({ user: { id: "admin-1", role: "ADMIN" } });
     mocks.update.mockImplementation(async (input) => ({ id: "global", ...input, configVersion: 2 }));
   });
+  afterEach(() => vi.unstubAllEnvs());
 
   it("preserves the existing admin authorization response", async () => {
     const denied = new Response("denied", { status: 403 });
@@ -53,7 +55,7 @@ describe("Growth settings API", () => {
     expect(mocks.update).not.toHaveBeenCalled();
   });
 
-  it("updates only validated settings for the authenticated admin", async () => {
+  it("updates settings for an authenticated admin through the reverse-proxy listener", async () => {
     const payload = { enabled: true, intensity: "LOW", workerBatchSize: 3 };
     const response = await PUT(request(payload));
     expect(response.status).toBe(200);
