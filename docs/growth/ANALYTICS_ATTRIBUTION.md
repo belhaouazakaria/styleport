@@ -51,7 +51,7 @@ The initial attribution model should support:
 - configurable return window;
 - first-touch and last-touch fields where feasible.
 
-The exact window is a product decision to be finalized during Phase 5.
+Initial proposal: seven days from last qualified Pinterest landing, configurable and versioned as `pinterest_organic_v1`; confirm during Phase 5 with live data and privacy review.
 
 Historical events must record attribution-model version so future changes do not silently rewrite past interpretation.
 
@@ -160,3 +160,7 @@ Dashboard should surface:
 - stale data.
 
 The agent should lower confidence or choose `WAIT_FOR_MORE_DATA` when data quality is poor.
+
+## Phase 5 event and identity contract
+
+`utm_source=pinterest`, `utm_medium=organic` and opaque stable `pin_ref` identify Growth-managed Pins; validate the ref against an issued candidate/publication. A landing event starts a first-party session; translator view, input started, Ideas view, Ideas CTA and embedded completion identify funnel steps. A successful completion is server-authoritative: link a trusted SUCCESS `TranslationLog` or server completion ID. Existing logs record success globally but no UTM, referrer or session, and log writes are currently nonblocking; report missing joins as measurement gaps. Keep both first and last eligible Pinterest touches; primary assignment uses last touch. One session counts once for QPC, even with multiple successful translations. Use unique event/completion keys, filter bots/prefetch and invalid refs, and do not store translation text in attribution rows. Session detail retention proposal: 30 days; event detail: 90 days; preserve aggregates and model version. Respect applicable consent/privacy requirements before launch.

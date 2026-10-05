@@ -7,11 +7,13 @@ This document exists so a future AI coding agent can resume the SayTwist Growth 
 Before planning or coding any Growth task:
 
 1. Read `docs/growth/README.md`.
-2. Read `docs/growth/DECISIONS.md`.
-3. Read `docs/growth/ROADMAP.md`.
-4. Read the topic-specific Growth documents affected by the task.
-5. Inspect the current implementation and database schema.
-6. Check Git status and current branch before editing anything.
+2. Read `docs/growth/AI_CONTEXT.md`.
+3. Read `docs/growth/DECISIONS.md`.
+4. Read `docs/growth/ROADMAP.md`.
+5. Read `docs/growth/IMPLEMENTATION_MAP.md`.
+6. Read `docs/growth/DATA_MODEL.md`.
+7. Read the remaining topic-specific Growth documents.
+8. Inspect the current implementation and database schema; check Git status and branch before editing.
 
 Do not infer missing product decisions from generic growth-marketing advice. If a material decision is unresolved and affects architecture, security, billing, Pinterest compliance, data retention, SEO or autonomous behavior, ask the user before implementing it.
 
@@ -84,8 +86,10 @@ Failure of Pinterest APIs, AI providers, report delivery, analytics synchronizat
 ## Current known SayTwist context
 
 - SayTwist is a Next.js application with Prisma/PostgreSQL.
-- Production database is self-hosted PostgreSQL on the VPS.
+- Production uses PostgreSQL 18 self-hosted on the VPS. SayTwist connects locally to `127.0.0.1:5433`, database `saytwist`, as application role `saytwist_app`. Growth shares this local PostgreSQL baseline and must keep its load bounded with scheduled jobs and bounded workers, never aggressive polling.
 - Existing translator and Pinterest Pin image generation functionality already exists.
 - Existing automatic Pin image generation is the initial control renderer ("Renderer V1").
 - Growth UI belongs inside the existing admin as `/admin/growth`.
 - Public editorial content belongs under `/ideas`.
+
+Phase 1 audit findings and exact future module paths live in `IMPLEMENTATION_MAP.md`; schema, retention and state machines live in `DATA_MODEL.md`. These are mandatory reading before Growth work.

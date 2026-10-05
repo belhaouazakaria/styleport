@@ -17,7 +17,7 @@ Processes
 └── SayTwist Growth worker
 
 Infrastructure
-├── PostgreSQL
+├── PostgreSQL 18 (self-hosted on the VPS; existing `saytwist` database)
 ├── existing asset storage
 ├── Pinterest API
 ├── AI provider(s)
@@ -25,6 +25,8 @@ Infrastructure
 ```
 
 Growth failures must not make the web application unavailable.
+
+Production SayTwist connects locally to PostgreSQL at `127.0.0.1:5433` as application role `saytwist_app`. Growth shares this existing local database architecture unless a later durable decision changes it. Persistent scheduled jobs and bounded workers are required to protect database capacity; Growth must not introduce aggressive always-on polling.
 
 ## 2. Component boundaries
 
@@ -328,3 +330,9 @@ Expose meaningful health in `/admin/growth`.
 Design so a future social platform can be added through adapters without rewriting the Growth domain.
 
 Do not make generic abstractions so broad that Pinterest implementation becomes unnecessarily complex. Pinterest-first, adapter-ready.
+
+## Repository-grounded target architecture
+
+`IMPLEMENTATION_MAP.md` is the canonical file-level audit and reuse matrix. `DATA_MODEL.md` is the exact proposed schema/state contract. Growth domain modules belong in `lib/growth/*`; web routes in `app/(admin)/admin/growth`, `app/api/admin/growth`, and `app/(public)/ideas`; UI in `components/admin/growth` and `components/public/ideas`; bounded process in `workers/growth-worker.ts`; explicit scheduled enqueue/run scripts in `scripts/`; Prisma additions in schema and timestamped migrations in future phases. Split Pinterest adapter, analytics ingest, attribution, cluster/opportunity engine, translator adapter, Ideas service, creative/V1 adapter, schedule/publish service, cost ledger, report providers and job runtime by responsibility. Core translation and public reads must never synchronously depend on Growth health.
+
+The existing editorial worker shows transactional claiming and retry patterns, but has a periodic DB poll. Growth uses host-scheduled explicit enqueueing and bounded `--once` execution, with due-at jobs, lease/heartbeat while active, idempotency, exponential capped retry, terminal state, kill switch and quota stop. Actual host scheduler and PM2 state require deployment verification; no cron is configured by this phase.

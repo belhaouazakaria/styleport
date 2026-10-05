@@ -19,7 +19,7 @@ The three initial intent classes are:
 **Intent:** Utility and discovery  
 **Role:** Main brand account and primary direct translator distribution account.  
 **Primary destinations:** `/translators/*` and selected `/ideas/*`.  
-**Recommended domain claim:** `saytwist.com`.
+**Domain claim:** `saytwist.com` is already claimed by this main account.
 
 Typical Pin concepts:
 
@@ -108,7 +108,7 @@ Current Pinterest guidance allows a website to be claimed by only one Pinterest 
 
 Plan:
 
-- claim `saytwist.com` with the main SayTwist account;
+- retain the existing `saytwist.com` claim on the main SayTwist account;
 - do not create artificial subdomains solely to manufacture separate domain claims;
 - satellite publications may link to relevant SayTwist pages without pretending to be separate businesses.
 
@@ -170,3 +170,7 @@ Monthly report example:
 - Minimum threshold for recommendation: 80%
 
 The operator decides whether to create/connect any recommended new account.
+
+## Launch inventory and targeting
+
+The two additional accounts already exist and will later be rebranded SayTwist Ideas and SayTwist Playground. Launch requires connection/rebranding, not creation. Start with three accounts. Worldwide English is the audience; cold-start scheduling/content tests prioritize US signals, then first-party performance controls the mix. A winning topic may yield a direct translator tool Pin on SayTwist, a useful save-worthy `/ideas` list on Ideas, and a genuinely interactive/relatable concept on Playground, each with distinct creative, copy and destination value. Similarity checks prevent superficial cross-posting.

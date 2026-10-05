@@ -196,3 +196,7 @@ Playground:
 - Explore the full version
 
 Avoid deceptive clickbait where the destination cannot satisfy the claim.
+
+## Repository integration
+
+`/ideas` does not exist today. Use `GrowthIdea`, `GrowthIdeaVersion` and separate Ideas categories rather than repurposing translator categories/editorial rows. Public pages go under `app/(public)/ideas/*`, with metadata and `app/sitemap.ts` integration. Contextual CTAs and embedded translations must use the existing translation API, while Phase 5 adds nonblocking attribution hooks. Do not expose unpublished versions. `lib/share-images.tsx` is Renderer V1 — Control for translator creatives; user result shares in `translator-card.tsx` are a separate temporary flow. No new renderer or video is part of Phase 1.

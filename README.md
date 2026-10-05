@@ -15,12 +15,11 @@ This repository is **feature-complete** and this hardening pass is focused on **
 Recommended runtime for this project:
 1. **Hostinger Node.js Web App** in hPanel
 2. **Primary domain** (`saytwist.com`)
-3. **External managed PostgreSQL** (Supabase, Neon, Prisma Postgres, or equivalent)
+3. **PostgreSQL 18 self-hosted on the VPS** (local SayTwist database)
 4. Existing app stack unchanged (Next.js + Prisma + Auth.js + OpenAI)
 
 Important:
-- Do **not** host PostgreSQL inside Hostinger shared hosting.
-- Keep `DATABASE_URL` pointed at managed Postgres.
+- Production SayTwist connects to the VPS-local PostgreSQL service at `127.0.0.1:5433`, using database `saytwist` and application role `saytwist_app`.
 - App features and behavior are unchanged; only infrastructure/config are hardened.
 
 ---
@@ -49,7 +48,7 @@ Copy `.env.production.example` to `.env.production` and fill values:
 - `NEXT_PUBLIC_APP_URL=https://saytwist.com`
 - `NEXTAUTH_URL=https://saytwist.com`
 - `NEXTAUTH_SECRET=<strong-random-secret>`
-- `DATABASE_URL=<managed-postgres-connection>`
+- `DATABASE_URL=<local-vps-postgres-connection>`
 - `OPENAI_API_KEY=<openai-key>`
 - `OPENAI_MODEL=<model>`
 - `GOOGLE_INDEXING_ENABLED=false`
@@ -203,10 +202,10 @@ npm run dev
 
 ## Hostinger Deployment Guide (Node.js Web App + Subdomain)
 
-### 1. Prepare managed Postgres
-1. Create a managed PostgreSQL project (Supabase/Neon/etc.).
-2. Copy the SSL-enabled `DATABASE_URL`.
-3. Verify connectivity from your app environment.
+### 1. Verify local VPS PostgreSQL
+1. Confirm PostgreSQL 18 is running on the VPS and reachable locally by the SayTwist app.
+2. Confirm the app uses the existing `saytwist` database and `saytwist_app` role.
+3. Verify connectivity from the app process without exposing connection credentials.
 
 ### 2. Configure domain
 1. In Hostinger hPanel, point `saytwist.com` to your Node.js app location.
@@ -419,7 +418,7 @@ Required GitHub secrets for deploy workflow:
 
 ---
 
-## Troubleshooting (Hostinger + Managed DB)
+## Troubleshooting (Hostinger + local VPS PostgreSQL)
 
 ### App starts but auth fails
 - Check `NEXTAUTH_URL` exactly matches production URL.
@@ -427,8 +426,8 @@ Required GitHub secrets for deploy workflow:
 - Ensure HTTPS is active on domain.
 
 ### Prisma connection errors
-- Verify `DATABASE_URL` with SSL options.
-- Confirm managed DB network rules allow Hostinger egress.
+- Verify the server-only database configuration points to the local VPS PostgreSQL service.
+- Confirm the local PostgreSQL service is listening on the expected loopback port and the app role has the required access.
 - Run `npm run prisma:status` and `npm run prisma:deploy`.
 
 ### Translation unavailable

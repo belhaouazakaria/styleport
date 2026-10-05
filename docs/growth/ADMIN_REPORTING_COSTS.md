@@ -238,3 +238,23 @@ Dangerous/high-impact settings should require deliberate confirmation:
 - large spend-limit increase;
 - enable a newly approved publishing mode;
 - delete Growth history.
+
+## Screen action contract
+
+| Screen | Primary data and actions | High-impact action / access |
+|---|---|---|
+| Overview | KPI, freshness, health; drill down | ADMIN read |
+| Opportunities | evidence/score; defer, dismiss, inspect | ADMIN decisions |
+| Accounts | connection, boards, health; reconnect, recommend | connect/disconnect requires ADMIN confirmation |
+| Pins | exact image/copy/URL/account/board/time/evidence/similarity; approve, edit, regenerate, reject, defer | approval and publication settings: ADMIN, audited |
+| Analytics | Pin and conversion series; filter/export | ADMIN read; export privacy review |
+| Content | translators/Ideas, versions; inspect/rollback | rollback ADMIN, audited |
+| Schedule | due jobs and approved Pins; defer/cancel | cancel ADMIN, audited |
+| Experiments | hypothesis/variants/results; pause/stop | ADMIN, audited |
+| Agent Activity | decisions, transitions, errors; inspect | ADMIN read |
+| AI Spend | daily/monthly/model/feature and cost per QPC; tune intensity | limit increases ADMIN confirmation |
+| Reports | archive/delivery; resend | resend ADMIN, idempotent |
+| Warnings | evidence/recommendation; acknowledge/snooze/resolve | ADMIN, no automatic performance account shutdown |
+| Settings | kill switch, limits, attribution model, report channel | ADMIN, versioned/audited |
+
+Every AI call records provider/model, tokens or image units, estimated and actual cost when available, pricing version, job/decision/account/translator/Idea/Pin links. Unknown prices are unpriced, never represented as free. Daily/monthly aggregates and cost per QPC use matching windows. The concise digest has one recipient through a provider interface, with WhatsApp if feasible and email fallback. No fixed budget is assumed.

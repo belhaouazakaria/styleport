@@ -10,7 +10,7 @@ Status values:
 
 ## Phase 1 — Growth specification and policy architecture
 
-**Status:** Not started
+**Status:** Complete (documentation/specification only)
 
 Deliver:
 - living docs finalized against current repo;
@@ -238,3 +238,7 @@ No phase is complete until:
 - ROADMAP status is updated;
 - DECISIONS includes new durable choices;
 - deployment/rollback instructions exist where relevant.
+
+### Phase 1 exit and Phase 2 implementation contract
+
+Phase 1 produces only documentation. `IMPLEMENTATION_MAP.md` and `DATA_MODEL.md` are the technical baseline. Phase 2 may implement **only** Growth Prisma foundation/migrations, domain state types, disabled feature flag and kill switch, persistent job foundation, `/admin/growth` shell, typed settings foundation, append-only audit/activity foundation, bounded worker skeleton and meaningful tests. Phase 2 must not connect Pinterest, build `/ideas` pages, autonomously create translators, publish Pins, ingest analytics, implement attribution or generate new creative systems. Deployed DB/storage/scheduler assumptions must be verified before production rollout; they do not block a host-neutral foundation.

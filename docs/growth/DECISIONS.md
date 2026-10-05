@@ -142,13 +142,35 @@ Main SayTwist should claim the root domain. Satellite accounts are authentic edi
 
 Growth docs are part of the source of truth. Relevant documents must be updated whenever implementation changes durable behavior.
 
-## Open decisions
+## D-019 — Worldwide English, US-first initial optimization
 
-These must be resolved before the relevant phase:
+**Status:** Accepted
 
-1. Primary Pinterest audience geography/language.
-2. Whether `saytwist.com` is already claimed and by which account.
-3. Exact additional Pinterest accounts already owned, if any.
-4. Attribution return window and first/last-touch rules.
-5. WhatsApp provider/setup after current pricing and eligibility check.
-6. Exact job scheduling technology after inspection of current SayTwist production architecture.
+Target English-speaking users worldwide. Initially optimize US scheduling, experiments, trend interpretation and Pinterest tests; replace geographic assumptions with first-party performance as evidence grows.
+
+## D-020 — Existing claimed domain and accounts
+
+**Status:** Accepted
+
+The main SayTwist Pinterest account already claims `saytwist.com`. Additional accounts already exist and will later be rebranded SayTwist Ideas and SayTwist Playground. No new Pinterest account creation is required for launch. The agent never creates an account.
+
+## D-021 — Attribution proposal for Phase 5
+
+**Status:** Proposed implementation default
+
+Seven-day configurable/versioned return window; retain first and last Pinterest touches and use last eligible Pinterest touch for the primary KPI. Count one session with a trusted SUCCESS completion once. Validate against live behavior and privacy requirements during Phase 5.
+
+## D-022 — Production database topology
+
+**Status:** Accepted
+
+Production uses PostgreSQL 18 self-hosted on the VPS. SayTwist connects locally on `127.0.0.1:5433` to database `saytwist` as application role `saytwist_app`.
+
+Growth is designed around the existing local PostgreSQL production architecture and shares that instance/database unless a later durable architecture decision changes it. External managed database assumptions, including Neon, are not part of the current production baseline. Growth jobs must keep PostgreSQL load bounded and must not use aggressive polling.
+
+## Open implementation checks
+
+1. Pinterest developer access/scopes and whether all existing accounts are eligible to connect.
+2. Persistent image storage path, host scheduler and PM2 process list before any worker is deployed.
+3. WhatsApp provider/setup, current pricing and eligibility; email fallback remains required.
+4. Attribution consent and retention details across served jurisdictions before collection starts.

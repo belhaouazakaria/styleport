@@ -176,3 +176,11 @@ Ability to:
 - disconnect Pinterest credentials.
 
 Pausing Growth must not affect the core application.
+
+## Phase-specific controls
+
+OAuth: cryptographically random single-use state tied to ADMIN session, exact redirect allowlist, least scopes, token expiry/refresh and authenticated encryption with key version in server-only secrets. Never log tokens or provider bodies containing them. Growth admin routes use existing ADMIN session guard plus origin/CSRF validation for sensitive mutations, Zod input validation and durable rate limits where multi-process behavior matters. Growth content is structured and sanitized before React rendering; prohibit arbitrary HTML. If external images are later fetched, allowlist hosts, block private/link-local IPs and redirects, cap bytes/time/type. Attribution stores opaque session IDs, no raw text/IP; use consent and retention policy appropriate to served jurisdictions. Pin approval binds immutable revision/checksum and publication is idempotent with reconciliation after unknown API outcome. Append-only activity records actor, reason, state transition and correlation key. Worker uses least-privilege credentials, finite concurrency, kill switch and independent failure budget. Explicit hard spend caps stop expensive jobs; warnings otherwise recommend action. Growth failure must not propagate into translation/page requests.
+
+Phase 2 tests should cover typed settings, kill switch, state guards, durable job claim/retry/idempotency and admin authorization on a disposable DB. Existing `RUN_EDITORIAL_DB_TESTS=1` suite is opt-in and must not be run against production. Later phases add OAuth/attribution/publication and rollback tests.
+
+Production uses the existing PostgreSQL 18 instance self-hosted on the VPS; SayTwist connects locally at `127.0.0.1:5433` to database `saytwist` as application role `saytwist_app`. Test and rollout plans must protect that shared database with bounded concurrency, explicit scheduling and finite retry behavior. Never use production for test fixtures, load testing, or idle polling.

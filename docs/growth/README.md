@@ -59,13 +59,20 @@ Read these before changing the Growth system:
 - `TESTING_SECURITY_ROLLOUT.md`
 - `ROADMAP.md`
 - `DECISIONS.md`
+- `IMPLEMENTATION_MAP.md`
+- `DATA_MODEL.md`
 
 If implementation changes behavior described here, update the relevant document in the same phase/commit.
 
-## Current assumptions requiring confirmation during implementation
+## Confirmed targeting and accounts
 
-- Primary Pinterest audience geography/language has not yet been fixed.
-- Whether `saytwist.com` is already claimed by an existing Pinterest account is not yet confirmed.
+- English-speaking worldwide; initially optimize US scheduling, experiments and trend interpretation, then adapt to first-party performance.
+- `saytwist.com` is already claimed by the main SayTwist Pinterest account. Additional existing accounts will later be rebranded SayTwist Ideas and SayTwist Playground. No account creation is needed for launch.
+
+## Remaining implementation checks
+
 - Only static/image Pins are in scope initially. Video is out of scope.
 - Pinterest Developer/API access has not yet been obtained.
 - WhatsApp reporting is desired for one recipient, but provider setup and current pricing must be verified before implementation.
+
+See `IMPLEMENTATION_MAP.md` for verified repository facts and `DATA_MODEL.md` for the proposed schema and state contracts. Phase 1 changes documentation only.

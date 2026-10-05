@@ -189,3 +189,7 @@ Official references to re-check during implementation:
 - Pinterest developer guidelines: https://policy.pinterest.com/en/developer-guidelines
 - Pinterest community guidelines: https://policy.pinterest.com/en-gb/community-guidelines
 - Pinterest website claims: https://help.pinterest.com/en/business/article/claim-your-website
+
+## Current repository boundary
+
+The only Pinterest-specific API route now is `/api/pinterest/result-image`, accepting a browser-generated temporary PNG for a user-initiated Pinterest share intent. There is no OAuth connection, official API publisher, board sync or metrics ingest. Future adapter must use official API, encrypted per-account credentials, state/redirect validation, rate-limit handling and unknown-result reconciliation. Current production gate remains exact per-Pin approval. `DATA_MODEL.md` defines approval/publication states. The main account already claims `saytwist.com`; satellite accounts already exist and will be rebranded later.

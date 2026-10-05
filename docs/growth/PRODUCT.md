@@ -161,3 +161,7 @@ The first production milestone is successful when:
 - the admin can understand the system;
 - daily executive reporting works;
 - failure of Growth components cannot take down core SayTwist.
+
+## Targeting and measuring
+
+Worldwide English is the audience; cold-start Pinterest tests and schedules are US-first, with later settings informed by first-party data. The north star is a session with at least one trusted, Pinterest-attributed successful translation, including embedded Ideas use. Outbound clicks are an upstream diagnostic. See `ANALYTICS_ATTRIBUTION.md` and `DATA_MODEL.md` for exact deduplication.

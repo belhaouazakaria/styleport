@@ -260,3 +260,7 @@ Use:
 - transactional state changes where required.
 
 A Growth failure must not prevent normal translations or public page loads.
+
+## Job and approval invariants
+
+Growth actions are explicit persistent jobs with unique logical work keys, bounded claim leases, capped concurrency, backoff and terminal failure. No idle high-frequency PostgreSQL polling. Every SayTwist content mutation records before/after version and activity; rollback is a new audited action. A Pin approval binds exact candidate revision, asset checksum, title, description, destination, account, board and time. A changed field voids that approval. The future publishing-mode flag defaults off and cannot bypass current per-Pin gate without an explicit policy/authorization change. See `DATA_MODEL.md`.
