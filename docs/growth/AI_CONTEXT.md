@@ -1,0 +1,91 @@
+# AI Context and Living Documentation Protocol
+
+This document exists so a future AI coding agent can resume the SayTwist Growth Agent without relying on chat history.
+
+## Mandatory reading order
+
+Before planning or coding any Growth task:
+
+1. Read `docs/growth/README.md`.
+2. Read `docs/growth/DECISIONS.md`.
+3. Read `docs/growth/ROADMAP.md`.
+4. Read the topic-specific Growth documents affected by the task.
+5. Inspect the current implementation and database schema.
+6. Check Git status and current branch before editing anything.
+
+Do not infer missing product decisions from generic growth-marketing advice. If a material decision is unresolved and affects architecture, security, billing, Pinterest compliance, data retention, SEO or autonomous behavior, ask the user before implementing it.
+
+## Living-document rule
+
+The Growth documentation is part of the implementation.
+
+A phase is not complete until:
+
+- code and database changes are implemented;
+- tests for that phase pass;
+- the relevant Growth docs describe the implemented behavior;
+- `ROADMAP.md` status is updated;
+- new durable decisions are added to `DECISIONS.md`;
+- unresolved material questions are explicitly recorded.
+
+Documentation and implementation must not intentionally diverge.
+
+## Change discipline
+
+When behavior changes, update docs in the same work unit.
+
+Examples:
+
+- New agent action -> update `AGENT_AUTOMATION.md`.
+- New Pinterest API behavior -> update `PINTEREST_INTEGRATION.md`.
+- KPI or attribution change -> update `ANALYTICS_ATTRIBUTION.md`.
+- New admin screen/setting -> update `ADMIN_REPORTING_COSTS.md`.
+- Schema/worker change -> update `ARCHITECTURE.md`.
+- Account strategy change -> update `ACCOUNT_STRATEGY.md`.
+- Public `/ideas` behavior -> update `CONTENT_AND_IDEAS.md`.
+- Phase scope/status -> update `ROADMAP.md`.
+- Durable product/architecture choice -> update `DECISIONS.md`.
+
+## Policy invariant
+
+Never implement a workaround whose purpose is to disguise duplicate content, evade Pinterest anti-spam systems, hide automation, manufacture engagement, or coordinate multiple accounts to manipulate distribution.
+
+If Pinterest policy or developer terms conflict with a desired feature, preserve the product goal where possible but change the implementation to a compliant workflow.
+
+As of the planning baseline, Pinterest's developer guidelines require users to specifically choose each Pin that will be published by an app. Therefore "autopilot" means autonomous analysis, content generation, creative preparation, timing, queueing and recommendations, with a per-Pin publish approval gate unless Pinterest explicitly approves a more autonomous workflow for this application.
+
+## Quality invariant
+
+The agent should optimize for useful, original, high-intent content, not volume.
+
+The system must permit the following daily decisions:
+
+- create;
+- improve;
+- revive;
+- experiment;
+- wait;
+- do nothing.
+
+Volume targets are ceilings, not quotas.
+
+## Operational invariant
+
+The Growth system must not become a hard dependency for the core translator product.
+
+Failure of Pinterest APIs, AI providers, report delivery, analytics synchronization or the Growth worker must not take down:
+
+- translator pages;
+- translation API;
+- public browsing;
+- authentication;
+- existing admin functionality.
+
+## Current known SayTwist context
+
+- SayTwist is a Next.js application with Prisma/PostgreSQL.
+- Production database is self-hosted PostgreSQL on the VPS.
+- Existing translator and Pinterest Pin image generation functionality already exists.
+- Existing automatic Pin image generation is the initial control renderer ("Renderer V1").
+- Growth UI belongs inside the existing admin as `/admin/growth`.
+- Public editorial content belongs under `/ideas`.

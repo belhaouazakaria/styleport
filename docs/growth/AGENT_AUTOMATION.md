@@ -1,0 +1,262 @@
+# Agent Automation Specification
+
+## 1. Agent purpose
+
+The Growth Agent is a daily decision engine that converts performance data into controlled growth actions.
+
+It is not a generic autonomous browser agent.
+
+It operates through:
+
+- SayTwist database/services;
+- official Pinterest APIs;
+- configured AI providers;
+- internal image/rendering services;
+- notification providers.
+
+## 2. Daily cycle
+
+A normal daily run follows this sequence:
+
+1. **Health check**
+   - database available;
+   - Pinterest credentials valid;
+   - API status/rate-limit budget acceptable;
+   - Growth worker healthy;
+   - cost ledger healthy.
+
+2. **Analytics synchronization**
+   - retrieve available Pinterest account and Pin metrics;
+   - update metric snapshots;
+   - ingest SayTwist attribution/conversion events;
+   - reconcile publication state.
+
+3. **Performance analysis**
+   - identify breakout Pins;
+   - identify rising topics;
+   - identify fatigue/decline;
+   - identify high-click/low-conversion mismatches;
+   - identify high-conversion/low-reach opportunities;
+   - evaluate creative archetypes and posting windows.
+
+4. **Inventory analysis**
+   - map winning topics to existing translators;
+   - map topics to Ideas content;
+   - detect content gaps;
+   - detect duplicate/near-duplicate candidates;
+   - identify evergreen content due for revival.
+
+5. **Opportunity scoring**
+   - score potential actions;
+   - estimate expected value;
+   - estimate AI/rendering cost;
+   - estimate content/policy risk;
+   - assign confidence.
+
+6. **Plan**
+   - choose a bounded daily portfolio of actions;
+   - select publication/account intent;
+   - select destination type;
+   - select creative archetype;
+   - select candidate publish window.
+
+7. **Create/update SayTwist content**
+   - translators;
+   - Ideas pages;
+   - collections;
+   - metadata/internal links;
+   - version history.
+
+8. **Generate Pin candidates**
+   - copy;
+   - image;
+   - destination;
+   - UTM/ref attribution;
+   - board recommendation;
+   - schedule recommendation;
+   - similarity/policy checks.
+
+9. **Publication approval queue**
+   - each Pin is shown as a specific publish candidate;
+   - admin specifically chooses each Pin to approve;
+   - approved Pin can then be scheduled for its recommended time;
+   - unapproved Pins remain drafts, expire, or are regenerated according to settings.
+
+10. **Post-publish monitoring**
+   - record publication ID/state;
+   - sync metrics;
+   - detect API/policy errors;
+   - attach outcomes to the originating decision.
+
+11. **Report**
+   - produce concise executive daily digest;
+   - include performance, actions, spend, warnings and next-plan summary.
+
+## 3. "Autopilot" definition
+
+Full SayTwist-side autopilot means the agent can autonomously:
+
+- research internal performance;
+- decide what SayTwist content to create/edit;
+- create translators;
+- edit translators;
+- create Ideas content;
+- create creative concepts;
+- generate images;
+- generate titles/descriptions;
+- select account/board/time;
+- create scheduled publication candidates;
+- learn from results.
+
+Pinterest publication itself is subject to a per-Pin approval gate because current Pinterest developer guidelines require the end user to choose each Pin that will be published by an app.
+
+If Pinterest explicitly approves a future workflow allowing more autonomous publication for this app, this behavior may be feature-flagged only after:
+- policy verification;
+- documentation update;
+- security review;
+- user approval.
+
+## 4. Decision evidence
+
+Every decision stores:
+
+- `decision_type`
+- `created_at`
+- evidence references
+- topic/content cluster
+- candidate account
+- target destination
+- confidence score
+- expected qualified conversions
+- expected outbound clicks
+- estimated AI cost
+- estimated render cost
+- risk flags
+- final action
+- resulting resource IDs
+- later measured outcome
+
+The admin must be able to inspect the evidence and outcome without exposing private model chain-of-thought.
+
+## 5. Opportunity scoring
+
+Initial conceptual score:
+
+`OpportunityScore = DemandSignal × ConversionQuality × ContentFit × Freshness × Confidence - CostPenalty - DuplicationPenalty - RiskPenalty`
+
+Implementation may use deterministic weighting first. It does not need ML at launch.
+
+Weights must be configurable/versioned so historical decisions can be explained.
+
+## 6. Winner detection
+
+Do not define "winner" solely by impressions.
+
+Signals include:
+
+- qualified conversions;
+- qualified conversion rate;
+- outbound clicks;
+- outbound click rate;
+- saves;
+- growth velocity;
+- performance relative to account baseline;
+- performance relative to creative-type baseline;
+- sustained performance rather than one-hour spikes.
+
+The system should use minimum sample thresholds to avoid acting on noise.
+
+## 7. Niche expansion
+
+When a topic wins, the agent treats it as a **signal**, not an instruction to clone.
+
+It may expand into adjacent content if:
+
+- the adjacent idea is genuinely distinct;
+- there is no existing equivalent;
+- it fits SayTwist;
+- expected usefulness is high;
+- the content cluster remains coherent.
+
+Example signal:
+
+`Gen Z + dating + texting`
+
+Possible outputs:
+
+- Gen Z Flirting Translator
+- Dry Texter Translator
+- Situationship Translator
+- "21 Flirty Texts That Do Not Sound Cringe"
+- "What to Text After a First Date"
+- "Which Type of Texter Are You?"
+
+## 8. Evergreen revival
+
+The revival engine evaluates older translators/Ideas pages that:
+
+- historically converted well;
+- have not been promoted recently;
+- have a fresh creative angle available;
+- remain relevant;
+- are not currently fatigued.
+
+Revival means a new authentic creative/angle, not reposting the same Pin repeatedly.
+
+## 9. Scheduling
+
+Do not hard-code generic "best Pinterest time" advice as the long-term scheduler.
+
+Cold-start:
+- use configurable exploration windows;
+- distribute tests across weekdays/time slots.
+
+Learning dimensions:
+- account;
+- weekday;
+- hour/time window;
+- content intent;
+- topic;
+- creative archetype;
+- destination type.
+
+As data grows, use exploration/exploitation:
+- reserve some inventory for learning;
+- place proven combinations in stronger windows;
+- avoid declaring a permanent best time from small samples.
+
+## 10. Warning behavior
+
+The user prefers recommendations over automatic shutdown.
+
+The agent should warn on:
+
+- unusual performance decline;
+- API/policy warnings;
+- repeated publish failures;
+- OAuth expiration;
+- suspected content duplication;
+- unusual account behavior;
+- cost acceleration;
+- attribution failure;
+- worker/analytics failure.
+
+The report includes recommended action.
+
+Operationally impossible jobs stop naturally; the agent should not repeatedly hammer a failing API.
+
+Hard spend limits, if explicitly configured by the user, are enforced mechanically.
+
+## 11. Failure isolation
+
+Growth failures must be isolated from core SayTwist.
+
+Use:
+- separate queues/jobs;
+- retries with bounded backoff;
+- idempotency;
+- dead-letter/failure states;
+- timeouts;
+- transactional state changes where required.
+
+A Growth failure must not prevent normal translations or public page loads.
