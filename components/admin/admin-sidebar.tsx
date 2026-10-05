@@ -7,6 +7,7 @@ import {
   BarChart3,
   Cog,
   FolderTree,
+  Gauge,
   Globe,
   LayoutTemplate,
   Menu,
@@ -31,6 +32,7 @@ interface AdminSidebarProps {
 
 const links = [
   { href: "/admin", label: "Overview", icon: BarChart3 },
+  { href: "/admin/growth", label: "Growth", icon: Gauge },
   { href: "/admin/translators", label: "Translators", icon: Sparkles },
   { href: "/admin/translators/new", label: "Create Translator", icon: PlusSquare },
   { href: "/admin/translators/ai/new", label: "Create With AI", icon: Sparkles },

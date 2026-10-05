@@ -93,3 +93,7 @@ Failure of Pinterest APIs, AI providers, report delivery, analytics synchronizat
 - Public editorial content belongs under `/ideas`.
 
 Phase 1 audit findings and exact future module paths live in `IMPLEMENTATION_MAP.md`; schema, retention and state machines live in `DATA_MODEL.md`. These are mandatory reading before Growth work.
+
+## Implemented foundation
+
+Phase 2 foundation uses migration `20261005140000_growth_platform_foundation`, `lib/growth/*`, the one-shot `npm run growth:worker` command, and `/admin/growth`. Growth is disabled by default. No cron/PM2 entry exists, and no Pinterest, Ideas or attribution implementation exists. Future work must extend the job enum/handler registry and schema only in its assigned phase.

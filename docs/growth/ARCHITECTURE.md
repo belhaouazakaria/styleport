@@ -132,6 +132,16 @@ Do not use constant aggressive polling.
 
 Prefer explicit scheduled jobs/cron-driven enqueueing and bounded workers.
 
+### Phase 2 concrete job runtime
+
+The implemented command is `npm run growth:worker`. It performs one bounded run and exits: read the kill switch, promote at most one configured batch of due retries, recover at most one configured batch of stale leases, claim and process no more than the configured batch size, then record completion status. The configured batch defaults to 5 and cannot exceed 25. There is no `setInterval`, sleep loop, cron entry or PM2 process.
+
+Each invocation claims its configured batch with one PostgreSQL statement in one transaction: a bounded, ordered candidate CTE selects eligible rows with `FOR UPDATE SKIP LOCKED`, then an `UPDATE ... RETURNING` writes claim ownership, lease timestamps and attempt counts before commit. Eligibility is `PENDING`, `runAfter <= CURRENT_TIMESTAMP`, and `attemptCount < maxAttempts`; ordering is `runAfter`, then `createdAt`, and the `(status, runAfter)` index supports the queue prefix. `JOB_CLAIMED` activities are written in that transaction. There is no per-job claim query loop.
+
+An attempt is consumed when a claim commits, before the handler starts. A crash after claim therefore consumes one attempt. Stale recovery clears ownership and returns the same job to `PENDING` only when `attemptCount < maxAttempts`; recovery itself does not increment, and the next claim consumes the next attempt. At the attempt limit, failure or stale recovery becomes `FAILED_TERMINAL`, so `maxAttempts=3` permits at most three claims/executions. The default is 3 and the database/service upper bound is 5. Worker state changes compare job ID, expected state and a unique per-invocation lease owner. Retryable failure uses capped exponential backoff from 30 seconds to 30 minutes. Due retry rows are promoted only during an explicit bounded invocation.
+
+`GrowthWorkerHeartbeat` is a bounded status view: the stable configured worker ID is its primary key and repeated invocations upsert that row. A random invocation ID fences updates so an older overlapping invocation cannot overwrite the newer invocation's status. Job and `GrowthActivity` rows retain history; heartbeat rows do not represent invocation history and no idle heartbeat loop exists.
+
 ## 5. Suggested data entities
 
 Final names may change, but the semantic model should cover:

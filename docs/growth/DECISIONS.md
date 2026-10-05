@@ -168,6 +168,12 @@ Production uses PostgreSQL 18 self-hosted on the VPS. SayTwist connects locally 
 
 Growth is designed around the existing local PostgreSQL production architecture and shares that instance/database unless a later durable architecture decision changes it. External managed database assumptions, including Neon, are not part of the current production baseline. Growth jobs must keep PostgreSQL load bounded and must not use aggressive polling.
 
+## D-023 — Phase 2 uses a dedicated disabled-by-default Growth foundation
+
+**Status:** Accepted and implemented
+
+Use dedicated `GrowthSettings`, `GrowthJob`, `GrowthActivity` and `GrowthWorkerHeartbeat` tables. Growth defaults to disabled. Workers run only through explicit bounded invocation, claim one bounded batch atomically with PostgreSQL row locking, cap retries and exit when disabled or empty. Attempts increment on committed claim; stale recovery does not increment, and exhausted leases/failures become terminal. A stable heartbeat row represents each configured worker identity while a random invocation ID fences heartbeat updates and job transitions. Required unique idempotency keys identify a logical job for its entire lifetime. Phase 2 exposes no generic job creation API and registers only the internal `FOUNDATION_NOOP` handler.
+
 ## Open implementation checks
 
 1. Pinterest developer access/scopes and whether all existing accounts are eligible to connect.

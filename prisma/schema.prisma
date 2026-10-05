@@ -142,6 +142,39 @@ enum TranslatorEditorialDraftStatus {
   PUBLISHED
 }
 
+enum GrowthIntensity {
+  LOW
+  BALANCED
+  AGGRESSIVE
+  CUSTOM
+}
+
+enum GrowthJobType {
+  FOUNDATION_NOOP
+}
+
+enum GrowthJobStatus {
+  PENDING
+  CLAIMED
+  RUNNING
+  SUCCEEDED
+  FAILED_RETRYABLE
+  FAILED_TERMINAL
+  CANCELLED
+}
+
+enum GrowthActivityActorKind {
+  SYSTEM
+  USER
+  WORKER
+}
+
+enum GrowthWorkerStatus {
+  RUNNING
+  IDLE
+  FAILED
+}
+
 model User {
   id                    String                     @id @default(cuid())
   name                  String?
@@ -156,6 +189,8 @@ model User {
   sessions              Session[]
   editorialJobs         TranslatorEditorialJob[]   @relation("TranslatorEditorialJobRequester")
   editorialDraftReviews TranslatorEditorialDraft[] @relation("TranslatorEditorialDraftReviewer")
+  growthSettingsUpdates GrowthSettings[]           @relation("GrowthSettingsUpdater")
+  growthActivities      GrowthActivity[]           @relation("GrowthActivityUser")
 }
 
 model Account {
@@ -569,6 +604,78 @@ model AppSetting {
   key       String   @unique
   value     Json
   updatedAt DateTime @updatedAt
+}
+
+model GrowthSettings {
+  id              String          @id @default("global")
+  enabled         Boolean         @default(false)
+  intensity       GrowthIntensity @default(BALANCED)
+  workerBatchSize Int             @default(5)
+  configVersion   Int             @default(1)
+  updatedById     String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  updatedBy       User?           @relation("GrowthSettingsUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@index([updatedAt])
+}
+
+model GrowthJob {
+  id             String          @id @default(cuid())
+  type           GrowthJobType
+  status         GrowthJobStatus @default(PENDING)
+  payload        Json?
+  idempotencyKey String          @unique
+  runAfter       DateTime        @default(now())
+  attemptCount   Int             @default(0)
+  maxAttempts    Int             @default(3)
+  workerId       String?
+  claimedAt      DateTime?
+  leaseUntil     DateTime?
+  heartbeatAt    DateTime?
+  lastError      String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  completedAt    DateTime?
+
+  @@index([status, runAfter])
+  @@index([leaseUntil])
+  @@index([workerId, status])
+}
+
+model GrowthActivity {
+  id             String                  @id @default(cuid())
+  actorKind      GrowthActivityActorKind
+  actorUserId    String?
+  entityType     String
+  entityId       String
+  action         String
+  fromState      String?
+  toState        String?
+  summary        Json?
+  correlationKey String?
+  createdAt      DateTime                @default(now())
+  actorUser      User?                   @relation("GrowthActivityUser", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId, createdAt])
+  @@index([createdAt])
+  @@index([correlationKey])
+}
+
+model GrowthWorkerHeartbeat {
+  workerId     String             @id
+  invocationId String
+  status       GrowthWorkerStatus @default(IDLE)
+  currentJobId String?
+  buildVersion String?
+  startedAt    DateTime           @default(now())
+  heartbeatAt  DateTime           @default(now())
+  completedAt  DateTime?
+  lastError    String?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  @@index([status, heartbeatAt])
 }
 
 model IndexingLog {

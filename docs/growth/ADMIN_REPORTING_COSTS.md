@@ -258,3 +258,7 @@ Dangerous/high-impact settings should require deliberate confirmation:
 | Settings | kill switch, limits, attribution model, report channel | ADMIN, versioned/audited |
 
 Every AI call records provider/model, tokens or image units, estimated and actual cost when available, pricing version, job/decision/account/translator/Idea/Pin links. Unknown prices are unpriced, never represented as free. Daily/monthly aggregates and cost per QPC use matching windows. The concise digest has one recipient through a provider interface, with WhatsApp if feasible and email fallback. No fixed budget is assumed.
+
+## Phase 2 admin implementation
+
+`/admin/growth` is implemented inside the existing admin shell and navigation. It shows only foundation facts: kill-switch state, queued/claimed/running/retryable/terminal job counts, oldest runnable job, latest bounded worker execution and recent structured activity. It explicitly identifies Pinterest, attribution, Ideas and publishing as inactive. `GET /api/admin/growth` returns the same authenticated status. `PUT /api/admin/growth/settings` updates only `enabled`, `intensity` and `workerBatchSize`; it uses the existing ADMIN guard, same-origin validation, strict Zod input and an audited transactional update. Phase 13 cost/report controls remain unimplemented.

@@ -1,6 +1,6 @@
 # SayTwist Growth Agent
 
-**Status:** Planned  
+**Status:** Phase 2 foundation complete; Growth disabled by default
 **Scope:** Pinterest-first autonomous growth system inside SayTwist  
 **Primary admin surface:** `/admin/growth`  
 **Primary public expansion:** `/ideas`  

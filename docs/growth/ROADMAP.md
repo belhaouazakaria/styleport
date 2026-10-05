@@ -27,7 +27,7 @@ Exit:
 
 ## Phase 2 — Growth platform foundation
 
-**Status:** Not started
+**Status:** Complete
 
 Deliver:
 - core Growth schema;
@@ -41,6 +41,8 @@ Deliver:
 Exit:
 - foundation tests pass;
 - core app remains unaffected when worker is down.
+
+Implemented in migration `20261005140000_growth_platform_foundation` and `lib/growth/*`. Growth defaults to disabled; `/admin/growth` remains readable, and `npm run growth:worker` performs one bounded run then exits. Unit coverage and an opt-in disposable PostgreSQL 18 suite verify state, security, idempotency, real concurrent batch claiming, retry limits, lease ownership/recovery, singleton settings, bounded heartbeat storage, audit records and the admin shell. The complete migration history applies from scratch. No Phase 3+ integration is included.
 
 ## Phase 3 — Pinterest integration
 
