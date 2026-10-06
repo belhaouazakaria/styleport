@@ -261,8 +261,21 @@ export function qualifyClusterOpportunities(input: {
       p.observationDays >= T.minimumObservationDays,
   ).length;
   const clusterSignals = classifyPinSignals(m);
+  const strongFatigue = clusterSignals.some(
+    (signal) =>
+      signal.type === GrowthPinSignalType.FATIGUE &&
+      signal.strength === GrowthSignalStrength.STRONG,
+  );
+  const strongRising = clusterSignals.some(
+    (signal) =>
+      signal.type === GrowthPinSignalType.RISING &&
+      signal.strength === GrowthSignalStrength.STRONG,
+  );
   if (
-    clusterSignals.some((s) => s.type === GrowthPinSignalType.WINNER) &&
+    !strongFatigue &&
+    clusterSignals.some(
+      (signal) => signal.type === GrowthPinSignalType.WINNER,
+    ) &&
     meaningful >= 2 &&
     concentration <= 80
   )
@@ -275,11 +288,8 @@ export function qualifyClusterOpportunities(input: {
       p.previousObservationDays >= 3,
   ).length;
   if (
-    clusterSignals.some(
-      (s) =>
-        s.type === GrowthPinSignalType.RISING &&
-        s.strength === GrowthSignalStrength.STRONG,
-    ) &&
+    !strongFatigue &&
+    strongRising &&
     recentContributors >= 2 &&
     concentration <= 80
   )
@@ -291,14 +301,7 @@ export function qualifyClusterOpportunities(input: {
       p.previousObservationDays >= 5 &&
       p.recentObservationDays >= 5,
   ).length;
-  if (
-    clusterSignals.some(
-      (s) =>
-        s.type === GrowthPinSignalType.FATIGUE &&
-        s.strength === GrowthSignalStrength.STRONG,
-    ) &&
-    priorContributors >= 2
-  )
+  if (strongFatigue && priorContributors >= 2)
     out.push(GrowthOpportunityType.INVESTIGATE_FATIGUE);
   if (
     m.outboundClicks >= T.inventoryGapOutboundClicks &&

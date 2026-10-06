@@ -281,3 +281,8 @@ Phase 5 adds `/admin/growth/attribution`. It supports 7/30-day bounded aggregate
 `/admin/growth/opportunities` is ADMIN-only and server-rendered from local persisted rows. It displays the latest evidence window and quality, Pin cap usage, cluster and opportunity counts, attribution collection state, a bounded Pin-signal table for winner/rising/fatigue observations, and a separate ranked cluster-opportunity table with score/confidence/type/status. A viral Pin remains visible even when concentration or insufficient content depth prevents a cluster opportunity. The POST route requires ADMIN and same origin and only enqueues the daily idempotent job. It cannot change status, publish, call Pinterest, or mutate accounts, boards, Pins, Translators, Ideas, or creatives. Analysis and report queries have fixed caps.
 
 Phase 7 has no AI or external trend cost. Opportunity evidence records cost as `NOT_APPLICABLE`; `NullTrendProvider` makes no request. This must change through a later versioned decision before any paid provider contributes evidence.
+
+
+### Phase 7 version visibility
+
+The opportunity dashboard orders runs by analysis date, completion time, creation time, and ID, then shows intelligence, clustering, and scoring versions. A corrected v2 same-day run therefore becomes current without hiding or deleting historical v1 evidence.

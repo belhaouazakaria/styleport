@@ -250,3 +250,14 @@ The manual ADMIN same-origin action only enqueues the daily idempotent job `oppo
 **Status:** Accepted and implemented; production not yet deployed
 
 Persist deterministic Pin observations separately from advisory cluster opportunities. One sustained Pin may produce a winner signal, including a viral outlier, but winner/rising expansion requires at least two meaningful contributors and rejects top-Pin outbound concentration above 80%. Inventory gaps retain multi-Pin/content-depth requirements. Rising combines absolute recent volume, reach or outbound movement, and non-contradictory CTR/save-rate evidence. Fatigue requires previously meaningful performance, complete recent/prior observations, concurrent reach and outbound decline, and quality evidence; improving CTR makes it cautious and prevents cluster opportunity qualification. Stale evidence suppresses rising/fatigue opportunities. No signal directly authorizes content or publication work.
+
+
+## D-031 — Retain Phase 7 clustering v1 and correct with versioned v2
+
+**Status:** Accepted and implemented; production correction pending validation
+
+The initial production `content_clustering_v1` analysis included raw destination-path tokens. Because every known Translator URL contains `/translators/:slug`, the structural `translators` token collapsed 221 eligible Pins into one false cluster. Keep the v1 job, run, cluster, signal, and opportunity rows unchanged as historical audit evidence.
+
+Use `content_clustering_v2` with `opportunity_intelligence_v2` and unchanged `opportunity_scoring_v1`. Recognized Translator destinations use resolved Translator name, slug tokens, primary category, legacy category, title, and description without route segments. Unknown destinations may use only normalized terminal path content. Centralized generic vocabulary includes `style/styles` because these words describe the SayTwist corpus broadly rather than a useful opportunity niche. For corpora of at least ten Pins, reject candidate tokens appearing in more than 60% of documents; require document frequency of at least two, prefer sufficiently specific category evidence, then choose by source trust, lower document frequency, and lexical tie-break.
+
+The new intelligence version permits a same-date v2 run beside v1 and changes the job key to `opportunity-intelligence:opportunity_intelligence_v2:YYYY-MM-DD`. Dashboard ordering prefers later completion/creation on the same date and displays all model versions. Strong fatigue suppresses `AMPLIFY_WINNER` and `EXPLORE_RISING_TOPIC` for that cluster/run while preserving underlying Pin signals; `FILL_INVENTORY_GAP` may coexist.

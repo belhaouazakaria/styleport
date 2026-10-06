@@ -171,3 +171,8 @@ Worldwide English is the audience; cold-start Pinterest tests and schedules are 
 ## Phase 7 implemented product boundary
 
 Opportunity intelligence is implemented with deterministic local evidence and no AI. It identifies sustainable winners, rising topics, inventory gaps, and fatigue over the last 28 complete UTC days; groups related eligible Pins with stable lexical/category clusters; records concentration and confidence; and ranks advisory opportunities from 0 to 100. It does not create content or make an opportunity actionable by itself. Conversion evidence participates only when attribution collection is enabled, and unavailable QPC is never interpreted as zero. Phase 8 Translator Autopilot is the next product phase.
+
+
+## Phase 7 clustering correction
+
+Opportunity topics must represent content semantics rather than URL structure. The current v2 model excludes route plumbing, applies a 60% maximum document-frequency ratio for corpora of at least ten Pins, and preserves single-Pin signals independently. Strong fatigue suppresses contradictory amplify/rising recommendations while leaving raw winner/fatigue signals visible.

@@ -1,6 +1,6 @@
 # SayTwist Growth Agent
 
-**Status:** Phase 7 complete (implementation validated; production not yet deployed); Phase 6 production deployed and live validated; attribution collection intentionally disabled
+**Status:** Phase 7 complete (implementation validated; production correction pending validation); Phase 6 production deployed and live validated; attribution collection intentionally disabled
 **Scope:** Pinterest-first autonomous growth system inside SayTwist  
 **Primary admin surface:** `/admin/growth`  
 **Primary public expansion:** `/ideas`  
@@ -76,3 +76,8 @@ If implementation changes behavior described here, update the relevant document 
 - WhatsApp reporting is desired for one recipient, but provider setup and current pricing must be verified before implementation.
 
 See `IMPLEMENTATION_MAP.md` for verified repository facts and `DATA_MODEL.md` for implemented and proposed schema/state contracts.
+
+
+## Phase 7 production correction
+
+The initial live `content_clustering_v1` run collapsed 221 eligible Pins into the structural route topic `translators`. Historical v1 rows remain untouched. `content_clustering_v2` excludes route plumbing, rejects overly common corpus tokens, and uses resolved Translator/category and slug evidence. `opportunity_intelligence_v2` allows the corrected same-day run. Production correction validation is still pending.

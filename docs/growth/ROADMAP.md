@@ -115,7 +115,7 @@ Production deployed and live validated with migration `20261006190000_growth_acc
 
 ## Phase 7 — Opportunity Intelligence
 
-**Status:** Complete (implementation validated; production not yet deployed)
+**Status:** Complete (implementation validated; production correction pending validation)
 
 Deliver:
 - winner/rising/fatigue detection;
@@ -128,7 +128,7 @@ Deliver:
 Exit:
 - opportunities are generated from real measurable evidence.
 
-Implemented in additive migration `20261006220000_growth_opportunity_intelligence`, deterministic `lib/growth/opportunity/*`, bounded `OPPORTUNITY_INTELLIGENCE_ANALYSIS`, and `/admin/growth/opportunities`. Models `opportunity_intelligence_v1`, `opportunity_scoring_v1`, and `content_clustering_v1` use the last 28 complete UTC days, recent/previous seven-day comparisons, four weekly buckets, and no AI. Analysis reads at most 500 active analytics-eligible Pins plus bounded local metrics, account state, latest strategy state, Translator/category metadata, and attribution aggregates only when collection is enabled. It persists Pin-level winner/rising/fatigue signals separately from stable clusters, explicit capped membership snapshots, immutable daily analysis runs, and ranked advisory cluster opportunities. Viral Pins remain visible, while contributor-depth and concentration rules prevent one outlier from proving a topic. Missing QPC is unavailable rather than zero; conversion-specific types are emitted only while attribution is collecting. No Pinterest call or mutation, publishing, Ideas, Translator mutation, creative generation, scheduling, cron, or PM2 Growth worker was added. Growth and attribution collection remain disabled. Phase 8 is next and covers Translator Autopilot.
+Implemented in additive migration `20261006220000_growth_opportunity_intelligence`, deterministic `lib/growth/opportunity/*`, bounded `OPPORTUNITY_INTELLIGENCE_ANALYSIS`, and `/admin/growth/opportunities`. Corrected models `opportunity_intelligence_v2`, `opportunity_scoring_v1`, and `content_clustering_v2` use the last 28 complete UTC days, recent/previous seven-day comparisons, four weekly buckets, and no AI. Analysis reads at most 500 active analytics-eligible Pins plus bounded local metrics, account state, latest strategy state, Translator/category metadata, and attribution aggregates only when collection is enabled. It persists Pin-level winner/rising/fatigue signals separately from stable clusters, explicit capped membership snapshots, immutable daily analysis runs, and ranked advisory cluster opportunities. Viral Pins remain visible, while contributor-depth and concentration rules prevent one outlier from proving a topic. Missing QPC is unavailable rather than zero; conversion-specific types are emitted only while attribution is collecting. No Pinterest call or mutation, publishing, Ideas, Translator mutation, creative generation, scheduling, cron, or PM2 Growth worker was added. Growth and attribution collection remain disabled. Phase 8 is next and covers Translator Autopilot.
 
 ## Phase 8 — Translator Autopilot
 

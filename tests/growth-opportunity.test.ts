@@ -341,6 +341,64 @@ describe("Phase 7 hardened deterministic signals", () => {
         .confidence,
     );
   });
+  it("keeps winner/fatigue signals but lets strong fatigue suppress amplify and rising", () => {
+    const declining = {
+      olderI: 100,
+      olderO: 4,
+      previousI: 200,
+      previousO: 8,
+      recentI: 80,
+      recentO: 2,
+    };
+    const rows = [...pinRows("a", declining), ...pinRows("b", declining)];
+    const pins = [
+      aggregate(pinRows("a", declining)),
+      aggregate(pinRows("b", declining), ["b"]),
+    ];
+    expect(classifyPinSignals(pins[0]).map((signal) => signal.type)).toEqual(
+      expect.arrayContaining([
+        GrowthPinSignalType.WINNER,
+        GrowthPinSignalType.FATIGUE,
+      ]),
+    );
+    const opportunities = qualifyClusterOpportunities({
+      metrics: aggregate(rows, ["a", "b"]),
+      pinMetrics: pins,
+      pinCount: 2,
+      destinations: 2,
+      stale: false,
+    });
+    expect(opportunities).toContain(GrowthOpportunityType.INVESTIGATE_FATIGUE);
+    expect(opportunities).not.toContain(GrowthOpportunityType.AMPLIFY_WINNER);
+    expect(opportunities).not.toContain(
+      GrowthOpportunityType.EXPLORE_RISING_TOPIC,
+    );
+  });
+  it("allows rising without fatigue when two contributors improve", () => {
+    const rising = {
+      olderI: 40,
+      olderO: 1,
+      previousI: 50,
+      previousO: 1,
+      recentI: 100,
+      recentO: 3,
+    };
+    const rows = [...pinRows("a", rising), ...pinRows("b", rising)];
+    const opportunities = qualifyClusterOpportunities({
+      metrics: aggregate(rows, ["a", "b"]),
+      pinMetrics: [
+        aggregate(pinRows("a", rising)),
+        aggregate(pinRows("b", rising), ["b"]),
+      ],
+      pinCount: 2,
+      destinations: 2,
+      stale: false,
+    });
+    expect(opportunities).toContain(GrowthOpportunityType.EXPLORE_RISING_TOPIC);
+    expect(opportunities).not.toContain(
+      GrowthOpportunityType.INVESTIGATE_FATIGUE,
+    );
+  });
   it("uses a no-network null trend provider", async () =>
     expect(
       await new NullTrendProvider().getSignal({

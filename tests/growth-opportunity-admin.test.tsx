@@ -42,6 +42,9 @@ describe("Phase 7 opportunity admin", () => {
     mocks.enqueue.mockResolvedValue({ job: { id: "job" }, created: true });
     mocks.dashboard.mockResolvedValue({
       latestRun: {
+        intelligenceModelVersion: "opportunity_intelligence_v2",
+        clusteringModelVersion: "content_clustering_v2",
+        scoringModelVersion: "opportunity_scoring_v1",
         evidenceQuality: "KNOWN",
         pinsConsidered: 12,
         pinCap: 500,
@@ -82,6 +85,9 @@ describe("Phase 7 opportunity admin", () => {
     ).toBeInTheDocument();
     expect(screen.getByText(/not collecting/i)).toBeInTheDocument();
     expect(screen.getByText(/amplify winner/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/opportunity_intelligence_v2/i),
+    ).toBeInTheDocument();
   });
   it("preserves the admin guard", async () => {
     const denied = new Response("denied", { status: 403 });
