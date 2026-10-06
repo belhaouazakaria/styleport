@@ -8,73 +8,167 @@ import {
   syncPinterestPinAnalytics,
   syncPinterestPinInventory,
 } from "@/lib/growth/pinterest/analytics";
-import { syncPinterestAccount, syncPinterestBoards } from "@/lib/growth/pinterest/sync";
+import {
+  syncPinterestAccount,
+  syncPinterestBoards,
+} from "@/lib/growth/pinterest/sync";
 import { attributionRetentionJobPayloadSchema } from "@/lib/growth/attribution/contracts";
 import { cleanupAttributionDetail } from "@/lib/growth/attribution/retention";
+import { accountStrategyJobPayloadSchema } from "@/lib/growth/strategy/contracts";
+import { persistAccountStrategyReview } from "@/lib/growth/strategy/review";
 
 export interface GrowthJobHandlerContext {
   job: GrowthJob;
 }
 
-export type GrowthJobHandler = (context: GrowthJobHandlerContext) => Promise<Record<string, unknown>>;
+export type GrowthJobHandler = (
+  context: GrowthJobHandlerContext,
+) => Promise<Record<string, unknown>>;
 
 const handlers = new Map<GrowthJobType, GrowthJobHandler>([
-  [GrowthJobType.FOUNDATION_NOOP, async ({ job }) => ({ handled: true, type: job.type })],
-  [GrowthJobType.PINTEREST_ACCOUNT_SYNC, async ({ job }) => {
-    const payload = parsePinterestSyncPayload(job.payload);
-    return syncPinterestAccount(payload.accountId);
-  }],
-  [GrowthJobType.PINTEREST_BOARD_SYNC, async ({ job }) => {
-    const payload = parsePinterestSyncPayload(job.payload);
-    return syncPinterestBoards(payload.accountId);
-  }],
-  [GrowthJobType.PINTEREST_PIN_INVENTORY_SYNC, async ({ job }) => {
-    const payload = parsePinterestAnalyticsPayload(job.payload);
-    return syncPinterestPinInventory(payload);
-  }],
-  [GrowthJobType.PINTEREST_ACCOUNT_ANALYTICS_SYNC, async ({ job }) => {
-    const payload = parsePinterestAnalyticsPayload(job.payload);
-    return syncPinterestAccountAnalytics(payload);
-  }],
-  [GrowthJobType.PINTEREST_PIN_ANALYTICS_SYNC, async ({ job }) => {
-    const payload = parsePinterestAnalyticsPayload(job.payload, true);
-    return syncPinterestPinAnalytics({ ...payload, batch: payload.batch || 0 });
-  }],
-  [GrowthJobType.ATTRIBUTION_RETENTION_CLEANUP, async ({ job }) => {
-    const parsed = attributionRetentionJobPayloadSchema.safeParse(job.payload || {});
-    if (!parsed.success) throw new NonRetryableGrowthJobError("Invalid attribution retention job payload.");
-    return cleanupAttributionDetail({ limit: parsed.data.limit });
-  }],
+  [
+    GrowthJobType.FOUNDATION_NOOP,
+    async ({ job }) => ({ handled: true, type: job.type }),
+  ],
+  [
+    GrowthJobType.PINTEREST_ACCOUNT_SYNC,
+    async ({ job }) => {
+      const payload = parsePinterestSyncPayload(job.payload);
+      return syncPinterestAccount(payload.accountId);
+    },
+  ],
+  [
+    GrowthJobType.PINTEREST_BOARD_SYNC,
+    async ({ job }) => {
+      const payload = parsePinterestSyncPayload(job.payload);
+      return syncPinterestBoards(payload.accountId);
+    },
+  ],
+  [
+    GrowthJobType.PINTEREST_PIN_INVENTORY_SYNC,
+    async ({ job }) => {
+      const payload = parsePinterestAnalyticsPayload(job.payload);
+      return syncPinterestPinInventory(payload);
+    },
+  ],
+  [
+    GrowthJobType.PINTEREST_ACCOUNT_ANALYTICS_SYNC,
+    async ({ job }) => {
+      const payload = parsePinterestAnalyticsPayload(job.payload);
+      return syncPinterestAccountAnalytics(payload);
+    },
+  ],
+  [
+    GrowthJobType.PINTEREST_PIN_ANALYTICS_SYNC,
+    async ({ job }) => {
+      const payload = parsePinterestAnalyticsPayload(job.payload, true);
+      return syncPinterestPinAnalytics({
+        ...payload,
+        batch: payload.batch || 0,
+      });
+    },
+  ],
+  [
+    GrowthJobType.ATTRIBUTION_RETENTION_CLEANUP,
+    async ({ job }) => {
+      const parsed = attributionRetentionJobPayloadSchema.safeParse(
+        job.payload || {},
+      );
+      if (!parsed.success)
+        throw new NonRetryableGrowthJobError(
+          "Invalid attribution retention job payload.",
+        );
+      return cleanupAttributionDetail({ limit: parsed.data.limit });
+    },
+  ],
+  [
+    GrowthJobType.ACCOUNT_STRATEGY_REVIEW,
+    async ({ job }) => {
+      const parsed = accountStrategyJobPayloadSchema.safeParse(
+        job.payload || {},
+      );
+      if (!parsed.success)
+        throw new NonRetryableGrowthJobError(
+          "Invalid account strategy review payload.",
+        );
+      const reviewMonth = new Date(
+        `${parsed.data.reviewMonth}-01T00:00:00.000Z`,
+      );
+      const evidenceWindowEnd = new Date(
+        `${parsed.data.evidenceWindowEnd}T00:00:00.000Z`,
+      );
+      if (
+        Number.isNaN(reviewMonth.getTime()) ||
+        Number.isNaN(evidenceWindowEnd.getTime())
+      ) {
+        throw new NonRetryableGrowthJobError(
+          "Invalid account strategy review period.",
+        );
+      }
+      const evidenceWindowStart = new Date(evidenceWindowEnd);
+      evidenceWindowStart.setUTCDate(evidenceWindowStart.getUTCDate() - 27);
+      const result = await persistAccountStrategyReview({
+        reviewMonth,
+        evidenceWindowStart,
+        evidenceWindowEnd,
+      });
+      return {
+        reviewId: result.review.id,
+        period: parsed.data.reviewMonth,
+        recommendation: result.review.recommendation,
+        connectedCount: result.review.connectedAccountCount,
+        confidence: result.review.confidence,
+        modelVersion: result.review.modelVersion,
+      };
+    },
+  ],
 ]);
 
 function parsePinterestSyncPayload(payload: unknown) {
-  const parsed = z.object({ accountId: z.string().min(1) }).strict().safeParse(payload);
-  if (!parsed.success) throw new NonRetryableGrowthJobError("Invalid Pinterest synchronization job payload.");
+  const parsed = z
+    .object({ accountId: z.string().min(1) })
+    .strict()
+    .safeParse(payload);
+  if (!parsed.success)
+    throw new NonRetryableGrowthJobError(
+      "Invalid Pinterest synchronization job payload.",
+    );
   return parsed.data;
 }
 
-function parsePinterestAnalyticsPayload(payload: unknown, requireBatch = false) {
-  const parsed = z.object({
-    accountId: z.string().min(1),
-    startDate: z.string(),
-    endDate: z.string(),
-    runStartedAt: z.string().datetime({ offset: true }),
-    batch: z.number().int().min(0).max(10_000).optional(),
-    relevancePrepared: z.boolean().optional(),
-  }).strict().safeParse(payload);
+function parsePinterestAnalyticsPayload(
+  payload: unknown,
+  requireBatch = false,
+) {
+  const parsed = z
+    .object({
+      accountId: z.string().min(1),
+      startDate: z.string(),
+      endDate: z.string(),
+      runStartedAt: z.string().datetime({ offset: true }),
+      batch: z.number().int().min(0).max(10_000).optional(),
+      relevancePrepared: z.boolean().optional(),
+    })
+    .strict()
+    .safeParse(payload);
   if (!parsed.success || (requireBatch && parsed.data.batch === undefined)) {
-    throw new NonRetryableGrowthJobError("Invalid Pinterest analytics job payload.");
+    throw new NonRetryableGrowthJobError(
+      "Invalid Pinterest analytics job payload.",
+    );
   }
   try {
     analyticsDateRange(parsed.data);
   } catch {
-    throw new NonRetryableGrowthJobError("Invalid Pinterest analytics date range.");
+    throw new NonRetryableGrowthJobError(
+      "Invalid Pinterest analytics date range.",
+    );
   }
   return parsed.data;
 }
 
 export async function dispatchGrowthJob(job: GrowthJob) {
   const handler = handlers.get(job.type);
-  if (!handler) throw new Error(`Unsupported Growth job type: ${String(job.type)}`);
+  if (!handler)
+    throw new Error(`Unsupported Growth job type: ${String(job.type)}`);
   return handler({ job });
 }

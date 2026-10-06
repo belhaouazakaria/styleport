@@ -157,6 +157,7 @@ enum GrowthJobType {
   PINTEREST_ACCOUNT_ANALYTICS_SYNC
   PINTEREST_PIN_ANALYTICS_SYNC
   ATTRIBUTION_RETENTION_CLEANUP
+  ACCOUNT_STRATEGY_REVIEW
 }
 
 enum GrowthJobStatus {
@@ -216,6 +217,21 @@ enum GrowthAttributionEventType {
   IDEA_VIEW
   IDEA_CTA
   EMBEDDED_TRANSLATION_COMPLETED
+}
+
+enum GrowthAccountStrategyRecommendation {
+  KEEP_CURRENT_PORTFOLIO
+  COMPLETE_BASELINE_PORTFOLIO
+  REPOSITION_EXISTING_ROLE
+  RECOMMEND_NEW_ACCOUNT
+  WAIT_FOR_MORE_DATA
+}
+
+enum GrowthStrategyEvidenceQuality {
+  KNOWN
+  UNKNOWN
+  INSUFFICIENT_DATA
+  NOT_APPLICABLE
 }
 
 model User {
@@ -923,6 +939,29 @@ model GrowthAttributionDailyAggregate {
   @@index([attributionRefId, metricDate])
   @@index([translatorId, metricDate])
   @@index([modelVersion, metricDate])
+}
+
+model GrowthAccountStrategyReview {
+  id                      String                              @id @default(cuid())
+  reviewMonth             DateTime
+  evidenceWindowStart     DateTime
+  evidenceWindowEnd       DateTime
+  modelVersion            String
+  recommendation          GrowthAccountStrategyRecommendation
+  plannedAccountCount     Int
+  connectedAccountCount   Int
+  recommendedAccountCount Int
+  confidence              Int
+  evidenceQuality         GrowthStrategyEvidenceQuality
+  evidence                Json
+  reasonCodes             String[]
+  recommendationSummary   String
+  createdAt               DateTime                            @default(now())
+  completedAt             DateTime                            @default(now())
+
+  @@unique([reviewMonth, modelVersion])
+  @@index([recommendation, reviewMonth])
+  @@index([completedAt])
 }
 
 model GrowthPinterestAccountMetricDaily {

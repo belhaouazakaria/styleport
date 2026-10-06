@@ -19,6 +19,7 @@
     "test:growth-analytics-db": "test -n \"$GROWTH_ANALYTICS_TEST_DATABASE_URL\" && DATABASE_URL=\"$GROWTH_ANALYTICS_TEST_DATABASE_URL\" RUN_GROWTH_ANALYTICS_DB_TESTS=1 vitest run tests/pinterest-analytics-persistence.integration.test.ts",
     "test:growth-relevance-db": "test -n \"$GROWTH_RELEVANCE_TEST_DATABASE_URL\" && DATABASE_URL=\"$GROWTH_RELEVANCE_TEST_DATABASE_URL\" RUN_GROWTH_RELEVANCE_DB_TESTS=1 vitest run tests/pinterest-relevance-persistence.integration.test.ts",
     "test:growth-attribution-db": "test -n \"$GROWTH_ATTRIBUTION_TEST_DATABASE_URL\" && DATABASE_URL=\"$GROWTH_ATTRIBUTION_TEST_DATABASE_URL\" GROWTH_ATTRIBUTION_COLLECTION_ENABLED=true RUN_GROWTH_ATTRIBUTION_DB_TESTS=1 vitest run tests/growth-attribution-persistence.integration.test.ts",
+    "test:growth-strategy-db": "test -n \"$GROWTH_STRATEGY_TEST_DATABASE_URL\" && DATABASE_URL=\"$GROWTH_STRATEGY_TEST_DATABASE_URL\" GROWTH_ATTRIBUTION_COLLECTION_ENABLED=false RUN_GROWTH_STRATEGY_DB_TESTS=1 vitest run tests/growth-strategy-persistence.integration.test.ts",
     "test:watch": "vitest",
     "prisma:generate": "node node_modules/prisma/build/index.js generate",
     "prisma:migrate": "node node_modules/prisma/build/index.js migrate dev",
