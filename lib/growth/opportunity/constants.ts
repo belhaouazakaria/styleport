@@ -1,6 +1,6 @@
-export const OPPORTUNITY_INTELLIGENCE_VERSION = "opportunity_intelligence_v1";
+export const OPPORTUNITY_INTELLIGENCE_VERSION = "opportunity_intelligence_v2";
 export const OPPORTUNITY_SCORING_VERSION = "opportunity_scoring_v1";
-export const CONTENT_CLUSTERING_VERSION = "content_clustering_v1";
+export const CONTENT_CLUSTERING_VERSION = "content_clustering_v2";
 export const OPPORTUNITY_WINDOW_DAYS = 28;
 export const OPPORTUNITY_PIN_CAP = 500;
 export const OPPORTUNITY_MAX_CLUSTERS = 100;

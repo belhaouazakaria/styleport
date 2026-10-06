@@ -1,7 +1,12 @@
 import { prisma } from "@/lib/prisma";
 export async function getOpportunityDashboard() {
   const latestRun = await prisma.growthOpportunityAnalysisRun.findFirst({
-    orderBy: { analysisDate: "desc" },
+    orderBy: [
+      { analysisDate: "desc" },
+      { completedAt: "desc" },
+      { createdAt: "desc" },
+      { id: "desc" },
+    ],
   });
   if (!latestRun)
     return { latestRun: null, opportunities: [], clusters: [], pinSignals: [] };

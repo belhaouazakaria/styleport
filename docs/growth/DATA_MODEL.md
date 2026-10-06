@@ -67,7 +67,7 @@ Phase 2 implements `GrowthSettings`, `GrowthJob`, `GrowthActivity` and `GrowthWo
 
 | Model | Durable meaning | Bounds and deletion |
 |---|---|---|
-| `GrowthOpportunityAnalysisRun` | One immutable UTC-day result for `opportunity_intelligence_v1`, including 28-day window, model versions, evidence quality, cap state, counts and summary. | Unique analysis date/model; 500-Pin ceiling; cascades its snapshots and opportunities. |
+| `GrowthOpportunityAnalysisRun` | One immutable UTC-day result for the current `opportunity_intelligence_v2` (historical v1 rows remain valid audit evidence), including 28-day window, model versions, evidence quality, cap state, counts and summary. | Unique analysis date/model; 500-Pin ceiling; cascades its snapshots and opportunities. |
 | `GrowthContentCluster` | Stable versioned lexical topic/category identity. | Unique cluster key/clustering version; retained across daily runs. |
 | `GrowthContentClusterSnapshot` | Per-run aggregate metrics, destination/week counts, velocity, concentration, evidence quality and reasons. | Unique run/cluster; BigInt counters; four-week maximum. |
 | `GrowthContentClusterMembership` | Explicit bounded Pin membership with immutable Pinterest ID/path/tokens and optional live Pin/Translator links. | Up to 100 members per cluster snapshot; Pin and Translator deletion sets optional links null while preserving evidence. |

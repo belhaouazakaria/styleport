@@ -18,7 +18,7 @@ function job(payload: unknown): GrowthJob {
     status: GrowthJobStatus.RUNNING,
     payload: payload as never,
     idempotencyKey:
-      "opportunity-intelligence:opportunity_intelligence_v1:2026-10-06",
+      "opportunity-intelligence:opportunity_intelligence_v2:2026-10-06",
     runAfter: new Date(),
     attemptCount: 1,
     maxAttempts: 3,
@@ -38,7 +38,7 @@ describe("Phase 7 worker handler", () => {
     mocks.persist.mockResolvedValue({
       run: {
         id: "run",
-        intelligenceModelVersion: "opportunity_intelligence_v1",
+        intelligenceModelVersion: "opportunity_intelligence_v2",
         evidenceQuality: GrowthOpportunityEvidenceQuality.KNOWN,
         pinsConsidered: 12,
         opportunitiesProduced: 2,
@@ -50,7 +50,7 @@ describe("Phase 7 worker handler", () => {
     const result = await dispatchGrowthJob(
       job({
         analysisDate: "2026-10-06",
-        modelVersion: "opportunity_intelligence_v1",
+        modelVersion: "opportunity_intelligence_v2",
       }),
     );
     expect(mocks.persist).toHaveBeenCalledWith({

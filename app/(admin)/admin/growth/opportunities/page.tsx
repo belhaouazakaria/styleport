@@ -5,9 +5,16 @@ import { KpiCard } from "@/components/admin/kpi-card";
 import { buttonVariants } from "@/components/ui/button";
 import { requireAdminRoute } from "@/lib/auth";
 import { getOpportunityDashboard } from "@/lib/growth/opportunity/reporting";
+import { GENERIC_CLUSTER_TOKENS } from "@/lib/growth/opportunity/clustering";
 import { cn } from "@/lib/utils";
 export const dynamic = "force-dynamic";
 const label = (v: string) => v.replaceAll("_", " ").toLowerCase();
+const clusterLabel = (value: string | null | undefined) =>
+  !value
+    ? "Unknown"
+    : GENERIC_CLUSTER_TOKENS.has(value.toLowerCase())
+      ? "Invalid legacy structural cluster"
+      : value;
 export default async function GrowthOpportunitiesPage() {
   await requireAdminRoute();
   const report = await getOpportunityDashboard();
@@ -31,6 +38,13 @@ export default async function GrowthOpportunitiesPage() {
           Analysis reads at most 500 eligible Pins and 28 complete UTC days. It
           makes no Pinterest API call, uses no AI, and cannot publish or mutate
           Pinterest resources.
+          {report.latestRun ? (
+            <span className="block">
+              Intelligence: {report.latestRun.intelligenceModelVersion} ·
+              Clustering: {report.latestRun.clusteringModelVersion} · Scoring:{" "}
+              {report.latestRun.scoringModelVersion}
+            </span>
+          ) : null}
         </section>
         {report.latestRun ? (
           <>
@@ -85,7 +99,9 @@ export default async function GrowthOpportunitiesPage() {
                           {signal.pin?.title || signal.pinterestPinId}
                         </td>
                         <td className="p-3">
-                          {signal.cluster?.name || "Unclustered"}
+                          {signal.cluster
+                            ? clusterLabel(signal.cluster.name)
+                            : "Unclustered"}
                         </td>
                         <td className="p-3">{label(signal.strength)}</td>
                         <td className="p-3">{signal.confidence}%</td>
@@ -135,7 +151,7 @@ export default async function GrowthOpportunitiesPage() {
                       <tr key={o.id} className="border-border border-t">
                         <td className="p-3">{label(o.type)}</td>
                         <td className="p-3 font-semibold">
-                          {o.cluster?.name || "Unknown"}
+                          {clusterLabel(o.cluster?.name)}
                         </td>
                         <td className="p-3">{o.score}</td>
                         <td className="p-3">{o.confidence}%</td>

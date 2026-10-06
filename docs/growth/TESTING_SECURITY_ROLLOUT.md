@@ -228,3 +228,8 @@ Phase 7 rollout keeps Growth disabled and attribution collection disabled. Migra
 ### Phase 7 hardening PostgreSQL matrix
 
 The real Phase 7 PostgreSQL suite names and independently verifies A–H: (A) multiple meaningful sustained Pins create winner signals and a topic opportunity; (B) one viral Pin creates its winner signal but concentration blocks cluster expansion; (C) recent multi-signal growth persists rising signals/opportunity; (D) previously meaningful multi-signal decline persists fatigue signals/opportunity; (E) one-destination demand with content depth persists an inventory gap; (F) disabled attribution remains unavailable and emits no conversion opportunity; (G) same-date/model rerun creates no duplicate run, signal, or opportunity; and (H) disabled Growth leaves the daily job pending and persists no analysis. All scenarios run only against loopback `saytwist_growth_phase7_opportunity_test`.
+
+
+### Phase 7 clustering v2 correction validation
+
+Regression tests cover structural route exclusion, centralized generic vocabulary, the 60% document-frequency ceiling on corpora of at least ten Pins, category preference, translator slug evidence, unknown-destination terminal fallback, order independence, no-singleton behavior, a 500-Pin live-like corpus, same-day v1/v2 coexistence, v2 enqueue/execution idempotency, deterministic latest-run ordering, and fatigue precedence. Phase 7 remains `Complete (implementation validated; production correction pending validation)` until a corrected production run succeeds.
