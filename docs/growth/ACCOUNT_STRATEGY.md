@@ -153,7 +153,7 @@ Example future possibilities, only if data earns them:
 
 Boards are an editorial taxonomy inside each account, not a substitute for account identity.
 
-The agent may recommend/create boards through approved API capabilities where allowed, but board creation must remain aligned with the account's purpose.
+Phase 6 may assess synchronized boards and recommend review, but it does not create, rename, delete or otherwise modify boards. Future Phase 11 board management, if implemented, must remain aligned with the account's purpose and applicable Pinterest policy.
 
 Board performance should be measurable but should not override page-level and conversion-level metrics.
 
@@ -176,3 +176,18 @@ The operator decides whether to create/connect any recommended new account.
 The two additional accounts already exist and will later be rebranded SayTwist Ideas and SayTwist Playground. Launch requires connection/rebranding, not creation. Start with three accounts. Worldwide English is the audience; cold-start scheduling/content tests prioritize US signals, then first-party performance controls the mix. A winning topic may yield a direct translator tool Pin on SayTwist, a useful save-worthy `/ideas` list on Ideas, and a genuinely interactive/relatable concept on Playground, each with distinct creative, copy and destination value. Similarity checks prevent superficial cross-posting.
 
 Phase 3 models the roles as `SAYTWIST`, `SAYTWIST_IDEAS` and `SAYTWIST_PLAYGROUND`. PostgreSQL permits only one connected account per active role and one record per Pinterest account ID. Role changes are explicit audited admin actions. Disconnect retains historical role metadata but releases the active slot and never assigns another account automatically.
+
+
+## 9. Implemented Phase 6 strategy model
+
+Phase 6 implements deterministic advisory model `account_strategy_v1`. Each evaluation uses the last 28 complete UTC days; the review month is recorded separately. It always returns the three planned roles (`SAYTWIST`, `SAYTWIST_IDEAS`, and `SAYTWIST_PLAYGROUND`) even when only one or none is connected. A missing role is `NOT_CONNECTED`, its metrics are unavailable/not applicable, and it is never treated as zero-performing.
+
+Account health combines connection state, required scopes, credential expiry/reauth state, API/account/board sync freshness, analytics freshness, inventory, at least 14 observation days, at least five analytics-relevant Pins, and board coverage. Intent alignment uses only persisted destination paths plus bounded existing title/description metadata: 70% aligned is `ALIGNED`, 40–69% is `MIXED`, below 40% is `MISALIGNED`, and fewer than five relevant Pins is `INSUFFICIENT_DATA`. This is explainable path/metadata evidence, not Phase 7 semantic clustering.
+
+Board eligibility is advisory. Connected, unblocked, active, public boards with usable role alignment may be `ELIGIBLE`; private/inactive/blocked boards are `NOT_ELIGIBLE`; empty or weakly evidenced boards are `INSUFFICIENT_DATA` or `NEEDS_REVIEW`. Board name alone never proves relevance, and performance never overrides configuration or role fit.
+
+Portfolio output records planned, connected and healthy role counts, readiness, evidence quality, recommendation, confidence, reasons and recommended account count. Confidence starts at 100 and has deterministic deductions for each missing/unhealthy role, mixed or missing alignment, unavailable attribution, and at least 70% top-Pin concentration. The v1 recommendation remains conservative: complete the three-role baseline first, repair/reposition existing roles where needed, and otherwise keep the current portfolio or wait for evidence. `RECOMMEND_NEW_ACCOUNT` exists for versioned future compatibility but v1 cannot select it because Phase 7 cluster/depth evidence does not exist.
+
+Attribution capability is present, while production collection remains intentionally disabled. Strategy therefore reports `NOT_COLLECTING`, leaves QPC unavailable, applies a confidence limitation, and never interprets missing conversions as zero performance. Pinterest account/Pin metrics remain usable independently.
+
+A monthly `GrowthAccountStrategyReview` is unique by review month and model version. Stored evidence is validated and capped at 64 KiB. The manual `ACCOUNT_STRATEGY_REVIEW` job reads only bounded local PostgreSQL data, UPSERTs the canonical review, records a bounded `GrowthActivity`, and exits. Its period/version idempotency key reuses one logical job. There is no automatic recurrence, Pinterest call, AI call, account/role mutation, board mutation, Pin mutation, cron, or permanent PM2 Growth worker.

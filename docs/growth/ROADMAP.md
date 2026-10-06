@@ -82,7 +82,7 @@ Implemented in additive migrations `20261005210000_growth_pinterest_analytics` a
 
 ## Phase 5 — SayTwist attribution
 
-**Status:** Complete (implementation validated; production collection disabled)
+**Status:** COMPLETE / PRODUCTION DEPLOYED / COLLECTION INTENTIONALLY DISABLED
 
 Deliver:
 - Pin refs/UTM strategy;
@@ -95,11 +95,11 @@ Deliver:
 Exit:
 - test Pin/session can be traced to completed translation.
 
-Implemented in additive migration `20261006150000_growth_attribution`, `lib/growth/attribution/*`, `/api/growth/attribution/*`, the trusted `/api/translate` SUCCESS path, translator instrumentation, and `/admin/growth/attribution`. The `pinterest_organic_v1` contract uses issued opaque refs, hashed first-party session tokens, a seven-day latest-qualified-landing window, preserved first/latest touches, frozen last-touch primary assignment, one QPC per session, deduplicated secondary completions, 30/90-day detail retention, and long-lived daily aggregates. Collection requires both the false-by-default server environment gate and the false-by-default Growth setting; production collection remains disabled. No Pinterest write, existing Pin edit, attribution guess for old Pins, Phase 6 behavior, cron, or PM2 Growth worker was added.
+Implemented in additive migration `20261006150000_growth_attribution`, `lib/growth/attribution/*`, `/api/growth/attribution/*`, the trusted `/api/translate` SUCCESS path, translator instrumentation, and `/admin/growth/attribution`. The `pinterest_organic_v1` contract uses issued opaque refs, hashed first-party session tokens, a seven-day latest-qualified-landing window, preserved first/latest touches, frozen last-touch primary assignment, one QPC per session, deduplicated secondary completions, 30/90-day detail retention, and long-lived daily aggregates. Collection requires both the false-by-default server environment gate and the false-by-default Growth setting; production collection remains intentionally disabled. Migration `20261006150000_growth_attribution` is deployed and all 19 migrations were current; production build and health/ready checks passed with both gates false, no visitor attribution rows, and no attribution cookie. No Pinterest write, existing Pin edit, attribution guess for old Pins, cron, or PM2 Growth worker was added.
 
 ## Phase 6 — Account Strategy Agent
 
-**Status:** Not started
+**Status:** Complete (implementation and local validation; production execution disabled)
 
 Deliver:
 - intent-driven account model;
@@ -110,6 +110,8 @@ Deliver:
 
 Exit:
 - agent can explain why three accounts are/are not currently appropriate.
+
+Implemented in additive migration `20261006190000_growth_account_strategy`, deterministic `lib/growth/strategy/*`, bounded `ACCOUNT_STRATEGY_REVIEW`, and `/admin/growth/strategy`. Model `account_strategy_v1` evaluates the last 28 complete UTC days, always represents the three user-intent roles, and distinguishes missing/unavailable evidence from zero. Health, readiness, intent alignment, board eligibility, portfolio recommendation, deterministic confidence, and Pin concentration are explainable. Monthly reviews are canonical per month/model and write bounded activity. Because attribution collection is intentionally disabled, QPC remains unavailable and confidence is limited. V1 cannot recommend a fourth account until Phase 7 supplies durable cluster/content-depth evidence. No Pinterest/API mutation, account/board/Pin automation, AI, autonomous recurrence, cron, or PM2 Growth worker was added. Phase 7 is next.
 
 ## Phase 7 — Opportunity Intelligence
 

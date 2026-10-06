@@ -222,3 +222,13 @@ Production validation accepted this boundary with 720 active Pins retained in co
 2. Persistent image storage path, host scheduler and PM2 process list before any worker is deployed.
 3. WhatsApp provider/setup, current pricing and eligibility; email fallback remains required.
 4. Attribution consent and retention details across served jurisdictions before collection starts.
+
+## D-028 — Phase 6 uses deterministic advisory account strategy
+
+**Status:** Accepted and implemented
+
+Use application-controlled `account_strategy_v1` over the last 28 complete UTC days. Always evaluate the three planned user-intent roles: SayTwist/utility, SayTwist Ideas/inspiration, and SayTwist Playground/entertainment and shareability. A role may be unconnected without being failed or zero-performing. Evidence quality must remain explicit, and disabled attribution means QPC measurement is unavailable rather than zero.
+
+Account health uses persisted connection/scopes/credential state, sync and analytics freshness, inventory, observation length and board coverage. Alignment uses bounded deterministic destination and stored metadata evidence; it is not semantic Phase 7 clustering. Board eligibility is advisory and cannot mutate Pinterest. Confidence uses documented deterministic deductions, including missing/weak roles, alignment gaps, unavailable attribution and high top-Pin concentration.
+
+Persist one canonical `GrowthAccountStrategyReview` per review month/model version with strict bounded evidence. A manual ADMIN same-origin action may enqueue one bounded local `ACCOUNT_STRATEGY_REVIEW` using a period/version idempotency key. Completion UPSERTs the review and writes compact `GrowthActivity`. Growth remains disabled by default. V1 never selects `RECOMMEND_NEW_ACCOUNT` because sustained cluster, concept-depth and comparative expansion evidence belongs to Phase 7. No AI, Pinterest API call, account/role/board/Pin mutation, automatic recurrence, cron, or PM2 Growth worker is allowed in Phase 6.

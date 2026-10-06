@@ -10,7 +10,12 @@ import { getGrowthFoundationOverview } from "@/lib/growth/admin";
 export const dynamic = "force-dynamic";
 
 function formatDate(value: Date | null | undefined) {
-  return value ? new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(value) : "Never";
+  return value
+    ? new Intl.DateTimeFormat("en", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      }).format(value)
+    : "Never";
 }
 
 export default async function AdminGrowthPage() {
@@ -26,56 +31,194 @@ export default async function AdminGrowthPage() {
         subtitle="Growth controls, bounded jobs, Pinterest connection, and organic analytics health."
       />
       <main className="space-y-6 p-4 sm:p-6">
-        <div className="flex flex-wrap justify-end gap-3"><Link href="/admin/growth/attribution" className={cn(buttonVariants({ variant: "outline" }))}>Attribution</Link><Link href="/admin/growth/analytics" className={cn(buttonVariants({ variant: "outline" }))}>Pinterest analytics</Link><Link href="/admin/growth/accounts" className={cn(buttonVariants({ variant: "outline" }))}>Pinterest accounts</Link></div>
-        <div className="rounded-2xl border border-brand-200 bg-brand-50 p-4 text-sm leading-6 text-brand-950">
-          Pinterest account, board, Pin inventory, organic analytics, and first-party attribution infrastructure are available. Public attribution collection remains inactive unless both attribution gates are enabled. Ideas, publishing, and autonomous content remain inactive.
+        <div className="flex flex-wrap justify-end gap-3">
+          <Link
+            href="/admin/growth/strategy"
+            className={cn(buttonVariants({ variant: "outline" }))}
+          >
+            Account strategy
+          </Link>
+          <Link
+            href="/admin/growth/attribution"
+            className={cn(buttonVariants({ variant: "outline" }))}
+          >
+            Attribution
+          </Link>
+          <Link
+            href="/admin/growth/analytics"
+            className={cn(buttonVariants({ variant: "outline" }))}
+          >
+            Pinterest analytics
+          </Link>
+          <Link
+            href="/admin/growth/accounts"
+            className={cn(buttonVariants({ variant: "outline" }))}
+          >
+            Pinterest accounts
+          </Link>
+        </div>
+        <div className="border-brand-200 bg-brand-50 text-brand-950 rounded-2xl border p-4 text-sm leading-6">
+          Pinterest account, board, Pin inventory, organic analytics,
+          first-party attribution, and deterministic account strategy
+          infrastructure are available. Public attribution collection remains
+          inactive unless both attribution gates are enabled. Ideas, publishing,
+          and autonomous content remain inactive.
         </div>
 
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Growth foundation status">
-          <KpiCard label="Growth state" value={overview.settings.enabled ? "Enabled" : "Disabled"} hint="Global execution kill switch" />
-          <KpiCard label="Queued jobs" value={overview.jobs.queued.toLocaleString()} hint={overview.jobs.oldestRunnableJob ? `Oldest due ${formatDate(overview.jobs.oldestRunnableJob.runAfter)}` : "No runnable work"} />
-          <KpiCard label="Active jobs" value={activeJobs.toLocaleString()} hint={`${overview.jobs.claimed} claimed · ${overview.jobs.running} running`} />
-          <KpiCard label="Failed jobs" value={failedJobs.toLocaleString()} hint={`${overview.jobs.retryable} retryable · ${overview.jobs.terminalFailed} terminal`} />
+        <section
+          className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
+          aria-label="Growth foundation status"
+        >
+          <KpiCard
+            label="Growth state"
+            value={overview.settings.enabled ? "Enabled" : "Disabled"}
+            hint="Global execution kill switch"
+          />
+          <KpiCard
+            label="Queued jobs"
+            value={overview.jobs.queued.toLocaleString()}
+            hint={
+              overview.jobs.oldestRunnableJob
+                ? `Oldest due ${formatDate(overview.jobs.oldestRunnableJob.runAfter)}`
+                : "No runnable work"
+            }
+          />
+          <KpiCard
+            label="Active jobs"
+            value={activeJobs.toLocaleString()}
+            hint={`${overview.jobs.claimed} claimed · ${overview.jobs.running} running`}
+          />
+          <KpiCard
+            label="Failed jobs"
+            value={failedJobs.toLocaleString()}
+            hint={`${overview.jobs.retryable} retryable · ${overview.jobs.terminalFailed} terminal`}
+          />
         </section>
 
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Pinterest analytics status">
-          <KpiCard label="Analytics state" value={overview.pinterestAnalytics.status} hint="Across connected Pinterest accounts" />
-          <KpiCard label="Inventoried Pins" value={overview.pinterestAnalytics.pinsInventoried.toLocaleString()} hint="Active locally synchronized Pins" />
-          <KpiCard label="Analytics-relevant Pins" value={overview.pinterestAnalytics.analyticsRelevantPins.toLocaleString()} hint="Active Pins linking to owned domains" />
-          <KpiCard label="Pin backfill" value={`${overview.pinterestAnalytics.backfillPinsProcessed}/${overview.pinterestAnalytics.backfillPinsTotal}`} hint="Detailed Pin history progress" />
-          <KpiCard label="Analytics retrieved" value={formatDate(overview.pinterestAnalytics.lastSuccessfulSyncAt)} hint="Latest successful API retrieval" />
+        <section
+          className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
+          aria-label="Pinterest analytics status"
+        >
+          <KpiCard
+            label="Analytics state"
+            value={overview.pinterestAnalytics.status}
+            hint="Across connected Pinterest accounts"
+          />
+          <KpiCard
+            label="Inventoried Pins"
+            value={overview.pinterestAnalytics.pinsInventoried.toLocaleString()}
+            hint="Active locally synchronized Pins"
+          />
+          <KpiCard
+            label="Analytics-relevant Pins"
+            value={overview.pinterestAnalytics.analyticsRelevantPins.toLocaleString()}
+            hint="Active Pins linking to owned domains"
+          />
+          <KpiCard
+            label="Pin backfill"
+            value={`${overview.pinterestAnalytics.backfillPinsProcessed}/${overview.pinterestAnalytics.backfillPinsTotal}`}
+            hint="Detailed Pin history progress"
+          />
+          <KpiCard
+            label="Analytics retrieved"
+            value={formatDate(overview.pinterestAnalytics.lastSuccessfulSyncAt)}
+            hint="Latest successful API retrieval"
+          />
         </section>
 
-        <div className="rounded-2xl border border-border bg-white p-4 text-sm text-ink"><strong>Attribution collection:</strong> {overview.attribution.state.replaceAll("_", " ").toLowerCase()} · Server gate {overview.attribution.environmentEnabled ? "enabled" : "disabled"} · Growth setting {overview.attribution.settingEnabled ? "enabled" : "disabled"}</div>
+        <div className="border-border text-ink rounded-2xl border bg-white p-4 text-sm">
+          <strong>Attribution collection:</strong>{" "}
+          {overview.attribution.state.replaceAll("_", " ").toLowerCase()} ·
+          Server gate{" "}
+          {overview.attribution.environmentEnabled ? "enabled" : "disabled"} ·
+          Growth setting{" "}
+          {overview.attribution.settingEnabled ? "enabled" : "disabled"}
+        </div>
 
-        <GrowthSettingsForm initial={{ enabled: overview.settings.enabled, intensity: overview.settings.intensity, workerBatchSize: overview.settings.workerBatchSize, ownedDomains: overview.settings.ownedDomains, attributionEnabled: overview.settings.attributionEnabled, attributionWindowDays: overview.settings.attributionWindowDays, attributionSessionRetentionDays: overview.settings.attributionSessionRetentionDays, attributionEventRetentionDays: overview.settings.attributionEventRetentionDays }} />
+        <GrowthSettingsForm
+          initial={{
+            enabled: overview.settings.enabled,
+            intensity: overview.settings.intensity,
+            workerBatchSize: overview.settings.workerBatchSize,
+            ownedDomains: overview.settings.ownedDomains,
+            attributionEnabled: overview.settings.attributionEnabled,
+            attributionWindowDays: overview.settings.attributionWindowDays,
+            attributionSessionRetentionDays:
+              overview.settings.attributionSessionRetentionDays,
+            attributionEventRetentionDays:
+              overview.settings.attributionEventRetentionDays,
+          }}
+        />
 
         <section className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
-          <div className="rounded-2xl border border-border bg-white p-5 sm:p-6">
+          <div className="border-border rounded-2xl border bg-white p-5 sm:p-6">
             <p className="section-kicker">Worker</p>
-            <h2 className="font-display mt-1 text-2xl font-bold text-ink">Last bounded run</h2>
+            <h2 className="font-display text-ink mt-1 text-2xl font-bold">
+              Last bounded run
+            </h2>
             <dl className="mt-5 space-y-3 text-sm">
-              <div className="flex justify-between gap-4"><dt className="text-muted-ink">Status</dt><dd className="font-bold text-ink">{overview.worker?.status || "Never run"}</dd></div>
-              <div className="flex justify-between gap-4"><dt className="text-muted-ink">Heartbeat</dt><dd className="text-right font-medium text-ink">{formatDate(overview.worker?.heartbeatAt)}</dd></div>
-              <div className="flex justify-between gap-4"><dt className="text-muted-ink">Completed</dt><dd className="text-right font-medium text-ink">{formatDate(overview.worker?.completedAt)}</dd></div>
-              <div className="flex justify-between gap-4"><dt className="text-muted-ink">Batch ceiling</dt><dd className="font-bold text-ink">{overview.settings.workerBatchSize}</dd></div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted-ink">Status</dt>
+                <dd className="text-ink font-bold">
+                  {overview.worker?.status || "Never run"}
+                </dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted-ink">Heartbeat</dt>
+                <dd className="text-ink text-right font-medium">
+                  {formatDate(overview.worker?.heartbeatAt)}
+                </dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted-ink">Completed</dt>
+                <dd className="text-ink text-right font-medium">
+                  {formatDate(overview.worker?.completedAt)}
+                </dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted-ink">Batch ceiling</dt>
+                <dd className="text-ink font-bold">
+                  {overview.settings.workerBatchSize}
+                </dd>
+              </div>
             </dl>
           </div>
 
-          <div className="rounded-2xl border border-border bg-white p-5 sm:p-6">
+          <div className="border-border rounded-2xl border bg-white p-5 sm:p-6">
             <p className="section-kicker">Audit trail</p>
-            <h2 className="font-display mt-1 text-2xl font-bold text-ink">Recent Growth activity</h2>
+            <h2 className="font-display text-ink mt-1 text-2xl font-bold">
+              Recent Growth activity
+            </h2>
             <div className="mt-5 space-y-3">
-              {overview.recentActivity.length ? overview.recentActivity.map((activity) => (
-                <div key={activity.id} className="rounded-xl border border-border p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-sm font-bold text-ink">{activity.action.replaceAll("_", " ")}</p>
-                    <time className="text-xs text-muted-ink">{formatDate(activity.createdAt)}</time>
+              {overview.recentActivity.length ? (
+                overview.recentActivity.map((activity) => (
+                  <div
+                    key={activity.id}
+                    className="border-border rounded-xl border p-4"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-ink text-sm font-bold">
+                        {activity.action.replaceAll("_", " ")}
+                      </p>
+                      <time className="text-muted-ink text-xs">
+                        {formatDate(activity.createdAt)}
+                      </time>
+                    </div>
+                    <p className="text-muted-ink mt-1 text-xs">
+                      {activity.entityType} · {activity.entityId}
+                    </p>
+                    {activity.toState ? (
+                      <p className="text-ink mt-2 text-sm">
+                        {activity.fromState || "—"} → {activity.toState}
+                      </p>
+                    ) : null}
                   </div>
-                  <p className="mt-1 text-xs text-muted-ink">{activity.entityType} · {activity.entityId}</p>
-                  {activity.toState ? <p className="mt-2 text-sm text-ink">{activity.fromState || "—"} → {activity.toState}</p> : null}
-                </div>
-              )) : <p className="rounded-xl border border-dashed border-border p-5 text-sm text-muted-ink">No Growth activity has been recorded yet.</p>}
+                ))
+              ) : (
+                <p className="border-border text-muted-ink rounded-xl border border-dashed p-5 text-sm">
+                  No Growth activity has been recorded yet.
+                </p>
+              )}
             </div>
           </div>
         </section>
