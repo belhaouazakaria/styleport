@@ -168,3 +168,5 @@ The agent should lower confidence or choose `WAIT_FOR_MORE_DATA` when data quali
 ## Phase 4 measurement boundary
 
 Phase 4 persists Pinterest-reported daily organic account and Pin counts only: impressions, saves, Pin clicks, outbound clicks, plus account engagements. Outbound click rate is derived from counts. A Pinterest outbound click is not labeled a SayTwist visit, session, translation, or qualified conversion. No UTM capture, cookie, `pin_ref`, event, or TranslationLog join is implemented before Phase 5. Daily Pinterest history is retained without automatic purging; raw API payloads are not stored.
+
+Account totals cover the complete connected Pinterest account, including unrelated historical Pins. Detailed Pin history and the default ranking are limited to active inventory rows whose parsed destination hostname exactly matches the configured current or legacy owned domains. This eligibility filter is operational request scoping, not Phase 5 attribution and not proof that an outbound click became a SayTwist visit or conversion. Existing metrics remain stored when a Pin becomes ineligible.

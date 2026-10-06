@@ -11,11 +11,13 @@ interface GrowthSettingsFormProps {
     enabled: boolean;
     intensity: "LOW" | "BALANCED" | "AGGRESSIVE" | "CUSTOM";
     workerBatchSize: number;
+    ownedDomains: readonly string[];
   };
 }
 
 export function GrowthSettingsForm({ initial }: GrowthSettingsFormProps) {
   const [settings, setSettings] = useState(initial);
+  const [ownedDomainsText, setOwnedDomainsText] = useState(initial.ownedDomains.join("\n"));
   const [saving, setSaving] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
@@ -26,7 +28,10 @@ export function GrowthSettingsForm({ initial }: GrowthSettingsFormProps) {
       const response = await fetch("/api/admin/growth/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(settings),
+        body: JSON.stringify({
+          ...settings,
+          ownedDomains: ownedDomainsText.split(/[\n,]/).map((value) => value.trim()).filter(Boolean),
+        }),
       });
       const result = await response.json();
       if (!response.ok || !result.ok) {
@@ -41,7 +46,9 @@ export function GrowthSettingsForm({ initial }: GrowthSettingsFormProps) {
         enabled: result.settings.enabled,
         intensity: result.settings.intensity,
         workerBatchSize: result.settings.workerBatchSize,
+        ownedDomains: result.settings.ownedDomains,
       });
+      setOwnedDomainsText(result.settings.ownedDomains.join("\n"));
       toast({ title: "Growth settings saved" });
       router.refresh();
     } catch {
@@ -102,6 +109,19 @@ export function GrowthSettingsForm({ initial }: GrowthSettingsFormProps) {
           />
         </label>
       </div>
+      <label className="mt-4 block space-y-2 text-sm font-semibold text-ink">
+        <span>Owned Pinterest domains</span>
+        <textarea
+          rows={4}
+          value={ownedDomainsText}
+          onChange={(event) => setOwnedDomainsText(event.target.value)}
+          placeholder="saytwist.com"
+          className="w-full rounded-xl border border-border bg-white px-3 py-2 font-mono text-sm"
+        />
+        <span className="block font-normal leading-5 text-muted-ink">
+          Pins linking to these domains receive detailed per-Pin analytics. Other Pins remain inventoried but are not individually backfilled. Enter one hostname per line, without a scheme or path.
+        </span>
+      </label>
       <div className="mt-5 flex justify-end">
         <Button type="button" onClick={save} disabled={saving}>
           {saving ? "Saving…" : "Save Growth settings"}

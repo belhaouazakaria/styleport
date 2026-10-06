@@ -9,13 +9,14 @@ describe("Growth foundation contracts", () => {
   afterEach(() => vi.unstubAllEnvs());
 
   it("accepts only bounded, explicit settings", () => {
-    expect(growthSettingsSchema.parse({ enabled: false, intensity: "BALANCED", workerBatchSize: 5 })).toEqual({
+    expect(growthSettingsSchema.parse({ enabled: false, intensity: "BALANCED", workerBatchSize: 5, ownedDomains: [" SAYTWIST.COM "] })).toEqual({
       enabled: false,
       intensity: "BALANCED",
       workerBatchSize: 5,
+      ownedDomains: ["saytwist.com"],
     });
-    expect(growthSettingsSchema.safeParse({ enabled: true, intensity: "BALANCED", workerBatchSize: 0 }).success).toBe(false);
-    expect(growthSettingsSchema.safeParse({ enabled: true, intensity: "BALANCED", workerBatchSize: 5, token: "secret" }).success).toBe(false);
+    expect(growthSettingsSchema.safeParse({ enabled: true, intensity: "BALANCED", workerBatchSize: 0, ownedDomains: ["saytwist.com"] }).success).toBe(false);
+    expect(growthSettingsSchema.safeParse({ enabled: true, intensity: "BALANCED", workerBatchSize: 5, ownedDomains: ["saytwist.com"], token: "secret" }).success).toBe(false);
   });
 
   it("removes sensitive fields and bounds structured payloads", () => {

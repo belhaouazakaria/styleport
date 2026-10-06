@@ -1,5 +1,6 @@
 import { GrowthIntensity, GrowthJobStatus, GrowthJobType } from "@prisma/client";
 import { z } from "zod";
+import { ownedPinterestDomainsSchema } from "@/lib/growth/pinterest/relevance";
 
 export const GROWTH_SETTINGS_ID = "global";
 export const DEFAULT_GROWTH_WORKER_BATCH_SIZE = 5;
@@ -14,6 +15,7 @@ export const growthSettingsSchema = z
     enabled: z.boolean(),
     intensity: z.nativeEnum(GrowthIntensity),
     workerBatchSize: z.number().int().min(1).max(MAX_GROWTH_WORKER_BATCH_SIZE),
+    ownedDomains: ownedPinterestDomainsSchema,
   })
   .strict();
 

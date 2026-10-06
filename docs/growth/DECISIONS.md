@@ -198,6 +198,14 @@ Persist Pinterest-specific account and Pin daily `BigInt` metrics with determini
 
 Use official `GET /pins`, user-account analytics/top Pins, and individual Pin analytics. Do not call or depend on the closed-beta multiple-Pin analytics endpoint. Do not store rolling/lifetime `pin_metrics` as daily history. Growth stays disabled and no scheduler is added until a later rollout decision.
 
+## D-027 — Complete Pinterest inventory with owned-domain detailed analytics
+
+**Status:** Accepted and implemented; pending deployment validation
+
+Keep a lightweight inventory of every Pin in the connected account, including unrelated and legacy content, because account strategy and future Phase 6/11 board lifecycle work require a complete view. Do not implement board management in Phase 4. Restrict expensive individual Pin analytics to active Pins whose parsed destination hostname exactly matches the ADMIN-configurable `GrowthSettings.ownedDomains`. Defaults are `saytwist.com`, `www.saytwist.com`, and `translator.whattypeof.com`. Do not follow redirects or make destination requests. Account-level analytics continues to cover the entire Pinterest account and is labeled accordingly.
+
+Persist `analyticsEligible`, retain metric history when eligibility changes, and calculate backfill total/processed from active eligible Pins only. Normalize configured hostnames to lowercase, trim whitespace, and remove duplicates before persistence. Reclassify stored inventory on explicit analytics sync, settings change, full inventory completion, or one-time preparation of an unmarked pre-upgrade Pin job. Mark prepared Pin roots and continuations in their JSON payload so each eight-Pin continuation directly uses current persisted eligibility without repeating the full scan. A complete inventory is fresh for 24 hours; reuse it during that window, but fetch/resume inventory when absent, stale, or partial. Persist each Pinterest page with one bounded parameterized PostgreSQL bulk UPSERT. Keep the worker one-shot and bounded; add no cron, PM2 worker, polling, attribution, publishing, or board-management behavior.
+
 ## Open implementation checks
 
 1. Whether the remaining existing Pinterest accounts are eligible to connect with the required scopes when their roles are activated.

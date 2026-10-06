@@ -19,11 +19,11 @@ import AdminGrowthPage from "@/app/(admin)/admin/growth/page";
 import { GET } from "@/app/api/admin/growth/route";
 
 const overview = {
-  settings: { enabled: false, intensity: "BALANCED" as const, workerBatchSize: 5, configVersion: 1 },
+  settings: { enabled: false, intensity: "BALANCED" as const, workerBatchSize: 5, ownedDomains: ["saytwist.com"], configVersion: 1 },
   jobs: { queued: 2, claimed: 1, running: 0, retryable: 1, terminalFailed: 0, succeeded: 3, cancelled: 0, oldestRunnableJob: null },
   recentActivity: [],
   worker: null,
-  pinterestAnalytics: { pinsInventoried: 0, status: "NEVER_SYNCED", lastSuccessfulSyncAt: null, backfillPinsProcessed: 0, backfillPinsTotal: 0 },
+  pinterestAnalytics: { pinsInventoried: 0, analyticsRelevantPins: 0, status: "NEVER_SYNCED", lastSuccessfulSyncAt: null, backfillPinsProcessed: 0, backfillPinsTotal: 0 },
 };
 
 describe("Growth admin foundation", () => {

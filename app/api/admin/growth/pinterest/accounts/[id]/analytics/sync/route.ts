@@ -16,5 +16,9 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     return apiError(409, "CONFLICT", "Reconnect this Pinterest account before syncing analytics.");
   }
   const result = await enqueuePinterestAnalyticsSync(account.id);
-  return apiOk({ created: result.account.created || result.inventory.created, range: result.range });
+  return apiOk({
+    created: result.account.created || Boolean(result.inventory?.created) || Boolean(result.pin?.created),
+    inventorySkipped: result.inventorySkipped,
+    range: result.range,
+  });
 }

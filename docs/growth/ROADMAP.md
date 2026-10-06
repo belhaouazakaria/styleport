@@ -65,7 +65,7 @@ Implemented in migration `20261005170000_growth_pinterest_integration`, `lib/gro
 
 ## Phase 4 — Analytics ingestion
 
-**Status:** Implemented / pending live analytics validation
+**Status:** Implemented and live read validation completed; relevance correction pending deployment validation
 
 Deliver:
 - Pin/account sync;
@@ -78,7 +78,7 @@ Deliver:
 Exit:
 - analytics match Pinterest source within understood tolerances.
 
-Implemented in additive migration `20261005210000_growth_pinterest_analytics`, `lib/growth/pinterest/analytics*`, the existing Pinterest API adapter/job worker, and `/admin/growth/analytics`. The implementation synchronizes owned Pin inventory, 90-day account history, outbound-click top Pins, and bounded single-Pin daily history without the closed-beta multiple-Pin endpoint. It refreshes the most recent seven UTC dates after initial backfill. Unit and disposable PostgreSQL validation cover idempotency, corrections, continuation, rankings, date ranges, zero denominators, and partial inventory safety. Phase 4 remains pending until a controlled production read-only run is compared with Pinterest; Growth remains disabled.
+Implemented in additive migrations `20261005210000_growth_pinterest_analytics` and `20261006010000_growth_pinterest_relevance`, `lib/growth/pinterest/analytics*`, the existing Pinterest API adapter/job worker, and `/admin/growth/analytics`. Live reads verified account analytics, a complete 720-Pin inventory, individual Pin analytics, and the first eight detailed backfills under the observed 60 requests/60 seconds organic limit. Inventory deliberately retains every account Pin for strategy and future Phase 6/11 board lifecycle work. Detailed history is limited to active Pins whose destination hostname exactly matches the configurable owned-domain list. A complete inventory less than 24 hours old is reused; older or partial inventory is reconciled. Growth remains disabled, and the relevance correction still requires controlled deployment validation before Phase 4 closes.
 
 ## Phase 5 — SayTwist attribution
 
