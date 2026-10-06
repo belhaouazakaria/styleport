@@ -53,6 +53,7 @@ function parsePinterestAnalyticsPayload(payload: unknown, requireBatch = false) 
     endDate: z.string(),
     runStartedAt: z.string().datetime({ offset: true }),
     batch: z.number().int().min(0).max(10_000).optional(),
+    relevancePrepared: z.boolean().optional(),
   }).strict().safeParse(payload);
   if (!parsed.success || (requireBatch && parsed.data.batch === undefined)) {
     throw new NonRetryableGrowthJobError("Invalid Pinterest analytics job payload.");

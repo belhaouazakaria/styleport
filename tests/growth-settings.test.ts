@@ -25,11 +25,18 @@ describe("Growth settings persistence", () => {
   it("defaults to disabled without writing a row", async () => {
     mocks.findUnique.mockResolvedValueOnce(null);
     const settings = await getGrowthSettings();
-    expect(settings).toMatchObject({ enabled: false, intensity: "BALANCED", workerBatchSize: 5, configVersion: 1 });
+    expect(settings).toMatchObject({
+      enabled: false,
+      intensity: "BALANCED",
+      workerBatchSize: 5,
+      ownedDomains: ["saytwist.com", "www.saytwist.com", "translator.whattypeof.com"],
+      configVersion: 1,
+    });
   });
 
   it("audits an explicit settings update in the same transaction", async () => {
-    const persisted = { id: "global", enabled: true, intensity: "LOW", workerBatchSize: 3, configVersion: 2 };
+    const ownedDomains = ["saytwist.com"];
+    const persisted = { id: "global", enabled: true, intensity: "LOW", workerBatchSize: 3, ownedDomains, configVersion: 2 };
     const tx = {
       growthSettings: {
         findUnique: vi.fn().mockResolvedValue({ ...persisted, enabled: false, configVersion: 1 }),
@@ -37,7 +44,7 @@ describe("Growth settings persistence", () => {
       },
     };
     mocks.transaction.mockImplementationOnce(async (callback: (client: typeof tx) => unknown) => callback(tx));
-    await expect(updateGrowthSettings({ enabled: true, intensity: "LOW", workerBatchSize: 3 }, "admin-1")).resolves.toBe(persisted);
+    await expect(updateGrowthSettings({ enabled: true, intensity: "LOW", workerBatchSize: 3, ownedDomains }, "admin-1")).resolves.toBe(persisted);
     expect(mocks.activity).toHaveBeenCalledWith(expect.objectContaining({ action: "SETTINGS_UPDATED", fromState: "DISABLED", toState: "ENABLED" }), tx);
   });
 });

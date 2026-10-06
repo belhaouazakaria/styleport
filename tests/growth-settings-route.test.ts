@@ -39,26 +39,26 @@ describe("Growth settings API", () => {
   it("preserves the existing admin authorization response", async () => {
     const denied = new Response("denied", { status: 403 });
     mocks.guard.mockResolvedValueOnce(denied);
-    expect(await PUT(request({ enabled: false, intensity: "BALANCED", workerBatchSize: 5 }))).toBe(denied);
+    expect(await PUT(request({ enabled: false, intensity: "BALANCED", workerBatchSize: 5, ownedDomains: ["saytwist.com"] }))).toBe(denied);
     expect(mocks.update).not.toHaveBeenCalled();
   });
 
   it("rejects cross-origin mutation", async () => {
-    const response = await PUT(request({ enabled: false, intensity: "BALANCED", workerBatchSize: 5 }, "https://attacker.example"));
+    const response = await PUT(request({ enabled: false, intensity: "BALANCED", workerBatchSize: 5, ownedDomains: ["saytwist.com"] }, "https://attacker.example"));
     expect(response.status).toBe(403);
     expect(mocks.update).not.toHaveBeenCalled();
   });
 
   it("rejects invalid or mass-assigned settings", async () => {
-    const response = await PUT(request({ enabled: true, intensity: "BALANCED", workerBatchSize: 5, maxSpend: 999 }));
+    const response = await PUT(request({ enabled: true, intensity: "BALANCED", workerBatchSize: 5, ownedDomains: ["saytwist.com"], maxSpend: 999 }));
     expect(response.status).toBe(400);
     expect(mocks.update).not.toHaveBeenCalled();
   });
 
   it("updates settings for an authenticated admin through the reverse-proxy listener", async () => {
-    const payload = { enabled: true, intensity: "LOW", workerBatchSize: 3 };
+    const payload = { enabled: true, intensity: "LOW", workerBatchSize: 3, ownedDomains: [" SAYTWIST.COM ", "translator.whattypeof.com"] };
     const response = await PUT(request(payload));
     expect(response.status).toBe(200);
-    expect(mocks.update).toHaveBeenCalledWith(payload, "admin-1");
+    expect(mocks.update).toHaveBeenCalledWith({ ...payload, ownedDomains: ["saytwist.com", "translator.whattypeof.com"] }, "admin-1");
   });
 });

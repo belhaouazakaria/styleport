@@ -1,9 +1,11 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 import {
   GrowthActivityActorKind,
+  GrowthJobStatus,
   GrowthJobType,
   GrowthPinterestAnalyticsStatus,
+  Prisma,
 } from "@prisma/client";
 
 import { recordGrowthActivity } from "@/lib/growth/activity";
@@ -25,7 +27,14 @@ import {
   type PinterestRateLimitMetadata,
 } from "@/lib/growth/pinterest/api";
 import { extractPinterestPreviewImageUrl, pinterestPublishedAt } from "@/lib/growth/pinterest/pin-media";
+import {
+  isOwnedPinterestDestination,
+  isPinterestInventoryFresh,
+  reconcilePinterestAnalyticsProgress,
+  reclassifyPinterestPins,
+} from "@/lib/growth/pinterest/relevance";
 import { toSafeGrowthError } from "@/lib/growth/safe-data";
+import { getGrowthSettings } from "@/lib/growth/settings";
 import { prisma } from "@/lib/prisma";
 
 function continuationKey(parts: string[]) {
@@ -58,7 +67,11 @@ function assertRowsInRange(rows: Array<{ date: string }>, startDate: string, end
 }
 
 export async function enqueuePinterestAnalyticsSync(accountId: string, now = new Date()) {
-  const current = await prisma.growthPinterestAnalyticsState.findUnique({ where: { accountId } });
+  const [current, settings] = await Promise.all([
+    prisma.growthPinterestAnalyticsState.findUnique({ where: { accountId } }),
+    getGrowthSettings(),
+  ]);
+  await reclassifyPinterestPins(accountId, settings.ownedDomains);
   const range = current?.backfillCompletedAt ? defaultRefreshRange(now) : defaultBackfillRange(now);
   const runStartedAt = now.toISOString();
   const bucket = Math.floor(now.getTime() / 60_000);
@@ -82,19 +95,93 @@ export async function enqueuePinterestAnalyticsSync(accountId: string, now = new
     },
   });
   const payload = { accountId, ...range, runStartedAt };
-  const [account, inventory] = await Promise.all([
-    enqueueGrowthJob({
-      type: GrowthJobType.PINTEREST_ACCOUNT_ANALYTICS_SYNC,
-      idempotencyKey: `pinterest:account-analytics:${accountId}:${bucket}`,
-      payload,
-    }),
-    enqueueGrowthJob({
-      type: GrowthJobType.PINTEREST_PIN_INVENTORY_SYNC,
-      idempotencyKey: `pinterest:pin-inventory:${accountId}:${bucket}`,
-      payload,
-    }),
-  ]);
-  return { account, inventory, range };
+  const inventoryFresh = current?.status !== GrowthPinterestAnalyticsStatus.PARTIAL &&
+    !current?.inventoryStartedAt && !current?.inventoryBookmark &&
+    isPinterestInventoryFresh(current?.lastInventorySyncAt, now);
+  const account = await enqueueGrowthJob({
+    type: GrowthJobType.PINTEREST_ACCOUNT_ANALYTICS_SYNC,
+    idempotencyKey: `pinterest:account-analytics:${accountId}:${bucket}`,
+    payload,
+  });
+  if (inventoryFresh) {
+    const existingPinJob = await prisma.growthJob.findFirst({
+      where: {
+        type: GrowthJobType.PINTEREST_PIN_ANALYTICS_SYNC,
+        status: { in: [GrowthJobStatus.PENDING, GrowthJobStatus.CLAIMED, GrowthJobStatus.RUNNING, GrowthJobStatus.FAILED_RETRYABLE] },
+        payload: { path: ["accountId"], equals: accountId },
+      },
+      orderBy: { createdAt: "asc" },
+    });
+    const pin = existingPinJob
+      ? { job: existingPinJob, created: false as const }
+      : await enqueueGrowthJob({
+        type: GrowthJobType.PINTEREST_PIN_ANALYTICS_SYNC,
+        idempotencyKey: continuationKey([accountId, runStartedAt, "pins", "0"]),
+        payload: { ...payload, batch: 0, relevancePrepared: true },
+      });
+    return { account, inventory: null, pin, inventorySkipped: true, range };
+  }
+  const inventory = await enqueueGrowthJob({
+    type: GrowthJobType.PINTEREST_PIN_INVENTORY_SYNC,
+    idempotencyKey: `pinterest:pin-inventory:${accountId}:${bucket}`,
+    payload,
+  });
+  return { account, inventory, pin: null, inventorySkipped: false, range };
+}
+
+type InventoryPin = Parameters<typeof extractPinterestPreviewImageUrl>[0];
+
+function postgresUtcTimestamp(value: Date | null) {
+  return value
+    ? Prisma.sql`${value.toISOString().slice(0, -1)}::timestamp(3)`
+    : Prisma.sql`NULL`;
+}
+
+async function bulkUpsertPinterestPins(params: {
+  accountId: string;
+  pins: InventoryPin[];
+  boardIds: Map<string, string>;
+  ownedDomains: readonly string[];
+  syncedAt: Date;
+}) {
+  if (!params.pins.length) return 0;
+  const rows = params.pins.map((pin) => {
+    const publishedAt = pinterestPublishedAt(pin.created_at);
+    return Prisma.sql`(
+      ${randomUUID()}, ${pin.id}, ${params.accountId},
+      ${pin.board_id ? params.boardIds.get(pin.board_id) || null : null}, ${pin.board_id ?? null},
+      ${pin.title ?? null}, ${pin.description ?? null}, ${pin.link ?? null},
+      ${pin.creative_type ?? null}, ${pin.media?.media_type ?? null},
+      ${extractPinterestPreviewImageUrl(pin)}, ${postgresUtcTimestamp(publishedAt)},
+      ${isOwnedPinterestDestination(pin.link, params.ownedDomains)}, true,
+      ${postgresUtcTimestamp(params.syncedAt)}, ${postgresUtcTimestamp(params.syncedAt)},
+      ${postgresUtcTimestamp(params.syncedAt)}, ${postgresUtcTimestamp(params.syncedAt)}
+    )`;
+  });
+  return prisma.$executeRaw(Prisma.sql`
+    INSERT INTO "GrowthPinterestPin" (
+      "id", "pinterestPinId", "accountId", "boardId", "pinterestBoardId",
+      "title", "description", "destinationUrl", "creativeType", "mediaType",
+      "previewImageUrl", "publishedAt", "analyticsEligible", "isActive",
+      "lastSeenAt", "lastSyncedAt", "createdAt", "updatedAt"
+    ) VALUES ${Prisma.join(rows)}
+    ON CONFLICT ("pinterestPinId") DO UPDATE SET
+      "accountId" = EXCLUDED."accountId",
+      "boardId" = EXCLUDED."boardId",
+      "pinterestBoardId" = EXCLUDED."pinterestBoardId",
+      "title" = EXCLUDED."title",
+      "description" = EXCLUDED."description",
+      "destinationUrl" = EXCLUDED."destinationUrl",
+      "creativeType" = EXCLUDED."creativeType",
+      "mediaType" = EXCLUDED."mediaType",
+      "previewImageUrl" = EXCLUDED."previewImageUrl",
+      "publishedAt" = EXCLUDED."publishedAt",
+      "analyticsEligible" = EXCLUDED."analyticsEligible",
+      "isActive" = true,
+      "lastSeenAt" = EXCLUDED."lastSeenAt",
+      "lastSyncedAt" = EXCLUDED."lastSyncedAt",
+      "updatedAt" = EXCLUDED."updatedAt"
+  `);
 }
 
 export async function syncPinterestPinInventory(params: {
@@ -112,6 +199,7 @@ export async function syncPinterestPinInventory(params: {
   let pinCount = state.inventoryPinCount;
   const seen = new Set(state.inventorySeenBookmarks);
   let lastRateLimit: PinterestRateLimitMetadata = { limit: null, remaining: null, reset: null };
+  const settings = await getGrowthSettings();
 
   try {
     for (let request = 0; request < PINTEREST_INVENTORY_REQUESTS_PER_JOB; request += 1) {
@@ -128,29 +216,12 @@ export async function syncPinterestPinInventory(params: {
         select: { id: true, pinterestBoardId: true },
       }) : [];
       const boardIds = new Map(resolvedBoards.map((board) => [board.pinterestBoardId, board.id]));
-      await prisma.$transaction(async (tx) => {
-        for (const pin of response.data.items) {
-          const values = {
-            accountId: params.accountId,
-            boardId: pin.board_id ? boardIds.get(pin.board_id) || null : null,
-            pinterestBoardId: pin.board_id || null,
-            title: pin.title || null,
-            description: pin.description || null,
-            destinationUrl: pin.link || null,
-            creativeType: pin.creative_type || null,
-            mediaType: pin.media?.media_type || null,
-            previewImageUrl: extractPinterestPreviewImageUrl(pin),
-            publishedAt: pinterestPublishedAt(pin.created_at),
-            isActive: true,
-            lastSeenAt: syncedAt,
-            lastSyncedAt: syncedAt,
-          };
-          await tx.growthPinterestPin.upsert({
-            where: { pinterestPinId: pin.id },
-            create: { pinterestPinId: pin.id, ...values },
-            update: values,
-          });
-        }
+      await bulkUpsertPinterestPins({
+        accountId: params.accountId,
+        pins: response.data.items,
+        boardIds,
+        ownedDomains: settings.ownedDomains,
+        syncedAt,
       });
       const next = response.data.bookmark || undefined;
       if (!next) {
@@ -161,12 +232,14 @@ export async function syncPinterestPinInventory(params: {
             data: { isActive: false },
           });
           const count = await tx.growthPinterestPin.count({ where: { accountId: params.accountId, isActive: true } });
+          const progress = await reconcilePinterestAnalyticsProgress(params.accountId, tx);
           await tx.growthPinterestAnalyticsState.update({
             where: { accountId: params.accountId },
             data: {
               inventoryBookmark: null, inventoryStartedAt: null, inventoryPageCount: 0,
               inventoryPinCount: 0, inventorySeenBookmarks: [], lastInventorySyncAt: completedAt,
-              lastSuccessfulSyncAt: completedAt, backfillPinsTotal: count,
+              lastSuccessfulSyncAt: completedAt,
+              backfillPinsTotal: progress.total, backfillPinsProcessed: progress.processed,
               ...rateLimitData(lastRateLimit, completedAt),
             },
           });
@@ -175,7 +248,10 @@ export async function syncPinterestPinInventory(params: {
         await enqueueGrowthJob({
           type: GrowthJobType.PINTEREST_PIN_ANALYTICS_SYNC,
           idempotencyKey: continuationKey([params.accountId, params.runStartedAt, "pins", "0"]),
-          payload: { accountId: params.accountId, startDate: params.startDate, endDate: params.endDate, runStartedAt: params.runStartedAt, batch: 0 },
+          payload: {
+            accountId: params.accountId, startDate: params.startDate, endDate: params.endDate,
+            runStartedAt: params.runStartedAt, batch: 0, relevancePrepared: true,
+          },
         });
         return { complete: true, pages: pageCount, pins: activePins };
       }
@@ -254,10 +330,6 @@ export async function syncPinterestAccountAnalytics(params: {
             update: values,
           });
         }
-        const activePinCount = await tx.growthPinterestPin.count({ where: { accountId: params.accountId, isActive: true } });
-        await tx.growthPinterestAnalyticsState.update({
-          where: { accountId: params.accountId }, data: { backfillPinsTotal: activePinCount },
-        });
       });
     }
     await prisma.growthPinterestAnalyticsState.update({
@@ -276,17 +348,22 @@ export async function syncPinterestAccountAnalytics(params: {
 }
 
 export async function syncPinterestPinAnalytics(params: {
-  accountId: string; startDate: string; endDate: string; runStartedAt: string; batch: number; fetchImpl?: typeof fetch;
+  accountId: string; startDate: string; endDate: string; runStartedAt: string;
+  batch: number; relevancePrepared?: boolean; fetchImpl?: typeof fetch;
 }) {
   const cutoff = new Date(params.runStartedAt);
   try {
     const analyticsState = await prisma.growthPinterestAnalyticsState.findUniqueOrThrow({ where: { accountId: params.accountId } });
+    if (!params.relevancePrepared) {
+      const settings = await getGrowthSettings();
+      await reclassifyPinterestPins(params.accountId, settings.ownedDomains);
+    }
     const isInitialBackfill = !analyticsState.backfillCompletedAt;
     const analyticsDue = isInitialBackfill
       ? { lastAnalyticsSyncAt: null }
       : { OR: [{ lastAnalyticsSyncAt: null }, { lastAnalyticsSyncAt: { lt: cutoff } }] };
     const pins = await prisma.growthPinterestPin.findMany({
-      where: { accountId: params.accountId, isActive: true, ...analyticsDue },
+      where: { accountId: params.accountId, isActive: true, analyticsEligible: true, ...analyticsDue },
       orderBy: [{ analyticsPriorityAt: { sort: "desc", nulls: "last" } }, { lastAnalyticsSyncAt: { sort: "asc", nulls: "first" } }, { publishedAt: "desc" }],
       take: PINTEREST_PIN_REQUESTS_PER_JOB,
       select: { id: true, pinterestPinId: true },
@@ -311,11 +388,17 @@ export async function syncPinterestPinAnalytics(params: {
             create: { pinId: pin.id, metricDate: new Date(`${row.date}T00:00:00.000Z`), ...values }, update: values,
           });
         }
-        await tx.growthPinterestPin.update({ where: { id: pin.id }, data: { lastAnalyticsSyncAt: fetchedAt } });
+        const firstDetailedSync = await tx.growthPinterestPin.updateMany({
+          where: { id: pin.id, lastAnalyticsSyncAt: null },
+          data: { lastAnalyticsSyncAt: fetchedAt },
+        });
+        if (firstDetailedSync.count === 0) {
+          await tx.growthPinterestPin.update({ where: { id: pin.id }, data: { lastAnalyticsSyncAt: fetchedAt } });
+        }
         await tx.growthPinterestAnalyticsState.update({
           where: { accountId: params.accountId },
           data: {
-            ...(isInitialBackfill ? { backfillPinsProcessed: { increment: 1 } } : {}),
+            ...(firstDetailedSync.count === 1 ? { backfillPinsProcessed: { increment: 1 } } : {}),
             lastPinAnalyticsSyncAt: fetchedAt, lastSuccessfulSyncAt: fetchedAt,
             ...rateLimitData(lastRateLimit, fetchedAt),
           },
@@ -325,19 +408,22 @@ export async function syncPinterestPinAnalytics(params: {
       if (lowRateLimit(lastRateLimit)) break;
     }
     const remaining = await prisma.growthPinterestPin.count({
-      where: { accountId: params.accountId, isActive: true, ...analyticsDue },
+      where: { accountId: params.accountId, isActive: true, analyticsEligible: true, ...analyticsDue },
     });
     if (remaining > 0) {
       await enqueueGrowthJob({
         type: GrowthJobType.PINTEREST_PIN_ANALYTICS_SYNC,
         idempotencyKey: continuationKey([params.accountId, params.runStartedAt, "pins", String(params.batch + 1)]),
-        payload: { accountId: params.accountId, startDate: params.startDate, endDate: params.endDate, runStartedAt: params.runStartedAt, batch: params.batch + 1 },
+        payload: {
+          accountId: params.accountId, startDate: params.startDate, endDate: params.endDate,
+          runStartedAt: params.runStartedAt, batch: params.batch + 1, relevancePrepared: true,
+        },
       });
     } else {
       const completedAt = new Date();
       const completedState = await prisma.growthPinterestAnalyticsState.findUniqueOrThrow({ where: { accountId: params.accountId } });
       const allComponentsCurrent = Boolean(
-        completedState.lastInventorySyncAt && completedState.lastInventorySyncAt >= cutoff &&
+        isPinterestInventoryFresh(completedState.lastInventorySyncAt, cutoff) &&
         completedState.lastAccountAnalyticsSyncAt && completedState.lastAccountAnalyticsSyncAt >= cutoff,
       );
       await prisma.growthPinterestAnalyticsState.update({

@@ -153,7 +153,7 @@ databaseDescribe("Pinterest Phase 4 PostgreSQL persistence", () => {
 
   it("upserts detailed Pin metrics, records progress, and is idempotent on correction", async () => {
     const account = await createAccount();
-    const pin = await prisma.growthPinterestPin.create({ data: { accountId: account.id, pinterestPinId: "500", lastSeenAt: new Date(), lastSyncedAt: new Date() } });
+    const pin = await prisma.growthPinterestPin.create({ data: { accountId: account.id, pinterestPinId: "500", analyticsEligible: true, destinationUrl: "https://saytwist.com/owned", lastSeenAt: new Date(), lastSyncedAt: new Date() } });
     await prisma.growthPinterestAnalyticsState.create({ data: {
       accountId: account.id, status: "BACKFILLING", backfillPinsTotal: 1,
       backfillStartedAt: new Date("2026-10-05T12:00:00Z"),
@@ -181,8 +181,8 @@ databaseDescribe("Pinterest Phase 4 PostgreSQL persistence", () => {
   it("ranks Pins by outbound clicks, aggregates a date range, and keeps zero-impression CTR safe", async () => {
     const account = await createAccount();
     const [first, second] = await Promise.all([
-      prisma.growthPinterestPin.create({ data: { accountId: account.id, pinterestPinId: "600", title: "First", lastSeenAt: new Date(), lastSyncedAt: new Date() } }),
-      prisma.growthPinterestPin.create({ data: { accountId: account.id, pinterestPinId: "601", title: "Second", lastSeenAt: new Date(), lastSyncedAt: new Date() } }),
+      prisma.growthPinterestPin.create({ data: { accountId: account.id, pinterestPinId: "600", title: "First", destinationUrl: "https://saytwist.com/first", analyticsEligible: true, lastSeenAt: new Date(), lastSyncedAt: new Date() } }),
+      prisma.growthPinterestPin.create({ data: { accountId: account.id, pinterestPinId: "601", title: "Second", destinationUrl: "https://saytwist.com/second", analyticsEligible: true, lastSeenAt: new Date(), lastSyncedAt: new Date() } }),
     ]);
     const metricDate = new Date(); metricDate.setUTCHours(0, 0, 0, 0);
     await prisma.growthPinterestAccountMetricDaily.create({ data: { accountId: account.id, metricDate, impressions: 0, outboundClicks: 7, dataStatus: "READY", fetchedAt: new Date() } });

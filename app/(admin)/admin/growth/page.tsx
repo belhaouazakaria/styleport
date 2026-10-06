@@ -40,12 +40,13 @@ export default async function AdminGrowthPage() {
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Pinterest analytics status">
           <KpiCard label="Analytics state" value={overview.pinterestAnalytics.status} hint="Across connected Pinterest accounts" />
-          <KpiCard label="Pins inventoried" value={overview.pinterestAnalytics.pinsInventoried.toLocaleString()} hint="Active locally synchronized Pins" />
+          <KpiCard label="Inventoried Pins" value={overview.pinterestAnalytics.pinsInventoried.toLocaleString()} hint="Active locally synchronized Pins" />
+          <KpiCard label="Analytics-relevant Pins" value={overview.pinterestAnalytics.analyticsRelevantPins.toLocaleString()} hint="Active Pins linking to owned domains" />
           <KpiCard label="Pin backfill" value={`${overview.pinterestAnalytics.backfillPinsProcessed}/${overview.pinterestAnalytics.backfillPinsTotal}`} hint="Detailed Pin history progress" />
           <KpiCard label="Analytics retrieved" value={formatDate(overview.pinterestAnalytics.lastSuccessfulSyncAt)} hint="Latest successful API retrieval" />
         </section>
 
-        <GrowthSettingsForm initial={{ enabled: overview.settings.enabled, intensity: overview.settings.intensity, workerBatchSize: overview.settings.workerBatchSize }} />
+        <GrowthSettingsForm initial={{ enabled: overview.settings.enabled, intensity: overview.settings.intensity, workerBatchSize: overview.settings.workerBatchSize, ownedDomains: overview.settings.ownedDomains }} />
 
         <section className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
           <div className="rounded-2xl border border-border bg-white p-5 sm:p-6">

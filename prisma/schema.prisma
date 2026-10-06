@@ -644,6 +644,7 @@ model GrowthSettings {
   enabled         Boolean         @default(false)
   intensity       GrowthIntensity @default(BALANCED)
   workerBatchSize Int             @default(5)
+  ownedDomains    String[]        @default(["saytwist.com", "www.saytwist.com", "translator.whattypeof.com"])
   configVersion   Int             @default(1)
   updatedById     String?
   createdAt       DateTime        @default(now())
@@ -779,6 +780,7 @@ model GrowthPinterestPin {
   previewImageUrl       String?
   publishedAt           DateTime?
   isActive              Boolean                         @default(true)
+  analyticsEligible     Boolean                         @default(false)
   lastSeenAt            DateTime
   lastSyncedAt          DateTime
   lastAnalyticsSyncAt   DateTime?
@@ -797,6 +799,7 @@ model GrowthPinterestPin {
   dailyMetrics          GrowthPinterestPinMetricDaily[]
 
   @@index([accountId, isActive])
+  @@index([accountId, isActive, analyticsEligible, lastAnalyticsSyncAt])
   @@index([accountId, lastAnalyticsSyncAt])
   @@index([accountId, analyticsPriorityAt])
   @@index([pinterestBoardId])

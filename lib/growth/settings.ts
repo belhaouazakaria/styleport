@@ -6,6 +6,7 @@ import {
   type GrowthSettingsInput,
 } from "@/lib/growth/contracts";
 import { recordGrowthActivity } from "@/lib/growth/activity";
+import { DEFAULT_OWNED_PINTEREST_DOMAINS, reclassifyPinterestPins } from "@/lib/growth/pinterest/relevance";
 import { prisma } from "@/lib/prisma";
 
 export const defaultGrowthSettings = {
@@ -13,6 +14,7 @@ export const defaultGrowthSettings = {
   enabled: false,
   intensity: GrowthIntensity.BALANCED,
   workerBatchSize: DEFAULT_GROWTH_WORKER_BATCH_SIZE,
+  ownedDomains: [...DEFAULT_OWNED_PINTEREST_DOMAINS],
   configVersion: 1,
   updatedById: null,
   createdAt: null,
@@ -36,6 +38,13 @@ export async function updateGrowthSettings(input: GrowthSettingsInput, updatedBy
       },
     });
 
+    const domainsChanged = !previous || previous.ownedDomains.length !== settings.ownedDomains.length ||
+      previous.ownedDomains.some((domain, index) => domain !== settings.ownedDomains[index]);
+    if (domainsChanged) {
+      const accounts = await tx.growthPinterestAccount.findMany({ select: { id: true } });
+      for (const account of accounts) await reclassifyPinterestPins(account.id, settings.ownedDomains, tx);
+    }
+
     await recordGrowthActivity(
       {
         actorKind: GrowthActivityActorKind.USER,
@@ -49,6 +58,7 @@ export async function updateGrowthSettings(input: GrowthSettingsInput, updatedBy
           enabled: settings.enabled,
           intensity: settings.intensity,
           workerBatchSize: settings.workerBatchSize,
+          ownedDomains: settings.ownedDomains,
           configVersion: settings.configVersion,
         },
         correlationKey: `growth-settings:${settings.configVersion}`,
