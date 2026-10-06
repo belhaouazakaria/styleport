@@ -3,9 +3,10 @@ import { GrowthJobStatus } from "@prisma/client";
 import { getGrowthSettings } from "@/lib/growth/settings";
 import { getPinterestAnalyticsOverview } from "@/lib/growth/pinterest/reporting";
 import { prisma } from "@/lib/prisma";
+import { getAttributionCollectionStatus } from "@/lib/growth/attribution/config";
 
 export async function getGrowthFoundationOverview() {
-  const [settings, groupedJobs, oldestRunnableJob, recentActivity, worker, pinterestAnalytics] = await Promise.all([
+  const [settings, groupedJobs, oldestRunnableJob, recentActivity, worker, pinterestAnalytics, attribution] = await Promise.all([
     getGrowthSettings(),
     prisma.growthJob.groupBy({ by: ["status"], _count: { _all: true } }),
     prisma.growthJob.findFirst({
@@ -30,6 +31,7 @@ export async function getGrowthFoundationOverview() {
     }),
     prisma.growthWorkerHeartbeat.findFirst({ orderBy: { heartbeatAt: "desc" } }),
     getPinterestAnalyticsOverview(),
+    getAttributionCollectionStatus({ readSettingWhenServerDisabled: true }),
   ]);
 
   const counts = Object.fromEntries(groupedJobs.map((row) => [row.status, row._count._all]));
@@ -48,5 +50,6 @@ export async function getGrowthFoundationOverview() {
     recentActivity,
     worker,
     pinterestAnalytics,
+    attribution,
   };
 }

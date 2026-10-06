@@ -2,6 +2,9 @@ import { GrowthActivityActorKind, GrowthIntensity } from "@prisma/client";
 
 import {
   DEFAULT_GROWTH_WORKER_BATCH_SIZE,
+  DEFAULT_ATTRIBUTION_EVENT_RETENTION_DAYS,
+  DEFAULT_ATTRIBUTION_SESSION_RETENTION_DAYS,
+  DEFAULT_ATTRIBUTION_WINDOW_DAYS,
   GROWTH_SETTINGS_ID,
   type GrowthSettingsInput,
 } from "@/lib/growth/contracts";
@@ -15,6 +18,10 @@ export const defaultGrowthSettings = {
   intensity: GrowthIntensity.BALANCED,
   workerBatchSize: DEFAULT_GROWTH_WORKER_BATCH_SIZE,
   ownedDomains: [...DEFAULT_OWNED_PINTEREST_DOMAINS],
+  attributionEnabled: false,
+  attributionWindowDays: DEFAULT_ATTRIBUTION_WINDOW_DAYS,
+  attributionSessionRetentionDays: DEFAULT_ATTRIBUTION_SESSION_RETENTION_DAYS,
+  attributionEventRetentionDays: DEFAULT_ATTRIBUTION_EVENT_RETENTION_DAYS,
   configVersion: 1,
   updatedById: null,
   createdAt: null,
@@ -59,6 +66,10 @@ export async function updateGrowthSettings(input: GrowthSettingsInput, updatedBy
           intensity: settings.intensity,
           workerBatchSize: settings.workerBatchSize,
           ownedDomains: settings.ownedDomains,
+          attributionEnabled: settings.attributionEnabled,
+          attributionWindowDays: settings.attributionWindowDays,
+          attributionSessionRetentionDays: settings.attributionSessionRetentionDays,
+          attributionEventRetentionDays: settings.attributionEventRetentionDays,
           configVersion: settings.configVersion,
         },
         correlationKey: `growth-settings:${settings.configVersion}`,

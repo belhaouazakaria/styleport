@@ -57,6 +57,7 @@ The agent may autonomously create/edit translators and Ideas content, generate c
 Current Pinterest developer guidelines require the end user to choose each Pin that will be published/scheduled through an app.
 
 Therefore the initial production mode is:
+
 - autonomous candidate generation;
 - exact Pin shown in admin;
 - explicit per-Pin approval;
@@ -109,6 +110,7 @@ Mechanical failures may stop individual jobs naturally.
 **Status:** Accepted
 
 One recipient. Include:
+
 - main performance;
 - breakout content;
 - actions completed;
@@ -154,11 +156,15 @@ Target English-speaking users worldwide. Initially optimize US scheduling, exper
 
 The main SayTwist Pinterest account already claims `saytwist.com`. Additional accounts already exist and will later be rebranded SayTwist Ideas and SayTwist Playground. No new Pinterest account creation is required for launch. The agent never creates an account.
 
-## D-021 — Attribution proposal for Phase 5
+## D-021 — Phase 5 first-party Pinterest attribution contract
 
-**Status:** Proposed implementation default
+**Status:** Accepted and implemented
 
-Seven-day configurable/versioned return window; retain first and last Pinterest touches and use last eligible Pinterest touch for the primary KPI. Count one session with a trusted SUCCESS completion once. Validate against live behavior and privacy requirements during Phase 5.
+Use version `pinterest_organic_v1` with a configurable seven-day window from the latest qualified Pinterest landing. Preserve first and latest eligible touches. At the first trusted SUCCESS `TranslationLog`, assign the session's single Qualified Pinterest Conversion to its current latest eligible ref and freeze the ref, log, translator and conversion time; later landings never rewrite that historical assignment. Later successful translations are deduplicated attributed usage.
+
+Only an active issued opaque `pin_ref` with exact Pinterest organic UTM source/medium and compatible same-origin destination creates a qualified landing. UTM or Referer alone never proves attribution. Store only a SHA-256 browser-token hash server-side; never place ref, UTM or internal IDs in the HttpOnly, SameSite=Lax cookie. Attribution rows store no translation input/output, raw IP, IP hash, raw user agent, email or authentication identity.
+
+Collection requires both server-only `GROWTH_ATTRIBUTION_COLLECTION_ENABLED=true` and `GrowthSettings.attributionEnabled=true`; both default false and the autonomous Growth kill switch is separate. Production keeps the server gate false pending explicit privacy/consent rollout approval. The browser cookie expires with the attribution window, seven days by default; 30-day session detail retention is separate. A later qualified landing after expiry creates a fresh session/token and can earn its own QPC without reviving the retained journey. The landing-session KPI counts unique qualified sessions rather than every landing event. Session/event detail defaults to 30/90 days, while idempotent daily landing, attributed-translation and QPC aggregates survive bounded cleanup. Existing Pins without `pin_ref` remain outside deterministic first-party attribution. Existing-Pin ref issuance reuses the active ref; a revoked ref remains revoked and issuance fails rather than silently reactivating or multiplying refs.
 
 ## D-022 — Production database topology
 

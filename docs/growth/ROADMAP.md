@@ -78,11 +78,11 @@ Deliver:
 Exit:
 - analytics match Pinterest source within understood tolerances.
 
-Implemented in additive migrations `20261005210000_growth_pinterest_analytics` and `20261006010000_growth_pinterest_relevance`, `lib/growth/pinterest/analytics*`, the existing Pinterest API adapter/job worker, and `/admin/growth/analytics`. Production validation verified account analytics, a complete inventory of 720 active Pins, 221 active analytics-relevant Pins across the configured owned domains, a completed 221/221 detailed history backfill, `FRESH` analytics state, and zero queued or active jobs under the observed 60 requests/60 seconds organic limit. The legacy queued pre-upgrade continuation self-prepared through the optional `relevancePrepared` mechanism and reconciled old all-Pin progress to eligible owned-domain Pin semantics. Inventory deliberately remains broader than analytics eligibility and retains unrelated Pins for strategy and future Phase 6/11 board lifecycle work; historical unrelated Pin analytics rows were retained. No Pinterest resource was created, edited or deleted, and no write API was used. Growth was disabled again after validation pending later scheduled/autonomous phases. Phase 5 attribution is next; Phase 4 added no attribution, publishing, scheduling, Ideas, board management, cron or PM2 Growth worker.
+Implemented in additive migrations `20261005210000_growth_pinterest_analytics` and `20261006010000_growth_pinterest_relevance`, `lib/growth/pinterest/analytics*`, the existing Pinterest API adapter/job worker, and `/admin/growth/analytics`. Production validation verified account analytics, a complete inventory of 720 active Pins, 221 active analytics-relevant Pins across the configured owned domains, a completed 221/221 detailed history backfill, `FRESH` analytics state, and zero queued or active jobs under the observed 60 requests/60 seconds organic limit. The legacy queued pre-upgrade continuation self-prepared through the optional `relevancePrepared` mechanism and reconciled old all-Pin progress to eligible owned-domain Pin semantics. Inventory deliberately remains broader than analytics eligibility and retains unrelated Pins for strategy and future Phase 6/11 board lifecycle work; historical unrelated Pin analytics rows were retained. No Pinterest resource was created, edited or deleted, and no write API was used. Growth was disabled again after validation pending later scheduled/autonomous phases. Phase 4 itself added no attribution, publishing, scheduling, Ideas, board management, cron or PM2 Growth worker.
 
 ## Phase 5 — SayTwist attribution
 
-**Status:** Not started
+**Status:** Complete (implementation validated; production collection disabled)
 
 Deliver:
 - Pin refs/UTM strategy;
@@ -94,6 +94,8 @@ Deliver:
 
 Exit:
 - test Pin/session can be traced to completed translation.
+
+Implemented in additive migration `20261006150000_growth_attribution`, `lib/growth/attribution/*`, `/api/growth/attribution/*`, the trusted `/api/translate` SUCCESS path, translator instrumentation, and `/admin/growth/attribution`. The `pinterest_organic_v1` contract uses issued opaque refs, hashed first-party session tokens, a seven-day latest-qualified-landing window, preserved first/latest touches, frozen last-touch primary assignment, one QPC per session, deduplicated secondary completions, 30/90-day detail retention, and long-lived daily aggregates. Collection requires both the false-by-default server environment gate and the false-by-default Growth setting; production collection remains disabled. No Pinterest write, existing Pin edit, attribution guess for old Pins, Phase 6 behavior, cron, or PM2 Growth worker was added.
 
 ## Phase 6 — Account Strategy Agent
 

@@ -40,10 +40,13 @@ const translator: PublicTranslator = {
   examples: [],
 };
 
-function renderCard() {
+function renderCard(attributionEnabled = false) {
   return render(
     <ToastProvider>
-      <TranslatorCard translator={translator} />
+      <TranslatorCard
+        translator={translator}
+        attributionEnabled={attributionEnabled}
+      />
     </ToastProvider>,
   );
 }
@@ -64,6 +67,7 @@ describe("TranslatorCard", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    window.history.replaceState({}, "", "/");
   });
 
   it("translates text and renders output", async () => {
@@ -77,10 +81,14 @@ describe("TranslatorCard", () => {
     const input = screen.getByLabelText("Input text");
     await userEvent.type(input, "hello there");
 
-    await userEvent.click(screen.getAllByRole("button", { name: /^translate$/i })[0]);
+    await userEvent.click(
+      screen.getAllByRole("button", { name: /^translate$/i })[0],
+    );
 
     await waitFor(() => {
-      expect(screen.getByLabelText("Output text")).toHaveValue("Good morrow to you.");
+      expect(screen.getByLabelText("Output text")).toHaveValue(
+        "Good morrow to you.",
+      );
     });
   });
 
@@ -102,8 +110,14 @@ describe("TranslatorCard", () => {
   });
 
   it("clears persisted input and output", async () => {
-    localStorage.setItem("saytwist:regal-rewrite:last-input", JSON.stringify("hello"));
-    localStorage.setItem("saytwist:regal-rewrite:last-output", JSON.stringify("refined"));
+    localStorage.setItem(
+      "saytwist:regal-rewrite:last-input",
+      JSON.stringify("hello"),
+    );
+    localStorage.setItem(
+      "saytwist:regal-rewrite:last-output",
+      JSON.stringify("refined"),
+    );
 
     renderCard();
 
@@ -114,5 +128,97 @@ describe("TranslatorCard", () => {
 
     expect(screen.getByLabelText("Input text")).toHaveValue("");
     expect(screen.getByLabelText("Output text")).toHaveValue("");
+  });
+
+  it("records view/input once and establishes a valid landing before translation", async () => {
+    window.history.replaceState(
+      {},
+      "",
+      `/?utm_source=pinterest&utm_medium=organic&utm_campaign=saytwist&utm_content=content&pin_ref=pa_${"a".repeat(32)}`,
+    );
+    const paths: string[] = [];
+    fetchMock.mockImplementation(async (input: string | URL | Request) => {
+      const path =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.pathname
+            : new URL(input.url).pathname;
+      paths.push(path);
+      if (path === "/api/translate")
+        return {
+          ok: true,
+          json: async () => ({ ok: true, result: "Tracked output" }),
+        };
+      return { ok: true, json: async () => ({ ok: true, collected: true }) };
+    });
+
+    renderCard(true);
+    const input = screen.getByLabelText("Input text");
+    await userEvent.type(input, "hello");
+    await userEvent.type(input, " again");
+    await userEvent.click(
+      screen.getAllByRole("button", { name: /^translate$/i })[0],
+    );
+    await waitFor(() =>
+      expect(screen.getByLabelText("Output text")).toHaveValue(
+        "Tracked output",
+      ),
+    );
+
+    expect(
+      paths.indexOf("/api/growth/attribution/landing"),
+    ).toBeGreaterThanOrEqual(0);
+    expect(paths.indexOf("/api/growth/attribution/landing")).toBeLessThan(
+      paths.indexOf("/api/translate"),
+    );
+    const eventCalls = fetchMock.mock.calls.filter(
+      ([path]) => path === "/api/growth/attribution/event",
+    );
+    const bodies = eventCalls.map(
+      ([, init]) => JSON.parse(String(init?.body)) as { type: string },
+    );
+    expect(
+      bodies.filter(({ type }) => type === "TRANSLATOR_VIEW"),
+    ).toHaveLength(1);
+    expect(bodies.filter(({ type }) => type === "INPUT_STARTED")).toHaveLength(
+      1,
+    );
+  });
+
+  it("does not enter the bounded attribution wait path for ordinary traffic without pin_ref", async () => {
+    const timeoutSpy = vi.spyOn(window, "setTimeout");
+    fetchMock.mockImplementation(async (input: string | URL | Request) => {
+      const path =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.pathname
+            : new URL(input.url).pathname;
+      if (path === "/api/translate")
+        return {
+          ok: true,
+          json: async () => ({ ok: true, result: "No attribution delay" }),
+        };
+      return { ok: true, json: async () => ({ ok: true, collected: false }) };
+    });
+
+    renderCard(true);
+    await userEvent.type(
+      screen.getByLabelText("Input text"),
+      "ordinary traffic",
+    );
+    await userEvent.click(
+      screen.getAllByRole("button", { name: /^translate$/i })[0],
+    );
+    await waitFor(() =>
+      expect(screen.getByLabelText("Output text")).toHaveValue(
+        "No attribution delay",
+      ),
+    );
+
+    expect(timeoutSpy.mock.calls.some(([, delay]) => delay === 1_200)).toBe(
+      false,
+    );
   });
 });

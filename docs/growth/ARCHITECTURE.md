@@ -149,6 +149,7 @@ Final names may change, but the semantic model should cover:
 ### Pinterest connection
 
 `GrowthPinterestAccount`
+
 - id
 - pinterestAccountId
 - role/intent
@@ -163,6 +164,7 @@ Final names may change, but the semantic model should cover:
 ### Board
 
 `GrowthPinterestBoard`
+
 - accountId
 - pinterestBoardId
 - name
@@ -172,6 +174,7 @@ Final names may change, but the semantic model should cover:
 ### Pin candidate
 
 `GrowthPinCandidate`
+
 - accountId
 - boardId
 - content/destination reference
@@ -187,6 +190,7 @@ Final names may change, but the semantic model should cover:
 ### Publication
 
 `GrowthPinPublication`
+
 - candidateId
 - pinterestPinId
 - approvedAt
@@ -200,6 +204,7 @@ Final names may change, but the semantic model should cover:
 ### Metric snapshot
 
 `GrowthPinMetricSnapshot`
+
 - publication/pin ID
 - snapshot date/time
 - metric values
@@ -209,6 +214,7 @@ Final names may change, but the semantic model should cover:
 ### Attribution event
 
 `GrowthAttributionEvent`
+
 - opaque visitor/session reference
 - Pin ref
 - event type
@@ -219,6 +225,7 @@ Final names may change, but the semantic model should cover:
 ### Content cluster
 
 `GrowthContentCluster`
+
 - topic/name
 - status
 - feature vector/tags
@@ -229,6 +236,7 @@ Final names may change, but the semantic model should cover:
 ### Opportunity
 
 `GrowthOpportunity`
+
 - cluster
 - opportunity type
 - evidence
@@ -240,6 +248,7 @@ Final names may change, but the semantic model should cover:
 ### Decision
 
 `GrowthDecision`
+
 - opportunity
 - decision type
 - structured reasons
@@ -251,6 +260,7 @@ Final names may change, but the semantic model should cover:
 ### Experiment
 
 `GrowthExperiment`
+
 - hypothesis
 - dimension
 - variants
@@ -261,6 +271,7 @@ Final names may change, but the semantic model should cover:
 ### AI cost
 
 `GrowthAiUsage`
+
 - provider/model
 - job/decision
 - tokens/units
@@ -270,6 +281,7 @@ Final names may change, but the semantic model should cover:
 ### Warning
 
 `GrowthWarning`
+
 - severity
 - category
 - evidence
@@ -279,6 +291,7 @@ Final names may change, but the semantic model should cover:
 ### Report
 
 `GrowthReport`
+
 - date
 - summary
 - KPI snapshot
@@ -360,3 +373,15 @@ The existing adapter now owns all Phase 4 reads. `analytics-contract.ts` central
 The complete account inventory and detailed analytics working set are separate. `GrowthPinterestPin.analyticsEligible` is derived from its stored destination and the versioned singleton `ownedDomains`; exact parsed hostnames only are accepted. Reclassification reads only Pin IDs/destinations, clears eligibility once, restores eligible IDs in chunks of 250, and recomputes processed/total from active eligible rows. Inventory pages use one parameterized PostgreSQL `INSERT ... ON CONFLICT DO UPDATE` for at most 250 Pins. A completed inventory remains fresh for 24 hours; an explicit sync during that window performs local reclassification and queues account plus eligible Pin analytics, while a partial or stale inventory is reconciled first. Pin job payloads mark prepared chains; continuations read current persisted eligibility without repeating full-account reclassification. A pre-upgrade job without the marker self-prepares once and creates only marked continuations.
 
 Inventory jobs read at most three 250-Pin pages per invocation, ten pages/2,500 Pins per complete scan, and mark unseen Pins inactive only after completion. Pin jobs read at most eight individual Pins per invocation. Account analytics uses one daily request and one top-50 request when rate-limit headroom remains. A header-reported remaining budget of five or less ends further calls in that job. The closed-beta multiple-Pin endpoint is not implemented.
+
+## Phase 5 first-party attribution
+
+`lib/growth/attribution/*` separates configuration, contracts, traffic defense, ref lifecycle, URL construction, session/event persistence, retention and reporting. `GrowthAttributionRef` is future-compatible: its Pin relation is nullable, destination path is independent, and an issued ref remains stable when a later publication gains an external Pin. Existing-Pin issuance requires `isActive=true`, `analyticsEligible=true`, and a canonical same-origin destination. It performs no Pinterest call.
+
+Public collection is double-gated. Server-only `GROWTH_ATTRIBUTION_COLLECTION_ENABLED` defaults false, and singleton `GrowthSettings.attributionEnabled` defaults false. Both must be true; `GrowthSettings.enabled` continues to control autonomous worker execution only. Disabled requests return a safe no-op before ref/session/event persistence and set no cookie. Public endpoints accept bounded JSON, enforce the canonical browser Origin, use strict Zod contracts, transient IP-based rate limiting without persisting IP/hash, and reject HEAD/prefetch/known-bot traffic.
+
+The cookie contains only 256-bit random URL-safe data and uses HttpOnly, SameSite=Lax, Path=/, production Secure and a Max-Age equal to the configured attribution window. PostgreSQL stores only SHA-256. The 30-day database session-detail retention is independent of the seven-day default browser/window lifetime. Unknown or expired browser-supplied tokens are rotated rather than adopted, preventing fixation; a later qualified landing creates a new session rather than reviving retained expired detail. A valid landing within an active session preserves first touch, updates latest touch, refreshes the server-timestamped window/cookie, and records an idempotent event. Client view/input events resolve the active translator by slug and never carry text, lengths, database IDs or arbitrary metadata.
+
+After core generation succeeds, `/api/translate` must first persist the SUCCESS `TranslationLog`. It then hashes the cookie token and records completion best-effort. The completion transaction locks the session row, verifies the window, deduplicates by TranslationLog/event key, freezes the current latest ref/log/translator on the first conversion, and increments the ref/translator daily aggregate. The row lock and uniqueness constraints prevent two simultaneous successes from creating two primaries. Attribution failure is caught after the trusted log and cannot change translation output or status.
+
+Session detail defaults to 30 days and event detail to 90 days. Event-to-session deletion is `SET NULL`; aggregate rows are independent of session/event deletion. The landing-session aggregate increments once when a new qualified attribution session is created, not for every landing event, so QCR uses unique qualified sessions. Event uniqueness and aggregate mutation share the transaction. `ATTRIBUTION_RETENTION_CLEANUP` deletes at most 500 expired detail rows per explicit bounded run and has no scheduler, cron or persistent worker. Admin reporting reads aggregate rows in bounded 7/30-day windows and never scans all TranslationLog rows.

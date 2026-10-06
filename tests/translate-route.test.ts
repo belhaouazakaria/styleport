@@ -9,6 +9,7 @@ const mockSettings = vi.fn();
 const mockGetRequestIdentity = vi.fn();
 const mockUsagePrecheck = vi.fn();
 const mockEvaluateTokenCap = vi.fn();
+const mockRecordAttribution = vi.fn();
 
 vi.mock("@/lib/openai", () => ({
   translateWithOpenAI: (...args: unknown[]) => mockTranslate(...args),
@@ -32,6 +33,10 @@ vi.mock("@/lib/settings", () => ({
   getAppSettings: (...args: unknown[]) => mockSettings(...args),
 }));
 
+vi.mock("@/lib/growth/attribution/sessions", () => ({
+  recordTrustedTranslationCompletion: (...args: unknown[]) => mockRecordAttribution(...args),
+}));
+
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     translator: {
@@ -52,10 +57,12 @@ describe("POST /api/translate", () => {
     mockGetRequestIdentity.mockReset();
     mockUsagePrecheck.mockReset();
     mockEvaluateTokenCap.mockReset();
+    mockRecordAttribution.mockReset();
     mockMaybeRecalculateAutoFeatured.mockReset();
 
     mockSettings.mockResolvedValue({ defaultModelOverride: "" });
-    mockCreateLog.mockResolvedValue(undefined);
+    mockCreateLog.mockResolvedValue({ id: "log-1" });
+    mockRecordAttribution.mockResolvedValue({ collected: false });
     mockGetRequestIdentity.mockReturnValue({
       ip: "127.0.0.1",
       ipHash: "abc123",
@@ -189,6 +196,25 @@ describe("POST /api/translate", () => {
     expect(response.status).toBe(200);
     expect(body.ok).toBe(true);
     expect(body.result).toContain("Pray tell");
+    expect(mockRecordAttribution).toHaveBeenCalledWith(expect.objectContaining({ translationLogId: "log-1", translatorId: "tr_1" }));
+  });
+
+  it("keeps a successful translation response when attribution persistence fails", async () => {
+    mockGetRuntime.mockResolvedValue({ id: "tr_1", slug: "regal-rewrite", promptSystem: "System", promptInstructions: "Instructions", modelOverride: null, showModeSelector: false, modes: [] });
+    mockTranslate.mockResolvedValue({ text: "Success", model: "gpt-4.1-mini", promptTokens: 1, completionTokens: 1, totalTokens: 2 });
+    mockRecordAttribution.mockRejectedValueOnce(new Error("measurement unavailable"));
+    const response = await POST(new Request("http://localhost/api/translate", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: "hello", translatorSlug: "regal-rewrite" }) }));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ ok: true, result: "Success" });
+  });
+
+  it("does not invent a trusted completion when SUCCESS TranslationLog persistence fails", async () => {
+    mockGetRuntime.mockResolvedValue({ id: "tr_1", slug: "regal-rewrite", promptSystem: "System", promptInstructions: "Instructions", modelOverride: null, showModeSelector: false, modes: [] });
+    mockTranslate.mockResolvedValue({ text: "Success", model: "gpt-4.1-mini", promptTokens: 1, completionTokens: 1, totalTokens: 2 });
+    mockCreateLog.mockRejectedValueOnce(new Error("log unavailable"));
+    const response = await POST(new Request("http://localhost/api/translate", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: "hello", translatorSlug: "regal-rewrite" }) }));
+    expect(response.status).toBe(200);
+    expect(mockRecordAttribution).not.toHaveBeenCalled();
   });
 
   it("returns 404 when translator missing", async () => {

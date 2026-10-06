@@ -9,6 +9,8 @@ import {
   syncPinterestPinInventory,
 } from "@/lib/growth/pinterest/analytics";
 import { syncPinterestAccount, syncPinterestBoards } from "@/lib/growth/pinterest/sync";
+import { attributionRetentionJobPayloadSchema } from "@/lib/growth/attribution/contracts";
+import { cleanupAttributionDetail } from "@/lib/growth/attribution/retention";
 
 export interface GrowthJobHandlerContext {
   job: GrowthJob;
@@ -37,6 +39,11 @@ const handlers = new Map<GrowthJobType, GrowthJobHandler>([
   [GrowthJobType.PINTEREST_PIN_ANALYTICS_SYNC, async ({ job }) => {
     const payload = parsePinterestAnalyticsPayload(job.payload, true);
     return syncPinterestPinAnalytics({ ...payload, batch: payload.batch || 0 });
+  }],
+  [GrowthJobType.ATTRIBUTION_RETENTION_CLEANUP, async ({ job }) => {
+    const parsed = attributionRetentionJobPayloadSchema.safeParse(job.payload || {});
+    if (!parsed.success) throw new NonRetryableGrowthJobError("Invalid attribution retention job payload.");
+    return cleanupAttributionDetail({ limit: parsed.data.limit });
   }],
 ]);
 

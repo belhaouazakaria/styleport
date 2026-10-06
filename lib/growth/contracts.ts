@@ -9,6 +9,9 @@ export const MAX_GROWTH_JOB_ATTEMPTS = 5;
 export const MAX_GROWTH_JOB_PAYLOAD_BYTES = 8_192;
 export const MAX_GROWTH_ACTIVITY_SUMMARY_BYTES = 8_192;
 export const DEFAULT_GROWTH_LEASE_SECONDS = 5 * 60;
+export const DEFAULT_ATTRIBUTION_WINDOW_DAYS = 7;
+export const DEFAULT_ATTRIBUTION_SESSION_RETENTION_DAYS = 30;
+export const DEFAULT_ATTRIBUTION_EVENT_RETENTION_DAYS = 90;
 
 export const growthSettingsSchema = z
   .object({
@@ -16,6 +19,10 @@ export const growthSettingsSchema = z
     intensity: z.nativeEnum(GrowthIntensity),
     workerBatchSize: z.number().int().min(1).max(MAX_GROWTH_WORKER_BATCH_SIZE),
     ownedDomains: ownedPinterestDomainsSchema,
+    attributionEnabled: z.boolean().default(false),
+    attributionWindowDays: z.number().int().min(1).max(30).default(DEFAULT_ATTRIBUTION_WINDOW_DAYS),
+    attributionSessionRetentionDays: z.number().int().min(7).max(90).default(DEFAULT_ATTRIBUTION_SESSION_RETENTION_DAYS),
+    attributionEventRetentionDays: z.number().int().min(30).max(365).default(DEFAULT_ATTRIBUTION_EVENT_RETENTION_DAYS),
   })
   .strict();
 

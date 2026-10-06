@@ -1,6 +1,6 @@
 # SayTwist Growth Agent
 
-**Status:** Phase 4 COMPLETE / LIVE VALIDATED; Growth disabled by default
+**Status:** Phase 5 complete and locally validated; production attribution collection disabled by default
 **Scope:** Pinterest-first autonomous growth system inside SayTwist  
 **Primary admin surface:** `/admin/growth`  
 **Primary public expansion:** `/ideas`  
@@ -72,7 +72,7 @@ If implementation changes behavior described here, update the relevant document 
 ## Remaining implementation checks
 
 - Only static/image Pins are in scope initially. Video is out of scope.
-- Pinterest Trial access is approved. The main `@saytwist` Business account is connected, Phase 3 account/board reads were live validated, and Phase 4 organic analytics and owned-domain relevance were live validated. Phase 5 attribution is next.
+- Pinterest Trial access is approved. The main `@saytwist` Business account is connected, Phase 3 account/board reads were live validated, and Phase 4 organic analytics and owned-domain relevance were live validated. Phase 5 first-party attribution is implemented and guarded by both `GROWTH_ATTRIBUTION_COLLECTION_ENABLED` and `GrowthSettings.attributionEnabled`; production keeps the server gate false pending explicit privacy/consent rollout approval. Phase 6 is next.
 - WhatsApp reporting is desired for one recipient, but provider setup and current pricing must be verified before implementation.
 
 See `IMPLEMENTATION_MAP.md` for verified repository facts and `DATA_MODEL.md` for implemented and proposed schema/state contracts.

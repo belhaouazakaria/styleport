@@ -51,6 +51,7 @@ const envSchema = z.object({
   IP_RATE_LIMIT_PER_DAY: integerParser,
   GLOBAL_DAILY_TOKEN_CAP: integerParser,
   AUTO_EMERGENCY_SHUTDOWN_ENABLED: booleanParser,
+  GROWTH_ATTRIBUTION_COLLECTION_ENABLED: booleanParser,
 });
 
 export type ServerEnv = z.infer<typeof envSchema>;

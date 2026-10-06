@@ -16,6 +16,7 @@ import { getRenderableAdPlacements } from "@/lib/data/ads";
 import { getPublicTranslatorBySlug, getRelatedPublicTranslators } from "@/lib/data/translators";
 import { getAppBaseUrl } from "@/lib/env";
 import { getAppSettings } from "@/lib/settings";
+import { getAttributionCollectionStatus } from "@/lib/growth/attribution/config";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -111,7 +112,7 @@ export default async function TranslatorSlugPage({ params }: PageProps) {
     notFound();
   }
 
-  const [settings, ads, relatedTranslators] = await Promise.all([
+  const [settings, ads, relatedTranslators, attributionEnabled] = await Promise.all([
     getAppSettings(),
     getRenderableAdPlacements({
       pageType: AdPageType.TRANSLATOR,
@@ -123,6 +124,7 @@ export default async function TranslatorSlugPage({ params }: PageProps) {
       categorySlug: translator.primaryCategory?.slug,
       limit: 15,
     }),
+    getAttributionCollectionStatus().then((status) => status.enabled).catch(() => false),
   ]);
   const baseUrl = getAppBaseUrl();
   const shareUrl = new URL(`/translators/${translator.slug}`, baseUrl).toString();
@@ -156,7 +158,7 @@ export default async function TranslatorSlugPage({ params }: PageProps) {
           </section>
         ) : null}
 
-        <TranslatorCard translator={translator} shareUrl={shareUrl} pinImageUrl={pinImageUrl} />
+        <TranslatorCard translator={translator} shareUrl={shareUrl} pinImageUrl={pinImageUrl} attributionEnabled={attributionEnabled} />
 
         <section className="mx-auto mt-8 w-full max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="border-y border-dashed border-border py-7 sm:py-9">

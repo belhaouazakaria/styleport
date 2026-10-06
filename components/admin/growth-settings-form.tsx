@@ -12,6 +12,10 @@ interface GrowthSettingsFormProps {
     intensity: "LOW" | "BALANCED" | "AGGRESSIVE" | "CUSTOM";
     workerBatchSize: number;
     ownedDomains: readonly string[];
+    attributionEnabled: boolean;
+    attributionWindowDays: number;
+    attributionSessionRetentionDays: number;
+    attributionEventRetentionDays: number;
   };
 }
 
@@ -47,6 +51,10 @@ export function GrowthSettingsForm({ initial }: GrowthSettingsFormProps) {
         intensity: result.settings.intensity,
         workerBatchSize: result.settings.workerBatchSize,
         ownedDomains: result.settings.ownedDomains,
+        attributionEnabled: result.settings.attributionEnabled,
+        attributionWindowDays: result.settings.attributionWindowDays,
+        attributionSessionRetentionDays: result.settings.attributionSessionRetentionDays,
+        attributionEventRetentionDays: result.settings.attributionEventRetentionDays,
       });
       setOwnedDomainsText(result.settings.ownedDomains.join("\n"));
       toast({ title: "Growth settings saved" });
@@ -122,6 +130,23 @@ export function GrowthSettingsForm({ initial }: GrowthSettingsFormProps) {
           Pins linking to these domains receive detailed per-Pin analytics. Other Pins remain inventoried but are not individually backfilled. Enter one hostname per line, without a scheme or path.
         </span>
       </label>
+      <div className="mt-6 rounded-xl border border-border bg-muted/20 p-4">
+        <label className="flex items-center gap-3 text-sm font-bold text-ink">
+          <input
+            type="checkbox"
+            checked={settings.attributionEnabled}
+            onChange={(event) => setSettings((current) => ({ ...current, attributionEnabled: event.target.checked }))}
+            className="h-4 w-4 accent-brand-600"
+          />
+          Allow attribution when the server gate is enabled
+        </label>
+        <p className="mt-2 text-xs leading-5 text-muted-ink">The server environment gate must also be enabled. This setting alone cannot start public collection.</p>
+        <div className="mt-4 grid gap-4 sm:grid-cols-3">
+          <label className="space-y-2 text-sm font-semibold text-ink"><span>Window (days)</span><input type="number" min={1} max={30} value={settings.attributionWindowDays} onChange={(event) => setSettings((current) => ({ ...current, attributionWindowDays: Number(event.target.value) }))} className="min-h-11 w-full rounded-xl border border-border bg-white px-3" /></label>
+          <label className="space-y-2 text-sm font-semibold text-ink"><span>Session detail retention</span><input type="number" min={7} max={90} value={settings.attributionSessionRetentionDays} onChange={(event) => setSettings((current) => ({ ...current, attributionSessionRetentionDays: Number(event.target.value) }))} className="min-h-11 w-full rounded-xl border border-border bg-white px-3" /></label>
+          <label className="space-y-2 text-sm font-semibold text-ink"><span>Event detail retention</span><input type="number" min={30} max={365} value={settings.attributionEventRetentionDays} onChange={(event) => setSettings((current) => ({ ...current, attributionEventRetentionDays: Number(event.target.value) }))} className="min-h-11 w-full rounded-xl border border-border bg-white px-3" /></label>
+        </div>
+      </div>
       <div className="mt-5 flex justify-end">
         <Button type="button" onClick={save} disabled={saving}>
           {saving ? "Saving…" : "Save Growth settings"}
