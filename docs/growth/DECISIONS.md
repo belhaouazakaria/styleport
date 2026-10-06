@@ -225,10 +225,28 @@ Production validation accepted this boundary with 720 active Pins retained in co
 
 ## D-028 — Phase 6 uses deterministic advisory account strategy
 
-**Status:** Accepted and implemented
+**Status:** Accepted, implemented and live validated
 
 Use application-controlled `account_strategy_v1` over the last 28 complete UTC days. Always evaluate the three planned user-intent roles: SayTwist/utility, SayTwist Ideas/inspiration, and SayTwist Playground/entertainment and shareability. A role may be unconnected without being failed or zero-performing. Evidence quality must remain explicit, and disabled attribution means QPC measurement is unavailable rather than zero.
 
-Account health uses persisted connection/scopes/credential state, sync and analytics freshness, inventory, observation length and board coverage. Alignment uses bounded deterministic destination and stored metadata evidence; it is not semantic Phase 7 clustering. Board eligibility is advisory and cannot mutate Pinterest. Confidence uses documented deterministic deductions, including missing/weak roles, alignment gaps, unavailable attribution and high top-Pin concentration.
+Account health uses persisted connection/scopes/credential state, sync and analytics freshness, inventory, observation length and board coverage. Alignment uses bounded deterministic destination and stored metadata evidence; it is separate from Phase 7 deterministic clustering. Board eligibility is advisory and cannot mutate Pinterest. Confidence uses documented deterministic deductions, including missing/weak roles, alignment gaps, unavailable attribution and high top-Pin concentration.
 
 Persist one canonical `GrowthAccountStrategyReview` per review month/model version with strict bounded evidence. A manual ADMIN same-origin action may enqueue one bounded local `ACCOUNT_STRATEGY_REVIEW` using a period/version idempotency key. Completion UPSERTs the review and writes compact `GrowthActivity`. Growth remains disabled by default. V1 never selects `RECOMMEND_NEW_ACCOUNT` because sustained cluster, concept-depth and comparative expansion evidence belongs to Phase 7. No AI, Pinterest API call, account/role/board/Pin mutation, automatic recurrence, cron, or PM2 Growth worker is allowed in Phase 6.
+
+
+## D-029 — Phase 7 uses deterministic, bounded local opportunity intelligence
+
+**Status:** Accepted and implemented; production not yet deployed
+
+Use application-controlled versions `opportunity_intelligence_v1`, `opportunity_scoring_v1`, and `content_clustering_v1`. Each daily run uses the last 28 complete UTC days ending yesterday, compares recent and previous seven-day windows, and records four weekly activity buckets. It reads at most 500 active analytics-eligible Pins and bounded locally persisted account, board, Pin metric, analytics-state, strategy, Translator/category, and enabled-attribution evidence. It makes no Pinterest request and uses no AI. A `TrendProvider` boundary exists, but Phase 7 installs only `NullTrendProvider`.
+
+Persist one immutable analysis run per UTC date/model, stable lexical clusters, bounded explicit membership snapshots, aggregate/concentration evidence, and immutable scored opportunities. Opportunity status changes never reopen old daily evidence. Winner, rising, fatigue, and inventory-gap types require documented minimum volume and sustainability. Conversion-specific types require live attribution collection; disabled attribution means unavailable, never zero. Missing conversion is removed from scoring weights. Cost is `NOT_APPLICABLE`. Full Pinterest inventory remains broader than analytics eligibility.
+
+The manual ADMIN same-origin action only enqueues the daily idempotent job `opportunity-intelligence:opportunity_intelligence_v1:YYYY-MM-DD`. No recurring enqueue, Pinterest or Translator mutation, Ideas creation, creative generation, publishing, scheduling, cron, or PM2 Growth worker is part of Phase 7. Growth and attribution collection remain disabled pending later rollout decisions. Phase 8 Translator Autopilot is next.
+
+
+## D-030 — Phase 7 separates Pin signals from cluster opportunities
+
+**Status:** Accepted and implemented; production not yet deployed
+
+Persist deterministic Pin observations separately from advisory cluster opportunities. One sustained Pin may produce a winner signal, including a viral outlier, but winner/rising expansion requires at least two meaningful contributors and rejects top-Pin outbound concentration above 80%. Inventory gaps retain multi-Pin/content-depth requirements. Rising combines absolute recent volume, reach or outbound movement, and non-contradictory CTR/save-rate evidence. Fatigue requires previously meaningful performance, complete recent/prior observations, concurrent reach and outbound decline, and quality evidence; improving CTR makes it cautious and prevents cluster opportunity qualification. Stale evidence suppresses rising/fatigue opportunities. No signal directly authorizes content or publication work.
