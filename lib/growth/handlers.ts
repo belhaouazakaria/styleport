@@ -16,6 +16,8 @@ import { attributionRetentionJobPayloadSchema } from "@/lib/growth/attribution/c
 import { cleanupAttributionDetail } from "@/lib/growth/attribution/retention";
 import { accountStrategyJobPayloadSchema } from "@/lib/growth/strategy/contracts";
 import { persistAccountStrategyReview } from "@/lib/growth/strategy/review";
+import { persistOpportunityAnalysis } from "@/lib/growth/opportunity/analysis";
+import { opportunityJobPayloadSchema } from "@/lib/growth/opportunity/contracts";
 
 export interface GrowthJobHandlerContext {
   job: GrowthJob;
@@ -119,6 +121,39 @@ const handlers = new Map<GrowthJobType, GrowthJobHandler>([
         connectedCount: result.review.connectedAccountCount,
         confidence: result.review.confidence,
         modelVersion: result.review.modelVersion,
+      };
+    },
+  ],
+  [
+    GrowthJobType.OPPORTUNITY_INTELLIGENCE_ANALYSIS,
+    async ({ job }) => {
+      const parsed = opportunityJobPayloadSchema.safeParse(job.payload || {});
+      if (!parsed.success)
+        throw new NonRetryableGrowthJobError(
+          "Invalid opportunity intelligence payload.",
+        );
+      const analysisDate = new Date(
+        `${parsed.data.analysisDate}T00:00:00.000Z`,
+      );
+      if (Number.isNaN(analysisDate.getTime()))
+        throw new NonRetryableGrowthJobError(
+          "Invalid opportunity intelligence analysis date.",
+        );
+      const evidenceWindowEnd = new Date(analysisDate);
+      evidenceWindowEnd.setUTCDate(evidenceWindowEnd.getUTCDate() - 1);
+      const evidenceWindowStart = new Date(evidenceWindowEnd);
+      evidenceWindowStart.setUTCDate(evidenceWindowStart.getUTCDate() - 27);
+      const result = await persistOpportunityAnalysis({
+        analysisDate,
+        evidenceWindowStart,
+        evidenceWindowEnd,
+      });
+      return {
+        analysisRunId: result.run.id,
+        modelVersion: result.run.intelligenceModelVersion,
+        evidenceQuality: result.run.evidenceQuality,
+        pinsConsidered: result.run.pinsConsidered,
+        opportunities: result.run.opportunitiesProduced,
       };
     },
   ],

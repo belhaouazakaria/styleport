@@ -99,7 +99,7 @@ Implemented in additive migration `20261006150000_growth_attribution`, `lib/grow
 
 ## Phase 6 — Account Strategy Agent
 
-**Status:** Complete (implementation and local validation; production execution disabled)
+**Status:** Complete (production deployed and live validated)
 
 Deliver:
 - intent-driven account model;
@@ -111,11 +111,11 @@ Deliver:
 Exit:
 - agent can explain why three accounts are/are not currently appropriate.
 
-Implemented in additive migration `20261006190000_growth_account_strategy`, deterministic `lib/growth/strategy/*`, bounded `ACCOUNT_STRATEGY_REVIEW`, and `/admin/growth/strategy`. Model `account_strategy_v1` evaluates the last 28 complete UTC days, always represents the three user-intent roles, and distinguishes missing/unavailable evidence from zero. Health, readiness, intent alignment, board eligibility, portfolio recommendation, deterministic confidence, and Pin concentration are explainable. Monthly reviews are canonical per month/model and write bounded activity. Because attribution collection is intentionally disabled, QPC remains unavailable and confidence is limited. V1 cannot recommend a fourth account until Phase 7 supplies durable cluster/content-depth evidence. No Pinterest/API mutation, account/board/Pin automation, AI, autonomous recurrence, cron, or PM2 Growth worker was added. Phase 7 is next.
+Production deployed and live validated with migration `20261006190000_growth_account_strategy`; build and health/ready checks passed. The first production review for `2026-10` returned `COMPLETE_BASELINE_PORTFOLIO`, recommended three accounts at 60% confidence, and recorded `ATTRIBUTION_NOT_COLLECTING`, `ROLE_NOT_CONNECTED`, `BASELINE_PORTFOLIO_INCOMPLETE`, and `NO_EXPANSION_EVIDENCE`. Implemented in deterministic `lib/growth/strategy/*`, bounded `ACCOUNT_STRATEGY_REVIEW`, and `/admin/growth/strategy`. Model `account_strategy_v1` evaluates the last 28 complete UTC days, always represents the three user-intent roles, and distinguishes missing/unavailable evidence from zero. Health, readiness, intent alignment, board eligibility, portfolio recommendation, deterministic confidence, and Pin concentration are explainable. Monthly reviews are canonical per month/model and write bounded activity. Because attribution collection is intentionally disabled, QPC remains unavailable and confidence is limited. V1 cannot recommend a fourth account because `account_strategy_v1` does not consume the durable cluster/content-depth evidence now implemented separately in Phase 7. No Pinterest/API mutation, account/board/Pin automation, AI, autonomous recurrence, cron, or PM2 Growth worker was added. Phase 8 is next.
 
 ## Phase 7 — Opportunity Intelligence
 
-**Status:** Not started
+**Status:** Complete (implementation validated; production not yet deployed)
 
 Deliver:
 - winner/rising/fatigue detection;
@@ -127,6 +127,8 @@ Deliver:
 
 Exit:
 - opportunities are generated from real measurable evidence.
+
+Implemented in additive migration `20261006220000_growth_opportunity_intelligence`, deterministic `lib/growth/opportunity/*`, bounded `OPPORTUNITY_INTELLIGENCE_ANALYSIS`, and `/admin/growth/opportunities`. Models `opportunity_intelligence_v1`, `opportunity_scoring_v1`, and `content_clustering_v1` use the last 28 complete UTC days, recent/previous seven-day comparisons, four weekly buckets, and no AI. Analysis reads at most 500 active analytics-eligible Pins plus bounded local metrics, account state, latest strategy state, Translator/category metadata, and attribution aggregates only when collection is enabled. It persists Pin-level winner/rising/fatigue signals separately from stable clusters, explicit capped membership snapshots, immutable daily analysis runs, and ranked advisory cluster opportunities. Viral Pins remain visible, while contributor-depth and concentration rules prevent one outlier from proving a topic. Missing QPC is unavailable rather than zero; conversion-specific types are emitted only while attribution is collecting. No Pinterest call or mutation, publishing, Ideas, Translator mutation, creative generation, scheduling, cron, or PM2 Growth worker was added. Growth and attribution collection remain disabled. Phase 8 is next and covers Translator Autopilot.
 
 ## Phase 8 — Translator Autopilot
 

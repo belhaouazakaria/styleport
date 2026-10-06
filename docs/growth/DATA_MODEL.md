@@ -1,6 +1,6 @@
 # Growth data model
 
-Phase 2 through Phase 6 implemented models are identified below; later-phase names remain proposals. Use existing `cuid()` IDs, uppercase enum values, `createdAt @default(now())`, `updatedAt @updatedAt`, explicit foreign keys/delete actions and timestamped migrations. Money: `Decimal(12,6)` or higher precision for unit costs; never floating point. `Json` stores bounded evidence/variants/snapshots, not an unbounded generic event log. Every state transition writes `GrowthActivity` in the same transaction where possible. Restrict deletion of audit, publication, cost and conversion history; scrub sensitive payloads by retention job. Durable Growth evidence linked to Translator/User uses `onDelete: SetNull`; attribution refs and aggregates use restrictive deletion where required to preserve meaning.
+Phase 2 through Phase 7 implemented models are identified below; later-phase names remain proposals. Use existing `cuid()` IDs, uppercase enum values, `createdAt @default(now())`, `updatedAt @updatedAt`, explicit foreign keys/delete actions and timestamped migrations. Money: `Decimal(12,6)` or higher precision for unit costs; never floating point. `Json` stores bounded evidence/variants/snapshots, not an unbounded generic event log. Every state transition writes `GrowthActivity` in the same transaction where possible. Restrict deletion of audit, publication, cost and conversion history; scrub sensitive payloads by retention job. Durable Growth evidence linked to Translator/User uses `onDelete: SetNull`; attribution refs and aggregates use restrictive deletion where required to preserve meaning.
 
 ## Enums and transitions
 
@@ -62,3 +62,16 @@ Growth Pin URLs include `utm_source=pinterest`, `utm_medium=organic`, a human-re
 ## Implementation sequencing
 
 Phase 2 implements `GrowthSettings`, `GrowthJob`, `GrowthActivity` and `GrowthWorkerHeartbeat` in migration `20261005140000_growth_platform_foundation`. Phase 3 implements Pinterest account, board and OAuth-state records in `20261005170000_growth_pinterest_integration`. Phase 4 implements Pinterest inventory/metrics/state and relevance in `20261005210000_growth_pinterest_analytics` and `20261006010000_growth_pinterest_relevance`. Phase 5 implements refs, sessions, events, daily aggregates, typed attribution settings and `ATTRIBUTION_RETENTION_CLEANUP` in `20261006150000_growth_attribution`. Phase 6 implements the canonical monthly strategy review, typed recommendation/evidence enums and `ACCOUNT_STRATEGY_REVIEW` in `20261006190000_growth_account_strategy`. Later phases add clusters/opportunities (7), content versions (8–9), candidate/asset/experiment (10), approval/publication (11), and AI cost/report/warnings (13).
+
+## Phase 7 implemented persistence
+
+| Model | Durable meaning | Bounds and deletion |
+|---|---|---|
+| `GrowthOpportunityAnalysisRun` | One immutable UTC-day result for `opportunity_intelligence_v1`, including 28-day window, model versions, evidence quality, cap state, counts and summary. | Unique analysis date/model; 500-Pin ceiling; cascades its snapshots and opportunities. |
+| `GrowthContentCluster` | Stable versioned lexical topic/category identity. | Unique cluster key/clustering version; retained across daily runs. |
+| `GrowthContentClusterSnapshot` | Per-run aggregate metrics, destination/week counts, velocity, concentration, evidence quality and reasons. | Unique run/cluster; BigInt counters; four-week maximum. |
+| `GrowthContentClusterMembership` | Explicit bounded Pin membership with immutable Pinterest ID/path/tokens and optional live Pin/Translator links. | Up to 100 members per cluster snapshot; Pin and Translator deletion sets optional links null while preserving evidence. |
+| `GrowthOpportunity` | Immutable scored advisory signal with lifecycle status, type, strict evidence, target hints and daily dedupe key. | 0–100 score/confidence; conversion-specific types require collected attribution; run deletion cascades, cluster deletion sets null. |
+| `GrowthPinSignal` | Immutable Pin-level observation (`WINNER`, `RISING`, `FATIGUE`) separated from recommendation qualification. | Strong/cautious strength, 0–100 confidence, strict evidence, unique date/model/type/Pin key; optional Pin/cluster links use `SetNull`. |
+
+Phase 7 adds `OPPORTUNITY_INTELLIGENCE_ANALYSIS` and lifecycle states `OPEN`, `EVALUATING`, `ACTIONED`, `DEFERRED`, `DISMISSED`, `CANCELLED`, `FAILED_RETRYABLE`, and `FAILED_TERMINAL`. Historical opportunity evidence is not rewritten or reopened by a later run.

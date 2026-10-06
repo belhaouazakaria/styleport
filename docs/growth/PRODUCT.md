@@ -167,3 +167,7 @@ The first production milestone is successful when:
 ## Targeting and measuring
 
 Worldwide English is the audience; cold-start Pinterest tests and schedules are US-first, with later settings informed by first-party data. The north star is a session with at least one trusted, Pinterest-attributed successful translation, including embedded Ideas use. Outbound clicks are an upstream diagnostic. See `ANALYTICS_ATTRIBUTION.md` and `DATA_MODEL.md` for exact deduplication.
+
+## Phase 7 implemented product boundary
+
+Opportunity intelligence is implemented with deterministic local evidence and no AI. It identifies sustainable winners, rising topics, inventory gaps, and fatigue over the last 28 complete UTC days; groups related eligible Pins with stable lexical/category clusters; records concentration and confidence; and ranks advisory opportunities from 0 to 100. It does not create content or make an opportunity actionable by itself. Conversion evidence participates only when attribution collection is enabled, and unavailable QPC is never interpreted as zero. Phase 8 Translator Autopilot is the next product phase.

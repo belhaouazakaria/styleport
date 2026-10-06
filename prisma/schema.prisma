@@ -158,6 +158,7 @@ enum GrowthJobType {
   PINTEREST_PIN_ANALYTICS_SYNC
   ATTRIBUTION_RETENTION_CLEANUP
   ACCOUNT_STRATEGY_REVIEW
+  OPPORTUNITY_INTELLIGENCE_ANALYSIS
 }
 
 enum GrowthJobStatus {
@@ -234,6 +235,58 @@ enum GrowthStrategyEvidenceQuality {
   NOT_APPLICABLE
 }
 
+enum GrowthOpportunityType {
+  AMPLIFY_WINNER
+  EXPLORE_RISING_TOPIC
+  FILL_INVENTORY_GAP
+  INVESTIGATE_FATIGUE
+  HIGH_CONVERSION_LOW_REACH
+  HIGH_CLICK_LOW_CONVERSION
+}
+
+enum GrowthOpportunityStatus {
+  OPEN
+  EVALUATING
+  ACTIONED
+  DEFERRED
+  DISMISSED
+  CANCELLED
+  FAILED_RETRYABLE
+  FAILED_TERMINAL
+}
+
+enum GrowthOpportunityEvidenceQuality {
+  KNOWN
+  PARTIAL
+  INSUFFICIENT_DATA
+  STALE
+  NOT_APPLICABLE
+}
+
+enum GrowthContentClusterStatus {
+  ACTIVE
+  INSUFFICIENT_DATA
+  ARCHIVED
+}
+
+enum GrowthOpportunityDestinationKind {
+  TRANSLATOR
+  FUTURE_IDEAS
+  MULTIPLE
+  UNKNOWN
+}
+
+enum GrowthPinSignalType {
+  WINNER
+  RISING
+  FATIGUE
+}
+
+enum GrowthSignalStrength {
+  STRONG
+  CAUTIOUS
+}
+
 model User {
   id                    String                      @id @default(cuid())
   name                  String?
@@ -292,53 +345,54 @@ model VerificationToken {
 }
 
 model Translator {
-  id                          String                            @id @default(cuid())
-  name                        String
-  slug                        String                            @unique
-  title                       String
-  subtitle                    String
-  shortDescription            String
-  sourceLabel                 String
-  targetLabel                 String
-  category                    String?
-  iconName                    String?
-  promptSystem                String
-  promptInstructions          String
-  modelOverride               String?
-  seoTitle                    String?
-  seoDescription              String?
-  showModeSelector            Boolean                           @default(false)
-  showSwap                    Boolean                           @default(false)
-  showExamples                Boolean                           @default(false)
-  isActive                    Boolean                           @default(true)
-  isFeatured                  Boolean                           @default(false)
-  featuredRank                Int?
-  featuredSource              FeaturedSource                    @default(MANUAL)
-  shareImagePath              String?
-  shareImageHash              String?
-  shareImageUpdatedAt         DateTime?
-  sortOrder                   Int                               @default(0)
-  archivedAt                  DateTime?
-  primaryCategoryId           String?
-  createdAt                   DateTime                          @default(now())
-  updatedAt                   DateTime                          @updatedAt
-  modes                       TranslationMode[]
-  examples                    TranslatorExample[]
-  logs                        TranslationLog[]
-  categories                  TranslatorCategory[]
-  primaryCategory             Category?                         @relation("PrimaryTranslatorCategory", fields: [primaryCategoryId], references: [id], onDelete: SetNull)
-  fulfilledRequests           TranslatorRequest[]               @relation("RequestCreatedTranslator")
-  comments                    TranslatorComment[]
-  indexingLogs                IndexingLog[]
-  editorialContent            TranslatorEditorialContent?
-  editorialLists              TranslatorEditorialList[]
-  editorialExamples           TranslatorEditorialExample[]
-  editorialFaqs               TranslatorEditorialFaq[]
-  editorialJobItems           TranslatorEditorialJobItem[]
-  editorialDrafts             TranslatorEditorialDraft[]
-  growthAttributionSessions   GrowthAttributionSession[]        @relation("GrowthAttributionQualifiedTranslator")
-  growthAttributionEvents     GrowthAttributionEvent[]
-  growthAttributionAggregates GrowthAttributionDailyAggregate[]
+  id                           String                            @id @default(cuid())
+  name                         String
+  slug                         String                            @unique
+  title                        String
+  subtitle                     String
+  shortDescription             String
+  sourceLabel                  String
+  targetLabel                  String
+  category                     String?
+  iconName                     String?
+  promptSystem                 String
+  promptInstructions           String
+  modelOverride                String?
+  seoTitle                     String?
+  seoDescription               String?
+  showModeSelector             Boolean                           @default(false)
+  showSwap                     Boolean                           @default(false)
+  showExamples                 Boolean                           @default(false)
+  isActive                     Boolean                           @default(true)
+  isFeatured                   Boolean                           @default(false)
+  featuredRank                 Int?
+  featuredSource               FeaturedSource                    @default(MANUAL)
+  shareImagePath               String?
+  shareImageHash               String?
+  shareImageUpdatedAt          DateTime?
+  sortOrder                    Int                               @default(0)
+  archivedAt                   DateTime?
+  primaryCategoryId            String?
+  createdAt                    DateTime                          @default(now())
+  updatedAt                    DateTime                          @updatedAt
+  modes                        TranslationMode[]
+  examples                     TranslatorExample[]
+  logs                         TranslationLog[]
+  categories                   TranslatorCategory[]
+  primaryCategory              Category?                         @relation("PrimaryTranslatorCategory", fields: [primaryCategoryId], references: [id], onDelete: SetNull)
+  fulfilledRequests            TranslatorRequest[]               @relation("RequestCreatedTranslator")
+  comments                     TranslatorComment[]
+  indexingLogs                 IndexingLog[]
+  editorialContent             TranslatorEditorialContent?
+  editorialLists               TranslatorEditorialList[]
+  editorialExamples            TranslatorEditorialExample[]
+  editorialFaqs                TranslatorEditorialFaq[]
+  editorialJobItems            TranslatorEditorialJobItem[]
+  editorialDrafts              TranslatorEditorialDraft[]
+  growthAttributionSessions    GrowthAttributionSession[]        @relation("GrowthAttributionQualifiedTranslator")
+  growthAttributionEvents      GrowthAttributionEvent[]
+  growthOpportunityMemberships GrowthContentClusterMembership[]
+  growthAttributionAggregates  GrowthAttributionDailyAggregate[]
 
   @@index([isActive, isFeatured, sortOrder])
   @@index([isFeatured, featuredRank])
@@ -803,37 +857,39 @@ model GrowthPinterestBoard {
 }
 
 model GrowthPinterestPin {
-  id                    String                          @id @default(cuid())
-  pinterestPinId        String                          @unique
-  accountId             String
-  boardId               String?
-  pinterestBoardId      String?
-  title                 String?
-  description           String?
-  destinationUrl        String?
-  creativeType          String?
-  mediaType             String?
-  previewImageUrl       String?
-  publishedAt           DateTime?
-  isActive              Boolean                         @default(true)
-  analyticsEligible     Boolean                         @default(false)
-  lastSeenAt            DateTime
-  lastSyncedAt          DateTime
-  lastAnalyticsSyncAt   DateTime?
-  analyticsPriorityAt   DateTime?
-  summaryStartDate      DateTime?
-  summaryEndDate        DateTime?
-  summaryFetchedAt      DateTime?
-  summaryImpressions    BigInt?
-  summarySaves          BigInt?
-  summaryPinClicks      BigInt?
-  summaryOutboundClicks BigInt?
-  createdAt             DateTime                        @default(now())
-  updatedAt             DateTime                        @updatedAt
-  account               GrowthPinterestAccount          @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  board                 GrowthPinterestBoard?           @relation(fields: [boardId], references: [id], onDelete: SetNull)
-  dailyMetrics          GrowthPinterestPinMetricDaily[]
-  attributionRefs       GrowthAttributionRef[]
+  id                     String                           @id @default(cuid())
+  pinterestPinId         String                           @unique
+  accountId              String
+  boardId                String?
+  pinterestBoardId       String?
+  title                  String?
+  description            String?
+  destinationUrl         String?
+  creativeType           String?
+  mediaType              String?
+  previewImageUrl        String?
+  publishedAt            DateTime?
+  isActive               Boolean                          @default(true)
+  analyticsEligible      Boolean                          @default(false)
+  lastSeenAt             DateTime
+  lastSyncedAt           DateTime
+  lastAnalyticsSyncAt    DateTime?
+  analyticsPriorityAt    DateTime?
+  summaryStartDate       DateTime?
+  summaryEndDate         DateTime?
+  summaryFetchedAt       DateTime?
+  summaryImpressions     BigInt?
+  summarySaves           BigInt?
+  summaryPinClicks       BigInt?
+  summaryOutboundClicks  BigInt?
+  createdAt              DateTime                         @default(now())
+  updatedAt              DateTime                         @updatedAt
+  account                GrowthPinterestAccount           @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  board                  GrowthPinterestBoard?            @relation(fields: [boardId], references: [id], onDelete: SetNull)
+  dailyMetrics           GrowthPinterestPinMetricDaily[]
+  attributionRefs        GrowthAttributionRef[]
+  opportunityMemberships GrowthContentClusterMembership[]
+  opportunitySignals     GrowthPinSignal[]
 
   @@index([accountId, isActive])
   @@index([accountId, isActive, analyticsEligible, lastAnalyticsSyncAt])
@@ -962,6 +1018,145 @@ model GrowthAccountStrategyReview {
   @@unique([reviewMonth, modelVersion])
   @@index([recommendation, reviewMonth])
   @@index([completedAt])
+}
+
+model GrowthOpportunityAnalysisRun {
+  id                       String                           @id @default(cuid())
+  analysisDate             DateTime
+  evidenceWindowStart      DateTime
+  evidenceWindowEnd        DateTime
+  intelligenceModelVersion String
+  scoringModelVersion      String
+  clusteringModelVersion   String
+  evidenceQuality          GrowthOpportunityEvidenceQuality
+  pinsConsidered           Int
+  pinCap                   Int
+  capReached               Boolean                          @default(false)
+  clustersProduced         Int
+  opportunitiesProduced    Int
+  attributionCollection    String
+  reasonCodes              String[]
+  summary                  String
+  createdAt                DateTime                         @default(now())
+  completedAt              DateTime                         @default(now())
+  snapshots                GrowthContentClusterSnapshot[]
+  opportunities            GrowthOpportunity[]
+  pinSignals               GrowthPinSignal[]
+
+  @@unique([analysisDate, intelligenceModelVersion])
+  @@index([completedAt])
+}
+
+model GrowthContentCluster {
+  id                String                          @id @default(cuid())
+  clusterKey        String
+  name              String
+  clusteringVersion String
+  targetRole        GrowthPinterestPublicationRole?
+  status            GrowthContentClusterStatus      @default(ACTIVE)
+  summary           String
+  createdAt         DateTime                        @default(now())
+  updatedAt         DateTime                        @updatedAt
+  snapshots         GrowthContentClusterSnapshot[]
+  opportunities     GrowthOpportunity[]
+  pinSignals        GrowthPinSignal[]
+
+  @@unique([clusterKey, clusteringVersion])
+  @@index([status, updatedAt])
+}
+
+model GrowthContentClusterSnapshot {
+  id                        String                           @id @default(cuid())
+  analysisRunId             String
+  clusterId                 String
+  pinCount                  Int
+  distinctDestinationCount  Int
+  activeWeekCount           Int
+  impressions               BigInt
+  saves                     BigInt
+  pinClicks                 BigInt
+  outboundClicks            BigInt
+  qualifiedConversions      Int?
+  topPinImpressionPercent   Int?
+  topThreeImpressionPercent Int?
+  topPinOutboundPercent     Int?
+  topThreeOutboundPercent   Int?
+  velocityPercent           Int?
+  evidenceQuality           GrowthOpportunityEvidenceQuality
+  reasonCodes               String[]
+  createdAt                 DateTime                         @default(now())
+  analysisRun               GrowthOpportunityAnalysisRun     @relation(fields: [analysisRunId], references: [id], onDelete: Cascade)
+  cluster                   GrowthContentCluster             @relation(fields: [clusterId], references: [id], onDelete: Restrict)
+  memberships               GrowthContentClusterMembership[]
+
+  @@unique([analysisRunId, clusterId])
+  @@index([clusterId, createdAt])
+}
+
+model GrowthContentClusterMembership {
+  id              String                       @id @default(cuid())
+  snapshotId      String
+  pinId           String?
+  translatorId    String?
+  pinterestPinId  String
+  destinationPath String?
+  matchTokens     String[]
+  createdAt       DateTime                     @default(now())
+  snapshot        GrowthContentClusterSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  pin             GrowthPinterestPin?          @relation(fields: [pinId], references: [id], onDelete: SetNull)
+  translator      Translator?                  @relation(fields: [translatorId], references: [id], onDelete: SetNull)
+
+  @@unique([snapshotId, pinterestPinId])
+  @@index([pinId])
+  @@index([translatorId])
+}
+
+model GrowthOpportunity {
+  id                     String                            @id @default(cuid())
+  analysisRunId          String
+  clusterId              String?
+  type                   GrowthOpportunityType
+  status                 GrowthOpportunityStatus           @default(OPEN)
+  score                  Int
+  confidence             Int
+  evidenceQuality        GrowthOpportunityEvidenceQuality
+  scoringModelVersion    String
+  clusteringModelVersion String
+  targetRole             GrowthPinterestPublicationRole?
+  targetDestinationKind  GrowthOpportunityDestinationKind?
+  evidence               Json
+  reasonCodes            String[]
+  dedupeKey              String                            @unique
+  createdAt              DateTime                          @default(now())
+  closedAt               DateTime?
+  analysisRun            GrowthOpportunityAnalysisRun      @relation(fields: [analysisRunId], references: [id], onDelete: Cascade)
+  cluster                GrowthContentCluster?             @relation(fields: [clusterId], references: [id], onDelete: SetNull)
+
+  @@index([status, score, createdAt])
+  @@index([type, createdAt])
+}
+
+model GrowthPinSignal {
+  id              String                           @id @default(cuid())
+  analysisRunId   String
+  clusterId       String?
+  pinId           String?
+  pinterestPinId  String
+  type            GrowthPinSignalType
+  strength        GrowthSignalStrength
+  confidence      Int
+  evidenceQuality GrowthOpportunityEvidenceQuality
+  evidence        Json
+  reasonCodes     String[]
+  dedupeKey       String                           @unique
+  createdAt       DateTime                         @default(now())
+  analysisRun     GrowthOpportunityAnalysisRun     @relation(fields: [analysisRunId], references: [id], onDelete: Cascade)
+  cluster         GrowthContentCluster?            @relation(fields: [clusterId], references: [id], onDelete: SetNull)
+  pin             GrowthPinterestPin?              @relation(fields: [pinId], references: [id], onDelete: SetNull)
+
+  @@index([type, confidence, createdAt])
+  @@index([analysisRunId, type])
+  @@index([pinId])
 }
 
 model GrowthPinterestAccountMetricDaily {

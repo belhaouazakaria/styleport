@@ -275,3 +275,9 @@ Phase 5 adds `/admin/growth/attribution`. It supports 7/30-day bounded aggregate
 `/admin/growth/strategy` is an ADMIN-only read surface over bounded local PostgreSQL queries. It shows the three planned roles even when unconnected, portfolio counts/readiness/recommendation/confidence, explicit evidence-quality warnings, recent Pinterest evidence, intent alignment, attribution as `NOT_COLLECTING` with QPC unavailable, up to 100 synchronized boards with advisory eligibility/reasons, and the latest durable monthly review. No credential ciphertext or decrypted token is selected or rendered.
 
 `POST /api/admin/growth/strategy/reviews` requires ADMIN plus the existing exact same-origin check. It accepts no arbitrary strategy parameters and only enqueues the current period/version bounded job. The action cannot enable attribution, call Pinterest, change a role, or mutate an account, board, or Pin.
+
+## Phase 7 opportunity intelligence admin
+
+`/admin/growth/opportunities` is ADMIN-only and server-rendered from local persisted rows. It displays the latest evidence window and quality, Pin cap usage, cluster and opportunity counts, attribution collection state, a bounded Pin-signal table for winner/rising/fatigue observations, and a separate ranked cluster-opportunity table with score/confidence/type/status. A viral Pin remains visible even when concentration or insufficient content depth prevents a cluster opportunity. The POST route requires ADMIN and same origin and only enqueues the daily idempotent job. It cannot change status, publish, call Pinterest, or mutate accounts, boards, Pins, Translators, Ideas, or creatives. Analysis and report queries have fixed caps.
+
+Phase 7 has no AI or external trend cost. Opportunity evidence records cost as `NOT_APPLICABLE`; `NullTrendProvider` makes no request. This must change through a later versioned decision before any paid provider contributes evidence.

@@ -275,3 +275,7 @@ Phase 4 adds only `PINTEREST_PIN_INVENTORY_SYNC`, `PINTEREST_ACCOUNT_ANALYTICS_S
 ## Phase 6 account strategy review
 
 Phase 6 adds `ACCOUNT_STRATEGY_REVIEW` as a manual, bounded local-data job. The payload is fixed to review month, complete evidence-window end, and application-controlled `account_strategy_v1`; the idempotency key is `account-strategy:account_strategy_v1:YYYY-MM`. One run reads bounded persisted account, board, inventory and metric evidence, UPSERTs the canonical monthly review, appends a compact `GrowthActivity`, and exits. It does not refresh stale Pinterest data automatically; the recommendation tells the operator to refresh it. Existing worker kill-switch checks apply before claim/execution, and there is no recurring enqueue, polling, cron, or PM2 Growth process.
+
+## Phase 7 opportunity analysis job
+
+`OPPORTUNITY_INTELLIGENCE_ANALYSIS` is a manual bounded local-data job. Its strict payload contains the UTC analysis date and `opportunity_intelligence_v1`; its daily idempotency key is `opportunity-intelligence:opportunity_intelligence_v1:YYYY-MM-DD`. It evaluates one 28-day window, persists an immutable run with capped clusters/memberships/opportunities and one compact activity record, then exits. Existing kill-switch, claim, lease, retry and terminal-failure behavior applies. There is no recurring enqueue, polling, cron, PM2 Growth process, Pinterest call, or resource mutation.
