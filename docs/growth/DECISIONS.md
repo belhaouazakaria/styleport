@@ -192,19 +192,23 @@ Production Trial-access validation connected the main SayTwist Business account 
 
 ## D-026 — Phase 4 uses daily organic history and bounded single-Pin reads
 
-**Status:** Accepted and implemented; pending live validation
+**Status:** Accepted, implemented and live validated
 
 Persist Pinterest-specific account and Pin daily `BigInt` metrics with deterministic account/date and Pin/date UPSERT keys. Initial backfill requests 90 inclusive UTC dates; incremental retrieval refreshes seven inclusive dates so settling data can be corrected. Inventory and detailed Pin work resume through existing persistent jobs with fixed request/page/Pin caps. Outbound clicks are the default Pinterest-side ranking metric, but Phase 4 creates no winner, viral, opportunity or conversion classification.
 
 Use official `GET /pins`, user-account analytics/top Pins, and individual Pin analytics. Do not call or depend on the closed-beta multiple-Pin analytics endpoint. Do not store rolling/lifetime `pin_metrics` as daily history. Growth stays disabled and no scheduler is added until a later rollout decision.
 
+Production validation completed the eligible detailed history backfill at 221/221, reached `FRESH`, and ended with zero queued and zero active jobs under the observed 60 requests/60 seconds organic analytics limit. This validates the bounded read design; it does not add attribution, publishing, scheduling or autonomous execution.
+
 ## D-027 — Complete Pinterest inventory with owned-domain detailed analytics
 
-**Status:** Accepted and implemented; pending deployment validation
+**Status:** Accepted, implemented and live validated
 
 Keep a lightweight inventory of every Pin in the connected account, including unrelated and legacy content, because account strategy and future Phase 6/11 board lifecycle work require a complete view. Do not implement board management in Phase 4. Restrict expensive individual Pin analytics to active Pins whose parsed destination hostname exactly matches the ADMIN-configurable `GrowthSettings.ownedDomains`. Defaults are `saytwist.com`, `www.saytwist.com`, and `translator.whattypeof.com`. Do not follow redirects or make destination requests. Account-level analytics continues to cover the entire Pinterest account and is labeled accordingly.
 
 Persist `analyticsEligible`, retain metric history when eligibility changes, and calculate backfill total/processed from active eligible Pins only. Normalize configured hostnames to lowercase, trim whitespace, and remove duplicates before persistence. Reclassify stored inventory on explicit analytics sync, settings change, full inventory completion, or one-time preparation of an unmarked pre-upgrade Pin job. Mark prepared Pin roots and continuations in their JSON payload so each eight-Pin continuation directly uses current persisted eligibility without repeating the full scan. A complete inventory is fresh for 24 hours; reuse it during that window, but fetch/resume inventory when absent, stale, or partial. Persist each Pinterest page with one bounded parameterized PostgreSQL bulk UPSERT. Keep the worker one-shot and bounded; add no cron, PM2 worker, polling, attribution, publishing, or board-management behavior.
+
+Production validation accepted this boundary with 720 active Pins retained in complete inventory and 221 active Pins eligible for detailed analytics across the configured owned domains. The pre-upgrade queued continuation successfully self-prepared through the optional `relevancePrepared` mechanism, converting old all-Pin progress to eligible-Pin progress. Full inventory remains intentionally broader than analytics eligibility, and historical unrelated metrics remain retained.
 
 ## Open implementation checks
 
