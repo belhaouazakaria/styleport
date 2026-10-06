@@ -286,3 +286,5 @@ Phase 7 has no AI or external trend cost. Opportunity evidence records cost as `
 ### Phase 7 version visibility
 
 The opportunity dashboard orders runs by analysis date, completion time, creation time, and ID, then shows intelligence, clustering, and scoring versions. A corrected v2 same-day run therefore becomes current without hiding or deleting historical v1 evidence.
+
+Production validation confirmed the dashboard's current run as `opportunity_intelligence_v2` / `content_clustering_v2` / `opportunity_scoring_v1`: `KNOWN` evidence, 221 eligible Pins under the 500-Pin cap, eight clusters, two opportunities, attribution `NOT_COLLECTING`, and no structural `translator` or `translators` cluster. The original v1 run remains visible as historical audit evidence.

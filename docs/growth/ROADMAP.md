@@ -115,7 +115,7 @@ Production deployed and live validated with migration `20261006190000_growth_acc
 
 ## Phase 7 — Opportunity Intelligence
 
-**Status:** Complete (implementation validated; production correction pending validation)
+**Status:** Complete — production deployed and live validated
 
 Deliver:
 - winner/rising/fatigue detection;
@@ -128,7 +128,7 @@ Deliver:
 Exit:
 - opportunities are generated from real measurable evidence.
 
-Implemented in additive migration `20261006220000_growth_opportunity_intelligence`, deterministic `lib/growth/opportunity/*`, bounded `OPPORTUNITY_INTELLIGENCE_ANALYSIS`, and `/admin/growth/opportunities`. Corrected models `opportunity_intelligence_v2`, `opportunity_scoring_v1`, and `content_clustering_v2` use the last 28 complete UTC days, recent/previous seven-day comparisons, four weekly buckets, and no AI. Analysis reads at most 500 active analytics-eligible Pins plus bounded local metrics, account state, latest strategy state, Translator/category metadata, and attribution aggregates only when collection is enabled. It persists Pin-level winner/rising/fatigue signals separately from stable clusters, explicit capped membership snapshots, immutable daily analysis runs, and ranked advisory cluster opportunities. Viral Pins remain visible, while contributor-depth and concentration rules prevent one outlier from proving a topic. Missing QPC is unavailable rather than zero; conversion-specific types are emitted only while attribution is collecting. No Pinterest call or mutation, publishing, Ideas, Translator mutation, creative generation, scheduling, cron, or PM2 Growth worker was added. Growth and attribution collection remain disabled. Phase 8 is next and covers Translator Autopilot.
+Implemented in additive migration `20261006220000_growth_opportunity_intelligence`, deterministic `lib/growth/opportunity/*`, bounded `OPPORTUNITY_INTELLIGENCE_ANALYSIS`, and `/admin/growth/opportunities`. The initial production `opportunity_intelligence_v1` / `content_clustering_v1` run is retained as historical audit evidence after exposing structural `/translators/` route-token collapse. The corrected production models are `opportunity_intelligence_v2`, `content_clustering_v2`, and unchanged `opportunity_scoring_v1`. Corrected live analysis considered 221 eligible Pins under the 500-Pin cap with `KNOWN` evidence and attribution `NOT_COLLECTING`; it produced eight deterministic clusters, two opportunities, and two WINNER Pin signals at 85% average confidence. Winner examples were Freaky Translator in `funny` and Cold Hearted, Cunning And Manipulative Translator in `roleplay`. The top opportunities were `AMPLIFY_WINNER` for `roleplay` at score 94/confidence 100% and for `historical` at score 77/confidence 100%. No `translator` or `translators` structural cluster remained. Growth and attribution were disabled again after validation. No Pinterest call or mutation, AI call, content mutation, publishing, Ideas, Translator mutation, creative generation, scheduling, cron, or persistent Growth worker was added. Phase 8 — Translator Autopilot — is next.
 
 ## Phase 8 — Translator Autopilot
 
