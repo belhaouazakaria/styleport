@@ -14,6 +14,10 @@ describe("Growth foundation contracts", () => {
       intensity: "BALANCED",
       workerBatchSize: 5,
       ownedDomains: ["saytwist.com"],
+      attributionEnabled: false,
+      attributionWindowDays: 7,
+      attributionSessionRetentionDays: 30,
+      attributionEventRetentionDays: 90,
     });
     expect(growthSettingsSchema.safeParse({ enabled: true, intensity: "BALANCED", workerBatchSize: 0, ownedDomains: ["saytwist.com"] }).success).toBe(false);
     expect(growthSettingsSchema.safeParse({ enabled: true, intensity: "BALANCED", workerBatchSize: 5, ownedDomains: ["saytwist.com"], token: "secret" }).success).toBe(false);

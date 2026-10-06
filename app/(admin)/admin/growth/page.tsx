@@ -26,9 +26,9 @@ export default async function AdminGrowthPage() {
         subtitle="Growth controls, bounded jobs, Pinterest connection, and organic analytics health."
       />
       <main className="space-y-6 p-4 sm:p-6">
-        <div className="flex flex-wrap justify-end gap-3"><Link href="/admin/growth/analytics" className={cn(buttonVariants({ variant: "outline" }))}>Pinterest analytics</Link><Link href="/admin/growth/accounts" className={cn(buttonVariants({ variant: "outline" }))}>Pinterest accounts</Link></div>
+        <div className="flex flex-wrap justify-end gap-3"><Link href="/admin/growth/attribution" className={cn(buttonVariants({ variant: "outline" }))}>Attribution</Link><Link href="/admin/growth/analytics" className={cn(buttonVariants({ variant: "outline" }))}>Pinterest analytics</Link><Link href="/admin/growth/accounts" className={cn(buttonVariants({ variant: "outline" }))}>Pinterest accounts</Link></div>
         <div className="rounded-2xl border border-brand-200 bg-brand-50 p-4 text-sm leading-6 text-brand-950">
-          Pinterest account, board, Pin inventory, and organic analytics synchronization are available through bounded jobs. Attribution, Ideas, publishing, and autonomous content remain inactive.
+          Pinterest account, board, Pin inventory, organic analytics, and first-party attribution infrastructure are available. Public attribution collection remains inactive unless both attribution gates are enabled. Ideas, publishing, and autonomous content remain inactive.
         </div>
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Growth foundation status">
@@ -46,7 +46,9 @@ export default async function AdminGrowthPage() {
           <KpiCard label="Analytics retrieved" value={formatDate(overview.pinterestAnalytics.lastSuccessfulSyncAt)} hint="Latest successful API retrieval" />
         </section>
 
-        <GrowthSettingsForm initial={{ enabled: overview.settings.enabled, intensity: overview.settings.intensity, workerBatchSize: overview.settings.workerBatchSize, ownedDomains: overview.settings.ownedDomains }} />
+        <div className="rounded-2xl border border-border bg-white p-4 text-sm text-ink"><strong>Attribution collection:</strong> {overview.attribution.state.replaceAll("_", " ").toLowerCase()} · Server gate {overview.attribution.environmentEnabled ? "enabled" : "disabled"} · Growth setting {overview.attribution.settingEnabled ? "enabled" : "disabled"}</div>
+
+        <GrowthSettingsForm initial={{ enabled: overview.settings.enabled, intensity: overview.settings.intensity, workerBatchSize: overview.settings.workerBatchSize, ownedDomains: overview.settings.ownedDomains, attributionEnabled: overview.settings.attributionEnabled, attributionWindowDays: overview.settings.attributionWindowDays, attributionSessionRetentionDays: overview.settings.attributionSessionRetentionDays, attributionEventRetentionDays: overview.settings.attributionEventRetentionDays }} />
 
         <section className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
           <div className="rounded-2xl border border-border bg-white p-5 sm:p-6">

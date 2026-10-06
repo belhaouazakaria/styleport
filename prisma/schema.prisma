@@ -156,6 +156,7 @@ enum GrowthJobType {
   PINTEREST_PIN_INVENTORY_SYNC
   PINTEREST_ACCOUNT_ANALYTICS_SYNC
   PINTEREST_PIN_ANALYTICS_SYNC
+  ATTRIBUTION_RETENTION_CLEANUP
 }
 
 enum GrowthJobStatus {
@@ -205,6 +206,16 @@ enum GrowthPinterestAnalyticsStatus {
   STALE
   PARTIAL
   FAILED
+}
+
+enum GrowthAttributionEventType {
+  PINTEREST_LANDING
+  TRANSLATOR_VIEW
+  INPUT_STARTED
+  TRANSLATION_COMPLETED
+  IDEA_VIEW
+  IDEA_CTA
+  EMBEDDED_TRANSLATION_COMPLETED
 }
 
 model User {
@@ -265,50 +276,53 @@ model VerificationToken {
 }
 
 model Translator {
-  id                  String                       @id @default(cuid())
-  name                String
-  slug                String                       @unique
-  title               String
-  subtitle            String
-  shortDescription    String
-  sourceLabel         String
-  targetLabel         String
-  category            String?
-  iconName            String?
-  promptSystem        String
-  promptInstructions  String
-  modelOverride       String?
-  seoTitle            String?
-  seoDescription      String?
-  showModeSelector    Boolean                      @default(false)
-  showSwap            Boolean                      @default(false)
-  showExamples        Boolean                      @default(false)
-  isActive            Boolean                      @default(true)
-  isFeatured          Boolean                      @default(false)
-  featuredRank        Int?
-  featuredSource      FeaturedSource               @default(MANUAL)
-  shareImagePath      String?
-  shareImageHash      String?
-  shareImageUpdatedAt DateTime?
-  sortOrder           Int                          @default(0)
-  archivedAt          DateTime?
-  primaryCategoryId   String?
-  createdAt           DateTime                     @default(now())
-  updatedAt           DateTime                     @updatedAt
-  modes               TranslationMode[]
-  examples            TranslatorExample[]
-  logs                TranslationLog[]
-  categories          TranslatorCategory[]
-  primaryCategory     Category?                    @relation("PrimaryTranslatorCategory", fields: [primaryCategoryId], references: [id], onDelete: SetNull)
-  fulfilledRequests   TranslatorRequest[]          @relation("RequestCreatedTranslator")
-  comments            TranslatorComment[]
-  indexingLogs        IndexingLog[]
-  editorialContent    TranslatorEditorialContent?
-  editorialLists      TranslatorEditorialList[]
-  editorialExamples   TranslatorEditorialExample[]
-  editorialFaqs       TranslatorEditorialFaq[]
-  editorialJobItems   TranslatorEditorialJobItem[]
-  editorialDrafts     TranslatorEditorialDraft[]
+  id                          String                            @id @default(cuid())
+  name                        String
+  slug                        String                            @unique
+  title                       String
+  subtitle                    String
+  shortDescription            String
+  sourceLabel                 String
+  targetLabel                 String
+  category                    String?
+  iconName                    String?
+  promptSystem                String
+  promptInstructions          String
+  modelOverride               String?
+  seoTitle                    String?
+  seoDescription              String?
+  showModeSelector            Boolean                           @default(false)
+  showSwap                    Boolean                           @default(false)
+  showExamples                Boolean                           @default(false)
+  isActive                    Boolean                           @default(true)
+  isFeatured                  Boolean                           @default(false)
+  featuredRank                Int?
+  featuredSource              FeaturedSource                    @default(MANUAL)
+  shareImagePath              String?
+  shareImageHash              String?
+  shareImageUpdatedAt         DateTime?
+  sortOrder                   Int                               @default(0)
+  archivedAt                  DateTime?
+  primaryCategoryId           String?
+  createdAt                   DateTime                          @default(now())
+  updatedAt                   DateTime                          @updatedAt
+  modes                       TranslationMode[]
+  examples                    TranslatorExample[]
+  logs                        TranslationLog[]
+  categories                  TranslatorCategory[]
+  primaryCategory             Category?                         @relation("PrimaryTranslatorCategory", fields: [primaryCategoryId], references: [id], onDelete: SetNull)
+  fulfilledRequests           TranslatorRequest[]               @relation("RequestCreatedTranslator")
+  comments                    TranslatorComment[]
+  indexingLogs                IndexingLog[]
+  editorialContent            TranslatorEditorialContent?
+  editorialLists              TranslatorEditorialList[]
+  editorialExamples           TranslatorEditorialExample[]
+  editorialFaqs               TranslatorEditorialFaq[]
+  editorialJobItems           TranslatorEditorialJobItem[]
+  editorialDrafts             TranslatorEditorialDraft[]
+  growthAttributionSessions   GrowthAttributionSession[]        @relation("GrowthAttributionQualifiedTranslator")
+  growthAttributionEvents     GrowthAttributionEvent[]
+  growthAttributionAggregates GrowthAttributionDailyAggregate[]
 
   @@index([isActive, isFeatured, sortOrder])
   @@index([isFeatured, featuredRank])
@@ -496,25 +510,27 @@ model TranslatorExample {
 }
 
 model TranslationLog {
-  id               String            @id @default(cuid())
-  translatorId     String
-  inputText        String
-  outputText       String?
-  modeUsed         String?
-  status           TranslationStatus @default(SUCCESS)
-  inputLength      Int               @default(0)
-  outputLength     Int               @default(0)
-  model            String?
-  promptTokens     Int?
-  completionTokens Int?
-  totalTokens      Int?
-  estimatedCost    Decimal?          @db.Decimal(12, 6)
-  errorCode        String?
-  latencyMs        Int?
-  ipHash           String?
-  userAgent        String?
-  createdAt        DateTime          @default(now())
-  translator       Translator        @relation(fields: [translatorId], references: [id], onDelete: Cascade)
+  id                                String                    @id @default(cuid())
+  translatorId                      String
+  inputText                         String
+  outputText                        String?
+  modeUsed                          String?
+  status                            TranslationStatus         @default(SUCCESS)
+  inputLength                       Int                       @default(0)
+  outputLength                      Int                       @default(0)
+  model                             String?
+  promptTokens                      Int?
+  completionTokens                  Int?
+  totalTokens                       Int?
+  estimatedCost                     Decimal?                  @db.Decimal(12, 6)
+  errorCode                         String?
+  latencyMs                         Int?
+  ipHash                            String?
+  userAgent                         String?
+  createdAt                         DateTime                  @default(now())
+  translator                        Translator                @relation(fields: [translatorId], references: [id], onDelete: Cascade)
+  growthAttributionEvent            GrowthAttributionEvent?
+  qualifiedGrowthAttributionSession GrowthAttributionSession? @relation("GrowthAttributionQualifiedTranslation")
 
   @@index([translatorId, createdAt])
   @@index([createdAt])
@@ -640,16 +656,20 @@ model AppSetting {
 }
 
 model GrowthSettings {
-  id              String          @id @default("global")
-  enabled         Boolean         @default(false)
-  intensity       GrowthIntensity @default(BALANCED)
-  workerBatchSize Int             @default(5)
-  ownedDomains    String[]        @default(["saytwist.com", "www.saytwist.com", "translator.whattypeof.com"])
-  configVersion   Int             @default(1)
-  updatedById     String?
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-  updatedBy       User?           @relation("GrowthSettingsUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
+  id                              String          @id @default("global")
+  enabled                         Boolean         @default(false)
+  intensity                       GrowthIntensity @default(BALANCED)
+  workerBatchSize                 Int             @default(5)
+  ownedDomains                    String[]        @default(["saytwist.com", "www.saytwist.com", "translator.whattypeof.com"])
+  attributionEnabled              Boolean         @default(false)
+  attributionWindowDays           Int             @default(7)
+  attributionSessionRetentionDays Int             @default(30)
+  attributionEventRetentionDays   Int             @default(90)
+  configVersion                   Int             @default(1)
+  updatedById                     String?
+  createdAt                       DateTime        @default(now())
+  updatedAt                       DateTime        @updatedAt
+  updatedBy                       User?           @relation("GrowthSettingsUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
 
   @@index([updatedAt])
 }
@@ -797,12 +817,112 @@ model GrowthPinterestPin {
   account               GrowthPinterestAccount          @relation(fields: [accountId], references: [id], onDelete: Cascade)
   board                 GrowthPinterestBoard?           @relation(fields: [boardId], references: [id], onDelete: SetNull)
   dailyMetrics          GrowthPinterestPinMetricDaily[]
+  attributionRefs       GrowthAttributionRef[]
 
   @@index([accountId, isActive])
   @@index([accountId, isActive, analyticsEligible, lastAnalyticsSyncAt])
   @@index([accountId, lastAnalyticsSyncAt])
   @@index([accountId, analyticsPriorityAt])
   @@index([pinterestBoardId])
+}
+
+model GrowthAttributionRef {
+  id                 String                            @id @default(cuid())
+  publicRef          String                            @unique
+  pinId              String?                           @unique
+  destinationPath    String
+  campaignKey        String
+  contentKey         String
+  modelVersion       String
+  isActive           Boolean                           @default(true)
+  revokedAt          DateTime?
+  createdAt          DateTime                          @default(now())
+  updatedAt          DateTime                          @updatedAt
+  pinterestPin       GrowthPinterestPin?               @relation(fields: [pinId], references: [id], onDelete: SetNull)
+  firstTouchSessions GrowthAttributionSession[]        @relation("GrowthAttributionFirstRef")
+  lastTouchSessions  GrowthAttributionSession[]        @relation("GrowthAttributionLastRef")
+  qualifiedSessions  GrowthAttributionSession[]        @relation("GrowthAttributionQualifiedRef")
+  events             GrowthAttributionEvent[]
+  dailyAggregates    GrowthAttributionDailyAggregate[]
+
+  @@index([isActive, createdAt])
+  @@index([modelVersion, createdAt])
+}
+
+model GrowthAttributionSession {
+  id                        String                   @id @default(cuid())
+  tokenHash                 String                   @unique
+  firstAttributionRefId     String
+  lastAttributionRefId      String
+  firstTouchAt              DateTime
+  lastTouchAt               DateTime
+  attributionExpiresAt      DateTime
+  modelVersion              String
+  qualifiedConversionAt     DateTime?
+  qualifiedAttributionRefId String?
+  qualifiedTranslationLogId String?                  @unique
+  qualifiedTranslatorId     String?
+  deleteAfter               DateTime
+  createdAt                 DateTime                 @default(now())
+  updatedAt                 DateTime                 @updatedAt
+  firstAttributionRef       GrowthAttributionRef     @relation("GrowthAttributionFirstRef", fields: [firstAttributionRefId], references: [id], onDelete: Restrict)
+  lastAttributionRef        GrowthAttributionRef     @relation("GrowthAttributionLastRef", fields: [lastAttributionRefId], references: [id], onDelete: Restrict)
+  qualifiedAttributionRef   GrowthAttributionRef?    @relation("GrowthAttributionQualifiedRef", fields: [qualifiedAttributionRefId], references: [id], onDelete: Restrict)
+  qualifiedTranslationLog   TranslationLog?          @relation("GrowthAttributionQualifiedTranslation", fields: [qualifiedTranslationLogId], references: [id], onDelete: SetNull)
+  qualifiedTranslator       Translator?              @relation("GrowthAttributionQualifiedTranslator", fields: [qualifiedTranslatorId], references: [id], onDelete: SetNull)
+  events                    GrowthAttributionEvent[]
+
+  @@index([attributionExpiresAt])
+  @@index([deleteAfter])
+  @@index([firstAttributionRefId, firstTouchAt])
+  @@index([lastAttributionRefId, lastTouchAt])
+  @@index([qualifiedAttributionRefId, qualifiedConversionAt])
+}
+
+model GrowthAttributionEvent {
+  id                           String                     @id @default(cuid())
+  sessionId                    String?
+  attributionRefId             String
+  type                         GrowthAttributionEventType
+  eventKey                     String                     @unique
+  occurredAt                   DateTime                   @default(now())
+  translatorId                 String?
+  translationLogId             String?                    @unique
+  isPrimaryQualifiedConversion Boolean                    @default(false)
+  modelVersion                 String
+  retentionAt                  DateTime
+  createdAt                    DateTime                   @default(now())
+  session                      GrowthAttributionSession?  @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  attributionRef               GrowthAttributionRef       @relation(fields: [attributionRefId], references: [id], onDelete: Restrict)
+  translator                   Translator?                @relation(fields: [translatorId], references: [id], onDelete: SetNull)
+  translationLog               TranslationLog?            @relation(fields: [translationLogId], references: [id], onDelete: SetNull)
+
+  @@index([type, occurredAt])
+  @@index([attributionRefId, occurredAt])
+  @@index([translatorId, occurredAt])
+  @@index([sessionId, occurredAt])
+  @@index([retentionAt])
+}
+
+model GrowthAttributionDailyAggregate {
+  id                     String               @id @default(cuid())
+  dimensionKey           String               @unique
+  metricDate             DateTime
+  attributionRefId       String
+  translatorId           String?
+  modelVersion           String
+  landingSessions        Int                  @default(0)
+  attributedTranslations Int                  @default(0)
+  qualifiedConversions   Int                  @default(0)
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+  attributionRef         GrowthAttributionRef @relation(fields: [attributionRefId], references: [id], onDelete: Restrict)
+  translator             Translator?          @relation(fields: [translatorId], references: [id], onDelete: SetNull)
+
+  @@index([metricDate])
+  @@index([attributionRefId, metricDate])
+  @@index([translatorId, metricDate])
+  @@index([modelVersion, metricDate])
 }
 
 model GrowthPinterestAccountMetricDaily {

@@ -18,9 +18,11 @@ The agent should learn which topics, translators, editorial angles, creatives, a
 
 Initial definition:
 
-> A visit attributable to a Pinterest Pin that results in at least one successfully completed SayTwist translation during the attribution window.
+> A Pinterest-attributed first-party session that produces at least one trusted successful SayTwist translation during the attribution window.
 
 This definition must be versioned in analytics so it can evolve without rewriting historical data.
+
+Implemented version `pinterest_organic_v1` uses a seven-day window from the latest qualified landing, preserves first and latest eligible touches, assigns the first qualified conversion to the latest eligible touch at completion time, and freezes that historical assignment. Each attribution session can create one Qualified Pinterest Conversion; later trusted successes remain attributed usage.
 
 ### Supporting metrics
 

@@ -14,17 +14,17 @@ The first production optimization target is completed translation attributable t
 
 ## 3. Pin attribution
 
-Every Growth-managed destination URL should include stable attribution parameters.
+Every Growth-managed destination URL uses the centralized Phase 5 builder and an issued stable attribution ref.
 
 Example conceptual scheme:
 
 - `utm_source=pinterest`
 - `utm_medium=organic`
-- `utm_campaign=<account-or-cluster>`
-- `utm_content=<pin-candidate-or-publication-id>`
+- `utm_campaign=<controlled-campaign-key>`
+- `utm_content=<controlled-content/ref-key>`
 - `pin_ref=<opaque-internal-reference>`
 
-Do not expose sensitive internal identifiers.
+`pin_ref` is a cryptographically random URL-safe value from `GrowthAttributionRef`; it exposes no Prisma or Pinterest ID. The builder uses the canonical current SayTwist origin, rejects unsafe/cross-origin destinations, preserves only intended destination parameters, and produces deterministic output for the same ref. Existing Pins without `pin_ref` are not deterministically attributable; Phase 4 metrics remain available, but Phase 5 does not guess from UTM or Referer.
 
 Avoid link shorteners unless there is a legitimate, policy-compliant reason.
 
@@ -39,19 +39,18 @@ Minimum first-party event set:
 - `idea_view`
 - `idea_translator_cta_clicked`
 - `embedded_translation_completed`
-- `related_content_clicked`
 
 Event design must respect privacy requirements and avoid collecting unnecessary personally identifiable data.
 
 ## 5. Attribution window
 
-The initial attribution model should support:
+Implemented model `pinterest_organic_v1` supports:
 
 - direct/session attribution;
 - configurable return window;
 - first-touch and last-touch fields where feasible.
 
-Initial proposal: seven days from last qualified Pinterest landing, configurable and versioned as `pinterest_organic_v1`; confirm during Phase 5 with live data and privacy review.
+The window is seven days from the latest qualified Pinterest landing and is configurable from 1–30 days. A new qualified landing restarts the window. A direct return inside the active window remains attributable; a translation after expiry does not count until another qualified landing occurs.
 
 Historical events must record attribution-model version so future changes do not silently rewrite past interpretation.
 
@@ -102,21 +101,25 @@ This is directional; cost attribution should support job/content granularity whe
 ## 8. Interpretation examples
 
 High impressions + low outbound CTR:
+
 - creative/message mismatch;
 - weak CTA;
 - broad reach without intent.
 
 High outbound clicks + low SayTwist conversion:
+
 - Pin promise/destination mismatch;
 - landing experience problem;
 - poor translator relevance;
 - accidental/clickbait curiosity.
 
 Lower outbound clicks + high conversion:
+
 - potentially valuable high-intent creative;
 - candidate for more distribution/testing.
 
 High saves + delayed conversion:
+
 - inspiration content may have longer intent cycle;
 - avoid judging solely on same-day clicks.
 
@@ -163,7 +166,13 @@ The agent should lower confidence or choose `WAIT_FOR_MORE_DATA` when data quali
 
 ## Phase 5 event and identity contract
 
-`utm_source=pinterest`, `utm_medium=organic` and opaque stable `pin_ref` identify Growth-managed Pins; validate the ref against an issued candidate/publication. A landing event starts a first-party session; translator view, input started, Ideas view, Ideas CTA and embedded completion identify funnel steps. A successful completion is server-authoritative: link a trusted SUCCESS `TranslationLog` or server completion ID. Existing logs record success globally but no UTM, referrer or session, and log writes are currently nonblocking; report missing joins as measurement gaps. Keep both first and last eligible Pinterest touches; primary assignment uses last touch. One session counts once for QPC, even with multiple successful translations. Use unique event/completion keys, filter bots/prefetch and invalid refs, and do not store translation text in attribution rows. Session detail retention proposal: 30 days; event detail: 90 days; preserve aggregates and model version. Respect applicable consent/privacy requirements before launch.
+`utm_source=pinterest`, `utm_medium=organic` and an active issued opaque `pin_ref` identify Growth-managed traffic. The destination path and controlled campaign/content keys must match the ref. A qualified landing creates or updates a first-party session, preserves its first touch, updates its latest touch, and refreshes the seven-day window. Primary assignment uses the latest eligible touch when the first qualified conversion occurs, then freezes it. One session counts once for QPC; additional trusted successes are secondary attributed usage. Translation completion is server-authoritative and requires the exact persisted SUCCESS `TranslationLog`; the client never submits a log ID.
+
+The raw random session token exists only in an HttpOnly, SameSite=Lax, Path=/ cookie that is Secure in production. Its Max-Age follows the attribution window, seven days by default; the separate 30-day session-detail retention does not extend browser identity. PostgreSQL stores only the token's SHA-256 hash. A qualified landing inside the active window refreshes both cookie expiry and `attributionExpiresAt`. A qualified landing after expiry creates a new token/session while the old detail remains until retention cleanup. Public landing/client-event routes require JSON, strict bounded schemas, same-origin requests, both collection gates, an active ref/session, rate limiting, and bot/prefetch filtering. Translator view is once per page interaction, and input started is once after meaningful input. Ideas event enum values exist for Phase 9 compatibility but are not wired in Phase 5.
+
+Session detail defaults to 30 days and event detail to 90 days. A bounded idempotent `ATTRIBUTION_RETENTION_CLEANUP` job deletes expired detail without cascading event history prematurely or deleting long-lived daily aggregate counts. The landing-session KPI counts each newly established qualified attribution session once, even if that session records several qualified landing events; QCR is QPC divided by these unique landing sessions. Aggregates preserve qualified landing sessions, attributed successful translations and QPC by ref/Pin and translator. Attribution tables never store input/output text, raw IP, IP hash, raw user agent, email, authentication identity, or arbitrary event JSON.
+
+Collection is enabled only when `GROWTH_ATTRIBUTION_COLLECTION_ENABLED=true` and `GrowthSettings.attributionEnabled=true`. Both default false; production keeps the environment gate false pending explicit privacy/consent rollout approval. Disabled collection creates no session, event or cookie and cannot affect normal translator use.
 
 ## Phase 4 measurement boundary
 

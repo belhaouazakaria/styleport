@@ -1,7 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRightLeft, Copy, Loader2, RefreshCcw, Sparkles, Square, Trash2, Volume2 } from "lucide-react";
+import {
+  ArrowRightLeft,
+  Copy,
+  Loader2,
+  RefreshCcw,
+  Sparkles,
+  Square,
+  Trash2,
+  Volume2,
+} from "lucide-react";
 
 import { useAutoResizeTextarea } from "@/hooks/use-auto-resize";
 import { useLocalStorage } from "@/hooks/use-local-storage";
@@ -46,7 +55,8 @@ function normalizeText(value: string) {
 }
 
 function buildResultPinCta(translator: PublicTranslator) {
-  const context = `${translator.name} ${translator.title || ""} ${translator.shortDescription || ""}`.toLowerCase();
+  const context =
+    `${translator.name} ${translator.title || ""} ${translator.shortDescription || ""}`.toLowerCase();
 
   if (/(pirate|captain|sea|ship|corsair|buccaneer)/i.test(context)) {
     return "Try this translator, matey!";
@@ -57,7 +67,9 @@ function buildResultPinCta(translator: PublicTranslator) {
   if (/(gen z|slang|zoomer|tiktok|vibe|no cap)/i.test(context)) {
     return "Try this translator fr.";
   }
-  if (/(professional|linkedin|business|formal|corporate|executive)/i.test(context)) {
+  if (
+    /(professional|linkedin|business|formal|corporate|executive)/i.test(context)
+  ) {
     return "Try this translator.";
   }
   if (/(shakespeare|old english|elizabethan|bard)/i.test(context)) {
@@ -72,7 +84,14 @@ function buildResultPinCta(translator: PublicTranslator) {
   return "Try this translator";
 }
 
-function drawRoundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number) {
+function drawRoundedRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+) {
   const r = Math.min(radius, width / 2, height / 2);
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -87,7 +106,11 @@ function drawRoundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, wi
   ctx.closePath();
 }
 
-function fitLineWithEllipsis(ctx: CanvasRenderingContext2D, text: string, maxWidth: number) {
+function fitLineWithEllipsis(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxWidth: number,
+) {
   if (!text) {
     return "";
   }
@@ -157,7 +180,11 @@ function wrapTextByWidth(
   }
 
   const trimmed = lines.slice(0, maxLines);
-  trimmed[maxLines - 1] = fitLineWithEllipsis(ctx, trimmed[maxLines - 1], maxWidth);
+  trimmed[maxLines - 1] = fitLineWithEllipsis(
+    ctx,
+    trimmed[maxLines - 1],
+    maxWidth,
+  );
   return trimmed;
 }
 
@@ -187,7 +214,12 @@ async function buildResultPinBlob(params: {
     throw new Error("Canvas context unavailable.");
   }
 
-  const pageGradient = ctx.createLinearGradient(0, 0, RESULT_PIN_WIDTH, RESULT_PIN_HEIGHT);
+  const pageGradient = ctx.createLinearGradient(
+    0,
+    0,
+    RESULT_PIN_WIDTH,
+    RESULT_PIN_HEIGHT,
+  );
   pageGradient.addColorStop(0, "#5547f1");
   pageGradient.addColorStop(0.5, "#7f86ff");
   pageGradient.addColorStop(1, "#8bc7ff");
@@ -205,7 +237,12 @@ async function buildResultPinBlob(params: {
   const logoX = RESULT_PIN_WIDTH / 2 - logoSize / 2;
   const logoY = 112;
   drawRoundedRect(ctx, logoX, logoY, logoSize, logoSize, 28);
-  const logoGradient = ctx.createLinearGradient(logoX, logoY, logoX + logoSize, logoY + logoSize);
+  const logoGradient = ctx.createLinearGradient(
+    logoX,
+    logoY,
+    logoX + logoSize,
+    logoY + logoSize,
+  );
   logoGradient.addColorStop(0, "#14B8A6");
   logoGradient.addColorStop(1, "#0D9488");
   ctx.fillStyle = logoGradient;
@@ -222,7 +259,10 @@ async function buildResultPinBlob(params: {
   ctx.font = '700 50px Inter, "Segoe UI", Arial, sans-serif';
   ctx.fillText("SayTwist", RESULT_PIN_WIDTH / 2, logoY + logoSize + 30);
 
-  const title = truncateShareText(params.translatorTitle, RESULT_PIN_MAX_TITLE_CHARS);
+  const title = truncateShareText(
+    params.translatorTitle,
+    RESULT_PIN_MAX_TITLE_CHARS,
+  );
   let titleFontSize = 84;
   if (title.length > 26) {
     titleFontSize = 76;
@@ -234,7 +274,12 @@ async function buildResultPinBlob(params: {
     titleFontSize = 62;
   }
   ctx.font = `800 ${titleFontSize}px Inter, "Segoe UI", Arial, sans-serif`;
-  const titleLines = wrapTextByWidth(ctx, title, RESULT_PIN_WIDTH - 140, RESULT_PIN_MAX_TITLE_LINES);
+  const titleLines = wrapTextByWidth(
+    ctx,
+    title,
+    RESULT_PIN_WIDTH - 140,
+    RESULT_PIN_MAX_TITLE_LINES,
+  );
   const titleLineHeight = Math.round(titleFontSize * 1.08);
   let titleY = 342;
   for (const line of titleLines) {
@@ -382,28 +427,56 @@ interface TranslatorCardProps {
   translator: PublicTranslator;
   shareUrl?: string;
   pinImageUrl?: string;
+  attributionEnabled?: boolean;
 }
 
 function PinterestIcon({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className={className} fill="currentColor">
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className={className}
+      fill="currentColor"
+    >
       <path d="M12 2a10 10 0 0 0-3.64 19.31c-.05-.82-.1-2.08.02-2.98l1.27-5.4s-.32-.65-.32-1.61c0-1.51.88-2.64 1.97-2.64.93 0 1.38.7 1.38 1.53 0 .93-.59 2.33-.9 3.63-.26 1.09.55 1.97 1.64 1.97 1.96 0 3.47-2.06 3.47-5.03 0-2.63-1.89-4.48-4.59-4.48-3.13 0-4.97 2.35-4.97 4.78 0 .95.37 1.97.82 2.53a.33.33 0 0 1 .08.31l-.33 1.36c-.05.21-.17.26-.4.16-1.5-.7-2.43-2.9-2.43-4.67 0-3.8 2.76-7.29 7.97-7.29 4.18 0 7.44 2.98 7.44 6.96 0 4.15-2.61 7.49-6.24 7.49-1.22 0-2.37-.63-2.76-1.38l-.75 2.85c-.27 1.03-1.01 2.33-1.51 3.12A10 10 0 1 0 12 2Z" />
     </svg>
   );
 }
 
-export function TranslatorCard({ translator, shareUrl, pinImageUrl }: TranslatorCardProps) {
+export function TranslatorCard({
+  translator,
+  shareUrl,
+  pinImageUrl,
+  attributionEnabled = false,
+}: TranslatorCardProps) {
   const initialMode = translator.modes[0]?.key || "";
-  const storagePrefix = useMemo(() => `saytwist:${translator.slug}`, [translator.slug]);
+  const storagePrefix = useMemo(
+    () => `saytwist:${translator.slug}`,
+    [translator.slug],
+  );
 
-  const [inputText, setInputText] = useLocalStorage<string>(`${storagePrefix}:last-input`, "");
-  const [outputText, setOutputText] = useLocalStorage<string>(`${storagePrefix}:last-output`, "");
-  const [modeKey, setModeKey] = useLocalStorage<string>(`${storagePrefix}:last-mode`, initialMode);
-  const [direction, setDirection] = useLocalStorage<TranslationDirection>(`${storagePrefix}:last-direction`, "forward");
+  const [inputText, setInputText] = useLocalStorage<string>(
+    `${storagePrefix}:last-input`,
+    "",
+  );
+  const [outputText, setOutputText] = useLocalStorage<string>(
+    `${storagePrefix}:last-output`,
+    "",
+  );
+  const [modeKey, setModeKey] = useLocalStorage<string>(
+    `${storagePrefix}:last-mode`,
+    initialMode,
+  );
+  const [direction, setDirection] = useLocalStorage<TranslationDirection>(
+    `${storagePrefix}:last-direction`,
+    "forward",
+  );
 
   const [isLoading, setIsLoading] = useState(false);
   const [isPreparingResultPin, setIsPreparingResultPin] = useState(false);
-  const [resultPinMediaUrl, setResultPinMediaUrl] = useState<string | null>(null);
+  const [resultPinMediaUrl, setResultPinMediaUrl] = useState<string | null>(
+    null,
+  );
   const [resultPinError, setResultPinError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [speechSupported, setSpeechSupported] = useState(false);
@@ -412,12 +485,22 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const outputRef = useRef<HTMLTextAreaElement | null>(null);
   const resultPinRequestIdRef = useRef(0);
+  const attributionReadyRef = useRef<Promise<void>>(Promise.resolve());
+  const attributionLandingPendingRef = useRef(false);
+  const attributionInputTrackedRef = useRef(false);
+  const attributionViewKeyRef = useRef<string | null>(null);
+  const attributionInputKeyRef = useRef<string | null>(null);
 
   const { toast } = useToast();
-  const hasModeOptions = translator.showModeSelector && translator.modes.length > 1;
+  const hasModeOptions =
+    translator.showModeSelector && translator.modes.length > 1;
   const isReverse = direction === "reverse";
-  const activeInputLabel = isReverse ? translator.targetLabel : translator.sourceLabel;
-  const activeOutputLabel = isReverse ? translator.sourceLabel : translator.targetLabel;
+  const activeInputLabel = isReverse
+    ? translator.targetLabel
+    : translator.sourceLabel;
+  const activeOutputLabel = isReverse
+    ? translator.sourceLabel
+    : translator.targetLabel;
 
   useAutoResizeTextarea(inputRef, inputText);
   useAutoResizeTextarea(outputRef, outputText);
@@ -450,6 +533,105 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
     return () => window.clearTimeout(timer);
   }, []);
 
+  useEffect(() => {
+    if (!attributionEnabled || typeof window === "undefined") return;
+    const eventKey = () => window.crypto.randomUUID();
+    attributionViewKeyRef.current ||= eventKey();
+    attributionInputKeyRef.current ||= eventKey();
+
+    async function post(path: string, body: Record<string, string>) {
+      const controller = new AbortController();
+      const timer = window.setTimeout(() => controller.abort(), 1_500);
+      try {
+        await fetch(path, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+          credentials: "same-origin",
+          signal: controller.signal,
+        });
+      } catch {
+        // Attribution is best-effort and cannot block translator use.
+      } finally {
+        window.clearTimeout(timer);
+      }
+    }
+
+    const current = new URL(window.location.href);
+    const pinRef = current.searchParams.get("pin_ref");
+    const utmSource = current.searchParams.get("utm_source");
+    const utmMedium = current.searchParams.get("utm_medium");
+    const utmCampaign = current.searchParams.get("utm_campaign");
+    const utmContent = current.searchParams.get("utm_content");
+    for (const key of [
+      "pin_ref",
+      "utm_source",
+      "utm_medium",
+      "utm_campaign",
+      "utm_content",
+    ]) {
+      current.searchParams.delete(key);
+    }
+
+    const hasPlausibleLanding =
+      /^pa_[A-Za-z0-9_-]{32}$/.test(pinRef || "") &&
+      utmSource === "pinterest" &&
+      utmMedium === "organic" &&
+      Boolean(utmCampaign && utmContent);
+    attributionLandingPendingRef.current = hasPlausibleLanding;
+    const landing = hasPlausibleLanding
+      ? post("/api/growth/attribution/landing", {
+          pinRef: pinRef!,
+          utmSource: utmSource!,
+          utmMedium: utmMedium!,
+          utmCampaign: utmCampaign!,
+          utmContent: utmContent!,
+          destinationPath: `${current.pathname}${current.search}`,
+          eventKey: eventKey(),
+        })
+      : Promise.resolve();
+
+    attributionReadyRef.current = landing.finally(() => {
+      attributionLandingPendingRef.current = false;
+    });
+    void attributionReadyRef.current.then(async () => {
+      await post("/api/growth/attribution/event", {
+        type: "TRANSLATOR_VIEW",
+        translatorSlug: translator.slug,
+        eventKey: attributionViewKeyRef.current || eventKey(),
+      });
+    });
+  }, [attributionEnabled, translator.slug]);
+
+  function trackInputStarted(nextValue: string) {
+    if (
+      !attributionEnabled ||
+      attributionInputTrackedRef.current ||
+      !nextValue.trim()
+    )
+      return;
+    attributionInputTrackedRef.current = true;
+    const eventKey =
+      attributionInputKeyRef.current || window.crypto.randomUUID();
+    attributionInputKeyRef.current = eventKey;
+    void attributionReadyRef.current.then(async () => {
+      try {
+        await fetch("/api/growth/attribution/event", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: "INPUT_STARTED",
+            translatorSlug: translator.slug,
+            eventKey,
+          }),
+          credentials: "same-origin",
+        });
+      } catch {
+        // Attribution is best-effort and cannot block translator input.
+      }
+    });
+  }
+
   function clearPreparedResultPin() {
     setResultPinMediaUrl(null);
     setResultPinError(null);
@@ -466,6 +648,12 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
     setIsLoading(true);
 
     try {
+      if (attributionEnabled && attributionLandingPendingRef.current) {
+        await Promise.race([
+          attributionReadyRef.current,
+          new Promise<void>((resolve) => window.setTimeout(resolve, 1_200)),
+        ]);
+      }
       const response = await fetch("/api/translate", {
         method: "POST",
         headers: {
@@ -482,7 +670,11 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
       const payload = (await response.json()) as TranslateResponse;
 
       if (!response.ok || !payload.ok) {
-        setError(payload.ok ? "We couldn't refine that text just now." : payload.error.message);
+        setError(
+          payload.ok
+            ? "We couldn't refine that text just now."
+            : payload.error.message,
+        );
         return;
       }
 
@@ -570,7 +762,9 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
       shareUrl || (typeof window !== "undefined" ? window.location.href : "");
     const mediaUrl =
       pinImageUrl ||
-      (typeof window !== "undefined" ? `${window.location.origin}/translators/${translator.slug}/pin-image` : "");
+      (typeof window !== "undefined"
+        ? `${window.location.origin}/translators/${translator.slug}/pin-image`
+        : "");
 
     if (!pageUrl || !mediaUrl) {
       return;
@@ -587,7 +781,10 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
 
   function openPinterestIntent(mediaUrl: string, translatedText: string) {
     const pageUrl = shareUrl || window.location.href;
-    const description = truncateShareText(`${translator.name}: ${translatedText}`, RESULT_PIN_DESCRIPTION_MAX);
+    const description = truncateShareText(
+      `${translator.name}: ${translatedText}`,
+      RESULT_PIN_DESCRIPTION_MAX,
+    );
     const intentUrl = new URL("https://www.pinterest.com/pin/create/button/");
     intentUrl.searchParams.set("url", pageUrl);
     intentUrl.searchParams.set("media", mediaUrl);
@@ -643,9 +840,18 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
 
     try {
       const blob = await buildResultPinBlob({
-        translatorTitle: truncateShareText(translator.title || translator.name, RESULT_PIN_TRANSLATOR_MAX),
-        inputText: truncateShareText(options.sourceText || "No source text provided.", RESULT_PIN_INPUT_MAX),
-        outputText: truncateShareText(options.translatedText, RESULT_PIN_OUTPUT_MAX),
+        translatorTitle: truncateShareText(
+          translator.title || translator.name,
+          RESULT_PIN_TRANSLATOR_MAX,
+        ),
+        inputText: truncateShareText(
+          options.sourceText || "No source text provided.",
+          RESULT_PIN_INPUT_MAX,
+        ),
+        outputText: truncateShareText(
+          options.translatedText,
+          RESULT_PIN_OUTPUT_MAX,
+        ),
         cta: buildResultPinCta(translator),
       });
       const mediaUrl = await uploadResultPinBlob(blob);
@@ -663,7 +869,8 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
       if (options.announceFailure) {
         toast({
           title: "Share unavailable",
-          description: "Unable to generate Pinterest image right now. Please try again.",
+          description:
+            "Unable to generate Pinterest image right now. Please try again.",
           variant: "error",
         });
       }
@@ -712,9 +919,9 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
       <Card className="overflow-visible border-0 bg-transparent shadow-none">
         <div className="hidden">
           <div className="grid items-center gap-3 md:grid-cols-[1fr_auto_1fr]">
-            <div className="flex items-center justify-between gap-2 text-sm font-semibold uppercase tracking-wide text-muted-ink md:justify-start">
+            <div className="text-muted-ink flex items-center justify-between gap-2 text-sm font-semibold tracking-wide uppercase md:justify-start">
               <span>{activeInputLabel}</span>
-              <span className="text-xs font-medium text-muted-ink md:ml-2">
+              <span className="text-muted-ink text-xs font-medium md:ml-2">
                 {inputText.length} / {MAX_INPUT_CHARS}
               </span>
             </div>
@@ -736,23 +943,34 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
               <div className="mx-auto h-9" />
             )}
 
-            <h2 className="text-left text-sm font-semibold uppercase tracking-wide text-muted-ink md:text-right">
+            <h2 className="text-muted-ink text-left text-sm font-semibold tracking-wide uppercase md:text-right">
               {activeOutputLabel}
             </h2>
           </div>
         </div>
 
         {hasModeOptions ? (
-          <div className="mb-4 rounded-[1.5rem] border border-accent-200 bg-[#fff0c7] px-4 py-3 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.4)] sm:px-6">
-            <ModeSelector value={modeKey} modes={translator.modes} onChange={setModeKey} />
+          <div className="border-accent-200 mb-4 rounded-[1.5rem] border bg-[#fff0c7] px-4 py-3 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.4)] sm:px-6">
+            <ModeSelector
+              value={modeKey}
+              modes={translator.modes}
+              onChange={setModeKey}
+            />
           </div>
         ) : null}
 
         <div className="relative grid w-full grid-cols-1 gap-5 md:grid-cols-2 md:items-stretch md:gap-5">
-          <div className="flex h-full w-full min-w-0 flex-col rounded-[1.75rem] border border-border bg-white p-4 shadow-[var(--shadow-soft)] sm:p-6">
+          <div className="border-border flex h-full w-full min-w-0 flex-col rounded-[1.75rem] border bg-white p-4 shadow-[var(--shadow-soft)] sm:p-6">
             <div className="mb-2 flex items-center justify-between">
-              <p className="font-display text-lg font-bold text-ink">{activeInputLabel}</p>
-              <Button type="button" variant="ghost" size="sm" onClick={() => void handleCopy(inputText, "Input")}>
+              <p className="font-display text-ink text-lg font-bold">
+                {activeInputLabel}
+              </p>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => void handleCopy(inputText, "Input")}
+              >
                 <Copy className="h-4 w-4" />
                 Copy
               </Button>
@@ -761,9 +979,15 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
               <Textarea
                 ref={inputRef}
                 value={inputText}
-                onChange={(event) => setInputText(event.target.value)}
+                onChange={(event) => {
+                  setInputText(event.target.value);
+                  trackInputStarted(event.target.value);
+                }}
                 onKeyDown={(event) => {
-                  if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+                  if (
+                    (event.metaKey || event.ctrlKey) &&
+                    event.key === "Enter"
+                  ) {
                     event.preventDefault();
                     void translate();
                   }
@@ -779,8 +1003,11 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
                     <button
                       key={example.id}
                       type="button"
-                      onClick={() => setInputText(example.value)}
-                      className="rounded-full border border-border bg-muted-surface px-3 py-1.5 text-xs font-bold text-muted-ink transition hover:border-brand-300 hover:text-ink"
+                      onClick={() => {
+                        setInputText(example.value);
+                        trackInputStarted(example.value);
+                      }}
+                      className="border-border bg-muted-surface text-muted-ink hover:border-brand-300 hover:text-ink rounded-full border px-3 py-1.5 text-xs font-bold transition"
                     >
                       {example.label}
                     </button>
@@ -792,7 +1019,7 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
           </div>
 
           {translator.showSwap ? (
-            <div className="relative z-10 -my-8 flex items-center justify-center md:absolute md:left-1/2 md:top-1/2 md:my-0 md:-translate-x-1/2 md:-translate-y-1/2">
+            <div className="relative z-10 -my-8 flex items-center justify-center md:absolute md:top-1/2 md:left-1/2 md:my-0 md:-translate-x-1/2 md:-translate-y-1/2">
               <Button
                 type="button"
                 size="icon"
@@ -800,16 +1027,18 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
                 aria-label="Reverse translation direction"
                 title="Reverse translation direction"
                 disabled={isLoading}
-                className="h-14 w-14 border-4 border-page bg-brand-500 text-white shadow-[0_5px_0_#0d9488] hover:bg-brand-600"
+                className="border-page bg-brand-500 hover:bg-brand-600 h-14 w-14 border-4 text-white shadow-[0_5px_0_#0d9488]"
               >
                 <ArrowRightLeft className="h-5 w-5 rotate-90 md:rotate-0" />
               </Button>
             </div>
           ) : null}
 
-          <div className="flex h-full w-full min-w-0 flex-col rounded-[1.75rem] border border-brand-200 bg-brand-50 p-4 shadow-[var(--shadow-soft)] sm:p-6">
+          <div className="border-brand-200 bg-brand-50 flex h-full w-full min-w-0 flex-col rounded-[1.75rem] border p-4 shadow-[var(--shadow-soft)] sm:p-6">
             <div className="mb-2 flex items-center justify-between">
-              <p className="font-display text-lg font-bold text-ink">{activeOutputLabel}</p>
+              <p className="font-display text-ink text-lg font-bold">
+                {activeOutputLabel}
+              </p>
               <div className="flex items-center gap-1">
                 <Button
                   type="button"
@@ -825,9 +1054,15 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
                   variant="ghost"
                   size="sm"
                   onClick={handleSpeakOutput}
-                  disabled={!speechSupported || (!outputText.trim() && !isSpeaking)}
+                  disabled={
+                    !speechSupported || (!outputText.trim() && !isSpeaking)
+                  }
                 >
-                  {isSpeaking ? <Square className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+                  {isSpeaking ? (
+                    <Square className="h-4 w-4" />
+                  ) : (
+                    <Volume2 className="h-4 w-4" />
+                  )}
                   {isSpeaking ? "Stop" : "Speak"}
                 </Button>
               </div>
@@ -840,25 +1075,39 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
                 readOnly
                 aria-label="Output text"
                 placeholder={`Your ${activeOutputLabel.toLowerCase()} text appears here...`}
-                className="translator-textarea flex-1 border-brand-200 bg-white/70 md:flex-none"
+                className="translator-textarea border-brand-200 flex-1 bg-white/70 md:flex-none"
               />
 
               <div className="mt-3 min-h-8">
                 {!outputText.trim() && !isLoading ? (
-                  <p className="text-xs text-muted-ink">Translate your text to generate an output in this style.</p>
+                  <p className="text-muted-ink text-xs">
+                    Translate your text to generate an output in this style.
+                  </p>
                 ) : null}
                 {!speechSupported ? (
-                  <p className="sr-only">Voice playback is not supported in this browser.</p>
+                  <p className="sr-only">
+                    Voice playback is not supported in this browser.
+                  </p>
                 ) : null}
               </div>
             </div>
           </div>
         </div>
 
-        <div className="mt-5 flex flex-col gap-3 border-t border-dashed border-border pt-5">
+        <div className="border-border mt-5 flex flex-col gap-3 border-t border-dashed pt-5">
           <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" aria-label="Translate" onClick={() => void translate()} disabled={isLoading} className="hidden md:inline-flex">
-              {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            <Button
+              type="button"
+              aria-label="Translate"
+              onClick={() => void translate()}
+              disabled={isLoading}
+              className="hidden md:inline-flex"
+            >
+              {isLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Sparkles className="h-4 w-4" />
+              )}
               Twist my words
             </Button>
             <Button
@@ -883,22 +1132,37 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
                 Reverse
               </Button>
             ) : null}
-            <Button type="button" variant="ghost" onClick={handleClear} disabled={isLoading}>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={handleClear}
+              disabled={isLoading}
+            >
               <Trash2 className="h-4 w-4" />
               Clear
             </Button>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 border-t border-border/70 pt-3">
-            <p className="mr-auto basis-full text-xs font-bold uppercase tracking-[0.1em] text-muted-ink sm:basis-auto">Share the twist</p>
+          <div className="border-border/70 flex flex-wrap items-center gap-2 border-t pt-3">
+            <p className="text-muted-ink mr-auto basis-full text-xs font-bold tracking-[0.1em] uppercase sm:basis-auto">
+              Share the twist
+            </p>
             <Button
               type="button"
               onClick={() => void handlePinterestResultShare()}
               disabled={isLoading || !outputText.trim() || isPreparingResultPin}
               className="bg-[#E60023] text-white hover:bg-[#cc001f] focus-visible:ring-[#E60023]/60 disabled:bg-[#E60023]/65 disabled:text-white"
             >
-              {isPreparingResultPin ? <Loader2 className="h-4 w-4 animate-spin" /> : <PinterestIcon className="h-4 w-4" />}
-              {isPreparingResultPin ? "Preparing image..." : resultPinError ? "Retry result image" : "Share result"}
+              {isPreparingResultPin ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <PinterestIcon className="h-4 w-4" />
+              )}
+              {isPreparingResultPin
+                ? "Preparing image..."
+                : resultPinError
+                  ? "Retry result image"
+                  : "Share result"}
             </Button>
             <Button
               type="button"
@@ -913,21 +1177,30 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
           </div>
 
           <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-            <p className="text-xs text-muted-ink">
-              Direction: {isReverse ? `${translator.targetLabel} → ${translator.sourceLabel}` : `${translator.sourceLabel} → ${translator.targetLabel}`}
+            <p className="text-muted-ink text-xs">
+              Direction:{" "}
+              {isReverse
+                ? `${translator.targetLabel} → ${translator.sourceLabel}`
+                : `${translator.sourceLabel} → ${translator.targetLabel}`}
             </p>
 
             {isLoading ? (
-              <p className="text-sm text-brand-700">{LOADING_COPY}</p>
+              <p className="text-brand-700 text-sm">{LOADING_COPY}</p>
             ) : (
-              <p className="text-xs text-muted-ink">Tip: Press Ctrl/Cmd + Enter to translate quickly.</p>
+              <p className="text-muted-ink text-xs">
+                Tip: Press Ctrl/Cmd + Enter to translate quickly.
+              </p>
             )}
           </div>
 
           {error ? <p className="text-sm text-red-600">{error}</p> : null}
-          {!error && resultPinError ? <p className="text-xs text-muted-ink">{resultPinError}</p> : null}
+          {!error && resultPinError ? (
+            <p className="text-muted-ink text-xs">{resultPinError}</p>
+          ) : null}
           {!error && !resultPinError && resultPinMediaUrl ? (
-            <p className="text-xs text-muted-ink">Result pin image is ready to share.</p>
+            <p className="text-muted-ink text-xs">
+              Result pin image is ready to share.
+            </p>
           ) : null}
         </div>
       </Card>
@@ -940,7 +1213,11 @@ export function TranslatorCard({ translator, shareUrl, pinImageUrl }: Translator
           disabled={isLoading}
           className="h-14 w-full rounded-full text-base"
         >
-          {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+          {isLoading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Sparkles className="h-4 w-4" />
+          )}
           Twist my words
         </Button>
       </div>

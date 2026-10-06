@@ -19,6 +19,7 @@ import {
   registerSuccessfulTokenUsage,
   runUsageProtectionPrecheck,
 } from "@/lib/usage-protection";
+import { recordTrustedTranslationCompletion } from "@/lib/growth/attribution/sessions";
 
 export async function POST(request: Request) {
   const startedAt = Date.now();
@@ -121,8 +122,9 @@ export async function POST(request: Request) {
       totalTokens: generated.totalTokens,
     });
 
+    let successfulLog: Awaited<ReturnType<typeof createTranslationLog>> | null = null;
     try {
-      await createTranslationLog({
+      successfulLog = await createTranslationLog({
         translatorId: translator.id,
         inputText: validation.data.text,
         outputText: generated.text,
@@ -142,6 +144,18 @@ export async function POST(request: Request) {
       registerSuccessfulTokenUsage(generated.totalTokens);
     } catch {
       // Non-blocking log path.
+    }
+
+    if (successfulLog) {
+      try {
+        await recordTrustedTranslationCompletion({
+          request,
+          translationLogId: successfulLog.id,
+          translatorId: translator.id,
+        });
+      } catch {
+        logWarn("growth_attribution_completion_gap", "A trusted translation succeeded but attribution recording failed.");
+      }
     }
 
     try {

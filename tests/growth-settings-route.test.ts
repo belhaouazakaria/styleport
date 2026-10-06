@@ -59,6 +59,13 @@ describe("Growth settings API", () => {
     const payload = { enabled: true, intensity: "LOW", workerBatchSize: 3, ownedDomains: [" SAYTWIST.COM ", "translator.whattypeof.com"] };
     const response = await PUT(request(payload));
     expect(response.status).toBe(200);
-    expect(mocks.update).toHaveBeenCalledWith({ ...payload, ownedDomains: ["saytwist.com", "translator.whattypeof.com"] }, "admin-1");
+    expect(mocks.update).toHaveBeenCalledWith({
+      ...payload,
+      ownedDomains: ["saytwist.com", "translator.whattypeof.com"],
+      attributionEnabled: false,
+      attributionWindowDays: 7,
+      attributionSessionRetentionDays: 30,
+      attributionEventRetentionDays: 90,
+    }, "admin-1");
   });
 });
