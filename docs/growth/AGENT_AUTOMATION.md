@@ -279,3 +279,5 @@ Phase 6 adds `ACCOUNT_STRATEGY_REVIEW` as a manual, bounded local-data job. The 
 ## Phase 7 opportunity analysis job
 
 `OPPORTUNITY_INTELLIGENCE_ANALYSIS` is a manual bounded local-data job. Its strict payload contains the UTC analysis date and `opportunity_intelligence_v2`; its daily idempotency key is `opportunity-intelligence:opportunity_intelligence_v2:YYYY-MM-DD`. It evaluates one 28-day window, persists an immutable run with capped clusters/memberships/opportunities and one compact activity record, then exits. Existing kill-switch, claim, lease, retry and terminal-failure behavior applies. There is no recurring enqueue, polling, cron, PM2 Growth process, Pinterest call, or resource mutation.
+
+Phase 7 is production deployed and live validated. The corrected v2 run completed under the 500-Pin cap, and Growth was disabled again afterward; attribution remained disabled. The retained v1 run is historical audit evidence of structural `/translators/` route-token collapse. Validation introduced no scheduler, cron, persistent Growth worker, Pinterest mutation, AI call, or content mutation. Phase 8 — Translator Autopilot — is next.

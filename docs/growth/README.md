@@ -1,6 +1,6 @@
 # SayTwist Growth Agent
 
-**Status:** Phase 7 complete (implementation validated; production correction pending validation); Phase 6 production deployed and live validated; attribution collection intentionally disabled
+**Status:** Phase 7 complete, production deployed, and live validated; attribution collection intentionally disabled
 **Scope:** Pinterest-first autonomous growth system inside SayTwist  
 **Primary admin surface:** `/admin/growth`  
 **Primary public expansion:** `/ideas`  
@@ -72,7 +72,7 @@ If implementation changes behavior described here, update the relevant document 
 ## Remaining implementation checks
 
 - Only static/image Pins are in scope initially. Video is out of scope.
-- Pinterest Trial access is approved. The main `@saytwist` Business account is connected, Phase 3 account/board reads were live validated, and Phase 4 organic analytics and owned-domain relevance were live validated. Phase 5 is production deployed; all 19 migrations through Phase 5, the production build, and health/ready checks succeeded. Attribution capability is available, but both collection gates remain false, so no visitor attribution rows or attribution cookie were created. Phase 6 deterministic account strategy is production deployed and live validated. Its first production review for 2026-10 returned `COMPLETE_BASELINE_PORTFOLIO`, recommended three accounts at 60% confidence, and recorded `ATTRIBUTION_NOT_COLLECTING`, `ROLE_NOT_CONNECTED`, `BASELINE_PORTFOLIO_INCOMPLETE`, and `NO_EXPANSION_EVIDENCE`. Phase 7 opportunity intelligence is implemented and locally validated but not deployed. It uses deterministic local evidence only, persists bounded clusters and ranked advisory opportunities, and performs no Pinterest mutation. Phase 8 is next.
+- Pinterest Trial access is approved. The main `@saytwist` Business account is connected, Phase 3 account/board reads were live validated, and Phase 4 organic analytics and owned-domain relevance were live validated. Phase 5 is production deployed; attribution capability is available, but both collection gates remain false, so no visitor attribution rows or attribution cookie were created. Phase 6 deterministic account strategy is production deployed and live validated. Phase 7 corrected opportunity intelligence is production deployed and live validated using deterministic local evidence only. Growth and attribution were disabled again after validation. Phase 8 — Translator Autopilot — is next.
 - WhatsApp reporting is desired for one recipient, but provider setup and current pricing must be verified before implementation.
 
 See `IMPLEMENTATION_MAP.md` for verified repository facts and `DATA_MODEL.md` for implemented and proposed schema/state contracts.
@@ -80,4 +80,4 @@ See `IMPLEMENTATION_MAP.md` for verified repository facts and `DATA_MODEL.md` fo
 
 ## Phase 7 production correction
 
-The initial live `content_clustering_v1` run collapsed 221 eligible Pins into the structural route topic `translators`. Historical v1 rows remain untouched. `content_clustering_v2` excludes route plumbing, rejects overly common corpus tokens, and uses resolved Translator/category and slug evidence. `opportunity_intelligence_v2` allows the corrected same-day run. Production correction validation is still pending.
+The initial production `opportunity_intelligence_v1` / `content_clustering_v1` run collapsed 221 eligible Pins into the structural `/translators/` route topic. Its rows remain untouched as historical audit evidence. The corrected production models are `opportunity_intelligence_v2`, `content_clustering_v2`, and unchanged `opportunity_scoring_v1`. Live v2 validation considered 221 eligible Pins under the 500-Pin cap with `KNOWN` evidence and `NOT_COLLECTING` attribution, producing eight deterministic clusters, two opportunities, and two WINNER Pin signals at 85% average confidence. No `translator` or `translators` structural cluster remained. Growth was disabled again after validation; no Pinterest mutation, AI call, content mutation, scheduler, cron, or persistent Growth worker was introduced.

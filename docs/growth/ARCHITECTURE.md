@@ -403,6 +403,8 @@ Intent alignment uses deterministic destination-path and stored metadata rules, 
 
 Historical `content_clustering_v1` tokenized full destination paths and was retained after live validation exposed structural route-token collapse. Current `content_clustering_v2` never tokenizes route structure for recognized translator URLs, prefers resolved Translator/category metadata and slug tokens, and applies deterministic document-frequency filtering. `opportunity_intelligence_v2` permits a corrected same-day run while retaining v1. It classifies winner, rising, fatigue, and inventory-gap evidence only after explicit minimum observations and volume. `opportunity_scoring_v1` records bounded 0–100 components and duplication, concentration, and evidence-risk penalties. When QPC is unavailable, conversion is absent and remaining weights are renormalized. A `TrendProvider` interface permits a later provider; `NullTrendProvider` is the only implementation and performs no call.
 
+The corrected v2 architecture is production deployed and live validated. The live run considered 221 eligible Pins under the 500-Pin cap with `KNOWN` evidence and attribution `NOT_COLLECTING`, yielding eight deterministic clusters, two opportunities, and no structural `translator`/`translators` cluster. Growth and attribution were disabled again after validation; no autonomous execution infrastructure was added.
+
 Immutable daily runs own cluster snapshots, capped membership, and opportunities. Stable cluster identity is versioned separately. The daily job and analysis-row unique key make repeated enqueue/execution idempotent; closed historical opportunities are never reopened. The admin report reads at most 50 opportunities and 50 snapshots. No autonomous recurrence is configured.
 
 

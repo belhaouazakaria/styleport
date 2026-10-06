@@ -236,7 +236,7 @@ Persist one canonical `GrowthAccountStrategyReview` per review month/model versi
 
 ## D-029 — Phase 7 uses deterministic, bounded local opportunity intelligence
 
-**Status:** Accepted and implemented; production not yet deployed
+**Status:** Accepted; superseded in production by D-031 after the retained v1 audit run
 
 Use application-controlled versions `opportunity_intelligence_v1`, `opportunity_scoring_v1`, and `content_clustering_v1`. Each daily run uses the last 28 complete UTC days ending yesterday, compares recent and previous seven-day windows, and records four weekly activity buckets. It reads at most 500 active analytics-eligible Pins and bounded locally persisted account, board, Pin metric, analytics-state, strategy, Translator/category, and enabled-attribution evidence. It makes no Pinterest request and uses no AI. A `TrendProvider` boundary exists, but Phase 7 installs only `NullTrendProvider`.
 
@@ -247,17 +247,19 @@ The manual ADMIN same-origin action only enqueues the daily idempotent job `oppo
 
 ## D-030 — Phase 7 separates Pin signals from cluster opportunities
 
-**Status:** Accepted and implemented; production not yet deployed
+**Status:** Accepted, implemented, production deployed, and live validated
 
 Persist deterministic Pin observations separately from advisory cluster opportunities. One sustained Pin may produce a winner signal, including a viral outlier, but winner/rising expansion requires at least two meaningful contributors and rejects top-Pin outbound concentration above 80%. Inventory gaps retain multi-Pin/content-depth requirements. Rising combines absolute recent volume, reach or outbound movement, and non-contradictory CTR/save-rate evidence. Fatigue requires previously meaningful performance, complete recent/prior observations, concurrent reach and outbound decline, and quality evidence; improving CTR makes it cautious and prevents cluster opportunity qualification. Stale evidence suppresses rising/fatigue opportunities. No signal directly authorizes content or publication work.
 
 
 ## D-031 — Retain Phase 7 clustering v1 and correct with versioned v2
 
-**Status:** Accepted and implemented; production correction pending validation
+**Status:** Accepted, production deployed, and live validated
 
 The initial production `content_clustering_v1` analysis included raw destination-path tokens. Because every known Translator URL contains `/translators/:slug`, the structural `translators` token collapsed 221 eligible Pins into one false cluster. Keep the v1 job, run, cluster, signal, and opportunity rows unchanged as historical audit evidence.
 
 Use `content_clustering_v2` with `opportunity_intelligence_v2` and unchanged `opportunity_scoring_v1`. Recognized Translator destinations use resolved Translator name, slug tokens, primary category, legacy category, title, and description without route segments. Unknown destinations may use only normalized terminal path content. Centralized generic vocabulary includes `style/styles` because these words describe the SayTwist corpus broadly rather than a useful opportunity niche. For corpora of at least ten Pins, reject candidate tokens appearing in more than 60% of documents; require document frequency of at least two, prefer sufficiently specific category evidence, then choose by source trust, lower document frequency, and lexical tie-break.
 
 The new intelligence version permits a same-date v2 run beside v1 and changes the job key to `opportunity-intelligence:opportunity_intelligence_v2:YYYY-MM-DD`. Dashboard ordering prefers later completion/creation on the same date and displays all model versions. Strong fatigue suppresses `AMPLIFY_WINNER` and `EXPLORE_RISING_TOPIC` for that cluster/run while preserving underlying Pin signals; `FILL_INVENTORY_GAP` may coexist.
+
+Corrected production validation accepted v2 as the current model. With `KNOWN` evidence and attribution `NOT_COLLECTING`, the run considered 221 eligible Pins under the 500-Pin cap and produced eight deterministic clusters, two opportunities, and two WINNER signals at 85% average confidence. No structural `translator` or `translators` cluster existed. The winner examples were Freaky Translator in `funny` and Cold Hearted, Cunning And Manipulative Translator in `roleplay`; the leading opportunities were `AMPLIFY_WINNER` for `roleplay` at score 94/confidence 100% and for `historical` at score 77/confidence 100%. Growth and attribution were disabled again afterward. The run made no Pinterest mutation, AI call, content mutation, or autonomous scheduling change.

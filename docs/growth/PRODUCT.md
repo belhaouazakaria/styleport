@@ -176,3 +176,5 @@ Opportunity intelligence is implemented with deterministic local evidence and no
 ## Phase 7 clustering correction
 
 Opportunity topics must represent content semantics rather than URL structure. The current v2 model excludes route plumbing, applies a 60% maximum document-frequency ratio for corpora of at least ten Pins, and preserves single-Pin signals independently. Strong fatigue suppresses contradictory amplify/rising recommendations while leaving raw winner/fatigue signals visible.
+
+Phase 7 is production deployed and live validated. The retained v1 run documents the original structural `/translators/` collapse; corrected v2 produced eight deterministic clusters from 221 eligible Pins and no structural translator cluster. Its two advisory opportunities do not authorize content creation or mutation. Growth and attribution were disabled again after validation, and Phase 8 — Translator Autopilot — is next.
