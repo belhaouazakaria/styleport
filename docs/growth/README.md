@@ -1,6 +1,6 @@
 # SayTwist Growth Agent
 
-**Status:** Phase 8 complete (implementation validated; production not yet deployed); Phase 7 production deployed and live validated; attribution collection intentionally disabled
+**Status:** Phase 8 complete — production deployed; live decision/planning path validated; mutation path implementation validated but not forced in production; Phase 7 production deployed and live validated; attribution collection intentionally disabled
 **Scope:** Pinterest-first autonomous growth system inside SayTwist  
 **Primary admin surface:** `/admin/growth`  
 **Primary public expansion:** `/ideas`  
@@ -72,7 +72,7 @@ If implementation changes behavior described here, update the relevant document 
 ## Remaining implementation checks
 
 - Only static/image Pins are in scope initially. Video is out of scope.
-- Pinterest Trial access is approved. The main `@saytwist` Business account is connected, Phase 3 account/board reads were live validated, and Phase 4 organic analytics and owned-domain relevance were live validated. Phase 5 is production deployed; attribution capability is available, but both collection gates remain false. Phase 6 and corrected Phase 7 are production deployed and live validated. Phase 8 Translator Autopilot is implementation validated but not production deployed. Growth and attribution remain disabled. Phase 9 — SayTwist Ideas — is next.
+- Pinterest Trial access is approved. The main `@saytwist` Business account is connected, Phase 3 account/board reads were live validated, and Phase 4 organic analytics and owned-domain relevance were live validated. Phase 5 is production deployed; attribution capability is available, but both collection gates remain false. Phase 6 and corrected Phase 7 are production deployed and live validated. Phase 8 Translator Autopilot is production deployed and its decision/planning path is live validated; the mutation path remains implementation validated and was not forced in production. Growth and attribution remain disabled. Phase 9 — SayTwist Ideas — is next.
 - WhatsApp reporting is desired for one recipient, but provider setup and current pricing must be verified before implementation.
 
 See `IMPLEMENTATION_MAP.md` for verified repository facts and `DATA_MODEL.md` for implemented and proposed schema/state contracts.
