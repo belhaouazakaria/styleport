@@ -33,6 +33,12 @@ export default async function AdminGrowthPage() {
       <main className="space-y-6 p-4 sm:p-6">
         <div className="flex flex-wrap justify-end gap-3">
           <Link
+            href="/admin/growth/ideas"
+            className={cn(buttonVariants({ variant: "outline" }))}
+          >
+            SayTwist Ideas
+          </Link>
+          <Link
             href="/admin/growth/translators"
             className={cn(buttonVariants({ variant: "outline" }))}
           >
@@ -73,9 +79,9 @@ export default async function AdminGrowthPage() {
           Pinterest account, board, Pin inventory, organic analytics,
           first-party attribution, and deterministic account strategy
           infrastructure are available. Public attribution collection remains
-          inactive unless both attribution gates are enabled. Ideas, publishing,
-          and Pinterest publishing remain inactive. Translator Autopilot is
-          available only through explicit bounded jobs and versioned rollback.
+          inactive unless both attribution gates are enabled. SayTwist Ideas and
+          Translator Autopilot are available only through explicit bounded jobs
+          with immutable versions and rollback. Pinterest publishing remains inactive.
         </div>
 
         <section
