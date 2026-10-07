@@ -1,6 +1,6 @@
 # SayTwist Growth Agent
 
-**Status:** Phase 7 complete, production deployed, and live validated; attribution collection intentionally disabled
+**Status:** Phase 8 complete (implementation validated; production not yet deployed); Phase 7 production deployed and live validated; attribution collection intentionally disabled
 **Scope:** Pinterest-first autonomous growth system inside SayTwist  
 **Primary admin surface:** `/admin/growth`  
 **Primary public expansion:** `/ideas`  
@@ -72,7 +72,7 @@ If implementation changes behavior described here, update the relevant document 
 ## Remaining implementation checks
 
 - Only static/image Pins are in scope initially. Video is out of scope.
-- Pinterest Trial access is approved. The main `@saytwist` Business account is connected, Phase 3 account/board reads were live validated, and Phase 4 organic analytics and owned-domain relevance were live validated. Phase 5 is production deployed; attribution capability is available, but both collection gates remain false, so no visitor attribution rows or attribution cookie were created. Phase 6 deterministic account strategy is production deployed and live validated. Phase 7 corrected opportunity intelligence is production deployed and live validated using deterministic local evidence only. Growth and attribution were disabled again after validation. Phase 8 — Translator Autopilot — is next.
+- Pinterest Trial access is approved. The main `@saytwist` Business account is connected, Phase 3 account/board reads were live validated, and Phase 4 organic analytics and owned-domain relevance were live validated. Phase 5 is production deployed; attribution capability is available, but both collection gates remain false. Phase 6 and corrected Phase 7 are production deployed and live validated. Phase 8 Translator Autopilot is implementation validated but not production deployed. Growth and attribution remain disabled. Phase 9 — SayTwist Ideas — is next.
 - WhatsApp reporting is desired for one recipient, but provider setup and current pricing must be verified before implementation.
 
 See `IMPLEMENTATION_MAP.md` for verified repository facts and `DATA_MODEL.md` for implemented and proposed schema/state contracts.
@@ -81,3 +81,9 @@ See `IMPLEMENTATION_MAP.md` for verified repository facts and `DATA_MODEL.md` fo
 ## Phase 7 production correction
 
 The initial production `opportunity_intelligence_v1` / `content_clustering_v1` run collapsed 221 eligible Pins into the structural `/translators/` route topic. Its rows remain untouched as historical audit evidence. The corrected production models are `opportunity_intelligence_v2`, `content_clustering_v2`, and unchanged `opportunity_scoring_v1`. Live v2 validation considered 221 eligible Pins under the 500-Pin cap with `KNOWN` evidence and `NOT_COLLECTING` attribution, producing eight deterministic clusters, two opportunities, and two WINNER Pin signals at 85% average confidence. No `translator` or `translators` structural cluster remained. Growth was disabled again after validation; no Pinterest mutation, AI call, content mutation, scheduler, cron, or persistent Growth worker was introduced.
+
+## Phase 8 Translator Autopilot
+
+Phase 8 uses `translator_autopilot_v1`, `translator_quality_v1`, and `translator_dedupe_v1`. A bounded planning job turns one eligible Phase 7 opportunity into a durable `GrowthDecision`; a separate execution job revalidates and mutates at most one Translator. Deterministic gates can choose create, improve, wait, or no action before AI is called. Creation requires known evidence, an eligible gap/rising type, score at least 75, confidence at least 80, a specific grounded concept, a safe existing category, and no exact/near duplicate. Improvement requires a deterministic target, score at least 70, confidence at least 75, and a material validated change. Broad `AMPLIFY_WINNER` clusters such as roleplay or historical never justify creation by themselves.
+
+Generation uses an injectable provider with bounded untrusted evidence, strict structured output, aggregate token metadata across at most one repair, and no transaction held across the AI call. Immediately before apply, execution rechecks the Growth kill switch, decision/opportunity state, target checksum, categories, quality, and create dedupe/slug safety. Server code keeps new Translators inactive. Each successful mutation atomically records a bounded managed-content snapshot, canonical SHA-256 checksum, monotonically increasing version, decision completion, opportunity action, and compact activity. Operational state and share-image metadata are excluded from rollback. Share-image refresh runs after commit with durable synchronized/pending-failure status, so retry reconciles the image without repeating content mutation. Rollback requires a current-checksum precondition and safe active historical categories. There is no recurrence, scheduler, cron, permanent worker, Pinterest mutation, attribution enablement, or Phase 9 implementation.

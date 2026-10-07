@@ -170,11 +170,15 @@ Worldwide English is the audience; cold-start Pinterest tests and schedules are 
 
 ## Phase 7 implemented product boundary
 
-Opportunity intelligence is implemented with deterministic local evidence and no AI. It identifies sustainable winners, rising topics, inventory gaps, and fatigue over the last 28 complete UTC days; groups related eligible Pins with stable lexical/category clusters; records concentration and confidence; and ranks advisory opportunities from 0 to 100. It does not create content or make an opportunity actionable by itself. Conversion evidence participates only when attribution collection is enabled, and unavailable QPC is never interpreted as zero. Phase 8 Translator Autopilot is the next product phase.
+Opportunity intelligence is implemented with deterministic local evidence and no AI. It identifies sustainable winners, rising topics, inventory gaps, and fatigue over the last 28 complete UTC days; groups related eligible Pins with stable lexical/category clusters; records concentration and confidence; and ranks advisory opportunities from 0 to 100. Phase 8 may turn a qualified opportunity into a separate versioned Translator plan and action. Conversion evidence participates only when attribution collection is enabled, and unavailable QPC is never interpreted as zero.
 
 
 ## Phase 7 clustering correction
 
 Opportunity topics must represent content semantics rather than URL structure. The current v2 model excludes route plumbing, applies a 60% maximum document-frequency ratio for corpora of at least ten Pins, and preserves single-Pin signals independently. Strong fatigue suppresses contradictory amplify/rising recommendations while leaving raw winner/fatigue signals visible.
 
-Phase 7 is production deployed and live validated. The retained v1 run documents the original structural `/translators/` collapse; corrected v2 produced eight deterministic clusters from 221 eligible Pins and no structural translator cluster. Its two advisory opportunities do not authorize content creation or mutation. Growth and attribution were disabled again after validation, and Phase 8 — Translator Autopilot — is next.
+Phase 7 is production deployed and live validated. The retained v1 run documents the original structural `/translators/` collapse; corrected v2 produced eight deterministic clusters from 221 eligible Pins and no structural translator cluster. Its opportunities do not authorize content mutation directly.
+
+## Phase 8 implemented product boundary
+
+Translator Autopilot supports `CREATE_TRANSLATOR`, `IMPROVE_TRANSLATOR`, `WAIT_FOR_MORE_DATA`, and `NO_ACTION`. Planning is deterministic and conservative: broad winner categories do not invent a Translator, fatigue needs a clear mapped target, and ambiguous or weak evidence waits. Generated content is bounded, validated, deduplicated, category-safe, versioned, inactive on creation, and reversible. Improvement and rollback never change slug, activation, featuring, archive state, order, runtime model, display controls, or share-image metadata. A Growth-created Translator cannot be activated until its stored configuration passes deterministic quality/category validation and has synchronized share-image state. Phase 8 creates no Idea, collection, Pin variant, creative, publication, or schedule. Phase 9 — SayTwist Ideas — is next.

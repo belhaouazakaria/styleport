@@ -6,13 +6,14 @@ const noStoreHeaders = {
   "Cache-Control": "no-store",
 } as const;
 
-export function apiError(status: number, code: ApiErrorCode, message: string) {
+export function apiError(status: number, code: ApiErrorCode, message: string, details?: unknown) {
   return NextResponse.json(
     {
       ok: false,
       error: {
         code,
         message,
+        ...(details === undefined ? {} : { details }),
       },
     },
     { status, headers: noStoreHeaders },
