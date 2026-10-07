@@ -18,6 +18,14 @@ import { accountStrategyJobPayloadSchema } from "@/lib/growth/strategy/contracts
 import { persistAccountStrategyReview } from "@/lib/growth/strategy/review";
 import { persistOpportunityAnalysis } from "@/lib/growth/opportunity/analysis";
 import { opportunityJobPayloadSchema } from "@/lib/growth/opportunity/contracts";
+import {
+  translatorDecisionJobPayloadSchema,
+  translatorExecutionJobPayloadSchema,
+} from "@/lib/growth/translator/contracts";
+import {
+  decideTranslatorOpportunity,
+  executeTranslatorDecision,
+} from "@/lib/growth/translator/service";
 
 export interface GrowthJobHandlerContext {
   job: GrowthJob;
@@ -154,6 +162,35 @@ const handlers = new Map<GrowthJobType, GrowthJobHandler>([
         evidenceQuality: result.run.evidenceQuality,
         pinsConsidered: result.run.pinsConsidered,
         opportunities: result.run.opportunitiesProduced,
+      };
+    },
+  ],
+  [
+    GrowthJobType.TRANSLATOR_AUTOPILOT_DECIDE,
+    async ({ job }) => {
+      const parsed = translatorDecisionJobPayloadSchema.safeParse(job.payload || {});
+      if (!parsed.success) throw new NonRetryableGrowthJobError("Invalid Translator Autopilot decision payload.");
+      const result = await decideTranslatorOpportunity(parsed.data.opportunityId);
+      return {
+        decisionId: result.decision.id,
+        decisionType: result.decision.type,
+        status: result.decision.status,
+        executionJobId: result.execution?.job.id || null,
+        modelVersion: result.decision.decisionModelVersion,
+      };
+    },
+  ],
+  [
+    GrowthJobType.TRANSLATOR_AUTOPILOT_EXECUTE,
+    async ({ job }) => {
+      const parsed = translatorExecutionJobPayloadSchema.safeParse(job.payload || {});
+      if (!parsed.success) throw new NonRetryableGrowthJobError("Invalid Translator Autopilot execution payload.");
+      const result = await executeTranslatorDecision(parsed.data.decisionId, { jobId: job.id });
+      return {
+        decisionId: result.decision.id,
+        status: result.decision.status,
+        translatorId: "translatorId" in result ? result.translatorId : result.decision.translatorId,
+        reused: result.reused,
       };
     },
   ],

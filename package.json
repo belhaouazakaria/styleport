@@ -21,6 +21,7 @@
     "test:growth-attribution-db": "test -n \"$GROWTH_ATTRIBUTION_TEST_DATABASE_URL\" && DATABASE_URL=\"$GROWTH_ATTRIBUTION_TEST_DATABASE_URL\" GROWTH_ATTRIBUTION_COLLECTION_ENABLED=true RUN_GROWTH_ATTRIBUTION_DB_TESTS=1 vitest run tests/growth-attribution-persistence.integration.test.ts",
     "test:growth-strategy-db": "test -n \"$GROWTH_STRATEGY_TEST_DATABASE_URL\" && DATABASE_URL=\"$GROWTH_STRATEGY_TEST_DATABASE_URL\" GROWTH_ATTRIBUTION_COLLECTION_ENABLED=false RUN_GROWTH_STRATEGY_DB_TESTS=1 vitest run tests/growth-strategy-persistence.integration.test.ts",
     "test:growth-opportunity-db": "test -n \"$GROWTH_OPPORTUNITY_TEST_DATABASE_URL\" && DATABASE_URL=\"$GROWTH_OPPORTUNITY_TEST_DATABASE_URL\" GROWTH_ATTRIBUTION_COLLECTION_ENABLED=false RUN_GROWTH_OPPORTUNITY_DB_TESTS=1 vitest run tests/growth-opportunity-persistence.integration.test.ts",
+    "test:growth-translator-db": "test -n \"$GROWTH_TRANSLATOR_TEST_DATABASE_URL\" && DATABASE_URL=\"$GROWTH_TRANSLATOR_TEST_DATABASE_URL\" GROWTH_ATTRIBUTION_COLLECTION_ENABLED=false RUN_GROWTH_TRANSLATOR_DB_TESTS=1 vitest run tests/growth-translator-persistence.integration.test.ts",
     "test:watch": "vitest",
     "prisma:generate": "node node_modules/prisma/build/index.js generate",
     "prisma:migrate": "node node_modules/prisma/build/index.js migrate dev",

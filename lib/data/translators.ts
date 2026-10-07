@@ -12,6 +12,11 @@ import { submitTranslatorToGoogleIndexing } from "@/lib/data/indexing";
 import { deleteStoredShareImage, ensureTranslatorShareImageById } from "@/lib/share-images";
 import { ensureUniqueTranslatorSlug } from "@/lib/slug";
 import { getAppSettings } from "@/lib/settings";
+import { assertGrowthTranslatorActivationReady, isGrowthManagedTranslator } from "@/lib/growth/translator/activation";
+import {
+  invalidatePublicTranslatorCaches,
+  registerPublicTranslatorCacheInvalidator,
+} from "@/lib/data/translator-cache-invalidation";
 import {
   assertNoEmDash,
   sanitizeGeneratedString,
@@ -83,7 +88,7 @@ const runtimeTranslatorCache = new Map<
 >();
 const runtimeTranslatorInFlight = new Map<string, Promise<RuntimeTranslator | null>>();
 
-export function invalidatePublicTranslatorCaches() {
+function clearPublicTranslatorCaches() {
   publicCategoriesCache = null;
   publicCategoriesInFlight = null;
   featuredTranslatorCache.clear();
@@ -93,6 +98,9 @@ export function invalidatePublicTranslatorCaches() {
   runtimeTranslatorCache.clear();
   runtimeTranslatorInFlight.clear();
 }
+
+registerPublicTranslatorCacheInvalidator(clearPublicTranslatorCaches);
+export { invalidatePublicTranslatorCaches } from "@/lib/data/translator-cache-invalidation";
 
 function pruneExpiringMap<T>(map: Map<string, { expiresAt: number; value: T }>, now: number) {
   for (const [key, entry] of map.entries()) {
@@ -1531,8 +1539,9 @@ export async function updateTranslator(id: string, input: TranslatorUpsertInput)
       targetLabel: true,
     },
   });
+  const growthActivation = Boolean(existing && !existing.isActive && normalized.isActive && await isGrowthManagedTranslator(id));
 
-  const updated = await prisma.$transaction(async (tx) => {
+  let updated = await prisma.$transaction(async (tx) => {
     await tx.translationMode.deleteMany({ where: { translatorId: id } });
     await tx.translatorExample.deleteMany({ where: { translatorId: id } });
     await tx.translatorCategory.deleteMany({ where: { translatorId: id } });
@@ -1559,7 +1568,7 @@ export async function updateTranslator(id: string, input: TranslatorUpsertInput)
         seoTitle: normalized.seoTitle,
         seoDescription: normalized.seoDescription,
         modelOverride: normalized.modelOverride,
-        isActive: normalized.isActive,
+        isActive: growthActivation ? false : normalized.isActive,
         isFeatured: allowManualFeatured ? normalized.isFeatured : false,
         featuredRank: allowManualFeatured ? null : undefined,
         featuredSource: FeaturedSource.MANUAL,
@@ -1567,7 +1576,7 @@ export async function updateTranslator(id: string, input: TranslatorUpsertInput)
         showSwap: normalized.showSwap,
         showExamples: normalized.showExamples,
         sortOrder: normalized.sortOrder,
-        archivedAt: normalized.isActive ? null : undefined,
+        archivedAt: normalized.isActive && !growthActivation ? null : undefined,
         primaryCategoryId: normalized.primaryCategoryId,
         modes: {
           createMany: {
@@ -1608,7 +1617,20 @@ export async function updateTranslator(id: string, input: TranslatorUpsertInput)
     existing.targetLabel !== updated.targetLabel;
 
   if (shareFieldsChanged || !updated.shareImagePath) {
-    await ensureTranslatorShareImageById(updated.id, { force: shareFieldsChanged });
+    await ensureTranslatorShareImageById(updated.id, { force: shareFieldsChanged, throwOnError: growthActivation });
+  }
+
+  if (growthActivation) {
+    await assertGrowthTranslatorActivationReady(updated.id);
+    updated = await prisma.translator.update({
+      where: { id: updated.id },
+      data: { isActive: true, archivedAt: null },
+      include: {
+        modes: { orderBy: { sortOrder: "asc" } },
+        examples: { orderBy: { sortOrder: "asc" } },
+        categories: { include: { category: true } },
+      },
+    });
   }
 
   if (!existing?.isActive && updated.isActive) {
@@ -1762,6 +1784,11 @@ export async function toggleTranslatorActive(id: string, active?: boolean) {
   }
 
   const next = active ?? !current.isActive;
+
+  if (!current.isActive && next && await isGrowthManagedTranslator(id)) {
+    await ensureTranslatorShareImageById(id, { throwOnError: true });
+    await assertGrowthTranslatorActivationReady(id);
+  }
 
   const updated = await prisma.translator.update({
     where: { id },

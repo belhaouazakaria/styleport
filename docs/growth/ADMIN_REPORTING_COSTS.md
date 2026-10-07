@@ -288,3 +288,9 @@ Phase 7 has no AI or external trend cost. Opportunity evidence records cost as `
 The opportunity dashboard orders runs by analysis date, completion time, creation time, and ID, then shows intelligence, clustering, and scoring versions. A corrected v2 same-day run therefore becomes current without hiding or deleting historical v1 evidence.
 
 Production validation confirmed the dashboard's current run as `opportunity_intelligence_v2` / `content_clustering_v2` / `opportunity_scoring_v1`: `KNOWN` evidence, 221 eligible Pins under the 500-Pin cap, eight clusters, two opportunities, attribution `NOT_COLLECTING`, and no structural `translator` or `translators` cluster. The original v1 run remains visible as historical audit evidence.
+
+## Phase 8 Translator Autopilot admin
+
+`/admin/growth/translators` is an ADMIN-only bounded report. It displays model version, unplanned eligible opportunities, at most 50 recent decisions, and at most 50 content versions. Decision rows distinguish decision status, source-opportunity status, whether a Translator mutation exists, and whether the target is inactive or publicly active. Version rows show durable share-image synchronization state and warn when reconciliation is pending; full prompt snapshots remain server-side/admin-only.
+
+The decision and rollback POST routes require ADMIN and exact same origin. The decision route accepts only an opportunity ID. The rollback route accepts a stored target-version ID plus the server-rendered current checksum; it rejects stale pages and never accepts snapshot/category content. No bulk activation control exists. Provider/model, aggregate tokens, bounded response IDs, and attempt count cover initial generation plus repair, while monetary cost remains unknown rather than invented because Phase 13 cost accounting is not implemented.
