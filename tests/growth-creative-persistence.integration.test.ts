@@ -233,6 +233,36 @@ suite("Growth Phase 10 PostgreSQL A-R scenarios", () => {
     expect(await prisma.growthPinCandidate.count()).toBe(0);
   });
 
+  it("serializes final authorization against a concurrent target deactivation", async () => {
+    const translator = await seedTranslator();
+    let releaseMutation!: () => void;
+    let mutationLocked!: () => void;
+    const mutationRelease = new Promise<void>((resolve) => { releaseMutation = resolve; });
+    const mutationHasLock = new Promise<void>((resolve) => { mutationLocked = resolve; });
+    const mutation = prisma.$transaction(async (tx) => {
+      await tx.translator.update({ where: { id: translator.id }, data: { isActive: false } });
+      mutationLocked();
+      await mutationRelease;
+    });
+    await mutationHasLock;
+
+    const generation = generateCreativeCandidate(payload(translator.id)).then(
+      (result) => ({ ok: true as const, result }),
+      (error: unknown) => ({ ok: false as const, error }),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(await prisma.growthPinCandidate.count()).toBe(0);
+
+    releaseMutation();
+    await mutation;
+    const outcome = await generation;
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) throw new Error("Creative generation unexpectedly passed concurrent target deactivation.");
+    expect(outcome.error).toBeInstanceOf(Error);
+    expect((outcome.error as Error).message).toContain("unavailable");
+    expect(await prisma.growthPinCandidate.count()).toBe(0);
+  });
+
   it("fails closed when account or experiment eligibility changes after rendering", async () => {
     const translator = await seedTranslator(); const account = await seedAccount("first");
     await expect(generateCreativeCandidate(payload(translator.id, GrowthCreativeArchetype.TYPOGRAPHY_LED, { accountId: account.id }), null, { beforePersist: async () => { await prisma.growthPinterestAccount.update({ where: { id: account.id }, data: { connectionStatus: GrowthPinterestConnectionStatus.DEGRADED } }); } })).rejects.toThrow("account is unavailable");

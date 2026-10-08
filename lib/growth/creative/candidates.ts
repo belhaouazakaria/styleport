@@ -184,6 +184,32 @@ async function validateCreativeContext(db: CreativeReadClient, payload: Creative
   return { account, experiment };
 }
 
+async function lockCreativeAuthorizationRows(tx: Prisma.TransactionClient, payload: CreativeGenerationJobPayload) {
+  if (payload.targetKind === GrowthCreativeDestinationKind.TRANSLATOR) {
+    await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "Translator" WHERE "id" = ${payload.targetId} FOR UPDATE`);
+  } else {
+    const ideas = await tx.$queryRaw<Array<{ id: string; currentVersionId: string | null; categoryId: string }>>(Prisma.sql`
+      SELECT "id", "currentVersionId", "categoryId"
+      FROM "GrowthIdea"
+      WHERE "id" = ${payload.targetId}
+      FOR UPDATE
+    `);
+    const idea = ideas[0];
+    if (idea?.currentVersionId) {
+      await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "GrowthIdeaVersion" WHERE "id" = ${idea.currentVersionId} FOR UPDATE`);
+    }
+    if (idea?.categoryId) {
+      await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "GrowthIdeaCategory" WHERE "id" = ${idea.categoryId} FOR UPDATE`);
+    }
+  }
+  if (payload.accountId) {
+    await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "GrowthPinterestAccount" WHERE "id" = ${payload.accountId} FOR UPDATE`);
+  }
+  if (payload.experimentId) {
+    await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "GrowthExperiment" WHERE "id" = ${payload.experimentId} FOR UPDATE`);
+  }
+}
+
 export async function generateCreativeCandidate(input: unknown, jobId: string | null = null, options: GenerateCreativeOptions = {}) {
   const payload = creativeGenerationJobPayloadSchema.parse(input);
   if (payload.archetype === GrowthCreativeArchetype.V1_CONTROL && payload.targetKind !== GrowthCreativeDestinationKind.TRANSLATOR) throw new NonRetryableGrowthJobError("Renderer V1 control is available only for Translator destinations.");
@@ -237,6 +263,7 @@ export async function generateCreativeCandidate(input: unknown, jobId: string | 
     const result = await prisma.$transaction(async (tx) => {
       const settings = await tx.$queryRaw<Array<{ enabled: boolean }>>(Prisma.sql`SELECT "enabled" FROM "GrowthSettings" WHERE "id" = ${GROWTH_SETTINGS_ID} FOR UPDATE`);
       if (!settings[0]?.enabled) throw new NonRetryableGrowthJobError("Growth is disabled before Creative Lab persistence.");
+      await lockCreativeAuthorizationRows(tx, payload);
       const currentTarget = await readEligibleCreativeTarget(tx, payload.targetKind, payload.targetId);
       if (currentTarget.sourceFingerprint !== target.sourceFingerprint) throw new NonRetryableGrowthJobError("Creative target changed during rendering.");
       await validateCreativeContext(tx, payload, currentTarget, definition);
