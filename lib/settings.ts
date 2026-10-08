@@ -129,6 +129,16 @@ export async function getAppSettings(options?: { forceRefresh?: boolean }): Prom
       };
       return value;
     })
+    .catch((error) => {
+      console.error("[settings] Failed to load app settings. Falling back to defaults.", error);
+
+      appSettingsCache = {
+        value: defaultSettings,
+        expiresAt: Date.now() + SETTINGS_CACHE_TTL_MS,
+      };
+
+      return defaultSettings;
+    })
     .finally(() => {
       if (appSettingsInFlight === task) {
         appSettingsInFlight = null;

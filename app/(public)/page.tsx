@@ -30,6 +30,33 @@ interface PageProps {
 
 export const dynamic = "force-dynamic";
 
+const PUBLIC_DATA_TIMEOUT_MS = 2_000;
+
+async function withPublicDataFallback<T>(
+  label: string,
+  task: Promise<T>,
+  fallback: T,
+): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+
+  try {
+    return await Promise.race([
+      task,
+      new Promise<T>((_, reject) => {
+        timeout = setTimeout(
+          () => reject(new Error(`${label} timed out after ${PUBLIC_DATA_TIMEOUT_MS}ms`)),
+          PUBLIC_DATA_TIMEOUT_MS,
+        );
+      }),
+    ]);
+  } catch (error) {
+    console.error(`[homepage] ${label} unavailable. Using fallback.`, error);
+    return fallback;
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
 export async function generateMetadata({ searchParams }: PageProps): Promise<Metadata> {
   const params = await searchParams;
   const settings = await getAppSettings();
@@ -92,17 +119,50 @@ export default async function HomePage({ searchParams }: PageProps) {
   const pageSize = settings.discoveryPageSize || DISCOVERY_DEFAULT_PAGE_SIZE;
 
   const [discovery, newestCatalog, featured, desktopAds, mobileAds] = await Promise.all([
-    getDiscoveryResult({ q, category, page, pageSize }),
-    useNewestCatalog ? getNewestPublicTranslatorsPage({ page, pageSize }) : Promise.resolve(null),
-    getFeaturedPublicTranslators(6),
-    getRenderableAdPlacements({
-      pageType: AdPageType.HOMEPAGE,
-      deviceType: AdDeviceType.DESKTOP,
-    }),
-    getRenderableAdPlacements({
-      pageType: AdPageType.HOMEPAGE,
-      deviceType: AdDeviceType.MOBILE,
-    }),
+    withPublicDataFallback(
+      "discovery",
+      getDiscoveryResult({ q, category, page, pageSize }),
+      {
+        translators: [],
+        total: 0,
+        page,
+        pageSize,
+        totalPages: 1,
+        categories: [],
+        q,
+        category,
+      },
+    ),
+    useNewestCatalog
+      ? withPublicDataFallback(
+          "newest translators",
+          getNewestPublicTranslatorsPage({ page, pageSize }),
+          {
+            translators: [],
+            total: 0,
+            page,
+            pageSize,
+            totalPages: 1,
+          },
+        )
+      : Promise.resolve(null),
+    withPublicDataFallback("featured translators", getFeaturedPublicTranslators(6), []),
+    withPublicDataFallback(
+      "desktop ads",
+      getRenderableAdPlacements({
+        pageType: AdPageType.HOMEPAGE,
+        deviceType: AdDeviceType.DESKTOP,
+      }),
+      [],
+    ),
+    withPublicDataFallback(
+      "mobile ads",
+      getRenderableAdPlacements({
+        pageType: AdPageType.HOMEPAGE,
+        deviceType: AdDeviceType.MOBILE,
+      }),
+      [],
+    ),
   ]);
   const catalogTranslators = useNewestCatalog && newestCatalog ? newestCatalog.translators : discovery.translators;
   const catalogTotal = useNewestCatalog && newestCatalog ? newestCatalog.total : discovery.total;
