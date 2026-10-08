@@ -1,8 +1,8 @@
 "use client";
 
 import { GrowthCreativeArchetype, GrowthCreativeDestinationKind, GrowthExperimentDimension } from "@prisma/client";
-import { ChevronDown, FlaskConical, Sparkles } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Check, ChevronDown, FlaskConical, Search, Sparkles } from "lucide-react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 const archetypeOptions = [
@@ -68,8 +68,53 @@ async function post(url: string, body: unknown) {
   return payload;
 }
 
+interface TranslatorOption { id: string; name: string; slug: string }
+
+function TranslatorTargetPicker({ initialOptions, targetId, onSelect }: { initialOptions: TranslatorOption[]; targetId: string; onSelect: (id: string) => void }) {
+  const listId = useId();
+  const initialSelection = initialOptions.find((item) => item.id === targetId) || null;
+  const [query, setQuery] = useState(initialSelection?.name || "");
+  const [options, setOptions] = useState(initialOptions);
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const selected = options.find((item) => item.id === targetId) || initialSelection;
+
+  useEffect(() => {
+    const normalized = query.trim();
+    if (!open || normalized.length < 2) {
+      if (!normalized) setOptions(initialOptions);
+      setLoading(false);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setLoading(true);
+      try {
+        const response = await fetch(`/api/admin/translators?status=active&q=${encodeURIComponent(normalized)}`, { signal: controller.signal });
+        const payload = await response.json() as { ok?: boolean; translators?: TranslatorOption[] };
+        if (!response.ok || !payload.ok) throw new Error("Search unavailable");
+        const matches = (payload.translators || []).map(({ id, name, slug }) => ({ id, name, slug })).sort((left, right) => left.name.localeCompare(right.name));
+        setOptions(matches);
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === "AbortError")) setOptions(initialOptions.filter((item) => item.id === targetId));
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    }, 250);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [initialOptions, open, query, targetId]);
+
+  return <div className="relative max-w-2xl">
+    <label htmlFor={`${listId}-input`} className="block text-sm font-extrabold text-ink">2. Find an active Translator</label>
+    <p className="mt-1 text-xs leading-5 text-muted-ink">Search by name or slug. Results include every active, non-archived Translator.</p>
+    <div className="relative mt-2"><Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-ink" aria-hidden="true" /><input id={`${listId}-input`} role="combobox" aria-autocomplete="list" aria-expanded={open} aria-controls={`${listId}-list`} autoComplete="off" value={query} onFocus={() => setOpen(true)} onBlur={() => window.setTimeout(() => setOpen(false), 150)} onChange={(event) => { setQuery(event.target.value); onSelect(""); setOpen(true); }} placeholder="Search active Translators…" className={`${fieldClass} mt-0 pl-10 pr-12`} />{loading ? <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-brand-700">Searching…</span> : null}</div>
+    {open ? <div id={`${listId}-list`} role="listbox" className="absolute z-30 mt-2 max-h-72 w-full overflow-y-auto rounded-2xl border border-border bg-white p-1.5 shadow-[0_20px_55px_-28px_rgba(15,23,42,0.4)]">{options.length ? options.map((item) => <button key={item.id} type="button" role="option" aria-selected={item.id === targetId} onMouseDown={(event) => event.preventDefault()} onClick={() => { onSelect(item.id); setQuery(item.name); setOpen(false); }} className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-brand-50"><span className="min-w-0"><span className="block truncate text-sm font-bold text-ink">{item.name}</span><span className="block truncate text-xs text-muted-ink">/translators/{item.slug}</span></span>{item.id === targetId ? <Check className="h-4 w-4 shrink-0 text-brand-600" aria-hidden="true" /> : null}</button>) : <p className="px-3 py-5 text-center text-sm text-muted-ink">{query.trim().length < 2 ? "Type at least two characters to search." : loading ? "Searching active Translators…" : "No active Translators matched that search."}</p>}</div> : null}
+    {selected && targetId ? <div className="mt-3 flex items-center gap-3 rounded-xl border border-brand-200 bg-brand-50 px-3.5 py-3"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-500 text-white"><Check className="h-4 w-4" aria-hidden="true" /></span><span className="min-w-0"><span className="block text-xs font-bold uppercase tracking-wide text-brand-800">Selected Translator</span><span className="block truncate text-sm font-bold text-ink">{selected.name} <span className="font-normal text-muted-ink">· /{selected.slug}</span></span></span></div> : <p className="mt-2 text-xs font-semibold text-amber-800">Choose a Translator from the search results to continue.</p>}
+  </div>;
+}
+
 export function CreativeGenerationForm({ translators, ideas, accounts, experiments }: {
-  translators: Array<{ id: string; name: string }>;
+  translators: TranslatorOption[];
   ideas: Array<{ id: string; title: string }>;
   accounts: Array<{ id: string; label: string }>;
   experiments: Array<{ id: string; hypothesis: string; variants: Array<{ key: string; label: string }> }>;
@@ -111,9 +156,7 @@ export function CreativeGenerationForm({ translators, ideas, accounts, experimen
         </div>
       </fieldset>
 
-      <label className="block text-sm font-extrabold text-ink">2. Select the {kind === GrowthCreativeDestinationKind.TRANSLATOR ? "Translator" : "Idea"}
-        <select className={`${fieldClass} max-w-2xl`} value={targetId} onChange={(event) => setTargetId(event.target.value)}>{targets.map((item) => <option key={item.id} value={item.id}>{"name" in item ? item.name : item.title}</option>)}</select>
-      </label>
+      {kind === GrowthCreativeDestinationKind.TRANSLATOR ? <TranslatorTargetPicker initialOptions={translators} targetId={targetId} onSelect={setTargetId} /> : <label className="block text-sm font-extrabold text-ink">2. Select the Idea<select className={`${fieldClass} max-w-2xl`} value={targetId} onChange={(event) => setTargetId(event.target.value)}>{targets.map((item) => <option key={item.id} value={item.id}>{"name" in item ? item.name : item.title}</option>)}</select></label>}
 
       <fieldset>
         <legend className="text-sm font-extrabold text-ink">3. Pick a creative style</legend>
