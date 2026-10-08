@@ -7,6 +7,7 @@ import { classifyIdeaDuplicate } from "@/lib/growth/ideas/dedupe";
 import { MAX_IDEA_DEDUPE_CANDIDATES } from "@/lib/growth/ideas/constants";
 import { planIdeaAction } from "@/lib/growth/ideas/planner";
 import { validateIdeaQuality } from "@/lib/growth/ideas/quality";
+import { CONTENT_CLUSTERING_VERSION, OPPORTUNITY_INTELLIGENCE_VERSION } from "@/lib/growth/opportunity/constants";
 
 function candidate(overrides: Partial<ResolvedIdeaCandidate> = {}): ResolvedIdeaCandidate {
   return {
@@ -85,15 +86,46 @@ describe("Growth Ideas quality", () => {
 });
 
 describe("Growth Ideas planner", () => {
-  const base = { type: GrowthOpportunityType.FILL_INVENTORY_GAP, status: GrowthOpportunityStatus.OPEN, score: 90, confidence: 90, evidenceQuality: GrowthOpportunityEvidenceQuality.KNOWN, clusterName: "birthday-messages", representativeEvidenceCount: 3, mappedIdeaIds: [] as string[], obviousCoverage: "NONE" as const };
+  const base = {
+    type: GrowthOpportunityType.FILL_INVENTORY_GAP,
+    status: GrowthOpportunityStatus.OPEN,
+    score: 90,
+    confidence: 90,
+    evidenceQuality: GrowthOpportunityEvidenceQuality.KNOWN,
+    intelligenceModelVersion: OPPORTUNITY_INTELLIGENCE_VERSION,
+    analysisClusteringModelVersion: CONTENT_CLUSTERING_VERSION,
+    opportunityClusteringModelVersion: CONTENT_CLUSTERING_VERSION,
+    clusterName: "birthday-messages",
+    representativeEvidenceCount: 3,
+    mappedIdeaIds: [] as string[],
+    obviousCoverage: "NONE" as const,
+  };
   it("plans create, improve, wait, and no action conservatively", () => {
     expect(planIdeaAction(base).type).toBe(GrowthDecisionType.CREATE_IDEA);
     expect(planIdeaAction({ ...base, mappedIdeaIds: ["idea-1"] })).toMatchObject({ type: GrowthDecisionType.IMPROVE_IDEA, targetIdeaId: "idea-1" });
     expect(planIdeaAction({ ...base, type: GrowthOpportunityType.INVESTIGATE_FATIGUE }).type).toBe(GrowthDecisionType.WAIT_FOR_MORE_DATA);
     expect(planIdeaAction({ ...base, score: 20 }).type).toBe(GrowthDecisionType.NO_ACTION);
   });
-  it("does not turn a generic winner label into an article", () => {
-    expect(planIdeaAction({ ...base, type: GrowthOpportunityType.AMPLIFY_WINNER, clusterName: "roleplay", representativeEvidenceCount: 2 }).type).toBe(GrowthDecisionType.WAIT_FOR_MORE_DATA);
+  it("rejects superseded source models before otherwise-actionable evidence", () => {
+    expect(planIdeaAction({
+      ...base,
+      type: GrowthOpportunityType.AMPLIFY_WINNER,
+      score: 94,
+      confidence: 100,
+      intelligenceModelVersion: "opportunity_intelligence_v1",
+      analysisClusteringModelVersion: "content_clustering_v1",
+      opportunityClusteringModelVersion: "content_clustering_v1",
+      clusterName: "translators",
+      representativeEvidenceCount: 100,
+    })).toMatchObject({ type: GrowthDecisionType.NO_ACTION, reasonCodes: ["IDEA_SOURCE_MODEL_OUTDATED"] });
+  });
+  it("keeps generic topics non-actionable regardless of evidence volume or one mapped Idea", () => {
+    expect(planIdeaAction({ ...base, type: GrowthOpportunityType.AMPLIFY_WINNER, clusterName: "historical", score: 77, confidence: 100, representativeEvidenceCount: 20 })).toMatchObject({ type: GrowthDecisionType.WAIT_FOR_MORE_DATA, reasonCodes: ["IDEA_GENERIC_TOPIC_INSUFFICIENT"] });
+    expect(planIdeaAction({ ...base, type: GrowthOpportunityType.AMPLIFY_WINNER, clusterName: "translators", representativeEvidenceCount: 100 })).toMatchObject({ type: GrowthDecisionType.WAIT_FOR_MORE_DATA, reasonCodes: ["IDEA_GENERIC_TOPIC_INSUFFICIENT"] });
+    expect(planIdeaAction({ ...base, type: GrowthOpportunityType.AMPLIFY_WINNER, clusterName: "professional", representativeEvidenceCount: 100, mappedIdeaIds: ["idea-1"] })).toMatchObject({ type: GrowthDecisionType.WAIT_FOR_MORE_DATA, targetIdeaId: null, reasonCodes: ["IDEA_GENERIC_TOPIC_INSUFFICIENT"] });
+  });
+  it("keeps a specific current-model topic eligible for creation", () => {
+    expect(planIdeaAction({ ...base, clusterName: "birthday-messages", representativeEvidenceCount: 3 })).toMatchObject({ type: GrowthDecisionType.CREATE_IDEA });
   });
 });
 

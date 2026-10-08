@@ -94,7 +94,7 @@ async function persistIdeaGenerationMetadata(decisionId: string, attempts: IdeaG
 async function getOpportunityContext(opportunityId: string) {
   const opportunity = await prisma.growthOpportunity.findUniqueOrThrow({
     where: { id: opportunityId },
-    include: { cluster: true },
+    include: { cluster: true, analysisRun: { select: { intelligenceModelVersion: true, clusteringModelVersion: true } } },
   });
   const snapshot = opportunity.clusterId
     ? await prisma.growthContentClusterSnapshot.findFirst({
@@ -136,6 +136,9 @@ export async function decideIdeaOpportunity(opportunityId: string) {
     score: context.opportunity.score,
     confidence: context.opportunity.confidence,
     evidenceQuality: context.opportunity.evidenceQuality,
+    intelligenceModelVersion: context.opportunity.analysisRun.intelligenceModelVersion,
+    analysisClusteringModelVersion: context.opportunity.analysisRun.clusteringModelVersion,
+    opportunityClusteringModelVersion: context.opportunity.clusteringModelVersion,
     clusterName: context.opportunity.cluster?.name || null,
     representativeEvidenceCount: context.representativePins.length,
     mappedIdeaIds: context.mappedIdeaIds,
@@ -148,6 +151,9 @@ export async function decideIdeaOpportunity(opportunityId: string) {
     score: context.opportunity.score,
     confidence: context.opportunity.confidence,
     evidenceQuality: context.opportunity.evidenceQuality,
+    intelligenceModelVersion: context.opportunity.analysisRun.intelligenceModelVersion,
+    analysisClusteringModelVersion: context.opportunity.analysisRun.clusteringModelVersion,
+    opportunityClusteringModelVersion: context.opportunity.clusteringModelVersion,
     clusterId: context.opportunity.clusterId,
     clusterName: context.opportunity.cluster?.name || null,
     representativePins: context.representativePins,
