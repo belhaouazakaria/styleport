@@ -1,4 +1,4 @@
-export const IDEA_AUTOPILOT_VERSION = "idea_autopilot_v1";
+export const IDEA_AUTOPILOT_VERSION = "idea_autopilot_v2";
 export const IDEA_GENERATION_VERSION = "idea_generation_v1";
 export const IDEA_QUALITY_VERSION = "idea_quality_v1";
 export const IDEA_DEDUPE_VERSION = "idea_dedupe_v1";
