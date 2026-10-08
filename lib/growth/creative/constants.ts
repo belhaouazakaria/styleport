@@ -3,7 +3,7 @@ import { GrowthCreativeArchetype } from "@prisma/client";
 export const CREATIVE_LAB_VERSION = "creative_lab_v1";
 export const CREATIVE_SIMILARITY_VERSION = "creative_similarity_v1";
 export const CREATIVE_EXPERIMENT_VERSION = "creative_experiment_v1";
-export const CREATIVE_RENDERER_VERSION = "creative_static_v2";
+export const CREATIVE_RENDERER_VERSION = "creative_static_v3";
 export const CONTROL_RENDERER_KEY = "v1-control";
 export const CONTROL_RENDERER_VERSION = "share_image_v1";
 export const CREATIVE_RENDERER_KEY = "creative-static";
