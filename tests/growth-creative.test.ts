@@ -10,9 +10,9 @@ import { describe, expect, it } from "vitest";
 
 import { createCreativeAiImageBudget } from "@/lib/growth/creative/ai-image-provider";
 import { GET as getCreativeAsset } from "@/app/generated/growth-creatives/[filename]/route";
-import { DETERMINISTIC_ARCHETYPES, STATIC_RENDERER_DEFINITIONS } from "@/lib/growth/creative/constants";
+import { CREATIVE_RENDERER_VERSION, DETERMINISTIC_ARCHETYPES, STATIC_RENDERER_DEFINITIONS } from "@/lib/growth/creative/constants";
 import { creativeGenerationJobPayloadSchema, createExperimentSchema } from "@/lib/growth/creative/contracts";
-import { capCreativeTextLines, CREATIVE_TEXT_LINE_LIMITS, getCreativeRendererDefinition, renderDeterministicCreative } from "@/lib/growth/creative/renderer";
+import { buildCreativeSvg, capCreativeTextLines, CREATIVE_TEXT_LINE_LIMITS, fitCreativeText, getCreativeRendererDefinition, renderDeterministicCreative } from "@/lib/growth/creative/renderer";
 import { buildExactCreativeSimilarity, classifyCreativeSimilarity } from "@/lib/growth/creative/similarity";
 import { cleanupCreativeAssetAfterFailure, persistCreativeAssetFile, readPngDimensions, releaseCreativeAssetLease, resolveCreativeAssetFile } from "@/lib/growth/creative/storage";
 
@@ -46,6 +46,20 @@ describe("Phase 10 Creative Lab contracts", () => {
     expect(readPngDimensions(first)).toEqual({ width: 1000, height: 1500 });
   });
 
+  it("uses the current SayTwist palette and versioned static renderer", () => {
+    expect(CREATIVE_RENDERER_VERSION).toBe("creative_static_v2");
+    for (const archetype of [GrowthCreativeArchetype.TYPOGRAPHY_LED, GrowthCreativeArchetype.EDITORIAL_LIST, GrowthCreativeArchetype.CONVERSATION_CHAT, GrowthCreativeArchetype.MINIMAL_STATEMENT]) {
+      const svg = buildCreativeSvg(archetype, copy).toString("utf8");
+      expect(svg).toContain("#14B8A6");
+      expect(svg).toContain("#FF7A59");
+      expect(svg).toContain("#0F172A");
+      expect(svg).toContain("#FFF9F4");
+      expect(svg).not.toContain("#f1e8ff");
+      expect(svg).not.toContain("#7048d8");
+      expect(svg).toContain('clip-path="url(#safe-canvas)"');
+    }
+  });
+
   it("caps maximum schema-valid static copy inside declared deterministic line limits", async () => {
     const maximumCopy = { title: "T".repeat(100), description: "D".repeat(500), headline: "H".repeat(90), subheadline: "S".repeat(180), cta: "C".repeat(50), topic: "P".repeat(160), listItems: Array.from({ length: 5 }, () => "L".repeat(80)) };
     for (const archetype of [GrowthCreativeArchetype.TYPOGRAPHY_LED, GrowthCreativeArchetype.EDITORIAL_LIST, GrowthCreativeArchetype.CONVERSATION_CHAT, GrowthCreativeArchetype.MINIMAL_STATEMENT]) {
@@ -60,6 +74,12 @@ describe("Phase 10 Creative Lab contracts", () => {
       expect(lines.every((line) => line.length <= limit.characters)).toBe(true);
       expect(lines.at(-1)).toMatch(/…$/);
     }
+    const fitted = fitCreativeText("A very long headline ".repeat(20), { maximumCharacters: 18, maximumLines: 4, maximumFontSize: 86, minimumFontSize: 58, availableWidth: 730 });
+    expect(fitted.lines).toHaveLength(4);
+    expect(fitted.lines.every((line) => line.length <= 18)).toBe(true);
+    expect(fitted.lines.at(-1)).toMatch(/…$/);
+    expect(fitted.fontSize).toBeGreaterThanOrEqual(58);
+    expect(fitted.fontSize).toBeLessThanOrEqual(86);
   });
 
   it("accepts only controlled identifiers and bounded experiment definitions", () => {
