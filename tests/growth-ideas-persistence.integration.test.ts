@@ -4,6 +4,7 @@ import {
   GrowthIdeaStatus,
   GrowthIdeaVersionAction,
   GrowthJobStatus,
+  GrowthJobType,
   GrowthOpportunityEvidenceQuality,
   GrowthOpportunityStatus,
   GrowthOpportunityType,
@@ -20,6 +21,7 @@ import type { GeneratedIdeaCandidate } from "@/lib/growth/ideas/contracts";
 import { IdeaGenerationError, type IdeaGenerationProvider } from "@/lib/growth/ideas/generation";
 import { recoverStaleGrowthJobs } from "@/lib/growth/jobs";
 import { archiveIdea, decideIdeaOpportunity, enqueueIdeaAutopilotDecision, executeIdeaDecision, rollbackIdeaVersion } from "@/lib/growth/ideas/service";
+import { CONTENT_CLUSTERING_VERSION, OPPORTUNITY_INTELLIGENCE_VERSION } from "@/lib/growth/opportunity/constants";
 import { runGrowthWorker } from "@/lib/growth/worker";
 import { prisma } from "@/lib/prisma";
 
@@ -97,22 +99,36 @@ async function seedTranslator(active = true) {
   } });
 }
 
-async function seedOpportunity(options: { type?: GrowthOpportunityType; clusterId?: string; clusterName?: string; score?: number; confidence?: number } = {}) {
+async function seedOpportunity(options: {
+  type?: GrowthOpportunityType;
+  clusterId?: string;
+  clusterName?: string;
+  score?: number;
+  confidence?: number;
+  intelligenceModelVersion?: string;
+  analysisClusteringModelVersion?: string;
+  opportunityClusteringModelVersion?: string;
+  representativePinCount?: number;
+} = {}) {
   sequence += 1;
+  const intelligenceModelVersion = options.intelligenceModelVersion || OPPORTUNITY_INTELLIGENCE_VERSION;
+  const analysisClusteringModelVersion = options.analysisClusteringModelVersion || CONTENT_CLUSTERING_VERSION;
+  const opportunityClusteringModelVersion = options.opportunityClusteringModelVersion || CONTENT_CLUSTERING_VERSION;
+  const representativePinCount = options.representativePinCount ?? 3;
   const analysis = await prisma.growthOpportunityAnalysisRun.create({ data: {
-    analysisDate: new Date(Date.UTC(2027, 0, Math.min(sequence, 28))), evidenceWindowStart: new Date("2026-09-01T00:00:00Z"), evidenceWindowEnd: new Date("2026-09-28T00:00:00Z"),
-    intelligenceModelVersion: `phase9-fixture-${sequence}`, scoringModelVersion: "opportunity_scoring_v1", clusteringModelVersion: "content_clustering_v2", evidenceQuality: GrowthOpportunityEvidenceQuality.KNOWN,
-    pinsConsidered: 3, pinCap: 500, clustersProduced: 1, opportunitiesProduced: 1, attributionCollection: "NOT_COLLECTING", reasonCodes: [], summary: "Bounded Phase 9 integration fixture.",
+    analysisDate: new Date(Date.UTC(2027, Math.floor((sequence - 1) / 28), ((sequence - 1) % 28) + 1)), evidenceWindowStart: new Date("2026-09-01T00:00:00Z"), evidenceWindowEnd: new Date("2026-09-28T00:00:00Z"),
+    intelligenceModelVersion, scoringModelVersion: "opportunity_scoring_v1", clusteringModelVersion: analysisClusteringModelVersion, evidenceQuality: GrowthOpportunityEvidenceQuality.KNOWN,
+    pinsConsidered: representativePinCount, pinCap: 500, clustersProduced: 1, opportunitiesProduced: 1, attributionCollection: "NOT_COLLECTING", reasonCodes: [], summary: "Bounded Phase 9 integration fixture.",
   } });
-  const cluster = options.clusterId ? await prisma.growthContentCluster.findUniqueOrThrow({ where: { id: options.clusterId } }) : await prisma.growthContentCluster.create({ data: { clusterKey: `birthday-${sequence}`, name: options.clusterName || "funny-birthday-messages", clusteringVersion: "content_clustering_v2", summary: "Specific birthday message intent." } });
-  const snapshot = await prisma.growthContentClusterSnapshot.create({ data: { analysisRunId: analysis.id, clusterId: cluster.id, pinCount: 3, distinctDestinationCount: 3, activeWeekCount: 4, impressions: 3000, saves: 90, pinClicks: 150, outboundClicks: 110, evidenceQuality: GrowthOpportunityEvidenceQuality.KNOWN, reasonCodes: [] } });
+  const cluster = options.clusterId ? await prisma.growthContentCluster.findUniqueOrThrow({ where: { id: options.clusterId } }) : await prisma.growthContentCluster.create({ data: { clusterKey: `birthday-${sequence}`, name: options.clusterName || "funny-birthday-messages", clusteringVersion: analysisClusteringModelVersion, summary: "Specific birthday message intent." } });
+  const snapshot = await prisma.growthContentClusterSnapshot.create({ data: { analysisRunId: analysis.id, clusterId: cluster.id, pinCount: representativePinCount, distinctDestinationCount: representativePinCount, activeWeekCount: 4, impressions: 3000, saves: 90, pinClicks: 150, outboundClicks: 110, evidenceQuality: GrowthOpportunityEvidenceQuality.KNOWN, reasonCodes: [] } });
   const account = await prisma.growthPinterestAccount.upsert({ where: { pinterestAccountId: "phase9" }, create: { pinterestAccountId: "phase9", publicationRole: GrowthPinterestPublicationRole.SAYTWIST_IDEAS, activeRole: GrowthPinterestPublicationRole.SAYTWIST_IDEAS, username: "saytwist", apiEnvironment: GrowthPinterestApiEnvironment.PRODUCTION, connectionStatus: GrowthPinterestConnectionStatus.CONNECTED, grantedScopes: ["pins:read"], encryptedCredentials: "integration-fixture-envelope-not-a-real-token", accessTokenExpiresAt: new Date("2027-12-01T00:00:00Z"), refreshTokenExpiresAt: new Date("2028-01-01T00:00:00Z") }, update: {} });
-  for (let index = 0; index < 3; index += 1) {
+  for (let index = 0; index < representativePinCount; index += 1) {
     const pinterestPinId = `phase9-${sequence}-${index}`;
     const pin = await prisma.growthPinterestPin.create({ data: { accountId: account.id, pinterestPinId, title: `Funny birthday message ${index + 1}`, description: "Specific demand for playful birthday wishes and examples", destinationUrl: `https://saytwist.com/ideas/source-${sequence}-${index}`, isActive: true, analyticsEligible: true, lastSeenAt: new Date(), lastSyncedAt: new Date() } });
     await prisma.growthContentClusterMembership.create({ data: { snapshotId: snapshot.id, pinId: pin.id, pinterestPinId, destinationPath: `/ideas/source-${sequence}-${index}`, matchTokens: ["funny", "birthday", "messages"] } });
   }
-  const opportunity = await prisma.growthOpportunity.create({ data: { analysisRunId: analysis.id, clusterId: cluster.id, type: options.type || GrowthOpportunityType.FILL_INVENTORY_GAP, status: GrowthOpportunityStatus.OPEN, score: options.score ?? 90, confidence: options.confidence ?? 92, evidenceQuality: GrowthOpportunityEvidenceQuality.KNOWN, scoringModelVersion: "opportunity_scoring_v1", clusteringModelVersion: "content_clustering_v2", evidence: {}, reasonCodes: ["SPECIFIC_EDITORIAL_GAP"], dedupeKey: `phase9-opportunity-${sequence}` } });
+  const opportunity = await prisma.growthOpportunity.create({ data: { analysisRunId: analysis.id, clusterId: cluster.id, type: options.type || GrowthOpportunityType.FILL_INVENTORY_GAP, status: GrowthOpportunityStatus.OPEN, score: options.score ?? 90, confidence: options.confidence ?? 92, evidenceQuality: GrowthOpportunityEvidenceQuality.KNOWN, scoringModelVersion: "opportunity_scoring_v1", clusteringModelVersion: opportunityClusteringModelVersion, evidence: {}, reasonCodes: ["SPECIFIC_EDITORIAL_GAP"], dedupeKey: `phase9-opportunity-${sequence}` } });
   return { opportunity, cluster };
 }
 
@@ -304,5 +320,38 @@ suite("Growth Phase 9 PostgreSQL A-P scenarios", () => {
     } };
     await expect(executeIdeaDecision(planned.decision.id, { provider })).rejects.toThrow("fake schema failure");
     expect(await prisma.growthDecision.findUniqueOrThrow({ where: { id: planned.decision.id } })).toMatchObject({ aiProvider: "FAKE", aiModel: "fake-invalid", aiResponseId: "invalid-1,invalid-2", aiPromptTokens: 20, aiCompletionTokens: 40, aiTotalTokens: 60, actualOutcome: { generation: { attemptCount: 2 } } });
+  });
+
+  it("dismisses a high-volume v1 opportunity without creating an execution job", async () => {
+    const { opportunity } = await seedOpportunity({
+      type: GrowthOpportunityType.AMPLIFY_WINNER,
+      clusterName: "translators",
+      score: 94,
+      confidence: 100,
+      intelligenceModelVersion: "opportunity_intelligence_v1",
+      analysisClusteringModelVersion: "content_clustering_v1",
+      opportunityClusteringModelVersion: "content_clustering_v1",
+      representativePinCount: 100,
+    });
+    const planned = await decideIdeaOpportunity(opportunity.id);
+    expect(planned.decision).toMatchObject({ type: GrowthDecisionType.NO_ACTION, status: GrowthDecisionStatus.COMPLETED, reasonCodes: ["IDEA_SOURCE_MODEL_OUTDATED"] });
+    expect(planned.execution).toBeNull();
+    expect(await prisma.growthJob.count({ where: { type: GrowthJobType.IDEA_AUTOPILOT_EXECUTE } })).toBe(0);
+    expect((await prisma.growthOpportunity.findUniqueOrThrow({ where: { id: opportunity.id } })).status).toBe(GrowthOpportunityStatus.DISMISSED);
+  });
+
+  it("defers a high-volume current-model generic opportunity without creating an execution job", async () => {
+    const { opportunity } = await seedOpportunity({
+      type: GrowthOpportunityType.AMPLIFY_WINNER,
+      clusterName: "historical",
+      score: 77,
+      confidence: 100,
+      representativePinCount: 20,
+    });
+    const planned = await decideIdeaOpportunity(opportunity.id);
+    expect(planned.decision).toMatchObject({ type: GrowthDecisionType.WAIT_FOR_MORE_DATA, status: GrowthDecisionStatus.WAITING_DATA, reasonCodes: ["IDEA_GENERIC_TOPIC_INSUFFICIENT"] });
+    expect(planned.execution).toBeNull();
+    expect(await prisma.growthJob.count({ where: { type: GrowthJobType.IDEA_AUTOPILOT_EXECUTE } })).toBe(0);
+    expect((await prisma.growthOpportunity.findUniqueOrThrow({ where: { id: opportunity.id } })).status).toBe(GrowthOpportunityStatus.DEFERRED);
   });
 });
