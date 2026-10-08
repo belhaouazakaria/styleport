@@ -33,6 +33,12 @@ export default async function AdminGrowthPage() {
       <main className="space-y-6 p-4 sm:p-6">
         <div className="flex flex-wrap justify-end gap-3">
           <Link
+            href="/admin/growth/creative"
+            className={cn(buttonVariants({ variant: "outline" }))}
+          >
+            Creative Lab
+          </Link>
+          <Link
             href="/admin/growth/ideas"
             className={cn(buttonVariants({ variant: "outline" }))}
           >

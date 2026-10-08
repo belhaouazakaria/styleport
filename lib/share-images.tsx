@@ -415,6 +415,11 @@ function isManagedShareImagePath(shareImagePath: string | null) {
   return shareImagePath.startsWith(`${publicPathPrefix}/`);
 }
 
+export function getStoredShareImageFilePath(shareImagePath: string | null) {
+  if (!isManagedShareImagePath(shareImagePath)) return null;
+  return toStoragePath(shareImagePath!);
+}
+
 async function fileExists(filePath: string) {
   try {
     await access(filePath);

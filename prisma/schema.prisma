@@ -163,6 +163,75 @@ enum GrowthJobType {
   TRANSLATOR_AUTOPILOT_EXECUTE
   IDEA_AUTOPILOT_DECIDE
   IDEA_AUTOPILOT_EXECUTE
+  CREATIVE_LAB_GENERATE
+}
+
+enum GrowthCreativeDestinationKind {
+  TRANSLATOR
+  IDEA
+}
+
+enum GrowthCreativeArchetype {
+  V1_CONTROL
+  TYPOGRAPHY_LED
+  EDITORIAL_LIST
+  CONVERSATION_CHAT
+  MINIMAL_STATEMENT
+  BEFORE_AFTER
+  COMPARISON
+  QUIZ_PERSONALITY
+  SCENE_BASED
+}
+
+enum GrowthPinCandidateStatus {
+  DRAFT
+  RENDERING
+  READY
+  DEFERRED
+  REJECTED
+  FAILED_RETRYABLE
+  FAILED_TERMINAL
+  CANCELLED
+}
+
+enum GrowthAssetGenerationKind {
+  DETERMINISTIC
+  REUSED
+  AI
+}
+
+enum GrowthAssetState {
+  READY
+  FAILED_RETRYABLE
+  FAILED_TERMINAL
+  RETIRED
+}
+
+enum GrowthCreativeSimilarityClassification {
+  EXACT_DUPLICATE
+  NEAR_DUPLICATE
+  RELATED_DISTINCT
+  DISTINCT
+  INSUFFICIENT_DATA
+}
+
+enum GrowthExperimentDimension {
+  ARCHETYPE
+  TEMPLATE
+  HEADLINE_PATTERN
+  CTA_PATTERN
+  VISUAL_TREATMENT
+}
+
+enum GrowthExperimentStatus {
+  DRAFT
+  RUNNING
+  PAUSED
+  ANALYZING
+  COMPLETED
+  INCONCLUSIVE
+  CANCELLED
+  FAILED_TERMINAL
 }
 
 enum GrowthJobStatus {
@@ -456,6 +525,7 @@ model Translator {
   growthDecisions              GrowthDecision[]
   growthContentVersions        GrowthContentVersion[]
   growthIdeaReferences         GrowthIdeaTranslatorReference[]
+  growthPinCandidates          GrowthPinCandidate[]
 
   @@index([isActive, isFeatured, sortOrder])
   @@index([isFeatured, featuredRank])
@@ -827,6 +897,7 @@ model GrowthJob {
   growthDecisions       GrowthDecision[]
   growthContentVersions GrowthContentVersion[]
   growthIdeaVersions    GrowthIdeaVersion[]
+  growthPinCandidate    GrowthPinCandidate?
 
   @@index([status, runAfter])
   @@index([leaseUntil])
@@ -894,6 +965,7 @@ model GrowthPinterestAccount {
   updatedAt               DateTime                            @updatedAt
   boards                  GrowthPinterestBoard[]
   pins                    GrowthPinterestPin[]
+  creativeCandidates      GrowthPinCandidate[]
   dailyMetrics            GrowthPinterestAccountMetricDaily[]
   analyticsState          GrowthPinterestAnalyticsState?
 
@@ -902,20 +974,21 @@ model GrowthPinterestAccount {
 }
 
 model GrowthPinterestBoard {
-  id               String                 @id @default(cuid())
-  accountId        String
-  pinterestBoardId String
-  name             String
-  description      String?
-  privacy          String?
-  ownerUsername    String?
-  isActive         Boolean                @default(true)
-  lastSeenAt       DateTime
-  lastSyncedAt     DateTime
-  createdAt        DateTime               @default(now())
-  updatedAt        DateTime               @updatedAt
-  account          GrowthPinterestAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  pins             GrowthPinterestPin[]
+  id                 String                 @id @default(cuid())
+  accountId          String
+  pinterestBoardId   String
+  name               String
+  description        String?
+  privacy            String?
+  ownerUsername      String?
+  isActive           Boolean                @default(true)
+  lastSeenAt         DateTime
+  lastSyncedAt       DateTime
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  account            GrowthPinterestAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  pins               GrowthPinterestPin[]
+  creativeCandidates GrowthPinCandidate[]
 
   @@unique([accountId, pinterestBoardId])
   @@index([accountId, isActive])
@@ -1114,19 +1187,21 @@ model GrowthOpportunityAnalysisRun {
 }
 
 model GrowthContentCluster {
-  id                String                          @id @default(cuid())
-  clusterKey        String
-  name              String
-  clusteringVersion String
-  targetRole        GrowthPinterestPublicationRole?
-  status            GrowthContentClusterStatus      @default(ACTIVE)
-  summary           String
-  createdAt         DateTime                        @default(now())
-  updatedAt         DateTime                        @updatedAt
-  snapshots         GrowthContentClusterSnapshot[]
-  opportunities     GrowthOpportunity[]
-  pinSignals        GrowthPinSignal[]
-  ideas             GrowthIdea[]
+  id                  String                          @id @default(cuid())
+  clusterKey          String
+  name                String
+  clusteringVersion   String
+  targetRole          GrowthPinterestPublicationRole?
+  status              GrowthContentClusterStatus      @default(ACTIVE)
+  summary             String
+  createdAt           DateTime                        @default(now())
+  updatedAt           DateTime                        @updatedAt
+  snapshots           GrowthContentClusterSnapshot[]
+  opportunities       GrowthOpportunity[]
+  pinSignals          GrowthPinSignal[]
+  ideas               GrowthIdea[]
+  creativeCandidates  GrowthPinCandidate[]
+  creativeExperiments GrowthExperiment[]
 
   @@unique([clusterKey, clusteringVersion])
   @@index([status, updatedAt])
@@ -1238,6 +1313,7 @@ model GrowthDecision {
   executionJob                 GrowthJob?             @relation(fields: [executionJobId], references: [id], onDelete: SetNull)
   contentVersions              GrowthContentVersion[]
   ideaVersions                 GrowthIdeaVersion[]
+  creativeCandidates           GrowthPinCandidate[]
 
   @@index([status, createdAt])
   @@index([opportunityId, createdAt])
@@ -1261,23 +1337,24 @@ model GrowthIdeaCategory {
 }
 
 model GrowthIdea {
-  id               String                @id @default(cuid())
-  slug             String                @unique
-  categoryId       String
-  status           GrowthIdeaStatus      @default(DRAFT)
-  currentVersionId String?               @unique
-  clusterId        String?
-  seoTitle         String
-  seoDescription   String
-  publishedAt      DateTime?
-  archivedAt       DateTime?
-  createdAt        DateTime              @default(now())
-  updatedAt        DateTime              @updatedAt
-  category         GrowthIdeaCategory    @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  cluster          GrowthContentCluster? @relation(fields: [clusterId], references: [id], onDelete: SetNull)
-  currentVersion   GrowthIdeaVersion?    @relation("CurrentGrowthIdeaVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
-  versions         GrowthIdeaVersion[]   @relation("GrowthIdeaVersions")
-  decisions        GrowthDecision[]
+  id                  String                @id @default(cuid())
+  slug                String                @unique
+  categoryId          String
+  status              GrowthIdeaStatus      @default(DRAFT)
+  currentVersionId    String?               @unique
+  clusterId           String?
+  seoTitle            String
+  seoDescription      String
+  publishedAt         DateTime?
+  archivedAt          DateTime?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  category            GrowthIdeaCategory    @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  cluster             GrowthContentCluster? @relation(fields: [clusterId], references: [id], onDelete: SetNull)
+  currentVersion      GrowthIdeaVersion?    @relation("CurrentGrowthIdeaVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
+  versions            GrowthIdeaVersion[]   @relation("GrowthIdeaVersions")
+  decisions           GrowthDecision[]
+  growthPinCandidates GrowthPinCandidate[]
 
   @@index([status, publishedAt])
   @@index([categoryId, status, publishedAt])
@@ -1344,6 +1421,110 @@ model GrowthIdeaTranslatorReference {
 
   @@unique([versionId, translatorId, kind])
   @@index([translatorId, createdAt])
+}
+
+model GrowthAsset {
+  id              String                    @id @default(cuid())
+  publicPath      String                    @unique @db.VarChar(512)
+  checksum        String                    @db.VarChar(64)
+  mimeType        String                    @db.VarChar(32)
+  width           Int
+  height          Int
+  byteSize        Int
+  rendererKey     String                    @db.VarChar(64)
+  rendererVersion String                    @db.VarChar(64)
+  templateId      String?                   @db.VarChar(96)
+  generationKind  GrowthAssetGenerationKind
+  state           GrowthAssetState          @default(READY)
+  aiProvider      String?                   @db.VarChar(80)
+  aiModel         String?                   @db.VarChar(120)
+  aiResponseId    String?                   @db.VarChar(191)
+  aiImageUnits    Int?
+  estimatedCost   Decimal?                  @db.Decimal(12, 6)
+  retainedUntil   DateTime?
+  createdAt       DateTime                  @default(now())
+  candidates      GrowthPinCandidate[]
+
+  @@index([checksum])
+  @@index([generationKind, createdAt])
+  @@index([state, retainedUntil])
+}
+
+model GrowthExperiment {
+  id                      String                    @id @default(cuid())
+  clusterId               String?
+  hypothesis              String                    @db.VarChar(500)
+  dimension               GrowthExperimentDimension
+  variants                Json
+  primaryKpi              String                    @db.VarChar(80)
+  guardrails              Json
+  attributionModelVersion String                    @db.VarChar(80)
+  scoringModelVersion     String                    @db.VarChar(80)
+  experimentModelVersion  String                    @db.VarChar(80)
+  status                  GrowthExperimentStatus    @default(DRAFT)
+  startedAt               DateTime?
+  endedAt                 DateTime?
+  result                  Json?
+  createdAt               DateTime                  @default(now())
+  updatedAt               DateTime                  @updatedAt
+  cluster                 GrowthContentCluster?     @relation(fields: [clusterId], references: [id], onDelete: SetNull)
+  candidates              GrowthPinCandidate[]
+
+  @@index([status, createdAt])
+  @@index([clusterId, createdAt])
+}
+
+model GrowthPinCandidate {
+  id                     String                                 @id @default(cuid())
+  candidateKey           String                                 @db.VarChar(191)
+  revision               Int
+  accountId              String?
+  boardId                String?
+  clusterId              String?
+  decisionId             String?
+  experimentId           String?
+  experimentVariantKey   String?                                @db.VarChar(64)
+  generationJobId        String?                                @unique
+  destinationKind        GrowthCreativeDestinationKind
+  translatorId           String?
+  ideaId                 String?
+  title                  String                                 @db.VarChar(100)
+  description            String                                 @db.VarChar(500)
+  destinationPath        String                                 @db.VarChar(512)
+  pinRef                 String?                                @db.VarChar(191)
+  assetId                String
+  rendererKey            String                                 @db.VarChar(64)
+  rendererVersion        String                                 @db.VarChar(64)
+  templateId             String                                 @db.VarChar(96)
+  archetype              GrowthCreativeArchetype
+  headlinePattern        String                                 @db.VarChar(96)
+  ctaPattern             String                                 @db.VarChar(96)
+  visualTreatment        String                                 @db.VarChar(96)
+  topic                  String                                 @db.VarChar(160)
+  contentHash            String                                 @db.VarChar(64)
+  similarityModelVersion String                                 @db.VarChar(64)
+  similarityResult       GrowthCreativeSimilarityClassification
+  similarityFlags        Json
+  recommendedAt          DateTime                               @default(now())
+  status                 GrowthPinCandidateStatus               @default(DRAFT)
+  createdAt              DateTime                               @default(now())
+  account                GrowthPinterestAccount?                @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  board                  GrowthPinterestBoard?                  @relation(fields: [boardId], references: [id], onDelete: SetNull)
+  cluster                GrowthContentCluster?                  @relation(fields: [clusterId], references: [id], onDelete: SetNull)
+  decision               GrowthDecision?                        @relation(fields: [decisionId], references: [id], onDelete: SetNull)
+  experiment             GrowthExperiment?                      @relation(fields: [experimentId], references: [id], onDelete: SetNull)
+  generationJob          GrowthJob?                             @relation(fields: [generationJobId], references: [id], onDelete: SetNull)
+  translator             Translator?                            @relation(fields: [translatorId], references: [id], onDelete: Restrict)
+  idea                   GrowthIdea?                            @relation(fields: [ideaId], references: [id], onDelete: Restrict)
+  asset                  GrowthAsset                            @relation(fields: [assetId], references: [id], onDelete: Restrict)
+
+  @@unique([candidateKey, revision])
+  @@index([status, recommendedAt])
+  @@index([destinationKind, translatorId, ideaId, createdAt])
+  @@index([contentHash])
+  @@index([accountId, createdAt])
+  @@index([experimentId, experimentVariantKey])
+  @@index([assetId])
 }
 
 model GrowthContentVersion {
