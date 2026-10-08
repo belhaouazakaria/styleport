@@ -14,9 +14,11 @@ import {
 } from "@prisma/client";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
-import { getIndexableIdeaSlugsForSitemap, getPublicIdeaBySlug, getPublicIdeasPage } from "@/lib/data/ideas";
+import { generateMetadata as generateIdeaMetadata } from "@/app/(public)/ideas/[slug]/page";
+import { getIndexableIdeaSlugsForSitemap, getPublicIdeaBySlug, getPublicIdeaCategories, getPublicIdeasPage } from "@/lib/data/ideas";
 import type { GeneratedIdeaCandidate } from "@/lib/growth/ideas/contracts";
-import type { IdeaGenerationProvider } from "@/lib/growth/ideas/generation";
+import { IdeaGenerationError, type IdeaGenerationProvider } from "@/lib/growth/ideas/generation";
+import { recoverStaleGrowthJobs } from "@/lib/growth/jobs";
 import { archiveIdea, decideIdeaOpportunity, enqueueIdeaAutopilotDecision, executeIdeaDecision, rollbackIdeaVersion } from "@/lib/growth/ideas/service";
 import { runGrowthWorker } from "@/lib/growth/worker";
 import { prisma } from "@/lib/prisma";
@@ -174,6 +176,7 @@ suite("Growth Phase 9 PostgreSQL A-P scenarios", () => {
     const translator = await seedTranslator(); const { opportunity } = await seedOpportunity(); const planned = await decideIdeaOpportunity(opportunity.id);
     await executeIdeaDecision(planned.decision.id, { provider: new FakeProvider({ ...candidate(translator.slug), categorySuggestion: "invented-category" }) });
     expect(await prisma.growthIdea.count()).toBe(0); expect(await prisma.growthIdeaCategory.findUnique({ where: { slug: "invented-category" } })).toBeNull();
+    expect(await prisma.growthDecision.findUniqueOrThrow({ where: { id: planned.decision.id } })).toMatchObject({ aiProvider: "FAKE", aiTotalTokens: 300, actualOutcome: { generation: { attemptCount: 1 } } });
   });
 
   it("H: inactive or unknown Translator references block publication", async () => {
@@ -231,5 +234,75 @@ suite("Growth Phase 9 PostgreSQL A-P scenarios", () => {
     const translator = await seedTranslator(); const { opportunity } = await seedOpportunity(); const planned = await decideIdeaOpportunity(opportunity.id); const provider = new FakeProvider(candidate(translator.slug));
     await executeIdeaDecision(planned.decision.id, { provider }); const decision = await prisma.growthDecision.findUniqueOrThrow({ where: { id: planned.decision.id } });
     expect(provider.calls).toBe(1); expect(decision).toMatchObject({ aiProvider: "FAKE", aiModel: "fake-ideas-v1", aiResponseId: "fake-1", aiPromptTokens: 100, aiCompletionTokens: 200, aiTotalTokens: 300 });
+  });
+
+  it("recovers stale Idea execution as retryable and terminal without duplicate mutation", async () => {
+    const translator = await seedTranslator();
+    const { opportunity } = await seedOpportunity();
+    const planned = await decideIdeaOpportunity(opportunity.id);
+    const jobId = planned.execution!.job.id;
+    await prisma.growthDecision.update({ where: { id: planned.decision.id }, data: { status: GrowthDecisionStatus.EXECUTING } });
+    await prisma.growthJob.update({ where: { id: jobId }, data: { status: GrowthJobStatus.RUNNING, workerId: "crashed-idea-worker", attemptCount: 1, maxAttempts: 2, claimedAt: new Date(0), leaseUntil: new Date(0), heartbeatAt: new Date(0) } });
+    await expect(recoverStaleGrowthJobs(new Date(), 1)).resolves.toBe(1);
+    expect(await prisma.growthDecision.findUniqueOrThrow({ where: { id: planned.decision.id } })).toMatchObject({ status: GrowthDecisionStatus.FAILED_RETRYABLE, reasonCodes: expect.arrayContaining(["EXECUTION_JOB_LEASE_EXPIRED"]) });
+    expect((await prisma.growthOpportunity.findUniqueOrThrow({ where: { id: opportunity.id } })).status).toBe(GrowthOpportunityStatus.FAILED_RETRYABLE);
+    await executeIdeaDecision(planned.decision.id, { provider: new FakeProvider(candidate(translator.slug)) });
+    await executeIdeaDecision(planned.decision.id, { provider: new FakeProvider(candidate(translator.slug)) });
+    expect(await prisma.growthIdea.count()).toBe(1);
+    expect(await prisma.growthIdeaVersion.count()).toBe(1);
+
+    const terminalOpportunity = await seedOpportunity({ clusterName: "specific-terminal-topic" });
+    const terminal = await decideIdeaOpportunity(terminalOpportunity.opportunity.id);
+    await prisma.growthDecision.update({ where: { id: terminal.decision.id }, data: { status: GrowthDecisionStatus.EXECUTING } });
+    await prisma.growthJob.update({ where: { id: terminal.execution!.job.id }, data: { status: GrowthJobStatus.RUNNING, workerId: "crashed-terminal-worker", attemptCount: 1, maxAttempts: 1, claimedAt: new Date(0), leaseUntil: new Date(0), heartbeatAt: new Date(0) } });
+    await expect(recoverStaleGrowthJobs(new Date(), 1)).resolves.toBe(1);
+    expect(await prisma.growthDecision.findUniqueOrThrow({ where: { id: terminal.decision.id } })).toMatchObject({ status: GrowthDecisionStatus.FAILED_TERMINAL, completedAt: expect.any(Date) });
+    expect(await prisma.growthOpportunity.findUniqueOrThrow({ where: { id: terminalOpportunity.opportunity.id } })).toMatchObject({ status: GrowthOpportunityStatus.FAILED_TERMINAL, closedAt: expect.any(Date) });
+  });
+
+  it("requires an active Idea category for every public query", async () => {
+    const first = await createIdeaFixture();
+    await prisma.growthIdeaCategory.update({ where: { id: first.idea.categoryId }, data: { isActive: false } });
+    expect((await getPublicIdeasPage()).total).toBe(0);
+    expect(await getPublicIdeaBySlug(first.idea.slug)).toBeNull();
+    expect(await getIndexableIdeaSlugsForSitemap()).toEqual([]);
+    expect(await getPublicIdeaCategories()).toEqual([]);
+  });
+
+  it("rejects rollback of an archived Idea and keeps it unavailable", async () => {
+    const first = await createIdeaFixture();
+    const admin = await prisma.user.create({ data: { email: "archive-admin@example.com", passwordHash: "not-a-real-hash", role: Role.ADMIN } });
+    await archiveIdea({ ideaId: first.idea.id, expectedCurrentChecksum: first.idea.currentVersion!.checksum, actorUserId: admin.id });
+    await expect(rollbackIdeaVersion({ ideaId: first.idea.id, targetVersionId: first.idea.currentVersionId!, expectedCurrentChecksum: first.idea.currentVersion!.checksum, actorUserId: admin.id })).rejects.toThrow("Archived Ideas cannot be restored");
+    expect((await prisma.growthIdea.findUniqueOrThrow({ where: { id: first.idea.id } })).status).toBe(GrowthIdeaStatus.ARCHIVED);
+    expect(await getPublicIdeaBySlug(first.idea.slug)).toBeNull();
+  });
+
+  it("enforces current-version ownership in PostgreSQL", async () => {
+    const first = await createIdeaFixture();
+    const other = await prisma.growthIdea.create({ data: { slug: "another-safe-idea", categoryId: first.idea.categoryId, status: GrowthIdeaStatus.DRAFT, seoTitle: "Another safe Idea title", seoDescription: "Another safe Idea description that remains a draft during this ownership invariant test." } });
+    await prisma.growthIdea.update({ where: { id: first.idea.id }, data: { status: GrowthIdeaStatus.DRAFT, currentVersionId: null, publishedAt: null } });
+    await expect(prisma.growthIdea.update({ where: { id: other.id }, data: { currentVersionId: first.idea.currentVersionId } })).rejects.toThrow(/currentVersionId must reference a version owned by the same Idea/);
+  });
+
+  it("uses current-version SEO and fails closed on corrupt current blocks", async () => {
+    const first = await createIdeaFixture();
+    await prisma.growthIdea.update({ where: { id: first.idea.id }, data: { seoTitle: "Stale parent SEO title", seoDescription: "Stale parent SEO description that must never become public metadata." } });
+    const metadata = await generateIdeaMetadata({ params: Promise.resolve({ slug: first.idea.slug }) });
+    expect(metadata).toMatchObject({ title: first.idea.currentVersion!.seoTitle, description: first.idea.currentVersion!.seoDescription });
+    await prisma.growthIdeaVersion.update({ where: { id: first.idea.currentVersionId! }, data: { blocks: [{ type: "PARAGRAPH", text: "Only one block is corrupt because the full contract requires at least three." }] } });
+    expect(await getPublicIdeaBySlug(first.idea.slug)).toBeNull();
+  });
+
+  it("retains aggregate AI metadata when schema generation and repair both fail", async () => {
+    const { opportunity } = await seedOpportunity();
+    const planned = await decideIdeaOpportunity(opportunity.id);
+    let calls = 0;
+    const provider: IdeaGenerationProvider = { generate: async () => {
+      calls += 1;
+      throw new IdeaGenerationError("fake schema failure", { provider: "FAKE", model: "fake-invalid", responseId: `invalid-${calls}`, promptTokens: 10, completionTokens: 20, totalTokens: 30 });
+    } };
+    await expect(executeIdeaDecision(planned.decision.id, { provider })).rejects.toThrow("fake schema failure");
+    expect(await prisma.growthDecision.findUniqueOrThrow({ where: { id: planned.decision.id } })).toMatchObject({ aiProvider: "FAKE", aiModel: "fake-invalid", aiResponseId: "invalid-1,invalid-2", aiPromptTokens: 20, aiCompletionTokens: 40, aiTotalTokens: 60, actualOutcome: { generation: { attemptCount: 2 } } });
   });
 });

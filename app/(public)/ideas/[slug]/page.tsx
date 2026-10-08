@@ -19,7 +19,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const idea = await getPublicIdeaBySlug(slug);
   if (!idea) return { title: "Idea not found", robots: { index: false, follow: false } };
   const url = new URL(`/ideas/${idea.slug}`, getAppBaseUrl()).toString();
-  return { title: idea.seoTitle, description: idea.seoDescription, alternates: { canonical: url }, openGraph: { title: idea.seoTitle, description: idea.seoDescription, type: "article", url }, twitter: { card: "summary_large_image", title: idea.seoTitle, description: idea.seoDescription } };
+  const seoTitle = idea.currentVersion!.seoTitle;
+  const seoDescription = idea.currentVersion!.seoDescription;
+  return { title: seoTitle, description: seoDescription, alternates: { canonical: url }, openGraph: { title: seoTitle, description: seoDescription, type: "article", url }, twitter: { card: "summary_large_image", title: seoTitle, description: seoDescription } };
 }
 
 export default async function IdeaDetailPage({ params }: Props) {
@@ -33,4 +35,3 @@ export default async function IdeaDetailPage({ params }: Props) {
     {idea.related.length ? <section className="mx-auto max-w-7xl border-t border-dashed border-border px-4 py-10 sm:px-6 lg:px-8"><h2 className="font-display text-3xl font-bold text-ink">More useful ideas</h2><div className="mt-5 grid gap-4 md:grid-cols-2">{idea.related.map((related) => <article key={related.id} className="rounded-2xl border border-border bg-white p-5"><p className="text-xs font-bold uppercase tracking-wide text-brand-700">{related.category.name}</p><h3 className="font-display mt-2 text-xl font-bold text-ink"><Link href={`/ideas/${related.slug}`}>{related.currentVersion!.title}</Link></h3><p className="mt-2 text-sm leading-6 text-muted-ink">{related.currentVersion!.excerpt}</p></article>)}</div></section> : null}
   </main><Footer platformName={settings.platformName} /></div>;
 }
-

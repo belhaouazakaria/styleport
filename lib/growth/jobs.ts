@@ -1,7 +1,9 @@
 import {
   GrowthActivityActorKind,
+  GrowthDecisionStatus,
   GrowthJobStatus,
   GrowthJobType,
+  GrowthOpportunityStatus,
   Prisma,
   type GrowthJob,
 } from "@prisma/client";
@@ -107,7 +109,7 @@ export async function recoverStaleGrowthJobs(now = new Date(), limit = 25) {
       status: { in: [GrowthJobStatus.CLAIMED, GrowthJobStatus.RUNNING] },
       leaseUntil: { lt: now },
     },
-    select: { id: true, status: true, attemptCount: true, maxAttempts: true, idempotencyKey: true },
+    select: { id: true, type: true, status: true, attemptCount: true, maxAttempts: true, idempotencyKey: true },
     take: Math.min(100, Math.max(1, limit)),
   });
 
@@ -134,6 +136,44 @@ export async function recoverStaleGrowthJobs(now = new Date(), limit = 25) {
       });
       if (updated.count === 1) {
         recovered += 1;
+        if (job.type === GrowthJobType.TRANSLATOR_AUTOPILOT_EXECUTE || job.type === GrowthJobType.IDEA_AUTOPILOT_EXECUTE) {
+          const decision = await tx.growthDecision.findFirst({
+            where: { executionJobId: job.id, status: GrowthDecisionStatus.EXECUTING },
+            select: { id: true, opportunityId: true, idempotencyKey: true },
+          });
+          if (decision) {
+            const decisionStatus = retryable ? GrowthDecisionStatus.FAILED_RETRYABLE : GrowthDecisionStatus.FAILED_TERMINAL;
+            const decisionUpdated = await tx.growthDecision.updateMany({
+              where: { id: decision.id, status: GrowthDecisionStatus.EXECUTING },
+              data: { status: decisionStatus, completedAt: retryable ? null : now, reasonCodes: { push: "EXECUTION_JOB_LEASE_EXPIRED" } },
+            });
+            if (decisionUpdated.count === 1) {
+              if (decision.opportunityId) {
+                await tx.growthOpportunity.updateMany({
+                  where: {
+                    id: decision.opportunityId,
+                    status: retryable
+                      ? GrowthOpportunityStatus.EVALUATING
+                      : { in: [GrowthOpportunityStatus.EVALUATING, GrowthOpportunityStatus.FAILED_RETRYABLE] },
+                  },
+                  data: retryable
+                    ? { status: GrowthOpportunityStatus.FAILED_RETRYABLE }
+                    : { status: GrowthOpportunityStatus.FAILED_TERMINAL, closedAt: now },
+                });
+              }
+              await recordGrowthActivity({
+                actorKind: GrowthActivityActorKind.SYSTEM,
+                entityType: "GrowthDecision",
+                entityId: decision.id,
+                action: "EXECUTION_JOB_LEASE_EXPIRED",
+                fromState: GrowthDecisionStatus.EXECUTING,
+                toState: decisionStatus,
+                summary: { jobId: job.id, jobType: job.type, attemptCount: job.attemptCount, maxAttempts: job.maxAttempts },
+                correlationKey: decision.idempotencyKey,
+              }, tx);
+            }
+          }
+        }
         await recordGrowthActivity({
           actorKind: GrowthActivityActorKind.SYSTEM,
           entityType: "GrowthJob",

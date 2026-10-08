@@ -1,6 +1,6 @@
 import { GrowthIdeaStatus } from "@prisma/client";
 
-import { ideaBlockSchema, type IdeaBlock } from "@/lib/growth/ideas/contracts";
+import { ideaBlocksSchema, type IdeaBlock } from "@/lib/growth/ideas/contracts";
 import { prisma } from "@/lib/prisma";
 
 const PUBLIC_PAGE_SIZE = 12;
@@ -9,11 +9,12 @@ const publicWhere = {
   status: GrowthIdeaStatus.PUBLISHED,
   archivedAt: null,
   currentVersionId: { not: null },
+  category: { isActive: true, archivedAt: null },
 } as const;
 
-function parseBlocks(value: unknown): IdeaBlock[] {
-  if (!Array.isArray(value)) return [];
-  return value.map((item) => ideaBlockSchema.safeParse(item)).filter((item) => item.success).map((item) => item.data);
+function parseBlocks(value: unknown): IdeaBlock[] | null {
+  const parsed = ideaBlocksSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
 }
 
 export async function getPublicIdeaCategories() {
@@ -49,13 +50,15 @@ export async function getPublicIdeaBySlug(slug: string) {
     },
   });
   if (!idea?.currentVersion || !idea.currentVersion.publishedAt) return null;
+  const blocks = parseBlocks(idea.currentVersion.blocks);
+  if (!blocks) return null;
   const translators = idea.currentVersion.translatorReferences.map((item) => item.translator).filter((item) => item.isActive && !item.archivedAt);
   const related = await prisma.growthIdea.findMany({
     where: { ...publicWhere, id: { not: idea.id }, OR: [{ categoryId: idea.categoryId }, ...(idea.clusterId ? [{ clusterId: idea.clusterId }] : [])] },
     select: { id: true, slug: true, category: { select: { name: true, slug: true } }, currentVersion: { select: { title: true, excerpt: true } } },
     orderBy: [{ publishedAt: "desc" }, { id: "asc" }], take: 4,
   });
-  return { ...idea, blocks: parseBlocks(idea.currentVersion.blocks), translators, related: related.filter((item) => item.currentVersion) };
+  return { ...idea, blocks, translators, related: related.filter((item) => item.currentVersion) };
 }
 
 export async function getIndexableIdeaSlugsForSitemap(limit = 5000) {

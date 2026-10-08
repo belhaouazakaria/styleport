@@ -122,6 +122,46 @@ ALTER TABLE "GrowthIdeaTranslatorReference" ADD CONSTRAINT "GrowthIdeaTranslator
 ALTER TABLE "GrowthIdeaTranslatorReference" ADD CONSTRAINT "GrowthIdeaTranslatorReference_translatorId_fkey" FOREIGN KEY ("translatorId") REFERENCES "Translator"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE "GrowthDecision" ADD CONSTRAINT "GrowthDecision_ideaId_fkey" FOREIGN KEY ("ideaId") REFERENCES "GrowthIdea"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
+CREATE FUNCTION "check_growth_idea_current_version_ownership"() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW."currentVersionId" IS NOT NULL AND NOT EXISTS (
+    SELECT 1
+    FROM "GrowthIdeaVersion"
+    WHERE "id" = NEW."currentVersionId" AND "ideaId" = NEW."id"
+  ) THEN
+    RAISE EXCEPTION 'GrowthIdea currentVersionId must reference a version owned by the same Idea'
+      USING ERRCODE = '23514', CONSTRAINT = 'GrowthIdea_current_version_ownership_check';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE CONSTRAINT TRIGGER "GrowthIdea_current_version_ownership_check"
+AFTER INSERT OR UPDATE ON "GrowthIdea"
+DEFERRABLE INITIALLY IMMEDIATE
+FOR EACH ROW EXECUTE FUNCTION "check_growth_idea_current_version_ownership"();
+
+CREATE FUNCTION "check_growth_idea_version_owner_change"() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW."ideaId" IS DISTINCT FROM OLD."ideaId" AND EXISTS (
+    SELECT 1
+    FROM "GrowthIdea"
+    WHERE "currentVersionId" = NEW."id" AND "id" <> NEW."ideaId"
+  ) THEN
+    RAISE EXCEPTION 'A current GrowthIdeaVersion cannot be moved to another Idea'
+      USING ERRCODE = '23514', CONSTRAINT = 'GrowthIdea_current_version_ownership_check';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE CONSTRAINT TRIGGER "GrowthIdeaVersion_owner_change_check"
+AFTER UPDATE ON "GrowthIdeaVersion"
+DEFERRABLE INITIALLY IMMEDIATE
+FOR EACH ROW EXECUTE FUNCTION "check_growth_idea_version_owner_change"();
+
 ALTER TABLE "GrowthIdeaCategory" ADD CONSTRAINT "GrowthIdeaCategory_slug_check" CHECK ("slug" ~ '^[a-z0-9]+(-[a-z0-9]+)*$');
 ALTER TABLE "GrowthIdea" ADD CONSTRAINT "GrowthIdea_slug_check" CHECK ("slug" ~ '^[a-z0-9]+(-[a-z0-9]+)*$');
 ALTER TABLE "GrowthIdea" ADD CONSTRAINT "GrowthIdea_publication_state_check" CHECK (

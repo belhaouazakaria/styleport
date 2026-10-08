@@ -52,6 +52,8 @@ export const ideaBlockSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("EMBEDDED_TRANSLATOR"), translatorId: text(64), heading: text(160), helperText: text(400) }).strict(),
 ]);
 
+export const ideaBlocksSchema = z.array(ideaBlockSchema).min(3).max(MAX_IDEA_BLOCKS);
+
 export const generatedIdeaCandidateSchema = z.object({
   title: text(140),
   slug: text(80),
@@ -69,7 +71,7 @@ export const resolvedIdeaCandidateSchema = z.object({
   excerpt: text(320),
   seoTitle: text(70),
   seoDescription: text(170),
-  blocks: z.array(ideaBlockSchema).min(3).max(MAX_IDEA_BLOCKS),
+  blocks: ideaBlocksSchema,
 }).strict();
 
 export type GeneratedIdeaCandidate = z.infer<typeof generatedIdeaCandidateSchema>;

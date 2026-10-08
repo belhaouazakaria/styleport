@@ -2,7 +2,9 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("next/link", () => ({ default: ({ href, children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }) => <a href={href} {...props}>{children}</a> }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
+import { IdeaVersionActions } from "@/components/admin/idea-autopilot-actions";
 import { IdeaBlocks } from "@/components/public/idea-blocks";
 
 describe("SayTwist Ideas public structured rendering", () => {
@@ -24,3 +26,10 @@ describe("SayTwist Ideas public structured rendering", () => {
   });
 });
 
+describe("SayTwist Ideas archived admin actions", () => {
+  it("does not offer rollback controls for archived Ideas", () => {
+    render(<IdeaVersionActions ideaId="idea" checksum={"a".repeat(64)} archived versions={[{ id: "v1", version: 1 }]} />);
+    expect(screen.queryByRole("button", { name: "Restore v1" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Archive" })).not.toBeInTheDocument();
+  });
+});

@@ -23,6 +23,7 @@ import {
   rollbackTranslatorVersion,
 } from "@/lib/growth/translator/service";
 import { readTranslatorSnapshot } from "@/lib/growth/translator/snapshot";
+import { recoverStaleGrowthJobs } from "@/lib/growth/jobs";
 import { runGrowthWorker } from "@/lib/growth/worker";
 import { prisma } from "@/lib/prisma";
 import type { TranslatorDraft } from "@/lib/types";
@@ -468,5 +469,24 @@ suite("Growth Phase 8 PostgreSQL A-K scenarios", () => {
     await expect(assertGrowthTranslatorActivationReady(translatorId)).resolves.toBeUndefined();
     await prisma.translator.update({ where: { id: translatorId }, data: { subtitle: "TODO placeholder" } });
     await expect(assertGrowthTranslatorActivationReady(translatorId)).rejects.toThrow("PLACEHOLDER_TEXT");
+  });
+
+  it("recovers a stale Translator execution decision and retries without duplicate mutation", async () => {
+    const opportunity = await seedOpportunity();
+    const planned = await decideTranslatorOpportunity(opportunity.id);
+    const jobId = planned.execution!.job.id;
+    await prisma.growthDecision.update({ where: { id: planned.decision.id }, data: { status: GrowthDecisionStatus.EXECUTING } });
+    await prisma.growthJob.update({ where: { id: jobId }, data: { status: GrowthJobStatus.RUNNING, workerId: "crashed-translator-worker", attemptCount: 1, maxAttempts: 2, claimedAt: new Date(0), leaseUntil: new Date(0), heartbeatAt: new Date(0) } });
+
+    await expect(recoverStaleGrowthJobs(new Date(), 1)).resolves.toBe(1);
+    expect(await prisma.growthDecision.findUniqueOrThrow({ where: { id: planned.decision.id } })).toMatchObject({ status: GrowthDecisionStatus.FAILED_RETRYABLE, reasonCodes: expect.arrayContaining(["EXECUTION_JOB_LEASE_EXPIRED"]) });
+    expect((await prisma.growthOpportunity.findUniqueOrThrow({ where: { id: opportunity.id } })).status).toBe(GrowthOpportunityStatus.FAILED_RETRYABLE);
+    expect((await prisma.growthJob.findUniqueOrThrow({ where: { id: jobId } })).status).toBe(GrowthJobStatus.PENDING);
+
+    const provider = new FakeProvider();
+    await executeTranslatorDecision(planned.decision.id, { provider, refreshShareImage });
+    await executeTranslatorDecision(planned.decision.id, { provider, refreshShareImage });
+    expect(await prisma.translator.count()).toBe(1);
+    expect(await prisma.growthContentVersion.count()).toBe(1);
   });
 });

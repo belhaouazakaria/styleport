@@ -73,6 +73,24 @@ function json(value: unknown) { return value as Prisma.InputJsonValue; }
 function decisionKey(opportunityId: string) { return `idea-decision:${IDEA_AUTOPILOT_VERSION}:${opportunityId}`; }
 function actionKey(decisionId: string, type: GrowthDecisionType) { return `idea-action:${decisionId}:${type === GrowthDecisionType.CREATE_IDEA ? "create" : "improve"}`; }
 
+async function persistIdeaGenerationMetadata(decisionId: string, attempts: IdeaGenerationMetadata[]) {
+  if (!attempts.length) return;
+  const metadata = aggregateIdeaGenerationMetadata(attempts);
+  const existing = await prisma.growthDecision.findUnique({ where: { id: decisionId }, select: { actualOutcome: true } });
+  const outcome = existing?.actualOutcome && typeof existing.actualOutcome === "object" && !Array.isArray(existing.actualOutcome)
+    ? existing.actualOutcome as Record<string, Prisma.JsonValue>
+    : {};
+  await prisma.growthDecision.update({ where: { id: decisionId }, data: {
+    aiProvider: metadata.provider,
+    aiModel: metadata.model,
+    aiResponseId: metadata.responseId,
+    aiPromptTokens: metadata.promptTokens,
+    aiCompletionTokens: metadata.completionTokens,
+    aiTotalTokens: metadata.totalTokens,
+    actualOutcome: json({ ...outcome, generation: { attemptCount: metadata.attemptCount } }),
+  } });
+}
+
 async function getOpportunityContext(opportunityId: string) {
   const opportunity = await prisma.growthOpportunity.findUniqueOrThrow({
     where: { id: opportunityId },
@@ -290,13 +308,27 @@ async function executeIdeaDecisionAttempt(decisionId: string, options: ExecuteId
   const attempts: IdeaGenerationMetadata[] = [];
   let generated;
   let repairUsed = false;
-  try { generated = await provider.generate(prepared.request); attempts.push(generated.metadata); }
+  try {
+    generated = await provider.generate(prepared.request);
+    attempts.push(generated.metadata);
+    await persistIdeaGenerationMetadata(decisionId, attempts);
+  }
   catch (error) {
-    if (error instanceof IdeaGenerationError && error.metadata) attempts.push(error.metadata);
+    if (error instanceof IdeaGenerationError && error.metadata) {
+      attempts.push(error.metadata);
+      await persistIdeaGenerationMetadata(decisionId, attempts);
+    }
     repairUsed = true;
-    try { generated = await provider.generate(prepared.request, { attempt: 1, issue: error instanceof Error ? error.message : "Invalid generated Idea." }); attempts.push(generated.metadata); }
+    try {
+      generated = await provider.generate(prepared.request, { attempt: 1, issue: error instanceof Error ? error.message : "Invalid generated Idea." });
+      attempts.push(generated.metadata);
+      await persistIdeaGenerationMetadata(decisionId, attempts);
+    }
     catch (repairError) {
-      if (repairError instanceof IdeaGenerationError && repairError.metadata) attempts.push(repairError.metadata);
+      if (repairError instanceof IdeaGenerationError && repairError.metadata) {
+        attempts.push(repairError.metadata);
+        await persistIdeaGenerationMetadata(decisionId, attempts);
+      }
       await updateFailure(decisionId, GrowthDecisionStatus.FAILED_RETRYABLE, "IDEA_GENERATION_FAILED");
       throw new RetryableGrowthJobError(repairError instanceof Error ? repairError.message : "Idea generation failed.");
     }
@@ -313,12 +345,17 @@ async function executeIdeaDecisionAttempt(decisionId: string, options: ExecuteId
     try {
       const repaired = await provider.generate(prepared.request, { attempt: 1, issue: quality.diagnostics.map((item) => item.code).join(", ") });
       attempts.push(repaired.metadata);
+      await persistIdeaGenerationMetadata(decisionId, attempts);
       generated = repaired;
       resolved = await resolveGeneratedCandidate(repaired.candidate, prepared.current?.candidate.slug);
       if (resolved.status !== "RESOLVED") throw new Error(resolved.status);
       checksum = checksumIdeaCandidate(resolved.candidate);
       quality = validateIdeaQuality(resolved.candidate, { activeTranslatorIds: new Set(resolved.translatorIds), translatorContextById: resolved.translatorContextById, previousChecksum: prepared.current?.checksum, checksum });
-    } catch {
+    } catch (repairError) {
+      if (repairError instanceof IdeaGenerationError && repairError.metadata) {
+        attempts.push(repairError.metadata);
+        await persistIdeaGenerationMetadata(decisionId, attempts);
+      }
       await updateFailure(decisionId, GrowthDecisionStatus.FAILED_TERMINAL, "IDEA_QUALITY_REPAIR_FAILED");
       return { decision: await prisma.growthDecision.findUniqueOrThrow({ where: { id: decisionId } }), reused: false, blocked: true };
     }
@@ -442,6 +479,7 @@ export async function rollbackIdeaVersion(params: { ideaId: string; targetVersio
     const current = await readCurrentIdea(params.ideaId, tx);
     if (!current) throw new Error("Idea no longer exists.");
     if (current.checksum !== params.expectedCurrentChecksum) throw new Error("Idea changed before rollback could be applied.");
+    if (current.idea.status === GrowthIdeaStatus.ARCHIVED || current.idea.archivedAt) throw new Error("Archived Ideas cannot be restored through rollback.");
     const target = await tx.growthIdeaVersion.findFirst({ where: { id: params.targetVersionId, ideaId: params.ideaId }, include: { translatorReferences: true } });
     if (!target) throw new Error("The selected version does not belong to this Idea.");
     const candidate = resolvedIdeaCandidateSchema.parse({ title: target.title, slug: current.idea.slug, categoryId: target.categoryId, excerpt: target.excerpt, seoTitle: target.seoTitle, seoDescription: target.seoDescription, blocks: target.blocks });
