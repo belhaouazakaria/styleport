@@ -21,6 +21,44 @@ const experimentDimensions = [
   { value: GrowthExperimentDimension.VISUAL_TREATMENT, label: "Visual treatment", help: "Compare two visual treatment IDs." },
 ];
 
+const experimentVariantOptions: Record<GrowthExperimentDimension, Array<{ label: string; value: string }>> = {
+  [GrowthExperimentDimension.ARCHETYPE]: [
+    { label: "Control", value: "V1_CONTROL" },
+    { label: "Typography", value: "TYPOGRAPHY_LED" },
+    { label: "Editorial list", value: "EDITORIAL_LIST" },
+    { label: "Conversation", value: "CONVERSATION_CHAT" },
+    { label: "Minimal", value: "MINIMAL_STATEMENT" },
+  ],
+  [GrowthExperimentDimension.TEMPLATE]: [
+    { label: "Control", value: "translator-share-control-v1" },
+    { label: "Typography", value: "typography-led-v1" },
+    { label: "Editorial list", value: "editorial-list-v1" },
+    { label: "Conversation", value: "conversation-chat-v1" },
+    { label: "Minimal", value: "minimal-statement-v1" },
+  ],
+  [GrowthExperimentDimension.HEADLINE_PATTERN]: [
+    { label: "Control translator prompt", value: "translate-your-text-to-style" },
+    { label: "Topic-led promise", value: "topic-led-promise" },
+    { label: "Editorial list preview", value: "editorial-list-preview" },
+    { label: "Conversation example", value: "conversation-example" },
+    { label: "Single statement", value: "single-statement" },
+  ],
+  [GrowthExperimentDimension.CTA_PATTERN]: [
+    { label: "Try it with your own text", value: "try-it-with-your-own-text" },
+    { label: "Destination action", value: "destination-action" },
+    { label: "Explore full version", value: "explore-full-version" },
+    { label: "Try with your message", value: "try-with-your-message" },
+    { label: "See full destination", value: "see-full-destination" },
+  ],
+  [GrowthExperimentDimension.VISUAL_TREATMENT]: [
+    { label: "Existing Translator control", value: "existing-translator-share-control" },
+    { label: "Bold typography", value: "bold-type-color-field" },
+    { label: "Editorial cards", value: "editorial-card-list" },
+    { label: "Chat bubbles", value: "safe-chat-bubbles" },
+    { label: "Minimal high contrast", value: "minimal-high-contrast" },
+  ],
+};
+
 const fieldClass = "mt-2 min-h-11 w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm text-ink outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/15";
 
 async function post(url: string, body: unknown) {
@@ -101,7 +139,10 @@ export function CreativeExperimentForm() {
   const router = useRouter();
   const [busy, setBusy] = useState(false); const [message, setMessage] = useState("");
   const [dimension, setDimension] = useState<GrowthExperimentDimension>(GrowthExperimentDimension.ARCHETYPE);
+  const [variantA, setVariantA] = useState("");
+  const [variantB, setVariantB] = useState("");
   const selectedDimension = experimentDimensions.find((item) => item.value === dimension)!;
+  const variantOptions = experimentVariantOptions[dimension];
   return <form className="rounded-[1.5rem] border border-dashed border-border bg-white/60 p-5 sm:p-6" onSubmit={async (event) => {
     event.preventDefault(); setBusy(true); setMessage(""); const data = new FormData(event.currentTarget);
     try { await post("/api/admin/growth/creative/experiments", { hypothesis: String(data.get("hypothesis")), dimension: String(data.get("dimension")), variants: [{ key: "a", label: "Variant A", value: String(data.get("variantA")) }, { key: "b", label: "Variant B", value: String(data.get("variantB")) }], primaryKpi: "OUTBOUND_CLICKS", guardrails: { minimumImpressions: 1000, minimumOutboundClicks: 20, maximumDays: 30 } }); setMessage("Draft experiment created."); router.refresh(); }
@@ -110,9 +151,9 @@ export function CreativeExperimentForm() {
     <div className="flex gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-supporting-100 text-supporting-800"><FlaskConical className="h-4 w-4" aria-hidden="true" /></span><div><p className="section-kicker">Secondary tool</p><h2 className="font-display mt-1 text-2xl font-bold text-ink">Plan a draft experiment</h2><p className="mt-1 max-w-2xl text-sm leading-6 text-muted-ink">Define a controlled comparison that candidates can join later. This creates a draft only; it does not launch or allocate traffic.</p></div></div>
     <div className="mt-6 grid gap-4 lg:grid-cols-2">
       <label className="text-sm font-bold text-ink lg:col-span-2">What do you expect to learn?<textarea name="hypothesis" required minLength={10} maxLength={500} placeholder="Example: Conversation creatives will earn more outbound clicks than typography creatives." className={`${fieldClass} min-h-24 resize-y`} /></label>
-      <label className="text-sm font-bold text-ink">What changes?<select name="dimension" value={dimension} onChange={(event) => setDimension(event.target.value as GrowthExperimentDimension)} className={fieldClass}>{experimentDimensions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select><span className="mt-1.5 block text-xs font-normal leading-5 text-muted-ink">{selectedDimension.help}</span></label>
-      <div className="grid gap-4 sm:grid-cols-2 lg:self-start"><label className="text-sm font-bold text-ink">Variant A value<input name="variantA" required maxLength={120} placeholder="First controlled value" className={fieldClass} /></label><label className="text-sm font-bold text-ink">Variant B value<input name="variantB" required maxLength={120} placeholder="Second controlled value" className={fieldClass} /></label></div>
+      <label className="text-sm font-bold text-ink">What changes?<select name="dimension" value={dimension} onChange={(event) => { setDimension(event.target.value as GrowthExperimentDimension); setVariantA(""); setVariantB(""); }} className={fieldClass}>{experimentDimensions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select><span className="mt-1.5 block text-xs font-normal leading-5 text-muted-ink">{selectedDimension.help}</span></label>
+      <fieldset className="lg:self-start"><legend className="text-sm font-bold text-ink">Treatments to compare</legend><p className="mt-1 text-xs leading-5 text-muted-ink">Choose the two controlled treatments you want to compare.</p><div className="mt-1 grid gap-4 sm:grid-cols-2"><label className="text-sm font-bold text-ink">Variant A<select name="variantA" required value={variantA} onChange={(event) => setVariantA(event.target.value)} className={fieldClass}><option value="">Choose first treatment</option>{variantOptions.map((item) => <option key={item.value} value={item.value} disabled={item.value === variantB}>{item.label}</option>)}</select></label><label className="text-sm font-bold text-ink">Variant B<select name="variantB" required value={variantB} onChange={(event) => setVariantB(event.target.value)} className={fieldClass}><option value="">Choose second treatment</option>{variantOptions.map((item) => <option key={item.value} value={item.value} disabled={item.value === variantA}>{item.label}</option>)}</select></label></div></fieldset>
     </div>
-    <div className="mt-5 flex flex-wrap items-center gap-4"><button disabled={busy} className="min-h-10 rounded-full border border-ink bg-white px-5 py-2 text-sm font-bold text-ink transition hover:bg-ink hover:text-white disabled:opacity-50">{busy ? "Creating draft…" : "Create draft experiment"}</button>{message ? <p role="status" className="text-sm text-muted-ink">{message}</p> : null}</div>
+    <div className="mt-5 flex flex-wrap items-center gap-4"><button disabled={busy || !variantA || !variantB || variantA === variantB} className="min-h-10 rounded-full border border-ink bg-white px-5 py-2 text-sm font-bold text-ink transition hover:bg-ink hover:text-white disabled:opacity-50">{busy ? "Creating draft…" : "Create draft experiment"}</button>{message ? <p role="status" className="text-sm text-muted-ink">{message}</p> : null}</div>
   </form>;
 }

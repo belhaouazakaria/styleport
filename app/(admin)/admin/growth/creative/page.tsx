@@ -19,6 +19,17 @@ const archetypeLabels: Record<string, string> = {
   SCENE_BASED: "Scene based",
 };
 
+const candidateStatusPresentation: Record<string, { label: string; badge: string; border: string; accent: string }> = {
+  READY: { label: "Ready", badge: "bg-brand-500 text-white", border: "border-brand-300", accent: "border-brand-500" },
+  DEFERRED: { label: "Deferred", badge: "bg-[#fff0c7] text-[#805000]", border: "border-accent-300", accent: "border-accent-400" },
+  DRAFT: { label: "Draft", badge: "bg-muted-surface text-muted-ink", border: "border-border", accent: "border-muted-ink/25" },
+  RENDERING: { label: "Rendering", badge: "bg-supporting-100 text-supporting-900", border: "border-supporting-300", accent: "border-supporting-500" },
+  REJECTED: { label: "Rejected", badge: "bg-red-100 text-red-900", border: "border-red-300", accent: "border-red-500" },
+  FAILED_RETRYABLE: { label: "Retry needed", badge: "bg-amber-100 text-amber-900", border: "border-amber-300", accent: "border-amber-500" },
+  FAILED_TERMINAL: { label: "Failed", badge: "bg-red-100 text-red-900", border: "border-red-300", accent: "border-red-600" },
+  CANCELLED: { label: "Cancelled", badge: "bg-slate-100 text-slate-600", border: "border-slate-300", accent: "border-slate-400" },
+};
+
 function humanize(value: string) {
   return value.replaceAll("_", " ").toLowerCase().replace(/^./, (letter) => letter.toUpperCase());
 }
@@ -48,11 +59,11 @@ export default async function AdminCreativeLabPage() {
       <section aria-labelledby="candidate-gallery-heading">
         <div className="flex flex-wrap items-end justify-between gap-3 border-b border-dashed border-border pb-5"><div><p className="section-kicker">Visual library</p><h2 id="candidate-gallery-heading" className="font-display mt-1 text-3xl font-bold text-ink">Recent candidates</h2><p className="mt-1 text-sm text-muted-ink">The creative leads. Technical provenance stays available when you need it.</p></div><span className="text-sm font-bold text-muted-ink">{overview.candidates.length} shown</span></div>
         {overview.candidates.length ? <div className="mt-6 columns-1 gap-5 md:columns-2 2xl:columns-3">{overview.candidates.map((candidate) => {
-          const isReady = candidate.status === "READY";
+          const status = candidateStatusPresentation[candidate.status] || { label: humanize(candidate.status), badge: "bg-muted-surface text-muted-ink", border: "border-border", accent: "border-muted-ink/25" };
           const destination = candidate.translator?.name || candidate.idea?.currentVersion?.title || candidate.destinationPath;
-          return <article key={candidate.id} className={`mb-5 break-inside-avoid overflow-hidden rounded-[1.6rem] border bg-white shadow-[0_20px_55px_-42px_rgba(15,23,42,0.55)] ${isReady ? "border-brand-300" : "border-accent-300"}`}>
-            <div className="relative bg-muted-surface"><Image src={candidate.asset.publicPath} alt={`Creative preview for ${destination}`} width={1000} height={1500} unoptimized className="h-auto w-full" /><span className={`absolute left-3 top-3 rounded-full px-3 py-1.5 text-xs font-extrabold shadow-sm ${isReady ? "bg-brand-500 text-white" : "bg-[#fff0c7] text-ink"}`}>{isReady ? "Ready" : humanize(candidate.status)}</span></div>
-            <div className={`border-t-4 p-5 ${isReady ? "border-brand-500" : "border-accent-400"}`}>
+          return <article key={candidate.id} className={`mb-5 break-inside-avoid overflow-hidden rounded-[1.6rem] border bg-white shadow-[0_20px_55px_-42px_rgba(15,23,42,0.55)] ${status.border}`}>
+            <div className="relative bg-muted-surface"><Image src={candidate.asset.publicPath} alt={`Creative preview for ${destination}`} width={1000} height={1500} unoptimized className="h-auto w-full" /><span className={`absolute left-3 top-3 rounded-full px-3 py-1.5 text-xs font-extrabold shadow-sm ${status.badge}`}>{status.label}</span></div>
+            <div className={`border-t-4 p-5 ${status.accent}`}>
               <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-brand-800">{humanize(candidate.destinationKind)} · {candidate.topic}</p><h3 className="font-display mt-1 text-xl font-bold leading-tight text-ink">{candidate.title}</h3></div><span className="shrink-0 rounded-lg bg-muted-surface px-2.5 py-1 text-xs font-bold text-muted-ink">{archetypeLabels[candidate.archetype] || humanize(candidate.archetype)}</span></div>
               <dl className="mt-4 grid grid-cols-2 gap-3 border-y border-dashed border-border py-3 text-xs"><div><dt className="font-bold text-muted-ink">Destination</dt><dd className="mt-0.5 line-clamp-2 font-semibold text-ink">{destination}</dd></div><div><dt className="font-bold text-muted-ink">Account</dt><dd className="mt-0.5 font-semibold text-ink">{candidate.accountId ? accountNames.get(candidate.accountId) || "Connected account" : "Not assigned"}</dd></div><div><dt className="font-bold text-muted-ink">Template</dt><dd className="mt-0.5 font-semibold text-ink">{humanize(candidate.templateId)}</dd></div><div><dt className="font-bold text-muted-ink">Similarity</dt><dd className="mt-0.5 font-semibold text-ink">{humanize(candidate.similarityResult)}</dd></div></dl>
               {candidate.experiment ? <p className="mt-3 rounded-xl bg-supporting-50 px-3 py-2 text-xs text-supporting-900"><strong>Experiment:</strong> {candidate.experiment.hypothesis} · {candidate.experimentVariantKey}</p> : null}
