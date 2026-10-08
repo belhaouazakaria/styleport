@@ -3,7 +3,7 @@ import { GrowthCreativeArchetype } from "@prisma/client";
 export const CREATIVE_LAB_VERSION = "creative_lab_v1";
 export const CREATIVE_SIMILARITY_VERSION = "creative_similarity_v1";
 export const CREATIVE_EXPERIMENT_VERSION = "creative_experiment_v1";
-export const CREATIVE_RENDERER_VERSION = "creative_static_v3";
+export const CREATIVE_RENDERER_VERSION = "creative_static_v4";
 export const CONTROL_RENDERER_KEY = "v1-control";
 export const CONTROL_RENDERER_VERSION = "share_image_v1";
 export const CREATIVE_RENDERER_KEY = "creative-static";
@@ -14,10 +14,8 @@ export const MAX_CREATIVE_COMPARISONS = 100;
 
 export const DETERMINISTIC_ARCHETYPES = [
   GrowthCreativeArchetype.V1_CONTROL,
-  GrowthCreativeArchetype.TYPOGRAPHY_LED,
-  GrowthCreativeArchetype.EDITORIAL_LIST,
-  GrowthCreativeArchetype.CONVERSATION_CHAT,
   GrowthCreativeArchetype.MINIMAL_STATEMENT,
+  GrowthCreativeArchetype.BEFORE_AFTER,
 ] as const;
 
 export const STATIC_RENDERER_DEFINITIONS = {
@@ -56,9 +54,17 @@ export const STATIC_RENDERER_DEFINITIONS = {
   [GrowthCreativeArchetype.MINIMAL_STATEMENT]: {
     rendererKey: CREATIVE_RENDERER_KEY,
     rendererVersion: CREATIVE_RENDERER_VERSION,
-    templateId: "minimal-statement-v1",
-    headlinePattern: "single-statement",
+    templateId: "minimal-poster-v2",
+    headlinePattern: "single-statement-v2",
     ctaPattern: "see-full-destination",
-    visualTreatment: "minimal-high-contrast",
+    visualTreatment: "minimal-brand-poster",
+  },
+  [GrowthCreativeArchetype.BEFORE_AFTER]: {
+    rendererKey: CREATIVE_RENDERER_KEY,
+    rendererVersion: CREATIVE_RENDERER_VERSION,
+    templateId: "before-after-showcase-v1",
+    headlinePattern: "transformation-proof",
+    ctaPattern: "see-the-transformation",
+    visualTreatment: "transformation-cards",
   },
 } as const;

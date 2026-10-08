@@ -17,6 +17,11 @@ import { recordGrowthActivity } from "@/lib/growth/activity";
 import type { CreativeAiImageProvider } from "@/lib/growth/creative/ai-image-provider";
 import { createCreativeAiImageBudget } from "@/lib/growth/creative/ai-image-provider";
 import {
+  DEFAULT_CREATIVE_EXAMPLE_INPUT,
+  generateCreativeExampleWithFallback,
+  type CreativeExampleProvider,
+} from "@/lib/growth/creative/example-provider";
+import {
   CREATIVE_HEIGHT,
   CREATIVE_LAB_VERSION,
   CREATIVE_SIMILARITY_VERSION,
@@ -26,7 +31,7 @@ import {
 import {
   creativeCopySchema,
   creativeGenerationJobPayloadSchema,
-  type CreativeCopy,
+  creativeGenerationRequestSchema,
   type CreativeGenerationJobPayload,
 } from "@/lib/growth/creative/contracts";
 import { readExperimentVariant } from "@/lib/growth/creative/experiments";
@@ -58,11 +63,15 @@ interface CreativeTarget {
   targetLabel: string;
   sourceFingerprint: string;
   listItems: string[];
+  promptSystem: string;
+  promptInstructions: string;
+  savedExample: { input: string; output: string } | null;
 }
 
 interface GenerateCreativeOptions {
   aiProvider?: CreativeAiImageProvider;
   aiEnabled?: boolean;
+  exampleProvider?: CreativeExampleProvider;
   beforePersist?: () => Promise<void>;
 }
 
@@ -95,7 +104,7 @@ export async function getEligibleCreativeTarget(kind: GrowthCreativeDestinationK
 
 async function readEligibleCreativeTarget(db: CreativeReadClient, kind: GrowthCreativeDestinationKind, id: string): Promise<CreativeTarget> {
   if (kind === GrowthCreativeDestinationKind.TRANSLATOR) {
-    const translator = await db.translator.findFirst({ where: { id, isActive: true, archivedAt: null }, select: { id: true, slug: true, name: true, title: true, subtitle: true, shortDescription: true, sourceLabel: true, targetLabel: true } });
+    const translator = await db.translator.findFirst({ where: { id, isActive: true, archivedAt: null }, select: { id: true, slug: true, name: true, title: true, subtitle: true, shortDescription: true, sourceLabel: true, targetLabel: true, promptSystem: true, promptInstructions: true, editorialExamples: { select: { originalText: true, transformedText: true }, orderBy: { sortOrder: "asc" }, take: 1 } } });
     if (!translator) throw new NonRetryableGrowthJobError("Creative Translator target is unavailable.");
     return {
       kind,
@@ -107,8 +116,11 @@ async function readEligibleCreativeTarget(db: CreativeReadClient, kind: GrowthCr
       topic: translator.name.replace(/\btranslator\b/gi, "").trim() || translator.name,
       sourceLabel: translator.sourceLabel,
       targetLabel: translator.targetLabel,
-      sourceFingerprint: hash({ id: translator.id, slug: translator.slug, title: translator.title, subtitle: translator.subtitle, shortDescription: translator.shortDescription, sourceLabel: translator.sourceLabel, targetLabel: translator.targetLabel }),
+      sourceFingerprint: hash({ id: translator.id, slug: translator.slug, title: translator.title, subtitle: translator.subtitle, shortDescription: translator.shortDescription, sourceLabel: translator.sourceLabel, targetLabel: translator.targetLabel, promptSystem: translator.promptSystem, promptInstructions: translator.promptInstructions, editorialExample: translator.editorialExamples[0] || null }),
       listItems: [translator.sourceLabel, translator.targetLabel],
+      promptSystem: translator.promptSystem,
+      promptInstructions: translator.promptInstructions,
+      savedExample: translator.editorialExamples[0] ? { input: translator.editorialExamples[0].originalText, output: translator.editorialExamples[0].transformedText } : null,
     };
   }
   const idea = await db.growthIdea.findFirst({
@@ -130,26 +142,45 @@ async function readEligibleCreativeTarget(db: CreativeReadClient, kind: GrowthCr
     targetLabel: idea.category.name,
     sourceFingerprint: hash({ currentVersionId: idea.currentVersionId, checksum: idea.currentVersion.checksum }),
     listItems: ideaListItems(parsedBlocks.data as Array<Record<string, unknown>>),
+    promptSystem: "",
+    promptInstructions: "",
+    savedExample: null,
   };
 }
 
-function buildCopy(target: CreativeTarget, archetype: GrowthCreativeArchetype): CreativeCopy {
+function resolveCreativeExample(target: CreativeTarget, useAi: boolean, provider?: CreativeExampleProvider) {
+  return generateCreativeExampleWithFallback({
+    savedExample: target.savedExample,
+    useAi: useAi && target.kind === GrowthCreativeDestinationKind.TRANSLATOR,
+    provider,
+    request: {
+        translatorName: target.topic,
+        title: target.title,
+        description: target.excerpt,
+        sourceLabel: target.sourceLabel,
+        targetLabel: target.targetLabel,
+        promptSystem: target.promptSystem,
+        promptInstructions: target.promptInstructions,
+        input: DEFAULT_CREATIVE_EXAMPLE_INPUT,
+    },
+  });
+}
+
+async function buildCopy(target: CreativeTarget, archetype: GrowthCreativeArchetype, useAiExample: boolean, provider?: CreativeExampleProvider) {
   const translator = target.kind === GrowthCreativeDestinationKind.TRANSLATOR;
   const cta = translator ? "Try it with your own text" : archetype === GrowthCreativeArchetype.EDITORIAL_LIST ? "Explore the full version" : "See all ideas";
-  const headline = archetype === GrowthCreativeArchetype.MINIMAL_STATEMENT
-    ? target.title
-    : archetype === GrowthCreativeArchetype.CONVERSATION_CHAT
-      ? `How would you say it in ${target.topic}?`
-      : target.title;
-  return creativeCopySchema.parse({
+  const example = archetype === GrowthCreativeArchetype.BEFORE_AFTER ? await resolveCreativeExample(target, useAiExample, provider) : null;
+  const copy = creativeCopySchema.parse({
     title: clamp(`${target.title} | ${cta}`, 100),
     description: clamp(`${target.excerpt} ${cta} on SayTwist.`, 500),
-    headline: clamp(headline, 90),
+    headline: clamp(target.title, 90),
     subheadline: clamp(target.excerpt, 180),
     cta,
     topic: clamp(target.topic, 160),
     listItems: target.listItems.map((item) => clamp(item, 80)).slice(0, 5),
+    ...(example ? { exampleInput: clamp(example.input, 180), exampleOutput: clamp(example.output, 180) } : {}),
   });
+  return { copy, exampleSource: example?.source || null, exampleMetadata: example?.metadata || null };
 }
 
 function candidateGroupKey(payload: CreativeGenerationJobPayload) {
@@ -157,8 +188,7 @@ function candidateGroupKey(payload: CreativeGenerationJobPayload) {
 }
 
 export async function enqueueCreativeGeneration(input: unknown) {
-  const payload = creativeGenerationJobPayloadSchema.parse(input);
-  if (payload.archetype === GrowthCreativeArchetype.SCENE_BASED) throw new NonRetryableGrowthJobError("Creative AI image generation is not enabled for ADMIN jobs.");
+  const payload = creativeGenerationRequestSchema.parse(input);
   const target = await getEligibleCreativeTarget(payload.targetKind, payload.targetId);
   const key = hash({ payload, sourceFingerprint: target.sourceFingerprint }).slice(0, 48);
   return enqueueGrowthJob({ type: GrowthJobType.CREATIVE_LAB_GENERATE, idempotencyKey: `creative-generate:${key}`, payload, maxAttempts: 3 });
@@ -212,13 +242,18 @@ async function lockCreativeAuthorizationRows(tx: Prisma.TransactionClient, paylo
 
 export async function generateCreativeCandidate(input: unknown, jobId: string | null = null, options: GenerateCreativeOptions = {}) {
   const payload = creativeGenerationJobPayloadSchema.parse(input);
+  if (jobId) {
+    const existing = await prisma.growthPinCandidate.findUnique({ where: { generationJobId: jobId }, include: { asset: true } });
+    if (existing) return { candidate: existing, asset: existing.asset, reused: true };
+  }
   if (payload.archetype === GrowthCreativeArchetype.V1_CONTROL && payload.targetKind !== GrowthCreativeDestinationKind.TRANSLATOR) throw new NonRetryableGrowthJobError("Renderer V1 control is available only for Translator destinations.");
+  if (payload.archetype === GrowthCreativeArchetype.BEFORE_AFTER && payload.targetKind !== GrowthCreativeDestinationKind.TRANSLATOR) throw new NonRetryableGrowthJobError("Before-and-after creatives require a Translator destination.");
   const definition: CreativeDefinition = payload.archetype === GrowthCreativeArchetype.SCENE_BASED
     ? { rendererKey: "ai-scene", rendererVersion: CREATIVE_LAB_VERSION, templateId: "scene-based-v1", headlinePattern: "scene-topic-promise", ctaPattern: "destination-action", visualTreatment: "generated-scene" }
     : getCreativeRendererDefinition(payload.archetype);
   const target = await getEligibleCreativeTarget(payload.targetKind, payload.targetId);
   await validateCreativeContext(prisma as unknown as CreativeReadClient, payload, target, definition);
-  const copy = buildCopy(target, payload.archetype);
+  const { copy, exampleSource, exampleMetadata } = await buildCopy(target, payload.archetype, payload.useAiExample === true, options.exampleProvider);
   const contentHash = hash({ target: target.sourceFingerprint, copy, definition, archetype: payload.archetype });
   const similarityInput = { title: copy.title, contentHash, destinationPath: target.destinationPath, topic: copy.topic, accountId: payload.accountId || null, archetype: payload.archetype, templateId: definition.templateId };
   const [preexistingExactContent, history] = await Promise.all([
@@ -309,7 +344,7 @@ export async function generateCreativeCandidate(input: unknown, jobId: string | 
         similarityModelVersion: CREATIVE_SIMILARITY_VERSION, similarityResult: similarity.classification, similarityFlags: similarity.flags as Prisma.InputJsonValue,
         status: deferred ? GrowthPinCandidateStatus.DEFERRED : GrowthPinCandidateStatus.READY,
       } });
-      await recordGrowthActivity({ actorKind: GrowthActivityActorKind.WORKER, entityType: "GrowthPinCandidate", entityId: candidate.id, action: "CREATIVE_CANDIDATE_GENERATED", toState: candidate.status, summary: { archetype: candidate.archetype, similarity: candidate.similarityResult, targetKind: candidate.destinationKind }, correlationKey: candidate.candidateKey }, tx);
+      await recordGrowthActivity({ actorKind: GrowthActivityActorKind.WORKER, entityType: "GrowthPinCandidate", entityId: candidate.id, action: "CREATIVE_CANDIDATE_GENERATED", toState: candidate.status, summary: { archetype: candidate.archetype, similarity: candidate.similarityResult, targetKind: candidate.destinationKind, exampleSource, exampleProvider: exampleMetadata?.provider || null, exampleModel: exampleMetadata?.model || null, examplePromptTokens: exampleMetadata?.promptTokens ?? null, exampleCompletionTokens: exampleMetadata?.completionTokens ?? null, exampleTotalTokens: exampleMetadata?.totalTokens ?? null }, correlationKey: candidate.candidateKey }, tx);
       return { candidate, asset, reused: false };
     });
     if (stored?.created && result.asset.publicPath !== stored.publicPath) {

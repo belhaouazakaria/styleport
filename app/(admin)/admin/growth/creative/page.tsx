@@ -15,7 +15,8 @@ const archetypeLabels: Record<string, string> = {
   TYPOGRAPHY_LED: "Typography",
   EDITORIAL_LIST: "Editorial list",
   CONVERSATION_CHAT: "Conversation",
-  MINIMAL_STATEMENT: "Minimal",
+  MINIMAL_STATEMENT: "Minimal poster",
+  BEFORE_AFTER: "Before → after",
   SCENE_BASED: "Scene based",
 };
 

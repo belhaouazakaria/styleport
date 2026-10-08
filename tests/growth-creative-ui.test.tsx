@@ -24,6 +24,12 @@ describe("Creative Lab target picker", () => {
     const user = userEvent.setup();
     render(<CreativeGenerationForm translators={[{ id: "first", name: "First Translator", slug: "first-translator" }]} ideas={[]} accounts={[]} experiments={[]} />);
 
+    expect(screen.getByRole("radio", { name: /minimal poster/i })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /before → after/i })).toBeInTheDocument();
+    expect(screen.queryByRole("radio", { name: /^typography/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("radio", { name: /^editorial/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("radio", { name: /^conversation/i })).not.toBeInTheDocument();
+
     const picker = screen.getByRole("combobox", { name: /find an active translator/i });
     await user.clear(picker);
     await user.type(picker, "Hidden Voice");
@@ -36,5 +42,20 @@ describe("Creative Lab target picker", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/admin/growth/creative/generate", expect.objectContaining({ method: "POST" })));
     const generationCall = fetchMock.mock.calls.find(([url]) => String(url) === "/api/admin/growth/creative/generate");
     expect(JSON.parse(String(generationCall?.[1]?.body))).toMatchObject({ targetKind: "TRANSLATOR", targetId: "hidden" });
+  });
+
+  it("requests one bounded AI example only for the before-and-after concept", async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ ok: true }) }) as Response);
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<CreativeGenerationForm translators={[{ id: "first", name: "First Translator", slug: "first-translator" }]} ideas={[]} accounts={[]} experiments={[]} />);
+
+    await user.click(screen.getByRole("radio", { name: /before → after/i }));
+    expect(screen.getByRole("checkbox", { name: /tailor the example with ai/i })).toBeChecked();
+    await user.click(screen.getByRole("button", { name: "Generate one candidate" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(body).toMatchObject({ archetype: "BEFORE_AFTER", useAiExample: true });
   });
 });

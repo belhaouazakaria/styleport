@@ -9,7 +9,7 @@ vi.mock("@/lib/growth/creative/experiments", () => ({ createDraftCreativeExperim
 import { POST as generatePost } from "@/app/api/admin/growth/creative/generate/route";
 import { POST as experimentPost } from "@/app/api/admin/growth/creative/experiments/route";
 
-const generation = { targetKind: "TRANSLATOR", targetId: "translator", archetype: "TYPOGRAPHY_LED", creativeModelVersion: "creative_lab_v1" };
+const generation = { targetKind: "TRANSLATOR", targetId: "translator", archetype: "MINIMAL_STATEMENT", creativeModelVersion: "creative_lab_v1" };
 
 describe("Phase 10 Creative Lab admin boundaries", () => {
   beforeEach(() => { vi.clearAllMocks(); mocks.guard.mockResolvedValue(null); mocks.sameOrigin.mockReturnValue(true); mocks.enqueue.mockResolvedValue({ job: { id: "job" }, created: true }); mocks.createExperiment.mockResolvedValue({ id: "experiment", status: "DRAFT" }); });
@@ -25,4 +25,3 @@ describe("Phase 10 Creative Lab admin boundaries", () => {
     expect(mocks.enqueue).not.toHaveBeenCalled(); expect(mocks.createExperiment).not.toHaveBeenCalled();
   });
 });
-

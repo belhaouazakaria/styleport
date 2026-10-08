@@ -6,11 +6,8 @@ import { useEffect, useId, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 const archetypeOptions = [
-  { value: GrowthCreativeArchetype.V1_CONTROL, label: "Control", description: "The established Translator share image." },
-  { value: GrowthCreativeArchetype.TYPOGRAPHY_LED, label: "Typography", description: "A bold, words-first editorial layout." },
-  { value: GrowthCreativeArchetype.EDITORIAL_LIST, label: "Editorial list", description: "Structured ideas made easy to scan." },
-  { value: GrowthCreativeArchetype.CONVERSATION_CHAT, label: "Conversation", description: "A familiar message-and-reply format." },
-  { value: GrowthCreativeArchetype.MINIMAL_STATEMENT, label: "Minimal", description: "One clear thought with generous space." },
+  { value: GrowthCreativeArchetype.MINIMAL_STATEMENT, label: "Minimal poster", description: "A bold, polished statement with controlled brand variation." },
+  { value: GrowthCreativeArchetype.BEFORE_AFTER, label: "Before → after", description: "Shows a believable message transformation and the Translator’s value." },
 ];
 
 const experimentDimensions = [
@@ -23,39 +20,24 @@ const experimentDimensions = [
 
 const experimentVariantOptions: Record<GrowthExperimentDimension, Array<{ label: string; value: string }>> = {
   [GrowthExperimentDimension.ARCHETYPE]: [
-    { label: "Control", value: "V1_CONTROL" },
-    { label: "Typography", value: "TYPOGRAPHY_LED" },
-    { label: "Editorial list", value: "EDITORIAL_LIST" },
-    { label: "Conversation", value: "CONVERSATION_CHAT" },
-    { label: "Minimal", value: "MINIMAL_STATEMENT" },
+    { label: "Minimal poster", value: "MINIMAL_STATEMENT" },
+    { label: "Before → after", value: "BEFORE_AFTER" },
   ],
   [GrowthExperimentDimension.TEMPLATE]: [
-    { label: "Control", value: "translator-share-control-v1" },
-    { label: "Typography", value: "typography-led-v1" },
-    { label: "Editorial list", value: "editorial-list-v1" },
-    { label: "Conversation", value: "conversation-chat-v1" },
-    { label: "Minimal", value: "minimal-statement-v1" },
+    { label: "Minimal poster", value: "minimal-poster-v2" },
+    { label: "Before → after showcase", value: "before-after-showcase-v1" },
   ],
   [GrowthExperimentDimension.HEADLINE_PATTERN]: [
-    { label: "Control translator prompt", value: "translate-your-text-to-style" },
-    { label: "Topic-led promise", value: "topic-led-promise" },
-    { label: "Editorial list preview", value: "editorial-list-preview" },
-    { label: "Conversation example", value: "conversation-example" },
-    { label: "Single statement", value: "single-statement" },
+    { label: "Single statement", value: "single-statement-v2" },
+    { label: "Transformation proof", value: "transformation-proof" },
   ],
   [GrowthExperimentDimension.CTA_PATTERN]: [
-    { label: "Try it with your own text", value: "try-it-with-your-own-text" },
-    { label: "Destination action", value: "destination-action" },
-    { label: "Explore full version", value: "explore-full-version" },
-    { label: "Try with your message", value: "try-with-your-message" },
     { label: "See full destination", value: "see-full-destination" },
+    { label: "See the transformation", value: "see-the-transformation" },
   ],
   [GrowthExperimentDimension.VISUAL_TREATMENT]: [
-    { label: "Existing Translator control", value: "existing-translator-share-control" },
-    { label: "Bold typography", value: "bold-type-color-field" },
-    { label: "Editorial cards", value: "editorial-card-list" },
-    { label: "Chat bubbles", value: "safe-chat-bubbles" },
-    { label: "Minimal high contrast", value: "minimal-high-contrast" },
+    { label: "Minimal brand poster", value: "minimal-brand-poster" },
+    { label: "Transformation cards", value: "transformation-cards" },
   ],
 };
 
@@ -122,7 +104,8 @@ export function CreativeGenerationForm({ translators, ideas, accounts, experimen
   const router = useRouter();
   const [kind, setKind] = useState<GrowthCreativeDestinationKind>(GrowthCreativeDestinationKind.TRANSLATOR);
   const [targetId, setTargetId] = useState(translators[0]?.id || "");
-  const [archetype, setArchetype] = useState<GrowthCreativeArchetype>(GrowthCreativeArchetype.V1_CONTROL);
+  const [archetype, setArchetype] = useState<GrowthCreativeArchetype>(GrowthCreativeArchetype.MINIMAL_STATEMENT);
+  const [useAiExample, setUseAiExample] = useState(true);
   const [accountId, setAccountId] = useState("");
   const [experimentId, setExperimentId] = useState("");
   const selectedExperiment = experiments.find((item) => item.id === experimentId);
@@ -134,13 +117,13 @@ export function CreativeGenerationForm({ translators, ideas, accounts, experimen
   function chooseKind(next: GrowthCreativeDestinationKind) {
     setKind(next);
     setTargetId((next === GrowthCreativeDestinationKind.TRANSLATOR ? translators : ideas)[0]?.id || "");
-    if (next === GrowthCreativeDestinationKind.IDEA && archetype === GrowthCreativeArchetype.V1_CONTROL) setArchetype(GrowthCreativeArchetype.TYPOGRAPHY_LED);
+    if (next === GrowthCreativeDestinationKind.IDEA && archetype === GrowthCreativeArchetype.BEFORE_AFTER) setArchetype(GrowthCreativeArchetype.MINIMAL_STATEMENT);
   }
 
   return <form className="overflow-hidden rounded-[1.75rem] border border-brand-200 bg-white shadow-[0_24px_70px_-48px_rgba(15,23,42,0.55)]" onSubmit={async (event) => {
     event.preventDefault(); setBusy(true); setMessage("");
     try {
-      await post("/api/admin/growth/creative/generate", { targetKind: kind, targetId, archetype, ...(accountId ? { accountId } : {}), ...(experimentId && variantKey ? { experimentId, variantKey } : {}), creativeModelVersion: "creative_lab_v1" });
+      await post("/api/admin/growth/creative/generate", { targetKind: kind, targetId, archetype, ...(archetype === GrowthCreativeArchetype.BEFORE_AFTER && useAiExample ? { useAiExample: true } : {}), ...(accountId ? { accountId } : {}), ...(experimentId && variantKey ? { experimentId, variantKey } : {}), creativeModelVersion: "creative_lab_v1" });
       setMessage("One creative has been added to the Growth queue."); router.refresh();
     } catch (error) { setMessage(error instanceof Error ? error.message : "Request failed."); } finally { setBusy(false); }
   }}>
@@ -160,7 +143,8 @@ export function CreativeGenerationForm({ translators, ideas, accounts, experimen
 
       <fieldset>
         <legend className="text-sm font-extrabold text-ink">3. Pick a creative style</legend>
-        <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">{archetypeOptions.filter((item) => kind === GrowthCreativeDestinationKind.TRANSLATOR || item.value !== GrowthCreativeArchetype.V1_CONTROL).map((item) => <label key={item.value} className={`relative cursor-pointer rounded-2xl border p-4 transition ${archetype === item.value ? "border-brand-500 bg-brand-50 shadow-[0_4px_0_rgba(20,184,166,0.2)]" : "border-border bg-white hover:border-brand-300"}`}><input type="radio" name="archetype" className="sr-only" value={item.value} checked={archetype === item.value} onChange={() => setArchetype(item.value)} /><span className="block font-display text-base font-bold text-ink">{item.label}</span><span className="mt-1 block text-xs leading-5 text-muted-ink">{item.description}</span>{archetype === item.value ? <span className="absolute right-3 top-3 h-2.5 w-2.5 rounded-full bg-brand-500" aria-hidden="true" /> : null}</label>)}</div>
+        <div className="mt-3 grid max-w-3xl gap-3 sm:grid-cols-2">{archetypeOptions.filter((item) => kind === GrowthCreativeDestinationKind.TRANSLATOR || item.value === GrowthCreativeArchetype.MINIMAL_STATEMENT).map((item) => <label key={item.value} className={`relative cursor-pointer rounded-2xl border p-4 transition ${archetype === item.value ? "border-brand-500 bg-brand-50 shadow-[0_4px_0_rgba(20,184,166,0.2)]" : "border-border bg-white hover:border-brand-300"}`}><input type="radio" name="archetype" className="sr-only" value={item.value} checked={archetype === item.value} onChange={() => setArchetype(item.value)} /><span className="block font-display text-base font-bold text-ink">{item.label}</span><span className="mt-1 block text-xs leading-5 text-muted-ink">{item.description}</span>{archetype === item.value ? <span className="absolute right-3 top-3 h-2.5 w-2.5 rounded-full bg-brand-500" aria-hidden="true" /> : null}</label>)}</div>
+        {kind === GrowthCreativeDestinationKind.TRANSLATOR && archetype === GrowthCreativeArchetype.BEFORE_AFTER ? <label className="mt-4 flex max-w-3xl cursor-pointer items-start gap-3 rounded-xl border border-supporting-200 bg-supporting-50 px-4 py-3"><input type="checkbox" checked={useAiExample} onChange={(event) => setUseAiExample(event.target.checked)} className="mt-1 h-4 w-4 accent-teal-600" /><span><span className="block text-sm font-bold text-ink">Tailor the example with AI when needed</span><span className="mt-0.5 block text-xs leading-5 text-muted-ink">A saved Translator example is always preferred. Otherwise Creative Lab makes one bounded text call and falls back to a deterministic example if unavailable.</span></span></label> : null}
       </fieldset>
 
       <details className="group border-t border-dashed border-border pt-5">

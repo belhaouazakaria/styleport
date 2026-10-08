@@ -11,7 +11,7 @@ import { describe, expect, it } from "vitest";
 import { createCreativeAiImageBudget } from "@/lib/growth/creative/ai-image-provider";
 import { GET as getCreativeAsset } from "@/app/generated/growth-creatives/[filename]/route";
 import { CREATIVE_RENDERER_VERSION, DETERMINISTIC_ARCHETYPES, STATIC_RENDERER_DEFINITIONS } from "@/lib/growth/creative/constants";
-import { creativeGenerationJobPayloadSchema, createExperimentSchema } from "@/lib/growth/creative/contracts";
+import { creativeGenerationJobPayloadSchema, creativeGenerationRequestSchema, createExperimentSchema } from "@/lib/growth/creative/contracts";
 import { buildCreativeSvg, capCreativeTextLines, CREATIVE_TEXT_LINE_LIMITS, fitCreativeText, getCreativeRendererDefinition, renderDeterministicCreative } from "@/lib/growth/creative/renderer";
 import { buildExactCreativeSimilarity, classifyCreativeSimilarity } from "@/lib/growth/creative/similarity";
 import { cleanupCreativeAssetAfterFailure, persistCreativeAssetFile, readPngDimensions, releaseCreativeAssetLease, resolveCreativeAssetFile } from "@/lib/growth/creative/storage";
@@ -24,31 +24,31 @@ const copy = {
   cta: "See all ideas",
   topic: "Birthdays",
   listItems: ["Warm and thoughtful", "Funny without being mean", "Short and easy to send"],
+  exampleInput: "Can we talk about this later?",
+  exampleOutput: "Let's come back to this when we can give it our full attention.",
 };
 
 describe("Phase 10 Creative Lab contracts", () => {
-  it("registers the control and four deterministic static archetypes", () => {
+  it("registers the control and focused deterministic concept set", () => {
     expect(DETERMINISTIC_ARCHETYPES).toEqual([
       GrowthCreativeArchetype.V1_CONTROL,
-      GrowthCreativeArchetype.TYPOGRAPHY_LED,
-      GrowthCreativeArchetype.EDITORIAL_LIST,
-      GrowthCreativeArchetype.CONVERSATION_CHAT,
       GrowthCreativeArchetype.MINIMAL_STATEMENT,
+      GrowthCreativeArchetype.BEFORE_AFTER,
     ]);
     expect(getCreativeRendererDefinition(GrowthCreativeArchetype.V1_CONTROL)).toMatchObject({ rendererKey: "v1-control", templateId: "translator-share-control-v1" });
-    expect(() => getCreativeRendererDefinition(GrowthCreativeArchetype.BEFORE_AFTER)).toThrow("no Phase 10 deterministic renderer");
+    expect(getCreativeRendererDefinition(GrowthCreativeArchetype.BEFORE_AFTER)).toMatchObject({ templateId: "before-after-showcase-v1", visualTreatment: "transformation-cards" });
   });
 
   it("renders reproducible bounded 1000x1500 static PNGs", async () => {
-    const first = await renderDeterministicCreative(GrowthCreativeArchetype.EDITORIAL_LIST, copy);
-    const second = await renderDeterministicCreative(GrowthCreativeArchetype.EDITORIAL_LIST, copy);
+    const first = await renderDeterministicCreative(GrowthCreativeArchetype.BEFORE_AFTER, copy);
+    const second = await renderDeterministicCreative(GrowthCreativeArchetype.BEFORE_AFTER, copy);
     expect(createHash("sha256").update(first).digest("hex")).toBe(createHash("sha256").update(second).digest("hex"));
     expect(readPngDimensions(first)).toEqual({ width: 1000, height: 1500 });
   });
 
   it("uses the current SayTwist palette and versioned static renderer", () => {
-    expect(CREATIVE_RENDERER_VERSION).toBe("creative_static_v3");
-    for (const archetype of [GrowthCreativeArchetype.TYPOGRAPHY_LED, GrowthCreativeArchetype.EDITORIAL_LIST, GrowthCreativeArchetype.CONVERSATION_CHAT, GrowthCreativeArchetype.MINIMAL_STATEMENT]) {
+    expect(CREATIVE_RENDERER_VERSION).toBe("creative_static_v4");
+    for (const archetype of [GrowthCreativeArchetype.MINIMAL_STATEMENT, GrowthCreativeArchetype.BEFORE_AFTER]) {
       const svg = buildCreativeSvg(archetype, copy).toString("utf8");
       expect(svg).toContain("#14B8A6");
       expect(svg).toContain("#FF7A59");
@@ -70,19 +70,34 @@ describe("Phase 10 Creative Lab contracts", () => {
       copy,
       { ...copy, headline: "Cold Hearted Cunning And Manipulative Translator", subheadline: "Turn a complicated thought into a polished message that still sounds unmistakably like you.", cta: "Try it with your own text" },
     ];
-    for (const archetype of [GrowthCreativeArchetype.TYPOGRAPHY_LED, GrowthCreativeArchetype.EDITORIAL_LIST, GrowthCreativeArchetype.CONVERSATION_CHAT, GrowthCreativeArchetype.MINIMAL_STATEMENT]) {
+    for (const archetype of [GrowthCreativeArchetype.MINIMAL_STATEMENT, GrowthCreativeArchetype.BEFORE_AFTER]) {
       for (const sample of copyLengths) {
         const svg = buildCreativeSvg(archetype, sample).toString("utf8");
         const png = await renderDeterministicCreative(archetype, sample);
-        expect(svg).toContain(`data-layout="${archetype === GrowthCreativeArchetype.TYPOGRAPHY_LED ? "typography" : archetype === GrowthCreativeArchetype.EDITORIAL_LIST ? "editorial" : archetype === GrowthCreativeArchetype.CONVERSATION_CHAT ? "conversation" : "minimal"}-content"`);
+        expect(svg).toContain(`data-layout="${archetype === GrowthCreativeArchetype.BEFORE_AFTER ? "before-after-showcase" : "minimal-poster"}"`);
         expect(readPngDimensions(png)).toEqual({ width: 1000, height: 1500 });
       }
     }
   });
 
+  it("shows meaningful before-and-after content and deterministic controlled variation", () => {
+    const showcase = buildCreativeSvg(GrowthCreativeArchetype.BEFORE_AFTER, copy).toString("utf8");
+    expect(showcase).toContain("BEFORE");
+    expect(showcase).toContain("AFTER");
+    expect(showcase).toContain("Can we talk about this later?");
+    expect(showcase).toContain("give it our full attention");
+    expect(showcase).not.toContain("undefined");
+
+    const variants = new Set(Array.from({ length: 20 }, (_, index) => {
+      const svg = buildCreativeSvg(GrowthCreativeArchetype.MINIMAL_STATEMENT, { ...copy, topic: `Topic ${index}` }).toString("utf8");
+      return svg.match(/data-variant="([0-2])"/)?.[1];
+    }));
+    expect(variants).toEqual(new Set(["0", "1", "2"]));
+  });
+
   it("caps maximum schema-valid static copy inside declared deterministic line limits", async () => {
-    const maximumCopy = { title: "T".repeat(100), description: "D".repeat(500), headline: "H".repeat(90), subheadline: "S".repeat(180), cta: "C".repeat(50), topic: "P".repeat(160), listItems: Array.from({ length: 5 }, () => "L".repeat(80)) };
-    for (const archetype of [GrowthCreativeArchetype.TYPOGRAPHY_LED, GrowthCreativeArchetype.EDITORIAL_LIST, GrowthCreativeArchetype.CONVERSATION_CHAT, GrowthCreativeArchetype.MINIMAL_STATEMENT]) {
+    const maximumCopy = { title: "T".repeat(100), description: "D".repeat(500), headline: "H".repeat(90), subheadline: "S".repeat(180), cta: "C".repeat(50), topic: "P".repeat(160), listItems: Array.from({ length: 5 }, () => "L".repeat(80)), exampleInput: "I".repeat(180), exampleOutput: "O".repeat(180) };
+    for (const archetype of [GrowthCreativeArchetype.MINIMAL_STATEMENT, GrowthCreativeArchetype.BEFORE_AFTER]) {
       const first = await renderDeterministicCreative(archetype, maximumCopy);
       const second = await renderDeterministicCreative(archetype, maximumCopy);
       expect(createHash("sha256").update(first).digest("hex")).toBe(createHash("sha256").update(second).digest("hex"));
@@ -103,8 +118,11 @@ describe("Phase 10 Creative Lab contracts", () => {
   });
 
   it("accepts only controlled identifiers and bounded experiment definitions", () => {
-    expect(creativeGenerationJobPayloadSchema.safeParse({ targetKind: GrowthCreativeDestinationKind.TRANSLATOR, targetId: "translator_1", archetype: GrowthCreativeArchetype.TYPOGRAPHY_LED, creativeModelVersion: "creative_lab_v1" }).success).toBe(true);
-    expect(creativeGenerationJobPayloadSchema.safeParse({ targetKind: GrowthCreativeDestinationKind.TRANSLATOR, targetId: "translator_1", archetype: GrowthCreativeArchetype.BEFORE_AFTER, creativeModelVersion: "creative_lab_v1" }).success).toBe(false);
+    expect(creativeGenerationJobPayloadSchema.safeParse({ targetKind: GrowthCreativeDestinationKind.TRANSLATOR, targetId: "translator_1", archetype: GrowthCreativeArchetype.MINIMAL_STATEMENT, creativeModelVersion: "creative_lab_v1" }).success).toBe(true);
+    expect(creativeGenerationJobPayloadSchema.safeParse({ targetKind: GrowthCreativeDestinationKind.TRANSLATOR, targetId: "translator_1", archetype: GrowthCreativeArchetype.BEFORE_AFTER, useAiExample: true, creativeModelVersion: "creative_lab_v1" }).success).toBe(true);
+    expect(creativeGenerationRequestSchema.safeParse({ targetKind: GrowthCreativeDestinationKind.TRANSLATOR, targetId: "translator_1", archetype: GrowthCreativeArchetype.TYPOGRAPHY_LED, creativeModelVersion: "creative_lab_v1" }).success).toBe(false);
+    expect(creativeGenerationRequestSchema.safeParse({ targetKind: GrowthCreativeDestinationKind.IDEA, targetId: "idea_1", archetype: GrowthCreativeArchetype.BEFORE_AFTER, creativeModelVersion: "creative_lab_v1" }).success).toBe(false);
+    expect(creativeGenerationRequestSchema.safeParse({ targetKind: GrowthCreativeDestinationKind.TRANSLATOR, targetId: "translator_1", archetype: GrowthCreativeArchetype.MINIMAL_STATEMENT, useAiExample: true, creativeModelVersion: "creative_lab_v1" }).success).toBe(false);
     expect(creativeGenerationJobPayloadSchema.safeParse({ targetKind: GrowthCreativeDestinationKind.TRANSLATOR, targetId: "../secret", archetype: GrowthCreativeArchetype.TYPOGRAPHY_LED, creativeModelVersion: "creative_lab_v1", rawHtml: "<script>" }).success).toBe(false);
     const experiment = { hypothesis: "Typography improves outbound clicks.", dimension: "ARCHETYPE", variants: [{ key: "a", label: "A", value: "TYPOGRAPHY_LED" }, { key: "b", label: "B", value: "EDITORIAL_LIST" }], primaryKpi: "OUTBOUND_CLICKS", guardrails: { minimumImpressions: 1000, minimumOutboundClicks: 20, maximumDays: 30 }, attributionModelVersion: "pinterest_organic_v1", scoringModelVersion: "opportunity_scoring_v1", experimentModelVersion: "creative_experiment_v1" };
     expect(createExperimentSchema.safeParse(experiment).success).toBe(true);
