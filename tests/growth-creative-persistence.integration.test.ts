@@ -3,6 +3,7 @@ import {
   GrowthCreativeArchetype,
   GrowthCreativeDestinationKind,
   GrowthExperimentDimension,
+  GrowthExperimentStatus,
   GrowthIdeaStatus,
   GrowthIdeaVersionAction,
   GrowthPinCandidateStatus,
@@ -83,11 +84,12 @@ async function seedTranslator(active = true, withControl = false, label = "Warm"
   return prisma.translator.create({ data: { ...values, promptSystem: "Rewrite safely.", promptInstructions: "Preserve meaning.", isActive: active, shareImagePath, shareImageHash, shareImageUpdatedAt: shareImagePath ? new Date() : null } });
 }
 
-async function seedIdea(status: GrowthIdeaStatus = GrowthIdeaStatus.PUBLISHED) {
+async function seedIdea(status: GrowthIdeaStatus = GrowthIdeaStatus.PUBLISHED, corruptBlocks = false) {
   const category = await prisma.growthIdeaCategory.findFirstOrThrow({ where: { isActive: true, archivedAt: null } });
   const suffix = Math.random().toString(36).slice(2, 10);
   const idea = await prisma.growthIdea.create({ data: { slug: `birthday-messages-${suffix}`, categoryId: category.id, status: GrowthIdeaStatus.DRAFT, seoTitle: "Birthday messages", seoDescription: "Useful birthday message ideas for friends and family." } });
-  const version = await prisma.growthIdeaVersion.create({ data: { ideaId: idea.id, categoryId: category.id, version: 1, action: GrowthIdeaVersionAction.CREATE, title: "15 Birthday Messages for Friends", excerpt: "Warm and funny birthday messages with context for choosing the right one.", seoTitle: "Birthday Messages for Friends", seoDescription: "Find useful birthday messages for friends with warm and funny options.", blocks: [{ type: "INTRO", text: "Choose a message that fits your friendship." }, { type: "HEADING", level: 2, text: "Birthday messages" }, { type: "IDEA_LIST", items: [{ text: "Hope your day feels as wonderful as you make everyone else feel." }, { text: "Another year wiser and still the funniest person I know." }, { text: "Celebrating you today and always." }] }], checksum: "a".repeat(64), qualityResult: {}, decisionModelVersion: "idea_autopilot_v2", generationModelVersion: "idea_generation_v1", qualityModelVersion: "idea_quality_v1", dedupeModelVersion: "idea_dedupe_v1", snapshotModelVersion: "idea_snapshot_v1", authorKind: "SYSTEM", mutationKey: `creative-idea-${suffix}`, publishedAt: status === GrowthIdeaStatus.PUBLISHED ? new Date() : null } });
+  const blocks = corruptBlocks ? [{ type: "INTRO", text: "Incomplete public content." }] : [{ type: "INTRO", text: "Choose a message that fits your friendship." }, { type: "HEADING", level: 2, text: "Birthday messages" }, { type: "IDEA_LIST", items: [{ text: "Hope your day feels as wonderful as you make everyone else feel." }, { text: "Another year wiser and still the funniest person I know." }, { text: "Celebrating you today and always." }] }];
+  const version = await prisma.growthIdeaVersion.create({ data: { ideaId: idea.id, categoryId: category.id, version: 1, action: GrowthIdeaVersionAction.CREATE, title: "15 Birthday Messages for Friends", excerpt: "Warm and funny birthday messages with context for choosing the right one.", seoTitle: "Birthday Messages for Friends", seoDescription: "Find useful birthday messages for friends with warm and funny options.", blocks, checksum: "a".repeat(64), qualityResult: {}, decisionModelVersion: "idea_autopilot_v2", generationModelVersion: "idea_generation_v1", qualityModelVersion: "idea_quality_v1", dedupeModelVersion: "idea_dedupe_v1", snapshotModelVersion: "idea_snapshot_v1", authorKind: "SYSTEM", mutationKey: `creative-idea-${suffix}`, publishedAt: status === GrowthIdeaStatus.PUBLISHED ? new Date() : null } });
   return prisma.growthIdea.update({ where: { id: idea.id }, data: { currentVersionId: version.id, status, publishedAt: status === GrowthIdeaStatus.PUBLISHED ? new Date() : null, archivedAt: status === GrowthIdeaStatus.ARCHIVED ? new Date() : null } });
 }
 
@@ -122,6 +124,41 @@ suite("Growth Phase 10 PostgreSQL A-R scenarios", () => {
     expect(await prisma.growthPinCandidate.count()).toBe(1); expect(await prisma.growthAsset.count()).toBe(1);
   });
 
+  it("finds an exact content duplicate older than the 100-row fuzzy window", async () => {
+    const translator = await seedTranslator();
+    const first = await generateCreativeCandidate(payload(translator.id));
+    const { id: _id, createdAt: _createdAt, recommendedAt: _recommendedAt, generationJobId: _generationJobId, ...fixture } = first.candidate;
+    void [_id, _createdAt, _recommendedAt, _generationJobId];
+    await prisma.growthPinCandidate.createMany({ data: Array.from({ length: 101 }, (_, index) => ({
+      ...fixture,
+      candidateKey: `newer-fixture-${index}`,
+      revision: 1,
+      contentHash: createHash("sha256").update(`newer-fixture-${index}`).digest("hex"),
+      similarityFlags: { fixture: index },
+      status: GrowthPinCandidateStatus.DEFERRED,
+      createdAt: new Date(Date.now() + index + 1),
+      recommendedAt: new Date(Date.now() + index + 1),
+      generationJobId: null,
+    })) });
+    const retry = await generateCreativeCandidate(payload(translator.id));
+    expect(retry).toMatchObject({ reused: true, candidate: { id: first.candidate.id } });
+    expect(await prisma.growthPinCandidate.count({ where: { status: GrowthPinCandidateStatus.READY } })).toBe(1);
+    expect(await prisma.growthPinCandidate.count()).toBe(102);
+  });
+
+  it("defers a different context that renders to the same asset checksum", async () => {
+    const firstTranslator = await seedTranslator(); const secondTranslator = await seedTranslator();
+    const first = await generateCreativeCandidate(payload(firstTranslator.id));
+    const duplicate = await generateCreativeCandidate(payload(secondTranslator.id));
+    expect(duplicate.candidate).toMatchObject({
+      status: GrowthPinCandidateStatus.DEFERRED,
+      similarityResult: "EXACT_DUPLICATE",
+      similarityFlags: { exactContentHash: false, exactAssetChecksum: true, sameDestination: false },
+    });
+    expect(duplicate.asset.id).toBe(first.asset.id);
+    expect(duplicate.candidate.contentHash).not.toBe(first.candidate.contentHash);
+  });
+
   it("F: near duplicate becomes DEFERRED", async () => {
     const translator = await seedTranslator();
     await generateCreativeCandidate(payload(translator.id, GrowthCreativeArchetype.TYPOGRAPHY_LED));
@@ -139,6 +176,13 @@ suite("Growth Phase 10 PostgreSQL A-R scenarios", () => {
     const idea = await seedIdea();
     const result = await generateCreativeCandidate({ targetKind: GrowthCreativeDestinationKind.IDEA, targetId: idea.id, archetype: GrowthCreativeArchetype.EDITORIAL_LIST, creativeModelVersion: CREATIVE_LAB_VERSION });
     expect(result.candidate).toMatchObject({ destinationKind: GrowthCreativeDestinationKind.IDEA, ideaId: idea.id, status: GrowthPinCandidateStatus.READY, pinRef: null });
+  });
+
+  it("rejects a published Idea whose current blocks fail the Phase 9 public contract", async () => {
+    const idea = await seedIdea(GrowthIdeaStatus.PUBLISHED, true);
+    await expect(generateCreativeCandidate({ targetKind: GrowthCreativeDestinationKind.IDEA, targetId: idea.id, archetype: GrowthCreativeArchetype.EDITORIAL_LIST, creativeModelVersion: CREATIVE_LAB_VERSION })).rejects.toThrow("invalid published content");
+    expect(await prisma.growthPinCandidate.count()).toBe(0);
+    expect(await prisma.growthAsset.count()).toBe(0);
   });
 
   it("I-J: inactive Translator and unpublished or archived Idea are rejected", async () => {
@@ -187,6 +231,25 @@ suite("Growth Phase 10 PostgreSQL A-R scenarios", () => {
     const translator = await seedTranslator();
     await expect(generateCreativeCandidate(payload(translator.id), null, { beforePersist: async () => { await prisma.translator.update({ where: { id: translator.id }, data: { isActive: false } }); } })).rejects.toThrow("unavailable");
     expect(await prisma.growthPinCandidate.count()).toBe(0);
+  });
+
+  it("fails closed when account or experiment eligibility changes after rendering", async () => {
+    const translator = await seedTranslator(); const account = await seedAccount("first");
+    await expect(generateCreativeCandidate(payload(translator.id, GrowthCreativeArchetype.TYPOGRAPHY_LED, { accountId: account.id }), null, { beforePersist: async () => { await prisma.growthPinterestAccount.update({ where: { id: account.id }, data: { connectionStatus: GrowthPinterestConnectionStatus.DEGRADED } }); } })).rejects.toThrow("account is unavailable");
+    const experiment = await createDraftCreativeExperiment({ hypothesis: "Typography increases outbound clicks.", dimension: GrowthExperimentDimension.ARCHETYPE, variants: [{ key: "a", label: "Typography", value: "TYPOGRAPHY_LED" }, { key: "b", label: "Minimal", value: "MINIMAL_STATEMENT" }], primaryKpi: "OUTBOUND_CLICKS", guardrails: { minimumImpressions: 1000, minimumOutboundClicks: 20, maximumDays: 30 }, attributionModelVersion: "pinterest_organic_v1", scoringModelVersion: "opportunity_scoring_v1", experimentModelVersion: CREATIVE_EXPERIMENT_VERSION });
+    await expect(generateCreativeCandidate(payload(translator.id, GrowthCreativeArchetype.TYPOGRAPHY_LED, { experimentId: experiment.id, variantKey: "a" }), null, { beforePersist: async () => { await prisma.growthExperiment.update({ where: { id: experiment.id }, data: { status: GrowthExperimentStatus.CANCELLED } }); } })).rejects.toThrow("experiment is unavailable");
+    expect(await prisma.growthPinCandidate.count()).toBe(0);
+    expect(await prisma.growthAsset.count()).toBe(0);
+  });
+
+  it("does not let exact reuse bypass the kill switch or late target eligibility", async () => {
+    const translator = await seedTranslator();
+    const first = await generateCreativeCandidate(payload(translator.id));
+    await prisma.growthSettings.update({ where: { id: "global" }, data: { enabled: false } });
+    await expect(generateCreativeCandidate(payload(translator.id))).rejects.toThrow("Growth is disabled");
+    await prisma.growthSettings.update({ where: { id: "global" }, data: { enabled: true } });
+    await expect(generateCreativeCandidate(payload(translator.id), null, { beforePersist: async () => { await prisma.translator.update({ where: { id: translator.id }, data: { isActive: false } }); } })).rejects.toThrow("unavailable");
+    expect(await prisma.growthPinCandidate.findMany()).toEqual([expect.objectContaining({ id: first.candidate.id })]);
   });
 
   it("R: failed persistence removes its orphan without deleting referenced assets", async () => {

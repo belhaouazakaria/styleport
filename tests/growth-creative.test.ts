@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { readFile, rm } from "node:fs/promises";
 import {
   GrowthCreativeArchetype,
   GrowthCreativeDestinationKind,
@@ -8,11 +9,12 @@ import {
 import { describe, expect, it } from "vitest";
 
 import { createCreativeAiImageBudget } from "@/lib/growth/creative/ai-image-provider";
+import { GET as getCreativeAsset } from "@/app/generated/growth-creatives/[filename]/route";
 import { DETERMINISTIC_ARCHETYPES, STATIC_RENDERER_DEFINITIONS } from "@/lib/growth/creative/constants";
 import { creativeGenerationJobPayloadSchema, createExperimentSchema } from "@/lib/growth/creative/contracts";
-import { getCreativeRendererDefinition, renderDeterministicCreative } from "@/lib/growth/creative/renderer";
-import { classifyCreativeSimilarity } from "@/lib/growth/creative/similarity";
-import { readPngDimensions, resolveCreativeAssetFile } from "@/lib/growth/creative/storage";
+import { capCreativeTextLines, CREATIVE_TEXT_LINE_LIMITS, getCreativeRendererDefinition, renderDeterministicCreative } from "@/lib/growth/creative/renderer";
+import { buildExactCreativeSimilarity, classifyCreativeSimilarity } from "@/lib/growth/creative/similarity";
+import { cleanupCreativeAssetAfterFailure, persistCreativeAssetFile, readPngDimensions, releaseCreativeAssetLease, resolveCreativeAssetFile } from "@/lib/growth/creative/storage";
 
 const copy = {
   title: "Birthday messages | See all ideas",
@@ -44,6 +46,22 @@ describe("Phase 10 Creative Lab contracts", () => {
     expect(readPngDimensions(first)).toEqual({ width: 1000, height: 1500 });
   });
 
+  it("caps maximum schema-valid static copy inside declared deterministic line limits", async () => {
+    const maximumCopy = { title: "T".repeat(100), description: "D".repeat(500), headline: "H".repeat(90), subheadline: "S".repeat(180), cta: "C".repeat(50), topic: "P".repeat(160), listItems: Array.from({ length: 5 }, () => "L".repeat(80)) };
+    for (const archetype of [GrowthCreativeArchetype.TYPOGRAPHY_LED, GrowthCreativeArchetype.EDITORIAL_LIST, GrowthCreativeArchetype.CONVERSATION_CHAT, GrowthCreativeArchetype.MINIMAL_STATEMENT]) {
+      const first = await renderDeterministicCreative(archetype, maximumCopy);
+      const second = await renderDeterministicCreative(archetype, maximumCopy);
+      expect(createHash("sha256").update(first).digest("hex")).toBe(createHash("sha256").update(second).digest("hex"));
+      expect(readPngDimensions(first)).toEqual({ width: 1000, height: 1500 });
+    }
+    for (const limit of Object.values(CREATIVE_TEXT_LINE_LIMITS)) {
+      const lines = capCreativeTextLines("maximum ".repeat(100), limit.characters, limit.lines);
+      expect(lines.length).toBeLessThanOrEqual(limit.lines);
+      expect(lines.every((line) => line.length <= limit.characters)).toBe(true);
+      expect(lines.at(-1)).toMatch(/…$/);
+    }
+  });
+
   it("accepts only controlled identifiers and bounded experiment definitions", () => {
     expect(creativeGenerationJobPayloadSchema.safeParse({ targetKind: GrowthCreativeDestinationKind.TRANSLATOR, targetId: "translator_1", archetype: GrowthCreativeArchetype.TYPOGRAPHY_LED, creativeModelVersion: "creative_lab_v1" }).success).toBe(true);
     expect(creativeGenerationJobPayloadSchema.safeParse({ targetKind: GrowthCreativeDestinationKind.TRANSLATOR, targetId: "translator_1", archetype: GrowthCreativeArchetype.BEFORE_AFTER, creativeModelVersion: "creative_lab_v1" }).success).toBe(false);
@@ -54,11 +72,29 @@ describe("Phase 10 Creative Lab contracts", () => {
   });
 
   it("classifies exact, cross-account, near, related, and distinct candidates deterministically", () => {
-    const history = [{ id: "one", title: "Birthday messages for close friends", contentHash: "a".repeat(64), destinationPath: "/ideas/birthday", accountId: "account-a", archetype: "TYPOGRAPHY_LED", templateId: "typography-led-v1" }];
-    expect(classifyCreativeSimilarity({ ...history[0], contentHash: history[0].contentHash, accountId: "account-b" }, history)).toMatchObject({ classification: GrowthCreativeSimilarityClassification.EXACT_DUPLICATE, flags: { crossAccount: true } });
+    const history = [{ id: "one", title: "Birthday messages for close friends", contentHash: "a".repeat(64), destinationPath: "/ideas/birthday", topic: "Birthdays", accountId: "account-a", archetype: "TYPOGRAPHY_LED", templateId: "typography-led-v1" }];
+    expect(buildExactCreativeSimilarity({ ...history[0], accountId: "account-b" }, history[0], { contentHash: true, assetChecksum: true })).toMatchObject({ classification: GrowthCreativeSimilarityClassification.EXACT_DUPLICATE, flags: { exactContentHash: true, exactAssetChecksum: true, crossAccount: true } });
     expect(classifyCreativeSimilarity({ ...history[0], contentHash: "b".repeat(64), title: "Birthday messages for your close friends" }, history).classification).toBe(GrowthCreativeSimilarityClassification.NEAR_DUPLICATE);
     expect(classifyCreativeSimilarity({ ...history[0], contentHash: "c".repeat(64), title: "A fresh celebration guide" }, history).classification).toBe(GrowthCreativeSimilarityClassification.RELATED_DISTINCT);
-    expect(classifyCreativeSimilarity({ ...history[0], contentHash: "d".repeat(64), destinationPath: "/ideas/other", title: "Conversation starters for class" }, history).classification).toBe(GrowthCreativeSimilarityClassification.DISTINCT);
+    expect(classifyCreativeSimilarity({ ...history[0], contentHash: "d".repeat(64), destinationPath: "/ideas/other", topic: "Classroom", title: "Birthday messages for close friends" }, history).classification).toBe(GrowthCreativeSimilarityClassification.DISTINCT);
+  });
+
+  it("publishes identical assets without clobbering and preserves files when references are known or unknown", async () => {
+    const bytes = await renderDeterministicCreative(GrowthCreativeArchetype.MINIMAL_STATEMENT, { ...copy, headline: "Concurrent storage hardening" });
+    const stored = await Promise.all([persistCreativeAssetFile(bytes), persistCreativeAssetFile(bytes)]);
+    expect(stored.filter((item) => item.created)).toHaveLength(1);
+    expect(new Set(stored.map((item) => item.filePath)).size).toBe(1);
+    const owner = stored.find((item) => item.created)!;
+    expect(await cleanupCreativeAssetAfterFailure(owner, async () => { throw new Error("database unavailable"); })).toBe(false);
+    expect(await readFile(owner.filePath)).toEqual(bytes);
+    expect(await cleanupCreativeAssetAfterFailure(owner, async () => 1)).toBe(false);
+    expect(await readFile(owner.filePath)).toEqual(bytes);
+    const response = await getCreativeAsset(new Request("https://saytwist.com"), { params: Promise.resolve({ filename: owner.publicPath.split("/").at(-1)! }) });
+    expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow, noarchive");
+    expect(response.headers.get("cache-control")).toContain("immutable");
+    await Promise.all(stored.map((item) => releaseCreativeAssetLease(item.leasePath)));
+    await rm(owner.filePath, { force: true });
   });
 
   it("keeps AI disabled by default and enforces one image unit per job", () => {

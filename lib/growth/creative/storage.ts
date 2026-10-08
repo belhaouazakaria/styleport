@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { access, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { link, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { CREATIVE_HEIGHT, CREATIVE_WIDTH, MAX_CREATIVE_BYTES } from "@/lib/growth/creative/constants";
@@ -42,31 +42,57 @@ export async function persistCreativeAssetFile(bytes: Buffer) {
   const finalPath = path.join(storageDirectory, fileName);
   const publicPath = `${publicPathPrefix}/${fileName}`;
   await mkdir(storageDirectory, { recursive: true });
-  try {
-    await access(finalPath);
-    return { checksum, filePath: finalPath, publicPath, byteSize: bytes.length, created: false };
-  } catch {
-    // Continue with a bounded atomic write.
-  }
   const tempPath = path.join(storageDirectory, `.creative-${randomBytes(8).toString("hex")}.tmp`);
+  const leasePath = path.join(storageDirectory, `.creative-${checksum}-${randomBytes(8).toString("hex")}.lease`);
+  let created = false;
   try {
     await writeFile(tempPath, bytes, { flag: "wx" });
-    await rename(tempPath, finalPath);
-    return { checksum, filePath: finalPath, publicPath, byteSize: bytes.length, created: true };
-  } catch (error) {
-    await rm(tempPath, { force: true });
     try {
-      await access(finalPath);
-      return { checksum, filePath: finalPath, publicPath, byteSize: bytes.length, created: false };
-    } catch {
-      throw error;
+      await link(tempPath, finalPath);
+      created = true;
+    } catch (error) {
+      if (!(error instanceof Error && "code" in error && error.code === "EEXIST")) throw error;
+      const existing = await readFile(finalPath);
+      validateCreativePng(existing);
+      if (creativeAssetChecksum(existing) !== checksum) throw new Error("Existing Creative asset does not match its content-addressed path.");
     }
+    await link(finalPath, leasePath);
+    return { checksum, filePath: finalPath, publicPath, byteSize: bytes.length, created, leasePath };
+  } catch (error) {
+    await rm(leasePath, { force: true });
+    if (created) {
+      const fileStats = await stat(finalPath).catch(() => null);
+      if (fileStats?.nlink === 1) await rm(finalPath, { force: true });
+    }
+    throw error;
+  } finally {
+    await rm(tempPath, { force: true });
   }
 }
 
-export async function removeUnreferencedCreativeAssetFile(filePath: string, referenced: boolean) {
-  if (referenced) return;
-  const resolved = path.resolve(filePath);
+export async function cleanupCreativeAssetAfterFailure(
+  stored: { filePath: string; leasePath: string; created: boolean },
+  verifyReferenceCount: () => Promise<number>,
+) {
+  if (!stored.created) return false;
+  let referenceCount: number;
+  try {
+    referenceCount = await verifyReferenceCount();
+  } catch {
+    return false;
+  }
+  if (referenceCount !== 0) return false;
+  const fileStats = await stat(stored.filePath).catch(() => null);
+  if (!fileStats || fileStats.nlink > 2) return false;
+  const resolved = path.resolve(stored.filePath);
+  const root = path.resolve(storageDirectory);
+  if (!resolved.startsWith(`${root}${path.sep}`)) return false;
+  await rm(resolved, { force: true });
+  return true;
+}
+
+export async function releaseCreativeAssetLease(leasePath: string) {
+  const resolved = path.resolve(leasePath);
   const root = path.resolve(storageDirectory);
   if (!resolved.startsWith(`${root}${path.sep}`)) return;
   await rm(resolved, { force: true });
@@ -76,4 +102,3 @@ export function resolveCreativeAssetFile(filename: string) {
   if (!filename || filename.length > 191 || !/^creative-[a-f0-9]{64}\.png$/.test(filename)) return null;
   return path.join(storageDirectory, filename);
 }
-

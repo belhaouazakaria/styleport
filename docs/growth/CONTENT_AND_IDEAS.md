@@ -165,7 +165,7 @@ Prefer, in order:
 2. reusable approved visual assets;
 3. generated imagery when visual novelty is expected to add value.
 
-Track generated-image cost separately. Phase 10 prefers deterministic rendering, disables AI images by default, and permits at most one image unit in a generation job when an explicit provider and gate are supplied. Provider/model/response metadata and the image unit are persisted. An unavailable price is `NULL`, never zero.
+Track generated-image cost separately. Phase 10 prefers deterministic rendering, disables AI images by default, and permits at most one image unit in a generation job when an explicit provider and gate are supplied. No production worker provider is wired in Phase 10, so the default paid-image ceiling is effectively zero. Provider/model/response metadata and the image unit are persisted. An unavailable price is `NULL`, never zero.
 
 ## 10. Duplicate/similarity controls
 
@@ -180,7 +180,7 @@ Before a Pin candidate enters approval:
 
 The purpose is quality and authenticity, not evading detection.
 
-`creative_similarity_v1` bounds comparison to the 100 most recent candidates. Equal content hashes are exact duplicates; token-set title Jaccard of at least 0.8 is near duplicate; the same destination below that threshold is related/distinct; otherwise the candidate is distinct. Same-account exact retries return the existing immutable candidate and asset. Cross-account exact matches and near matches are persisted as `DEFERRED`; related and distinct candidates may become `READY`. Phase 10 stops there: approval, scheduling, and publication are Phase 11 work.
+`creative_similarity_v1` uses direct indexed lookups over all candidates for exact content hashes and exact asset checksums; only fuzzy comparison is bounded to the 100 most recent candidates. Token-set title Jaccard of at least 0.8 becomes near duplicate only when the destination is the same or normalized topic intent is equivalent. Destination, topic, account, archetype, and template relationships are retained in bounded flags so generic titles across unrelated intents are not automatically near duplicates. Exact retries for the same immutable candidate context return the existing candidate and asset. Exact matches in a different context and near matches are persisted as `DEFERRED`; related and distinct candidates may become `READY`. Phase 10 stops there: approval, scheduling, and publication are Phase 11 work.
 
 ## 11. CTA strategy
 
