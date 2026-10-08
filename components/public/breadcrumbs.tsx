@@ -8,15 +8,16 @@ interface BreadcrumbItem {
 
 interface BreadcrumbsProps {
   items: BreadcrumbItem[];
+  align?: "center" | "start";
 }
 
-export function Breadcrumbs({ items }: BreadcrumbsProps) {
+export function Breadcrumbs({ items, align = "center" }: BreadcrumbsProps) {
   if (!items.length) {
     return null;
   }
 
   return (
-    <nav aria-label="Breadcrumb" className="flex flex-wrap items-center justify-center gap-1 text-sm">
+    <nav aria-label="Breadcrumb" className={`flex flex-wrap items-center gap-1 text-sm ${align === "start" ? "justify-start" : "justify-center"}`}>
       {items.map((item, index) => {
         const isLast = index === items.length - 1;
         return (
@@ -45,4 +46,3 @@ export function Breadcrumbs({ items }: BreadcrumbsProps) {
     </nav>
   );
 }
-
