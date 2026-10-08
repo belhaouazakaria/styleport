@@ -73,6 +73,12 @@ export function Navbar({
             Categories
           </Link>
           <Link
+            href="/ideas"
+            className="inline-flex h-11 items-center rounded-full px-4 text-sm font-semibold text-muted-ink transition hover:bg-muted-surface hover:text-ink"
+          >
+            Ideas
+          </Link>
+          <Link
             href="/contact"
             className="inline-flex h-11 items-center rounded-full px-4 text-sm font-semibold text-muted-ink transition hover:bg-muted-surface hover:text-ink"
           >
@@ -150,6 +156,14 @@ export function Navbar({
               >
                 <LayoutGrid className="h-4 w-4" />
                 Categories
+              </Link>
+              <Link
+                href="/ideas"
+                onClick={() => setMobileOpen(false)}
+                className="flex min-h-12 items-center gap-3 rounded-xl px-3 text-sm font-bold text-white/75 hover:bg-white/10 hover:text-white"
+              >
+                <Compass className="h-4 w-4" />
+                Ideas
               </Link>
               <Link
                 href="/contact"

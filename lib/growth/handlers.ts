@@ -26,6 +26,14 @@ import {
   decideTranslatorOpportunity,
   executeTranslatorDecision,
 } from "@/lib/growth/translator/service";
+import {
+  ideaDecisionJobPayloadSchema,
+  ideaExecutionJobPayloadSchema,
+} from "@/lib/growth/ideas/contracts";
+import {
+  decideIdeaOpportunity,
+  executeIdeaDecision,
+} from "@/lib/growth/ideas/service";
 
 export interface GrowthJobHandlerContext {
   job: GrowthJob;
@@ -190,6 +198,35 @@ const handlers = new Map<GrowthJobType, GrowthJobHandler>([
         decisionId: result.decision.id,
         status: result.decision.status,
         translatorId: "translatorId" in result ? result.translatorId : result.decision.translatorId,
+        reused: result.reused,
+      };
+    },
+  ],
+  [
+    GrowthJobType.IDEA_AUTOPILOT_DECIDE,
+    async ({ job }) => {
+      const parsed = ideaDecisionJobPayloadSchema.safeParse(job.payload || {});
+      if (!parsed.success) throw new NonRetryableGrowthJobError("Invalid Idea Autopilot decision payload.");
+      const result = await decideIdeaOpportunity(parsed.data.opportunityId);
+      return {
+        decisionId: result.decision.id,
+        decisionType: result.decision.type,
+        status: result.decision.status,
+        executionJobId: result.execution?.job.id || null,
+        modelVersion: result.decision.decisionModelVersion,
+      };
+    },
+  ],
+  [
+    GrowthJobType.IDEA_AUTOPILOT_EXECUTE,
+    async ({ job }) => {
+      const parsed = ideaExecutionJobPayloadSchema.safeParse(job.payload || {});
+      if (!parsed.success) throw new NonRetryableGrowthJobError("Invalid Idea Autopilot execution payload.");
+      const result = await executeIdeaDecision(parsed.data.decisionId, { jobId: job.id });
+      return {
+        decisionId: result.decision.id,
+        status: result.decision.status,
+        ideaId: "ideaId" in result ? result.ideaId : result.decision.ideaId,
         reused: result.reused,
       };
     },

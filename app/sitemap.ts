@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 
 import { getIndexableTranslatorSlugsForSitemap } from "@/lib/data/translators";
+import { getIndexableIdeaSlugsForSitemap } from "@/lib/data/ideas";
 import { getAppBaseUrl } from "@/lib/env";
 
 const STATIC_INDEXABLE_ROUTES = [
@@ -11,12 +12,16 @@ const STATIC_INDEXABLE_ROUTES = [
   "/terms",
   "/disclaimer",
   "/cookies",
+  "/ideas",
 ] as const;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = getAppBaseUrl().toString().replace(/\/$/, "");
   const now = new Date();
-  const translators = await getIndexableTranslatorSlugsForSitemap();
+  const [translators, ideas] = await Promise.all([
+    getIndexableTranslatorSlugsForSitemap(),
+    getIndexableIdeaSlugsForSitemap(),
+  ]);
 
   const staticEntries: MetadataRoute.Sitemap = STATIC_INDEXABLE_ROUTES.map((path) => ({
     url: `${base}${path}`,
@@ -32,5 +37,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     lastModified: translator.updatedAt,
   }));
 
-  return [...staticEntries, ...translatorEntries];
+  const ideaEntries: MetadataRoute.Sitemap = ideas.map((idea) => ({
+    url: `${base}/ideas/${idea.slug}`,
+    changeFrequency: "monthly",
+    priority: 0.7,
+    lastModified: idea.updatedAt,
+  }));
+
+  return [...staticEntries, ...translatorEntries, ...ideaEntries];
 }

@@ -161,6 +161,8 @@ enum GrowthJobType {
   OPPORTUNITY_INTELLIGENCE_ANALYSIS
   TRANSLATOR_AUTOPILOT_DECIDE
   TRANSLATOR_AUTOPILOT_EXECUTE
+  IDEA_AUTOPILOT_DECIDE
+  IDEA_AUTOPILOT_EXECUTE
 }
 
 enum GrowthJobStatus {
@@ -292,6 +294,8 @@ enum GrowthSignalStrength {
 enum GrowthDecisionType {
   CREATE_TRANSLATOR
   IMPROVE_TRANSLATOR
+  CREATE_IDEA
+  IMPROVE_IDEA
   WAIT_FOR_MORE_DATA
   NO_ACTION
 }
@@ -321,6 +325,27 @@ enum GrowthContentSideEffectStatus {
   FAILED_RETRYABLE
 }
 
+enum GrowthIdeaStatus {
+  DRAFT
+  VALIDATING
+  NEEDS_REVISION
+  PUBLISHED
+  REVISING
+  ARCHIVED
+  CANCELLED
+}
+
+enum GrowthIdeaVersionAction {
+  CREATE
+  IMPROVE
+  ROLLBACK
+}
+
+enum GrowthIdeaTranslatorReferenceKind {
+  CTA
+  EMBEDDED
+}
+
 model User {
   id                    String                      @id @default(cuid())
   name                  String?
@@ -338,6 +363,7 @@ model User {
   growthSettingsUpdates GrowthSettings[]            @relation("GrowthSettingsUpdater")
   growthActivities      GrowthActivity[]            @relation("GrowthActivityUser")
   growthPinterestStates GrowthPinterestOAuthState[] @relation("GrowthPinterestOAuthStateAdmin")
+  growthIdeaVersions    GrowthIdeaVersion[]         @relation("GrowthIdeaVersionAuthor")
 }
 
 model Account {
@@ -429,6 +455,7 @@ model Translator {
   growthAttributionAggregates  GrowthAttributionDailyAggregate[]
   growthDecisions              GrowthDecision[]
   growthContentVersions        GrowthContentVersion[]
+  growthIdeaReferences         GrowthIdeaTranslatorReference[]
 
   @@index([isActive, isFeatured, sortOrder])
   @@index([isFeatured, featuredRank])
@@ -799,6 +826,7 @@ model GrowthJob {
   completedAt           DateTime?
   growthDecisions       GrowthDecision[]
   growthContentVersions GrowthContentVersion[]
+  growthIdeaVersions    GrowthIdeaVersion[]
 
   @@index([status, runAfter])
   @@index([leaseUntil])
@@ -1098,6 +1126,7 @@ model GrowthContentCluster {
   snapshots         GrowthContentClusterSnapshot[]
   opportunities     GrowthOpportunity[]
   pinSignals        GrowthPinSignal[]
+  ideas             GrowthIdea[]
 
   @@unique([clusterKey, clusteringVersion])
   @@index([status, updatedAt])
@@ -1179,6 +1208,7 @@ model GrowthDecision {
   id                           String                 @id @default(cuid())
   opportunityId                String?
   translatorId                 String?
+  ideaId                       String?
   executionJobId               String?
   type                         GrowthDecisionType
   status                       GrowthDecisionStatus   @default(PROPOSED)
@@ -1204,11 +1234,115 @@ model GrowthDecision {
   completedAt                  DateTime?
   opportunity                  GrowthOpportunity?     @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
   translator                   Translator?            @relation(fields: [translatorId], references: [id], onDelete: SetNull)
+  idea                         GrowthIdea?            @relation(fields: [ideaId], references: [id], onDelete: SetNull)
   executionJob                 GrowthJob?             @relation(fields: [executionJobId], references: [id], onDelete: SetNull)
   contentVersions              GrowthContentVersion[]
+  ideaVersions                 GrowthIdeaVersion[]
 
   @@index([status, createdAt])
   @@index([opportunityId, createdAt])
+  @@index([translatorId, createdAt])
+  @@index([ideaId, createdAt])
+}
+
+model GrowthIdeaCategory {
+  id          String       @id @default(cuid())
+  slug        String       @unique
+  name        String
+  description String
+  sortOrder   Int          @default(0)
+  isActive    Boolean      @default(true)
+  archivedAt  DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  ideas       GrowthIdea[]
+
+  @@index([isActive, sortOrder])
+}
+
+model GrowthIdea {
+  id               String                @id @default(cuid())
+  slug             String                @unique
+  categoryId       String
+  status           GrowthIdeaStatus      @default(DRAFT)
+  currentVersionId String?               @unique
+  clusterId        String?
+  seoTitle         String
+  seoDescription   String
+  publishedAt      DateTime?
+  archivedAt       DateTime?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  category         GrowthIdeaCategory    @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  cluster          GrowthContentCluster? @relation(fields: [clusterId], references: [id], onDelete: SetNull)
+  currentVersion   GrowthIdeaVersion?    @relation("CurrentGrowthIdeaVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
+  versions         GrowthIdeaVersion[]   @relation("GrowthIdeaVersions")
+  decisions        GrowthDecision[]
+
+  @@index([status, publishedAt])
+  @@index([categoryId, status, publishedAt])
+  @@index([clusterId, status])
+}
+
+model GrowthIdeaVersion {
+  id                     String                          @id @default(cuid())
+  ideaId                 String
+  categoryId             String
+  decisionId             String?
+  jobId                  String?
+  sourceVersionId        String?
+  authorUserId           String?
+  version                Int
+  action                 GrowthIdeaVersionAction
+  title                  String
+  excerpt                String
+  seoTitle               String
+  seoDescription         String
+  blocks                 Json
+  checksum               String
+  qualityResult          Json
+  decisionModelVersion   String
+  generationModelVersion String
+  qualityModelVersion    String
+  dedupeModelVersion     String
+  snapshotModelVersion   String
+  aiProvider             String?
+  aiModel                String?
+  aiResponseId           String?
+  aiPromptTokens         Int?
+  aiCompletionTokens     Int?
+  aiTotalTokens          Int?
+  generationAttemptCount Int                             @default(0)
+  authorKind             GrowthActivityActorKind
+  mutationKey            String                          @unique
+  createdAt              DateTime                        @default(now())
+  publishedAt            DateTime?
+  idea                   GrowthIdea                      @relation("GrowthIdeaVersions", fields: [ideaId], references: [id], onDelete: Restrict)
+  currentFor             GrowthIdea?                     @relation("CurrentGrowthIdeaVersion")
+  decision               GrowthDecision?                 @relation(fields: [decisionId], references: [id], onDelete: SetNull)
+  job                    GrowthJob?                      @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  authorUser             User?                           @relation("GrowthIdeaVersionAuthor", fields: [authorUserId], references: [id], onDelete: SetNull)
+  sourceVersion          GrowthIdeaVersion?              @relation("GrowthIdeaVersionRollback", fields: [sourceVersionId], references: [id], onDelete: SetNull)
+  rollbackVersions       GrowthIdeaVersion[]             @relation("GrowthIdeaVersionRollback")
+  translatorReferences   GrowthIdeaTranslatorReference[]
+
+  @@unique([ideaId, version])
+  @@index([ideaId, createdAt])
+  @@index([decisionId, createdAt])
+  @@index([checksum])
+}
+
+model GrowthIdeaTranslatorReference {
+  id           String                            @id @default(cuid())
+  versionId    String
+  translatorId String
+  kind         GrowthIdeaTranslatorReferenceKind
+  sortOrder    Int                               @default(0)
+  createdAt    DateTime                          @default(now())
+  version      GrowthIdeaVersion                 @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  translator   Translator                        @relation(fields: [translatorId], references: [id], onDelete: Restrict)
+
+  @@unique([versionId, translatorId, kind])
   @@index([translatorId, createdAt])
 }
 
