@@ -164,11 +164,11 @@ Deliver:
 Exit:
 - Ideas content provides standalone user value and measurable conversions.
 
-Implemented in additive migration `20261007140000_growth_ideas`, `lib/growth/ideas/*`, one-shot jobs `IDEA_AUTOPILOT_DECIDE` and `IDEA_AUTOPILOT_EXECUTE`, public `/ideas` and `/ideas/[slug]`, and ADMIN `/admin/growth/ideas`. Ideas use a separate seeded taxonomy with 10 production categories, strict structured blocks, immutable bounded versions/checksums, contextual Translator references, and at most one embedded Translator through the existing translation API. Public reads expose only published, non-archived current versions and the sitemap includes only those URLs. The production safety hotfix deployed `idea_autopilot_v2`, which rejects superseded Opportunity Intelligence/clustering versions and prevents generic clusters from creating or improving Ideas merely because of evidence volume. Public `/ideas`, sitemap, homepage, and `ads.txt` smoke checks passed; the existing AdSense line remains `google.com, pub-7927856375186557, DIRECT, f08c47fec0942fa0`. Live validation used current-v2 opportunity `cmux9ou7e0040a52kdu99upq2` (`AMPLIFY_WINNER`, `historical`, score 77, confidence 100, evidence `KNOWN`) and returned `WAIT_FOR_MORE_DATA` / `WAITING_DATA` with `IDEA_GENERIC_TOPIC_INSUFFICIENT`, null `executionJobId`, and `DEFERRED` opportunity status. `IDEA_AUTOPILOT_DECIDE` succeeded on the first attempt; no `IDEA_AUTOPILOT_EXECUTE` job was created, zero Ideas were created, no live OpenAI generation was forced, Growth was disabled again, and attribution remained disabled. Phase 10 — Creative Lab — is next.
+Implemented in additive migration `20261007140000_growth_ideas`, `lib/growth/ideas/*`, one-shot jobs `IDEA_AUTOPILOT_DECIDE` and `IDEA_AUTOPILOT_EXECUTE`, public `/ideas` and `/ideas/[slug]`, and ADMIN `/admin/growth/ideas`. Ideas use a separate seeded taxonomy with 10 production categories, strict structured blocks, immutable bounded versions/checksums, contextual Translator references, and at most one embedded Translator through the existing translation API. Public reads expose only published, non-archived current versions and the sitemap includes only those URLs. The production safety hotfix deployed `idea_autopilot_v2`, which rejects superseded Opportunity Intelligence/clustering versions and prevents generic clusters from creating or improving Ideas merely because of evidence volume. Public `/ideas`, sitemap, homepage, and `ads.txt` smoke checks passed; the existing AdSense line remains `google.com, pub-7927856375186557, DIRECT, f08c47fec0942fa0`. Live validation used current-v2 opportunity `cmux9ou7e0040a52kdu99upq2` (`AMPLIFY_WINNER`, `historical`, score 77, confidence 100, evidence `KNOWN`) and returned `WAIT_FOR_MORE_DATA` / `WAITING_DATA` with `IDEA_GENERIC_TOPIC_INSUFFICIENT`, null `executionJobId`, and `DEFERRED` opportunity status. `IDEA_AUTOPILOT_DECIDE` succeeded on the first attempt; no `IDEA_AUTOPILOT_EXECUTE` job was created, zero Ideas were created, no live OpenAI generation was forced, Growth was disabled again, and attribution remained disabled.
 
 ## Phase 10 — Creative Lab
 
-**Status:** Not started
+**Status:** Complete — implementation validated; not production deployed
 
 Deliver:
 - existing Pin generator integrated as Renderer V1/control;
@@ -180,6 +180,12 @@ Deliver:
 
 Exit:
 - creative performance is attributable to renderer/template/archetype.
+
+Implemented in additive migration `20261008120000_growth_creative_lab`, `lib/growth/creative/*`, bounded one-shot job `CREATIVE_LAB_GENERATE`, generated-asset serving, and ADMIN `/admin/growth/creative`. `GrowthAsset`, `GrowthPinCandidate`, and `GrowthExperiment` persist immutable asset bytes/checksums, candidate revisions, exact creative metadata, similarity results, and bounded DRAFT experiment definitions. Eligible destinations are active non-archived Translators and published current Ideas in active categories.
+
+The exact Translator share-image generator remains Renderer V1 control (`v1-control`, `share_image_v1`, `translator-share-control-v1`); the adapter materializes its existing 1000×1500 PNG without changing the established renderer. Deterministic 1000×1500 static implementations cover typography-led, editorial/list, conversation/chat, and minimal-statement. `creative_similarity_v1` compares at most 100 recent candidates: equal content hash is exact, title Jaccard at least 0.8 is near, a shared destination is related/distinct, and the remaining result is distinct. Exact same-account retry reuses the candidate; exact cross-account and near matches are retained as `DEFERRED`; safe novel candidates stop at `READY`.
+
+AI image generation is default-off, injectable, permits at most one image unit per job, accepts only validated 1000×1500 PNG output, and records provider/model/response/image-unit metadata. Unknown price remains `NULL`. Phase 10 made no live provider call and added no approval, scheduling, publication, Pinterest write, attribution enablement, recurring enqueue, cron, or persistent Growth worker. Phase 11 — Scheduling and Publishing Engine — is next.
 
 ## Phase 11 — Scheduling and Publishing Engine
 

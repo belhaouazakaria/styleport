@@ -117,7 +117,7 @@ The existing SayTwist automatic Pin image generator becomes:
 
 **Renderer V1 — Control**
 
-Do not replace it before measuring it.
+Phase 10 preserves it exactly as `v1-control` / `share_image_v1` / `translator-share-control-v1`. The Creative Lab adapter calls the established Translator share-image path, validates its 1000×1500 PNG, and records an immutable Growth asset; it does not alter the control's layout, copy, palette, or hash behavior.
 
 Additional static-image archetypes may be introduced experimentally:
 
@@ -131,6 +131,8 @@ Additional static-image archetypes may be introduced experimentally:
 - Scene-based visual, if image generation is justified
 
 Video is out of scope initially.
+
+Phase 10 implements deterministic 1000×1500 versions of Typography-led, Editorial/list, Conversation/chat, and Minimal statement. Before/after, Comparison, Quiz/personality, and Scene-based remain registered extension values without deterministic implementations. Scene-based generation is available only through an explicit injectable AI provider gate.
 
 ## 8. Creative experiments
 
@@ -149,6 +151,8 @@ Each Pin candidate records:
 
 Outcomes attach to the exact creative metadata.
 
+Phase 10 creates only bounded DRAFT experiment definitions with two to four immutable variant descriptors and may attach a candidate to one DRAFT variant. It does not launch, allocate, analyze, pause, or complete an experiment. Those runtime behaviors require later scheduling, publication, and outcome evidence.
+
 The agent should learn which archetype works for which topic and account rather than naming a single universal "best design."
 
 ## 9. AI image economics
@@ -161,7 +165,7 @@ Prefer, in order:
 2. reusable approved visual assets;
 3. generated imagery when visual novelty is expected to add value.
 
-Track generated-image cost separately.
+Track generated-image cost separately. Phase 10 prefers deterministic rendering, disables AI images by default, and permits at most one image unit in a generation job when an explicit provider and gate are supplied. Provider/model/response metadata and the image unit are persisted. An unavailable price is `NULL`, never zero.
 
 ## 10. Duplicate/similarity controls
 
@@ -175,6 +179,8 @@ Before a Pin candidate enters approval:
 - flag borderline cases.
 
 The purpose is quality and authenticity, not evading detection.
+
+`creative_similarity_v1` bounds comparison to the 100 most recent candidates. Equal content hashes are exact duplicates; token-set title Jaccard of at least 0.8 is near duplicate; the same destination below that threshold is related/distinct; otherwise the candidate is distinct. Same-account exact retries return the existing immutable candidate and asset. Cross-account exact matches and near matches are persisted as `DEFERRED`; related and distinct candidates may become `READY`. Phase 10 stops there: approval, scheduling, and publication are Phase 11 work.
 
 ## 11. CTA strategy
 

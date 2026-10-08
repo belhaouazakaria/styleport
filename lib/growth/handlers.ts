@@ -34,6 +34,8 @@ import {
   decideIdeaOpportunity,
   executeIdeaDecision,
 } from "@/lib/growth/ideas/service";
+import { creativeGenerationJobPayloadSchema } from "@/lib/growth/creative/contracts";
+import { generateCreativeCandidate } from "@/lib/growth/creative/candidates";
 
 export interface GrowthJobHandlerContext {
   job: GrowthJob;
@@ -227,6 +229,21 @@ const handlers = new Map<GrowthJobType, GrowthJobHandler>([
         decisionId: result.decision.id,
         status: result.decision.status,
         ideaId: "ideaId" in result ? result.ideaId : result.decision.ideaId,
+        reused: result.reused,
+      };
+    },
+  ],
+  [
+    GrowthJobType.CREATIVE_LAB_GENERATE,
+    async ({ job }) => {
+      const parsed = creativeGenerationJobPayloadSchema.safeParse(job.payload || {});
+      if (!parsed.success) throw new NonRetryableGrowthJobError("Invalid Creative Lab generation payload.");
+      const result = await generateCreativeCandidate(parsed.data, job.id);
+      return {
+        candidateId: result.candidate.id,
+        assetId: result.asset.id,
+        status: result.candidate.status,
+        archetype: result.candidate.archetype,
         reused: result.reused,
       };
     },
