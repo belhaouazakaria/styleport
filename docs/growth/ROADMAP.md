@@ -149,7 +149,7 @@ Implemented in additive migration `20261007010000_growth_translator_autopilot`, 
 
 ## Phase 9 — SayTwist Ideas
 
-**Status:** Complete (implementation validated; production not yet deployed)
+**Status:** Complete — production deployed; live decision/planning safety path validated; no forced Idea mutation
 
 Deliver:
 - `/ideas` content model;
@@ -164,7 +164,7 @@ Deliver:
 Exit:
 - Ideas content provides standalone user value and measurable conversions.
 
-Implemented in additive migration `20261007140000_growth_ideas`, `lib/growth/ideas/*`, one-shot jobs `IDEA_AUTOPILOT_DECIDE` and `IDEA_AUTOPILOT_EXECUTE`, public `/ideas` and `/ideas/[slug]`, and ADMIN `/admin/growth/ideas`. Ideas use a separate seeded taxonomy, strict structured blocks, immutable bounded versions/checksums, contextual Translator references, and at most one embedded Translator through the existing translation API. Public reads expose only published, non-archived current versions and the sitemap includes only those URLs. Deterministic planning, dedupe, quality, late revalidation, auto-publication, archive, and audited rollback are implementation validated. The isolated real PostgreSQL suite passed A–P from all 23 migrations, and earlier Growth database suites remain compatible. No production deployment or access, live OpenAI call, Pinterest call/mutation, attribution enablement, scheduler, cron, persistent Growth worker, or Phase 10 work occurred. Phase 10 — Creative Lab — is next.
+Implemented in additive migration `20261007140000_growth_ideas`, `lib/growth/ideas/*`, one-shot jobs `IDEA_AUTOPILOT_DECIDE` and `IDEA_AUTOPILOT_EXECUTE`, public `/ideas` and `/ideas/[slug]`, and ADMIN `/admin/growth/ideas`. Ideas use a separate seeded taxonomy with 10 production categories, strict structured blocks, immutable bounded versions/checksums, contextual Translator references, and at most one embedded Translator through the existing translation API. Public reads expose only published, non-archived current versions and the sitemap includes only those URLs. The production safety hotfix deployed `idea_autopilot_v2`, which rejects superseded Opportunity Intelligence/clustering versions and prevents generic clusters from creating or improving Ideas merely because of evidence volume. Public `/ideas`, sitemap, homepage, and `ads.txt` smoke checks passed; the existing AdSense line remains `google.com, pub-7927856375186557, DIRECT, f08c47fec0942fa0`. Live validation used current-v2 opportunity `cmux9ou7e0040a52kdu99upq2` (`AMPLIFY_WINNER`, `historical`, score 77, confidence 100, evidence `KNOWN`) and returned `WAIT_FOR_MORE_DATA` / `WAITING_DATA` with `IDEA_GENERIC_TOPIC_INSUFFICIENT`, null `executionJobId`, and `DEFERRED` opportunity status. `IDEA_AUTOPILOT_DECIDE` succeeded on the first attempt; no `IDEA_AUTOPILOT_EXECUTE` job was created, zero Ideas were created, no live OpenAI generation was forced, Growth was disabled again, and attribution remained disabled. Phase 10 — Creative Lab — is next.
 
 ## Phase 10 — Creative Lab
 
