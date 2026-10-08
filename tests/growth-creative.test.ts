@@ -47,7 +47,7 @@ describe("Phase 10 Creative Lab contracts", () => {
   });
 
   it("uses the current SayTwist palette and versioned static renderer", () => {
-    expect(CREATIVE_RENDERER_VERSION).toBe("creative_static_v2");
+    expect(CREATIVE_RENDERER_VERSION).toBe("creative_static_v3");
     for (const archetype of [GrowthCreativeArchetype.TYPOGRAPHY_LED, GrowthCreativeArchetype.EDITORIAL_LIST, GrowthCreativeArchetype.CONVERSATION_CHAT, GrowthCreativeArchetype.MINIMAL_STATEMENT]) {
       const svg = buildCreativeSvg(archetype, copy).toString("utf8");
       expect(svg).toContain("#14B8A6");
@@ -56,7 +56,27 @@ describe("Phase 10 Creative Lab contracts", () => {
       expect(svg).toContain("#FFF9F4");
       expect(svg).not.toContain("#f1e8ff");
       expect(svg).not.toContain("#7048d8");
+      expect(svg).toContain('data-brand="text-wordmark"');
+      expect(svg).toContain("<tspan fill=\"#0F172A\">Say</tspan><tspan fill=\"#14B8A6\">Twist</tspan>");
+      expect(svg).not.toContain('data-brand="logo-icon"');
       expect(svg).toContain('clip-path="url(#safe-canvas)"');
+      expect(svg).toContain('data-element="footer"');
+    }
+  });
+
+  it("renders short, medium, and long copy safely across every deterministic archetype", async () => {
+    const copyLengths = [
+      { ...copy, headline: "Say it warmly", subheadline: "A softer way to share it.", cta: "Try it" },
+      copy,
+      { ...copy, headline: "Cold Hearted Cunning And Manipulative Translator", subheadline: "Turn a complicated thought into a polished message that still sounds unmistakably like you.", cta: "Try it with your own text" },
+    ];
+    for (const archetype of [GrowthCreativeArchetype.TYPOGRAPHY_LED, GrowthCreativeArchetype.EDITORIAL_LIST, GrowthCreativeArchetype.CONVERSATION_CHAT, GrowthCreativeArchetype.MINIMAL_STATEMENT]) {
+      for (const sample of copyLengths) {
+        const svg = buildCreativeSvg(archetype, sample).toString("utf8");
+        const png = await renderDeterministicCreative(archetype, sample);
+        expect(svg).toContain(`data-layout="${archetype === GrowthCreativeArchetype.TYPOGRAPHY_LED ? "typography" : archetype === GrowthCreativeArchetype.EDITORIAL_LIST ? "editorial" : archetype === GrowthCreativeArchetype.CONVERSATION_CHAT ? "conversation" : "minimal"}-content"`);
+        expect(readPngDimensions(png)).toEqual({ width: 1000, height: 1500 });
+      }
     }
   });
 
