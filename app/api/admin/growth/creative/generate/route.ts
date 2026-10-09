@@ -1,6 +1,6 @@
 import { apiError, apiOk } from "@/lib/api-response";
 import { enqueueCreativeGeneration } from "@/lib/growth/creative/candidates";
-import { creativeGenerationJobPayloadSchema } from "@/lib/growth/creative/contracts";
+import { creativeGenerationRequestSchema } from "@/lib/growth/creative/contracts";
 import { isSameOriginMutation } from "@/lib/growth/request-security";
 import { adminRouteGuard } from "@/lib/permissions";
 
@@ -10,7 +10,7 @@ export async function POST(request: Request) {
   if (!isSameOriginMutation(request)) return apiError(403, "FORBIDDEN", "Cross-origin Creative Lab requests are not allowed.");
   let input: unknown;
   try { input = await request.json(); } catch { return apiError(400, "VALIDATION_ERROR", "A valid JSON payload is required."); }
-  const parsed = creativeGenerationJobPayloadSchema.safeParse(input);
+  const parsed = creativeGenerationRequestSchema.safeParse(input);
   if (!parsed.success) return apiError(400, "VALIDATION_ERROR", "Invalid Creative Lab generation request.");
   try {
     const result = await enqueueCreativeGeneration(parsed.data);

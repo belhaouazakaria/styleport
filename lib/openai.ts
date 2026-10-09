@@ -68,8 +68,9 @@ async function tryGenerate(params: {
   systemPrompt: string;
   userPrompt: string;
   maxOutputTokens?: number;
+  maximumAttempts?: 1 | 2;
 }) {
-  for (let attempt = 0; attempt < 2; attempt += 1) {
+  for (let attempt = 0; attempt < (params.maximumAttempts || 2); attempt += 1) {
     const temperature = attempt === 0 ? 0.7 : 0.45;
 
     const response = await params.client.responses.create({
@@ -105,11 +106,15 @@ export async function generateOpenAIText(params: {
   userPrompt: string;
   model?: string;
   maxOutputTokens?: number;
+  maximumAttemptsPerModel?: 1 | 2;
+  allowModelFallback?: boolean;
 }): Promise<{ text: string; model: string; promptTokens: number | null; completionTokens: number | null; totalTokens: number | null }> {
   const env = getServerEnv();
   const client = getClient();
   const envModel = env.OPENAI_MODEL || DEFAULT_MODEL;
-  const modelCandidates = Array.from(new Set([params.model, envModel, DEFAULT_MODEL].filter(Boolean))) as string[];
+  const modelCandidates = params.allowModelFallback === false
+    ? [params.model || envModel]
+    : Array.from(new Set([params.model, envModel, DEFAULT_MODEL].filter(Boolean))) as string[];
   let lastError: unknown;
 
   for (const model of modelCandidates) {
@@ -120,6 +125,7 @@ export async function generateOpenAIText(params: {
         systemPrompt: params.systemPrompt,
         userPrompt: params.userPrompt,
         maxOutputTokens: params.maxOutputTokens,
+        maximumAttempts: params.maximumAttemptsPerModel,
       });
 
       if (generated) {

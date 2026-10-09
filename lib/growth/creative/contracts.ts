@@ -8,8 +8,9 @@ import { z } from "zod";
 import { CREATIVE_EXPERIMENT_VERSION, CREATIVE_LAB_VERSION } from "@/lib/growth/creative/constants";
 
 const identifier = z.string().trim().min(1).max(64).regex(/^[A-Za-z0-9_-]+$/);
+const selectableCreativeArchetypes = new Set<string>([GrowthCreativeArchetype.MINIMAL_STATEMENT, GrowthCreativeArchetype.BEFORE_AFTER]);
 
-export const creativeGenerationJobPayloadSchema = z.object({
+const creativeGenerationFields = {
   targetKind: z.nativeEnum(GrowthCreativeDestinationKind),
   targetId: identifier,
   archetype: z.enum([
@@ -18,17 +19,39 @@ export const creativeGenerationJobPayloadSchema = z.object({
     GrowthCreativeArchetype.EDITORIAL_LIST,
     GrowthCreativeArchetype.CONVERSATION_CHAT,
     GrowthCreativeArchetype.MINIMAL_STATEMENT,
+    GrowthCreativeArchetype.BEFORE_AFTER,
     GrowthCreativeArchetype.SCENE_BASED,
   ]),
+  useAiExample: z.boolean().optional(),
   accountId: identifier.optional(),
   experimentId: identifier.optional(),
   variantKey: identifier.optional(),
   creativeModelVersion: z.literal(CREATIVE_LAB_VERSION),
-}).strict().superRefine((value, context) => {
+} as const;
+
+function validateCreativeGenerationPair(value: { experimentId?: string; variantKey?: string }, context: z.RefinementCtx) {
   if (Boolean(value.experimentId) !== Boolean(value.variantKey)) {
     context.addIssue({ code: "custom", message: "experimentId and variantKey must be supplied together." });
   }
+}
+
+export const creativeGenerationRequestSchema = z.object(creativeGenerationFields).strict().superRefine((value, context) => {
+  validateCreativeGenerationPair(value, context);
+  if (!selectableCreativeArchetypes.has(value.archetype)) {
+    context.addIssue({ code: "custom", path: ["archetype"], message: "This Creative Lab concept is no longer selectable." });
+  }
+  if (value.archetype === GrowthCreativeArchetype.BEFORE_AFTER && value.targetKind !== GrowthCreativeDestinationKind.TRANSLATOR) {
+    context.addIssue({ code: "custom", path: ["archetype"], message: "Before-and-after creatives require a Translator destination." });
+  }
+  if (value.useAiExample && value.archetype !== GrowthCreativeArchetype.BEFORE_AFTER) {
+    context.addIssue({ code: "custom", path: ["useAiExample"], message: "AI example copy is available only for before-and-after creatives." });
+  }
 });
+
+export const creativeGenerationJobPayloadSchema = z.object({
+  ...creativeGenerationFields,
+  visualVariation: z.number().int().min(0).max(2).optional(),
+}).strict().superRefine(validateCreativeGenerationPair);
 
 export const experimentVariantSchema = z.object({
   key: identifier,
@@ -68,7 +91,10 @@ export const creativeCopySchema = z.object({
   cta: z.string().trim().min(2).max(50),
   topic: z.string().trim().min(2).max(160),
   listItems: z.array(z.string().trim().min(2).max(80)).max(5),
+  exampleInput: z.string().trim().min(3).max(180).optional(),
+  exampleOutput: z.string().trim().min(3).max(180).optional(),
 }).strict();
 
 export type CreativeGenerationJobPayload = z.infer<typeof creativeGenerationJobPayloadSchema>;
+export type CreativeGenerationRequest = z.infer<typeof creativeGenerationRequestSchema>;
 export type CreativeCopy = z.infer<typeof creativeCopySchema>;
