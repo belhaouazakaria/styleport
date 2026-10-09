@@ -81,11 +81,8 @@ function textEndY(text: FittedText, y: number) {
   return y + Math.max(0, text.lines.length - 1) * text.lineHeight;
 }
 
-function controlledVariant(copy: CreativeCopy, archetype: GrowthCreativeArchetype) {
-  const seed = `${archetype}:${copy.topic}:${copy.headline}`;
-  let hash = 0;
-  for (let index = 0; index < seed.length; index += 1) hash = (hash * 31 + seed.charCodeAt(index)) >>> 0;
-  return hash % 3;
+function controlledVariation(value?: number) {
+  return Number.isInteger(value) && value! >= 0 && value! <= 2 ? value! : 0;
 }
 
 function wordmark() {
@@ -109,8 +106,8 @@ function minimalMotif(variant: number) {
   return `<path d="M720 260h222v226L828 438l-108 61Z" fill="#17243B"/><circle cx="852" cy="361" r="48" fill="${BRAND.secondary}"/><rect x="108" y="322" width="118" height="14" rx="7" fill="${BRAND.accent}"/>`;
 }
 
-function minimalPosterLayout(copy: CreativeCopy, archetype: GrowthCreativeArchetype) {
-  const variant = controlledVariant(copy, archetype);
+function minimalPosterLayout(copy: CreativeCopy, variation?: number) {
+  const variant = controlledVariation(variation);
   const headline = fitCreativeText(copy.headline, { maximumCharacters: CREATIVE_TEXT_LINE_LIMITS.HEADLINE.characters, maximumLines: CREATIVE_TEXT_LINE_LIMITS.HEADLINE.lines, maximumFontSize: 92, minimumFontSize: 58, availableWidth: 720, lineHeightRatio: 1.02 });
   const subheadline = fitCreativeText(copy.subheadline, { maximumCharacters: CREATIVE_TEXT_LINE_LIMITS.SUBHEADLINE.characters, maximumLines: CREATIVE_TEXT_LINE_LIMITS.SUBHEADLINE.lines, maximumFontSize: 32, minimumFontSize: 26, availableWidth: 690, lineHeightRatio: 1.24 });
   const contentHeight = textBlockHeight(headline) + 68 + textBlockHeight(subheadline);
@@ -127,8 +124,8 @@ function showcaseMotif(variant: number) {
   return `<path d="M815 0h185v328l-93-54-92 54Z" fill="${BRAND.sky}"/><rect x="851" y="198" width="82" height="82" rx="26" fill="${BRAND.secondary}" transform="rotate(8 892 239)"/>`;
 }
 
-function beforeAfterLayout(copy: CreativeCopy, archetype: GrowthCreativeArchetype) {
-  const variant = controlledVariant(copy, archetype);
+function beforeAfterLayout(copy: CreativeCopy, variation?: number) {
+  const variant = controlledVariation(variation);
   const headline = fitCreativeText(copy.headline, { maximumCharacters: CREATIVE_TEXT_LINE_LIMITS.SHOWCASE_HEADLINE.characters, maximumLines: CREATIVE_TEXT_LINE_LIMITS.SHOWCASE_HEADLINE.lines, maximumFontSize: 58, minimumFontSize: 44, availableWidth: 760, lineHeightRatio: 1.04 });
   const input = fitCreativeText(copy.exampleInput || "Can we talk about this later?", { maximumCharacters: CREATIVE_TEXT_LINE_LIMITS.EXAMPLE_INPUT.characters, maximumLines: CREATIVE_TEXT_LINE_LIMITS.EXAMPLE_INPUT.lines, maximumFontSize: 35, minimumFontSize: 28, availableWidth: 710, lineHeightRatio: 1.2 });
   const output = fitCreativeText(copy.exampleOutput || "Let's come back to this later and give it the attention it deserves.", { maximumCharacters: CREATIVE_TEXT_LINE_LIMITS.EXAMPLE_OUTPUT.characters, maximumLines: CREATIVE_TEXT_LINE_LIMITS.EXAMPLE_OUTPUT.lines, maximumFontSize: 38, minimumFontSize: 29, availableWidth: 680, lineHeightRatio: 1.18 });
@@ -143,19 +140,23 @@ function beforeAfterLayout(copy: CreativeCopy, archetype: GrowthCreativeArchetyp
   return `<rect width="1000" height="1500" fill="${BRAND.light}"/>${showcaseMotif(variant)}${wordmark()}${topicBadge(copy.topic)}<g data-layout="before-after-showcase" data-variant="${variant}"><text x="70" y="258" fill="${BRAND.secondary}" font-size="19" font-weight="900" letter-spacing="2">SEE THE TWIST IN ACTION</text>${renderTextLines(headline, 70, headlineY, `fill="${BRAND.ink}" font-weight="800"`)}<g data-element="before-card"><rect x="${inputX}" y="${inputY}" width="820" height="${inputHeight}" rx="32" fill="${BRAND.white}" stroke="#D6E3E1" stroke-width="3"/><text x="${inputX + 42}" y="${inputY + 50}" fill="${BRAND.muted}" font-size="17" font-weight="900" letter-spacing="2">BEFORE</text>${renderTextLines(input, inputX + 42, inputY + 112, `fill="${BRAND.ink}" font-weight="700"`)}</g><g transform="translate(${variant === 1 ? 775 : 785} ${inputY + inputHeight + 10})"><circle r="34" fill="${BRAND.secondary}"/><text x="0" y="10" fill="${BRAND.white}" font-size="30" font-weight="900" text-anchor="middle">↓</text></g><g data-element="after-card"><rect x="${outputX}" y="${outputY}" width="860" height="${outputHeight}" rx="34" fill="${BRAND.primary}"/><rect x="${outputX + 34}" y="${outputY + 30}" width="92" height="42" rx="14" fill="${BRAND.white}" opacity=".18"/><text x="${outputX + 52}" y="${outputY + 58}" fill="${BRAND.white}" font-size="17" font-weight="900" letter-spacing="2">AFTER</text>${renderTextLines(output, outputX + 48, outputY + 128, `fill="${BRAND.white}" font-weight="750"`)}</g><g transform="translate(70 ${proofY})"><rect width="204" height="10" rx="5" fill="${BRAND.secondary}"/><rect x="220" width="78" height="10" rx="5" fill="${BRAND.accent}"/><text x="0" y="52" fill="${BRAND.muted}" font-size="18" font-weight="900" letter-spacing="1.8">SAME MEANING. NEW ENERGY.</text></g></g>${footer(copy)}`;
 }
 
-function layoutFor(archetype: GrowthCreativeArchetype, copy: CreativeCopy) {
-  if (archetype === GrowthCreativeArchetype.BEFORE_AFTER || archetype === GrowthCreativeArchetype.CONVERSATION_CHAT) return beforeAfterLayout(copy, archetype);
-  return minimalPosterLayout(copy, archetype);
+function layoutFor(archetype: GrowthCreativeArchetype, copy: CreativeCopy, variation?: number) {
+  if (archetype === GrowthCreativeArchetype.BEFORE_AFTER) {
+    if (!copy.exampleInput || !copy.exampleOutput) throw new Error("Before-and-after creative requires verified example evidence.");
+    return beforeAfterLayout(copy, variation);
+  }
+  if (archetype === GrowthCreativeArchetype.CONVERSATION_CHAT) return beforeAfterLayout(copy, variation);
+  return minimalPosterLayout(copy, variation);
 }
 
-export function buildCreativeSvg(archetype: GrowthCreativeArchetype, rawCopy: CreativeCopy) {
+export function buildCreativeSvg(archetype: GrowthCreativeArchetype, rawCopy: CreativeCopy, variation?: number) {
   const copy = creativeCopySchema.parse(rawCopy);
-  return Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${CREATIVE_WIDTH}" height="${CREATIVE_HEIGHT}" viewBox="0 0 ${CREATIVE_WIDTH} ${CREATIVE_HEIGHT}"><defs><clipPath id="safe-canvas"><rect width="1000" height="1500"/></clipPath></defs><g clip-path="url(#safe-canvas)" font-family="Nunito Sans, Arial, Helvetica, sans-serif">${layoutFor(archetype, copy)}</g></svg>`);
+  return Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${CREATIVE_WIDTH}" height="${CREATIVE_HEIGHT}" viewBox="0 0 ${CREATIVE_WIDTH} ${CREATIVE_HEIGHT}"><defs><clipPath id="safe-canvas"><rect width="1000" height="1500"/></clipPath></defs><g clip-path="url(#safe-canvas)" font-family="Nunito Sans, Arial, Helvetica, sans-serif">${layoutFor(archetype, copy, variation)}</g></svg>`);
 }
 
-export async function renderDeterministicCreative(archetype: GrowthCreativeArchetype, rawCopy: CreativeCopy) {
+export async function renderDeterministicCreative(archetype: GrowthCreativeArchetype, rawCopy: CreativeCopy, variation?: number) {
   if (archetype === GrowthCreativeArchetype.V1_CONTROL) throw new Error("Renderer V1 control must be materialized through the share-image adapter.");
   getCreativeRendererDefinition(archetype);
   const copy = creativeCopySchema.parse(rawCopy);
-  return sharp(buildCreativeSvg(archetype, copy), { density: 72 }).png().toBuffer();
+  return sharp(buildCreativeSvg(archetype, copy, variation), { density: 72 }).png().toBuffer();
 }

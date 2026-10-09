@@ -10,7 +10,7 @@ import { CREATIVE_EXPERIMENT_VERSION, CREATIVE_LAB_VERSION } from "@/lib/growth/
 const identifier = z.string().trim().min(1).max(64).regex(/^[A-Za-z0-9_-]+$/);
 const selectableCreativeArchetypes = new Set<string>([GrowthCreativeArchetype.MINIMAL_STATEMENT, GrowthCreativeArchetype.BEFORE_AFTER]);
 
-export const creativeGenerationJobPayloadSchema = z.object({
+const creativeGenerationFields = {
   targetKind: z.nativeEnum(GrowthCreativeDestinationKind),
   targetId: identifier,
   archetype: z.enum([
@@ -27,13 +27,16 @@ export const creativeGenerationJobPayloadSchema = z.object({
   experimentId: identifier.optional(),
   variantKey: identifier.optional(),
   creativeModelVersion: z.literal(CREATIVE_LAB_VERSION),
-}).strict().superRefine((value, context) => {
+} as const;
+
+function validateCreativeGenerationPair(value: { experimentId?: string; variantKey?: string }, context: z.RefinementCtx) {
   if (Boolean(value.experimentId) !== Boolean(value.variantKey)) {
     context.addIssue({ code: "custom", message: "experimentId and variantKey must be supplied together." });
   }
-});
+}
 
-export const creativeGenerationRequestSchema = creativeGenerationJobPayloadSchema.superRefine((value, context) => {
+export const creativeGenerationRequestSchema = z.object(creativeGenerationFields).strict().superRefine((value, context) => {
+  validateCreativeGenerationPair(value, context);
   if (!selectableCreativeArchetypes.has(value.archetype)) {
     context.addIssue({ code: "custom", path: ["archetype"], message: "This Creative Lab concept is no longer selectable." });
   }
@@ -44,6 +47,11 @@ export const creativeGenerationRequestSchema = creativeGenerationJobPayloadSchem
     context.addIssue({ code: "custom", path: ["useAiExample"], message: "AI example copy is available only for before-and-after creatives." });
   }
 });
+
+export const creativeGenerationJobPayloadSchema = z.object({
+  ...creativeGenerationFields,
+  visualVariation: z.number().int().min(0).max(2).optional(),
+}).strict().superRefine(validateCreativeGenerationPair);
 
 export const experimentVariantSchema = z.object({
   key: identifier,
@@ -88,4 +96,5 @@ export const creativeCopySchema = z.object({
 }).strict();
 
 export type CreativeGenerationJobPayload = z.infer<typeof creativeGenerationJobPayloadSchema>;
+export type CreativeGenerationRequest = z.infer<typeof creativeGenerationRequestSchema>;
 export type CreativeCopy = z.infer<typeof creativeCopySchema>;

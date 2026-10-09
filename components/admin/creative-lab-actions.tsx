@@ -24,8 +24,12 @@ const experimentVariantOptions: Record<GrowthExperimentDimension, Array<{ label:
     { label: "Before → after", value: "BEFORE_AFTER" },
   ],
   [GrowthExperimentDimension.TEMPLATE]: [
-    { label: "Minimal poster", value: "minimal-poster-v2" },
-    { label: "Before → after showcase", value: "before-after-showcase-v1" },
+    { label: "Minimal poster · layout 1", value: "minimal-poster-v2-layout-1" },
+    { label: "Minimal poster · layout 2", value: "minimal-poster-v2-layout-2" },
+    { label: "Minimal poster · layout 3", value: "minimal-poster-v2-layout-3" },
+    { label: "Before → after · layout 1", value: "before-after-showcase-v1-layout-1" },
+    { label: "Before → after · layout 2", value: "before-after-showcase-v1-layout-2" },
+    { label: "Before → after · layout 3", value: "before-after-showcase-v1-layout-3" },
   ],
   [GrowthExperimentDimension.HEADLINE_PATTERN]: [
     { label: "Single statement", value: "single-statement-v2" },
@@ -144,7 +148,7 @@ export function CreativeGenerationForm({ translators, ideas, accounts, experimen
       <fieldset>
         <legend className="text-sm font-extrabold text-ink">3. Pick a creative style</legend>
         <div className="mt-3 grid max-w-3xl gap-3 sm:grid-cols-2">{archetypeOptions.filter((item) => kind === GrowthCreativeDestinationKind.TRANSLATOR || item.value === GrowthCreativeArchetype.MINIMAL_STATEMENT).map((item) => <label key={item.value} className={`relative cursor-pointer rounded-2xl border p-4 transition ${archetype === item.value ? "border-brand-500 bg-brand-50 shadow-[0_4px_0_rgba(20,184,166,0.2)]" : "border-border bg-white hover:border-brand-300"}`}><input type="radio" name="archetype" className="sr-only" value={item.value} checked={archetype === item.value} onChange={() => setArchetype(item.value)} /><span className="block font-display text-base font-bold text-ink">{item.label}</span><span className="mt-1 block text-xs leading-5 text-muted-ink">{item.description}</span>{archetype === item.value ? <span className="absolute right-3 top-3 h-2.5 w-2.5 rounded-full bg-brand-500" aria-hidden="true" /> : null}</label>)}</div>
-        {kind === GrowthCreativeDestinationKind.TRANSLATOR && archetype === GrowthCreativeArchetype.BEFORE_AFTER ? <label className="mt-4 flex max-w-3xl cursor-pointer items-start gap-3 rounded-xl border border-supporting-200 bg-supporting-50 px-4 py-3"><input type="checkbox" checked={useAiExample} onChange={(event) => setUseAiExample(event.target.checked)} className="mt-1 h-4 w-4 accent-teal-600" /><span><span className="block text-sm font-bold text-ink">Tailor the example with AI when needed</span><span className="mt-0.5 block text-xs leading-5 text-muted-ink">A saved Translator example is always preferred. Otherwise Creative Lab makes one bounded text call and falls back to a deterministic example if unavailable.</span></span></label> : null}
+        {kind === GrowthCreativeDestinationKind.TRANSLATOR && archetype === GrowthCreativeArchetype.BEFORE_AFTER ? <label className="mt-4 flex max-w-3xl cursor-pointer items-start gap-3 rounded-xl border border-supporting-200 bg-supporting-50 px-4 py-3"><input type="checkbox" checked={useAiExample} onChange={(event) => setUseAiExample(event.target.checked)} className="mt-1 h-4 w-4 accent-teal-600" /><span><span className="block text-sm font-bold text-ink">Generate a real transformation when needed</span><span className="mt-0.5 block text-xs leading-5 text-muted-ink">A saved Translator example is always preferred. Otherwise Creative Lab makes one bounded AI transformation. If that is unavailable, no Before → After candidate is generated.</span></span></label> : null}
       </fieldset>
 
       <details className="group border-t border-dashed border-border pt-5">

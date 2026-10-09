@@ -18,7 +18,7 @@ import type { CreativeAiImageProvider } from "@/lib/growth/creative/ai-image-pro
 import { createCreativeAiImageBudget } from "@/lib/growth/creative/ai-image-provider";
 import {
   DEFAULT_CREATIVE_EXAMPLE_INPUT,
-  generateCreativeExampleWithFallback,
+  generateCreativeExample,
   type CreativeExampleProvider,
 } from "@/lib/growth/creative/example-provider";
 import {
@@ -33,6 +33,7 @@ import {
   creativeGenerationJobPayloadSchema,
   creativeGenerationRequestSchema,
   type CreativeGenerationJobPayload,
+  type CreativeGenerationRequest,
 } from "@/lib/growth/creative/contracts";
 import { readExperimentVariant } from "@/lib/growth/creative/experiments";
 import { getCreativeRendererDefinition, renderDeterministicCreative } from "@/lib/growth/creative/renderer";
@@ -148,12 +149,27 @@ async function readEligibleCreativeTarget(db: CreativeReadClient, kind: GrowthCr
   };
 }
 
-function resolveCreativeExample(target: CreativeTarget, useAi: boolean, provider?: CreativeExampleProvider) {
-  return generateCreativeExampleWithFallback({
-    savedExample: target.savedExample,
-    useAi: useAi && target.kind === GrowthCreativeDestinationKind.TRANSLATOR,
-    provider,
-    request: {
+async function resolveCreativeExample(target: CreativeTarget, useAi: boolean, provider: CreativeExampleProvider | undefined, jobId: string | null) {
+  try {
+    return await generateCreativeExample({
+      savedExample: target.savedExample,
+      useAi: useAi && target.kind === GrowthCreativeDestinationKind.TRANSLATOR,
+      provider,
+      assertGrowthEnabled: async () => {
+        const settings = await prisma.growthSettings.findUnique({ where: { id: GROWTH_SETTINGS_ID }, select: { enabled: true } });
+        if (!settings?.enabled) throw new NonRetryableGrowthJobError("Growth is disabled before Creative Lab AI generation.");
+      },
+      onAiUsage: jobId ? async (metadata) => {
+        await recordGrowthActivity({
+          actorKind: GrowthActivityActorKind.WORKER,
+          entityType: "GrowthJob",
+          entityId: jobId,
+          action: "CREATIVE_EXAMPLE_AI_USED",
+          summary: { provider: metadata.provider, model: metadata.model, promptTokens: metadata.promptTokens, completionTokens: metadata.completionTokens, totalTokens: metadata.totalTokens },
+          correlationKey: jobId,
+        });
+      } : undefined,
+      request: {
         translatorName: target.topic,
         title: target.title,
         description: target.excerpt,
@@ -162,14 +178,18 @@ function resolveCreativeExample(target: CreativeTarget, useAi: boolean, provider
         promptSystem: target.promptSystem,
         promptInstructions: target.promptInstructions,
         input: DEFAULT_CREATIVE_EXAMPLE_INPUT,
-    },
-  });
+      },
+    });
+  } catch (error) {
+    if (error instanceof NonRetryableGrowthJobError) throw error;
+    throw new NonRetryableGrowthJobError("Before-and-after example generation failed; no candidate was created.");
+  }
 }
 
-async function buildCopy(target: CreativeTarget, archetype: GrowthCreativeArchetype, useAiExample: boolean, provider?: CreativeExampleProvider) {
+async function buildCopy(target: CreativeTarget, archetype: GrowthCreativeArchetype, useAiExample: boolean, provider: CreativeExampleProvider | undefined, jobId: string | null) {
   const translator = target.kind === GrowthCreativeDestinationKind.TRANSLATOR;
   const cta = translator ? "Try it with your own text" : archetype === GrowthCreativeArchetype.EDITORIAL_LIST ? "Explore the full version" : "See all ideas";
-  const example = archetype === GrowthCreativeArchetype.BEFORE_AFTER ? await resolveCreativeExample(target, useAiExample, provider) : null;
+  const example = archetype === GrowthCreativeArchetype.BEFORE_AFTER ? await resolveCreativeExample(target, useAiExample, provider, jobId) : null;
   const copy = creativeCopySchema.parse({
     title: clamp(`${target.title} | ${cta}`, 100),
     description: clamp(`${target.excerpt} ${cta} on SayTwist.`, 500),
@@ -187,11 +207,51 @@ function candidateGroupKey(payload: CreativeGenerationJobPayload) {
   return hash({ targetKind: payload.targetKind, targetId: payload.targetId, archetype: payload.archetype, accountId: payload.accountId || null, experimentId: payload.experimentId || null, variantKey: payload.variantKey || null }).slice(0, 48);
 }
 
+export function creativeTemplateIdForVariation(baseTemplateId: string, variation: number) {
+  const bounded = Math.min(2, Math.max(0, Math.trunc(variation)));
+  return `${baseTemplateId}-layout-${bounded + 1}`;
+}
+
+export function creativeVariationFromTemplateId(templateId: string) {
+  const match = templateId.match(/-layout-([123])$/);
+  return match ? Number(match[1]) - 1 : null;
+}
+
+export function nextCreativeVariation(previousTemplateId?: string | null) {
+  const previous = previousTemplateId ? creativeVariationFromTemplateId(previousTemplateId) : null;
+  return previous === null ? 0 : (previous + 1) % 3;
+}
+
+async function experimentVariation(request: CreativeGenerationRequest, baseTemplateId: string, rotatedVariation: number) {
+  if (!request.experimentId || !request.variantKey) return rotatedVariation;
+  const experiment = await prisma.growthExperiment.findUnique({ where: { id: request.experimentId }, select: { status: true, dimension: true, variants: true } });
+  if (!experiment || experiment.dimension !== "TEMPLATE") return rotatedVariation;
+  const variant = readExperimentVariant(experiment, request.variantKey);
+  if (!variant.value.startsWith(`${baseTemplateId}-layout-`)) return rotatedVariation;
+  return creativeVariationFromTemplateId(variant.value) ?? rotatedVariation;
+}
+
 export async function enqueueCreativeGeneration(input: unknown) {
-  const payload = creativeGenerationRequestSchema.parse(input);
-  const target = await getEligibleCreativeTarget(payload.targetKind, payload.targetId);
-  const key = hash({ payload, sourceFingerprint: target.sourceFingerprint }).slice(0, 48);
-  return enqueueGrowthJob({ type: GrowthJobType.CREATIVE_LAB_GENERATE, idempotencyKey: `creative-generate:${key}`, payload, maxAttempts: 3 });
+  const request = creativeGenerationRequestSchema.parse(input);
+  const target = await getEligibleCreativeTarget(request.targetKind, request.targetId);
+  if (request.archetype === GrowthCreativeArchetype.BEFORE_AFTER && !target.savedExample && !request.useAiExample) {
+    throw new NonRetryableGrowthJobError("Before-and-after creative requires a saved example or enabled AI transformation.");
+  }
+  const latest = await prisma.growthPinCandidate.findFirst({
+    where: {
+      destinationKind: request.targetKind,
+      archetype: request.archetype,
+      ...(request.targetKind === GrowthCreativeDestinationKind.TRANSLATOR ? { translatorId: target.id } : { ideaId: target.id }),
+    },
+    select: { id: true, templateId: true },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+  });
+  const baseDefinition = getCreativeRendererDefinition(request.archetype);
+  const visualVariation = await experimentVariation(request, baseDefinition.templateId, nextCreativeVariation(latest?.templateId));
+  const payload: CreativeGenerationJobPayload = { ...request, visualVariation };
+  const key = hash({ request, sourceFingerprint: target.sourceFingerprint, predecessorCandidateId: latest?.id || null, visualVariation }).slice(0, 48);
+  const requiresPaidExample = request.archetype === GrowthCreativeArchetype.BEFORE_AFTER && !target.savedExample;
+  return enqueueGrowthJob({ type: GrowthJobType.CREATIVE_LAB_GENERATE, idempotencyKey: `creative-generate:${key}`, payload, maxAttempts: requiresPaidExample ? 1 : 3 });
 }
 
 async function validateCreativeContext(db: CreativeReadClient, payload: CreativeGenerationJobPayload, target: CreativeTarget, definition: CreativeDefinition) {
@@ -248,12 +308,18 @@ export async function generateCreativeCandidate(input: unknown, jobId: string | 
   }
   if (payload.archetype === GrowthCreativeArchetype.V1_CONTROL && payload.targetKind !== GrowthCreativeDestinationKind.TRANSLATOR) throw new NonRetryableGrowthJobError("Renderer V1 control is available only for Translator destinations.");
   if (payload.archetype === GrowthCreativeArchetype.BEFORE_AFTER && payload.targetKind !== GrowthCreativeDestinationKind.TRANSLATOR) throw new NonRetryableGrowthJobError("Before-and-after creatives require a Translator destination.");
-  const definition: CreativeDefinition = payload.archetype === GrowthCreativeArchetype.SCENE_BASED
+  const baseDefinition: CreativeDefinition = payload.archetype === GrowthCreativeArchetype.SCENE_BASED
     ? { rendererKey: "ai-scene", rendererVersion: CREATIVE_LAB_VERSION, templateId: "scene-based-v1", headlinePattern: "scene-topic-promise", ctaPattern: "destination-action", visualTreatment: "generated-scene" }
     : getCreativeRendererDefinition(payload.archetype);
+  const visualVariation = payload.visualVariation ?? 0;
+  const usesControlledLayout = payload.archetype === GrowthCreativeArchetype.MINIMAL_STATEMENT
+    || payload.archetype === GrowthCreativeArchetype.BEFORE_AFTER;
+  const definition = usesControlledLayout
+    ? { ...baseDefinition, templateId: creativeTemplateIdForVariation(baseDefinition.templateId, visualVariation) }
+    : baseDefinition;
   const target = await getEligibleCreativeTarget(payload.targetKind, payload.targetId);
   await validateCreativeContext(prisma as unknown as CreativeReadClient, payload, target, definition);
-  const { copy, exampleSource, exampleMetadata } = await buildCopy(target, payload.archetype, payload.useAiExample === true, options.exampleProvider);
+  const { copy, exampleSource, exampleMetadata } = await buildCopy(target, payload.archetype, payload.useAiExample === true, options.exampleProvider, jobId);
   const contentHash = hash({ target: target.sourceFingerprint, copy, definition, archetype: payload.archetype });
   const similarityInput = { title: copy.title, contentHash, destinationPath: target.destinationPath, topic: copy.topic, accountId: payload.accountId || null, archetype: payload.archetype, templateId: definition.templateId };
   const [preexistingExactContent, history] = await Promise.all([
@@ -287,7 +353,7 @@ export async function generateCreativeCandidate(input: unknown, jobId: string | 
     if (!provider || !model || (estimatedCost !== null && (!Number.isFinite(estimatedCost) || estimatedCost < 0))) throw new NonRetryableGrowthJobError("Creative AI provider returned invalid metadata.");
     aiMetadata = { provider, model, responseId: generated.metadata.responseId ? clamp(generated.metadata.responseId, 191) : null, imageUnits: 1, estimatedCost };
   } else if (!preexistingExactContent) {
-    bytes = await renderDeterministicCreative(payload.archetype, copy);
+    bytes = await renderDeterministicCreative(payload.archetype, copy, visualVariation);
   }
 
   const stored = bytes ? await persistCreativeAssetFile(bytes) : null;

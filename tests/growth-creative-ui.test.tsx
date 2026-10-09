@@ -51,7 +51,7 @@ describe("Creative Lab target picker", () => {
     render(<CreativeGenerationForm translators={[{ id: "first", name: "First Translator", slug: "first-translator" }]} ideas={[]} accounts={[]} experiments={[]} />);
 
     await user.click(screen.getByRole("radio", { name: /before → after/i }));
-    expect(screen.getByRole("checkbox", { name: /tailor the example with ai/i })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /generate a real transformation/i })).toBeChecked();
     await user.click(screen.getByRole("button", { name: "Generate one candidate" }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());

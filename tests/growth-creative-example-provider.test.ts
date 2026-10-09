@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ generate: vi.fn() }));
 vi.mock("@/lib/openai", () => ({ generateOpenAIText: mocks.generate }));
 
-import { generateCreativeExampleWithFallback, OpenAICreativeExampleProvider } from "@/lib/growth/creative/example-provider";
+import { generateCreativeExample, OpenAICreativeExampleProvider } from "@/lib/growth/creative/example-provider";
 
 const request = {
   translatorName: "Cold Hearted Translator",
@@ -25,7 +25,7 @@ describe("Creative Lab AI example provider", () => {
   it("makes one bounded plain-text request and returns auditable metadata", async () => {
     const result = await new OpenAICreativeExampleProvider().generate(request);
     expect(mocks.generate).toHaveBeenCalledTimes(1);
-    expect(mocks.generate).toHaveBeenCalledWith(expect.objectContaining({ maxOutputTokens: 120 }));
+    expect(mocks.generate).toHaveBeenCalledWith(expect.objectContaining({ maxOutputTokens: 120, maximumAttemptsPerModel: 1, allowModelFallback: false }));
     expect(result).toEqual({
       input: request.input,
       output: "We can talk later, if it still matters by then.",
@@ -38,15 +38,28 @@ describe("Creative Lab AI example provider", () => {
     await expect(new OpenAICreativeExampleProvider().generate(request)).rejects.toThrow("markup");
   });
 
-  it("prefers saved evidence and falls back deterministically when AI fails", async () => {
+  it("prefers saved evidence and fails closed when AI fails", async () => {
     const provider = { generate: vi.fn().mockRejectedValue(new Error("provider unavailable")) };
-    const fallback = await generateCreativeExampleWithFallback({ useAi: true, request, provider });
-    expect(fallback).toMatchObject({ source: "DETERMINISTIC", input: request.input, output: "We can talk later, if it still matters by then." });
+    await expect(generateCreativeExample({ useAi: true, request, provider, assertGrowthEnabled: async () => {} })).rejects.toThrow("provider unavailable");
     expect(provider.generate).toHaveBeenCalledTimes(1);
 
     provider.generate.mockClear();
-    const saved = await generateCreativeExampleWithFallback({ useAi: true, request, provider, savedExample: { input: "Saved input", output: "Saved output" } });
+    const assertGrowthEnabled = vi.fn();
+    const saved = await generateCreativeExample({ useAi: true, request, provider, assertGrowthEnabled, savedExample: { input: "Saved input", output: "Saved output" } });
     expect(saved).toMatchObject({ source: "SAVED", input: "Saved input", output: "Saved output" });
+    expect(provider.generate).not.toHaveBeenCalled();
+    expect(assertGrowthEnabled).not.toHaveBeenCalled();
+  });
+
+  it("checks Growth immediately before AI and audits only successful usage", async () => {
+    const order: string[] = [];
+    const provider = { generate: vi.fn(async () => { order.push("provider"); return { input: request.input, output: "We can talk later, if it still matters by then.", metadata: { provider: "OPENAI", model: "test", promptTokens: 10, completionTokens: 8, totalTokens: 18 } }; }) };
+    const onAiUsage = vi.fn(async () => { order.push("audit"); });
+    await expect(generateCreativeExample({ useAi: true, request, provider, assertGrowthEnabled: async () => { order.push("growth"); }, onAiUsage })).resolves.toMatchObject({ source: "AI" });
+    expect(order).toEqual(["growth", "provider", "audit"]);
+
+    provider.generate.mockClear();
+    await expect(generateCreativeExample({ useAi: true, request, provider, assertGrowthEnabled: async () => { throw new Error("Growth disabled"); }, onAiUsage })).rejects.toThrow("Growth disabled");
     expect(provider.generate).not.toHaveBeenCalled();
   });
 });

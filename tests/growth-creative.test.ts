@@ -9,6 +9,7 @@ import {
 import { describe, expect, it } from "vitest";
 
 import { createCreativeAiImageBudget } from "@/lib/growth/creative/ai-image-provider";
+import { creativeTemplateIdForVariation, creativeVariationFromTemplateId, nextCreativeVariation } from "@/lib/growth/creative/candidates";
 import { GET as getCreativeAsset } from "@/app/generated/growth-creatives/[filename]/route";
 import { CREATIVE_RENDERER_VERSION, DETERMINISTIC_ARCHETYPES, STATIC_RENDERER_DEFINITIONS } from "@/lib/growth/creative/constants";
 import { creativeGenerationJobPayloadSchema, creativeGenerationRequestSchema, createExperimentSchema } from "@/lib/growth/creative/contracts";
@@ -80,19 +81,32 @@ describe("Phase 10 Creative Lab contracts", () => {
     }
   });
 
-  it("shows meaningful before-and-after content and deterministic controlled variation", () => {
-    const showcase = buildCreativeSvg(GrowthCreativeArchetype.BEFORE_AFTER, copy).toString("utf8");
+  it("shows meaningful before-and-after content and persisted controlled variation", async () => {
+    const showcase = buildCreativeSvg(GrowthCreativeArchetype.BEFORE_AFTER, copy, 2).toString("utf8");
     expect(showcase).toContain("BEFORE");
     expect(showcase).toContain("AFTER");
     expect(showcase).toContain("Can we talk about this later?");
     expect(showcase).toContain("give it our full attention");
     expect(showcase).not.toContain("undefined");
 
-    const variants = new Set(Array.from({ length: 20 }, (_, index) => {
-      const svg = buildCreativeSvg(GrowthCreativeArchetype.MINIMAL_STATEMENT, { ...copy, topic: `Topic ${index}` }).toString("utf8");
-      return svg.match(/data-variant="([0-2])"/)?.[1];
-    }));
+    const variants = new Set([0, 1, 2].map((variation) => buildCreativeSvg(GrowthCreativeArchetype.MINIMAL_STATEMENT, copy, variation).toString("utf8").match(/data-variant="([0-2])"/)?.[1]));
     expect(variants).toEqual(new Set(["0", "1", "2"]));
+    expect(buildCreativeSvg(GrowthCreativeArchetype.MINIMAL_STATEMENT, copy).toString("utf8")).toContain('data-variant="0"');
+
+    const sameJobFirst = await renderDeterministicCreative(GrowthCreativeArchetype.MINIMAL_STATEMENT, copy, 1);
+    const sameJobRetry = await renderDeterministicCreative(GrowthCreativeArchetype.MINIMAL_STATEMENT, copy, 1);
+    const nextIntentional = await renderDeterministicCreative(GrowthCreativeArchetype.MINIMAL_STATEMENT, copy, 2);
+    expect(createHash("sha256").update(sameJobFirst).digest("hex")).toBe(createHash("sha256").update(sameJobRetry).digest("hex"));
+    expect(createHash("sha256").update(nextIntentional).digest("hex")).not.toBe(createHash("sha256").update(sameJobFirst).digest("hex"));
+    const firstVariation = nextCreativeVariation(null);
+    const firstTemplate = creativeTemplateIdForVariation("minimal-poster-v2", firstVariation);
+    const secondVariation = nextCreativeVariation(firstTemplate);
+    const secondTemplate = creativeTemplateIdForVariation("minimal-poster-v2", secondVariation);
+    expect([firstVariation, secondVariation, nextCreativeVariation(secondTemplate)]).toEqual([0, 1, 2]);
+    expect(nextCreativeVariation("minimal-poster-v2-layout-3")).toBe(0);
+    expect(creativeVariationFromTemplateId(creativeTemplateIdForVariation("minimal-poster-v2", 99))).toBe(2);
+    expect(creativeVariationFromTemplateId(creativeTemplateIdForVariation("minimal-poster-v2", -99))).toBe(0);
+    expect(() => buildCreativeSvg(GrowthCreativeArchetype.BEFORE_AFTER, { ...copy, exampleInput: undefined, exampleOutput: undefined })).toThrow("verified example evidence");
   });
 
   it("caps maximum schema-valid static copy inside declared deterministic line limits", async () => {
@@ -123,6 +137,8 @@ describe("Phase 10 Creative Lab contracts", () => {
     expect(creativeGenerationRequestSchema.safeParse({ targetKind: GrowthCreativeDestinationKind.TRANSLATOR, targetId: "translator_1", archetype: GrowthCreativeArchetype.TYPOGRAPHY_LED, creativeModelVersion: "creative_lab_v1" }).success).toBe(false);
     expect(creativeGenerationRequestSchema.safeParse({ targetKind: GrowthCreativeDestinationKind.IDEA, targetId: "idea_1", archetype: GrowthCreativeArchetype.BEFORE_AFTER, creativeModelVersion: "creative_lab_v1" }).success).toBe(false);
     expect(creativeGenerationRequestSchema.safeParse({ targetKind: GrowthCreativeDestinationKind.TRANSLATOR, targetId: "translator_1", archetype: GrowthCreativeArchetype.MINIMAL_STATEMENT, useAiExample: true, creativeModelVersion: "creative_lab_v1" }).success).toBe(false);
+    expect(creativeGenerationRequestSchema.safeParse({ targetKind: GrowthCreativeDestinationKind.TRANSLATOR, targetId: "translator_1", archetype: GrowthCreativeArchetype.MINIMAL_STATEMENT, visualVariation: 2, creativeModelVersion: "creative_lab_v1" }).success).toBe(false);
+    expect(creativeGenerationJobPayloadSchema.safeParse({ targetKind: GrowthCreativeDestinationKind.TRANSLATOR, targetId: "translator_1", archetype: GrowthCreativeArchetype.MINIMAL_STATEMENT, visualVariation: 2, creativeModelVersion: "creative_lab_v1" }).success).toBe(true);
     expect(creativeGenerationJobPayloadSchema.safeParse({ targetKind: GrowthCreativeDestinationKind.TRANSLATOR, targetId: "../secret", archetype: GrowthCreativeArchetype.TYPOGRAPHY_LED, creativeModelVersion: "creative_lab_v1", rawHtml: "<script>" }).success).toBe(false);
     const experiment = { hypothesis: "Typography improves outbound clicks.", dimension: "ARCHETYPE", variants: [{ key: "a", label: "A", value: "TYPOGRAPHY_LED" }, { key: "b", label: "B", value: "EDITORIAL_LIST" }], primaryKpi: "OUTBOUND_CLICKS", guardrails: { minimumImpressions: 1000, minimumOutboundClicks: 20, maximumDays: 30 }, attributionModelVersion: "pinterest_organic_v1", scoringModelVersion: "opportunity_scoring_v1", experimentModelVersion: "creative_experiment_v1" };
     expect(createExperimentSchema.safeParse(experiment).success).toBe(true);

@@ -37,44 +37,28 @@ function bounded(value: string, maximum: number) {
   return value.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, maximum);
 }
 
-export function deterministicCreativeExample(styleContext: string) {
-  const style = styleContext.toLowerCase();
-  if (/cold|heartless|cunning|manipulative|ruthless/.test(style)) return "We can talk later, if it still matters by then.";
-  if (/funny|humor|witty|sarcas/.test(style)) return "Sure, let's schedule that right after my next dramatic plot twist.";
-  if (/romantic|flirt|love|sweet/.test(style)) return "Later works, but only if you promise the conversation is with me.";
-  if (/professional|formal|business|polite/.test(style)) return "Let's revisit this later when we can give it our full attention.";
-  if (/medieval|shakespeare|victorian|old english/.test(style)) return "Let us speak of this anon, when the hour is kinder.";
-  if (/gen z|slang|casual/.test(style)) return "Yeah, let's circle back later when the vibe is right.";
-  return "Let's come back to this later and give it the attention it deserves.";
-}
-
-export async function generateCreativeExampleWithFallback(input: {
+export async function generateCreativeExample(input: {
   savedExample?: { input: string; output: string } | null;
   useAi: boolean;
   request: CreativeExampleRequest;
   provider?: CreativeExampleProvider;
+  assertGrowthEnabled: () => Promise<void>;
+  onAiUsage?: (metadata: CreativeExampleResult["metadata"]) => Promise<void>;
 }) {
   if (input.savedExample) return { ...input.savedExample, source: "SAVED" as const, metadata: null };
-  if (input.useAi) {
-    try {
-      const generated = await (input.provider || new OpenAICreativeExampleProvider()).generate(input.request);
-      return { input: generated.input, output: generated.output, source: "AI" as const, metadata: generated.metadata };
-    } catch {
-      // A creative remains renderable when the optional copy provider is unavailable or invalid.
-    }
-  }
-  return {
-    input: input.request.input,
-    output: deterministicCreativeExample(`${input.request.translatorName} ${input.request.title} ${input.request.targetLabel} ${input.request.description}`),
-    source: "DETERMINISTIC" as const,
-    metadata: null,
-  };
+  if (!input.useAi) throw new Error("Before-and-after creative requires a saved example or enabled AI transformation.");
+  await input.assertGrowthEnabled();
+  const generated = await (input.provider || new OpenAICreativeExampleProvider()).generate(input.request);
+  if (input.onAiUsage) await input.onAiUsage(generated.metadata);
+  return { input: generated.input, output: generated.output, source: "AI" as const, metadata: generated.metadata };
 }
 
 export class OpenAICreativeExampleProvider implements CreativeExampleProvider {
   async generate(request: CreativeExampleRequest): Promise<CreativeExampleResult> {
     const result = await generateOpenAIText({
       maxOutputTokens: 120,
+      maximumAttemptsPerModel: 1,
+      allowModelFallback: false,
       systemPrompt: [
         "Rewrite one short sample message to demonstrate a SayTwist Translator.",
         "Preserve the meaning and facts of the sample. Change only tone and phrasing.",
