@@ -20,7 +20,8 @@ vi.mock("@/lib/prisma", () => ({ prisma: {
   translator: { findFirst: vi.fn(async () => mocks.translator) },
   growthPinCandidate: {
     findUnique: vi.fn(async ({ where }: any) => where.id === "source" ? mocks.source : where.id === mocks.matched?.id ? mocks.matched : null),
-    findMany: vi.fn(async ({ where }: any) => where.templateId?.in ? mocks.usedControlledTemplates : mocks.recent),
+    findMany: vi.fn(async () => mocks.recent),
+    groupBy: vi.fn(async () => mocks.usedControlledTemplates),
   },
   growthJob: { findFirst: vi.fn(async ({ where }: any) => mocks.jobs.filter((job) => String(job.idempotencyKey).startsWith(where.idempotencyKey.startsWith)).at(-1) || null) },
 } }));

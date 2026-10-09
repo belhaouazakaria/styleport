@@ -364,16 +364,14 @@ export async function enqueueCreativeRegeneration(input: unknown) {
       ? prisma.growthPinCandidate.findUnique({ where: { id: matchedCandidateId }, select: { id: true, templateId: true } })
       : Promise.resolve(null),
     controlledTemplateIds.length
-      ? prisma.growthPinCandidate.findMany({
+      ? prisma.growthPinCandidate.groupBy({
+        by: ["templateId"],
         where: {
           destinationKind: source.destinationKind,
           archetype: source.archetype,
           ...targetWhere,
           templateId: { in: controlledTemplateIds },
         },
-        select: { templateId: true },
-        distinct: ["templateId"],
-        take: controlledTemplateIds.length,
       })
       : Promise.resolve([]),
   ]);
