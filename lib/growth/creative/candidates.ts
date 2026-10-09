@@ -98,6 +98,35 @@ function clamp(value: string, limit: number) {
   return `${normalized.slice(0, limit - 1).trimEnd()}…`;
 }
 
+function compactStyleLabel(value: string, maximum = 18) {
+  const normalized = value
+    .replace(/\btranslator\b/gi, " ")
+    .replace(/[^\p{L}\p{N}'’-]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!normalized) return null;
+  const words = normalized.split(" ");
+  let label = "";
+  for (const word of words) {
+    const candidate = label ? `${label} ${word}` : word;
+    if (candidate.length > maximum) break;
+    label = candidate;
+  }
+  return label || normalized.slice(0, maximum).trim();
+}
+
+export function buildStyleAwareCreativeCta(topic: string, sourceFingerprint: string) {
+  const style = compactStyleLabel(topic);
+  if (!style) return "Try it with your own text";
+  const frames = [
+    `Try the ${style} version`,
+    `Give it the ${style} twist`,
+    `Rewrite it the ${style} way`,
+  ];
+  const frameIndex = Number.parseInt(sourceFingerprint.slice(0, 8), 16) % frames.length;
+  return frames[Number.isFinite(frameIndex) ? frameIndex : 0];
+}
+
 function ideaListItems(blocks: Array<Record<string, unknown>>) {
   for (const block of blocks) {
     if (block.type !== "IDEA_LIST") continue;
@@ -197,7 +226,13 @@ async function resolveCreativeExample(target: CreativeTarget, useAi: boolean, pr
 
 async function buildCopy(target: CreativeTarget, archetype: GrowthCreativeArchetype, useAiExample: boolean, provider: CreativeExampleProvider | undefined, jobId: string | null) {
   const translator = target.kind === GrowthCreativeDestinationKind.TRANSLATOR;
-  const cta = translator ? "Try it with your own text" : archetype === GrowthCreativeArchetype.EDITORIAL_LIST ? "Explore the full version" : "See all ideas";
+  const cta = translator
+    ? archetype === GrowthCreativeArchetype.BEFORE_AFTER
+      ? buildStyleAwareCreativeCta(target.topic, target.sourceFingerprint)
+      : "Try it with your own text"
+    : archetype === GrowthCreativeArchetype.EDITORIAL_LIST
+      ? "Explore the full version"
+      : "See all ideas";
   const example = archetype === GrowthCreativeArchetype.BEFORE_AFTER ? await resolveCreativeExample(target, useAiExample, provider, jobId) : null;
   const copy = creativeCopySchema.parse({
     title: clamp(`${target.title} | ${cta}`, 100),
