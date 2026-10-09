@@ -6,6 +6,8 @@ export const CREATIVE_EXPERIMENT_VERSION = "creative_experiment_v1";
 export const CREATIVE_RENDERER_VERSION = "creative_static_v4";
 export const CREATIVE_AI_COMPOSITE_VERSION = "creative_ai_composite_v1";
 export const CREATIVE_AI_COMPOSITE_KEY = "creative-ai-composite";
+export const CREATIVE_AI_FULL_VERSION = "creative_ai_full_v1";
+export const CREATIVE_AI_FULL_KEY = "creative-ai-full";
 export const CONTROL_RENDERER_KEY = "v1-control";
 export const CONTROL_RENDERER_VERSION = "share_image_v1";
 export const CREATIVE_RENDERER_KEY = "creative-static";
@@ -25,6 +27,14 @@ export const CREATIVE_DIRECTIONS = [
 export type CreativeDirection = typeof CREATIVE_DIRECTIONS[number];
 
 export const CREATIVE_DIRECTION_TEMPLATES: Record<CreativeDirection, string> = {
+  EDITORIAL_SPLIT: "before-after-full-ai-v1-editorial-split",
+  CHAT_FOCUS: "before-after-full-ai-v1-chat-focus",
+  BOLD_POSTER: "before-after-full-ai-v1-bold-poster",
+  COLLAGE: "before-after-full-ai-v1-collage",
+  MAGAZINE_FRAME: "before-after-full-ai-v1-magazine-frame",
+};
+
+export const HISTORICAL_CREATIVE_DIRECTION_TEMPLATES: Record<CreativeDirection, string> = {
   EDITORIAL_SPLIT: "before-after-ai-v1-editorial-split",
   CHAT_FOCUS: "before-after-ai-v1-chat-focus",
   BOLD_POSTER: "before-after-ai-v1-bold-poster",
@@ -33,7 +43,8 @@ export const CREATIVE_DIRECTION_TEMPLATES: Record<CreativeDirection, string> = {
 };
 
 export const CREATIVE_TEMPLATE_DIRECTIONS = Object.fromEntries(
-  Object.entries(CREATIVE_DIRECTION_TEMPLATES).map(([direction, template]) => [template, direction]),
+  [...Object.entries(HISTORICAL_CREATIVE_DIRECTION_TEMPLATES), ...Object.entries(CREATIVE_DIRECTION_TEMPLATES)]
+    .map(([direction, template]) => [template, direction]),
 ) as Record<string, CreativeDirection>;
 
 export const DETERMINISTIC_ARCHETYPES = [

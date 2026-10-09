@@ -24,12 +24,13 @@ import {
 } from "@/lib/growth/creative/example-provider";
 import {
   CREATIVE_HEIGHT,
-  CREATIVE_AI_COMPOSITE_KEY,
-  CREATIVE_AI_COMPOSITE_VERSION,
+  CREATIVE_AI_FULL_KEY,
+  CREATIVE_AI_FULL_VERSION,
   CREATIVE_DIRECTIONS,
   CREATIVE_DIRECTION_TEMPLATES,
   CREATIVE_LAB_VERSION,
   CREATIVE_SIMILARITY_VERSION,
+  CREATIVE_TEMPLATE_DIRECTIONS,
   CREATIVE_WIDTH,
   MAX_CREATIVE_COMPARISONS,
   type CreativeDirection,
@@ -43,7 +44,7 @@ import {
   type CreativeGenerationRequest,
 } from "@/lib/growth/creative/contracts";
 import { readExperimentVariant } from "@/lib/growth/creative/experiments";
-import { compositeBeforeAfterCreative, getCreativeRendererDefinition, renderDeterministicCreative } from "@/lib/growth/creative/renderer";
+import { getCreativeRendererDefinition, renderDeterministicCreative } from "@/lib/growth/creative/renderer";
 import { buildExactCreativeSimilarity, classifyCreativeSimilarity, type SimilarityCandidate } from "@/lib/growth/creative/similarity";
 import { parseCreativeSimilarityFlags } from "@/lib/growth/creative/presentation";
 import {
@@ -268,7 +269,7 @@ export function nextCreativeVariation(previousTemplateId?: string | null) {
 
 export function creativeDirectionFromTemplateId(templateId?: string | null) {
   if (!templateId) return null;
-  return (Object.entries(CREATIVE_DIRECTION_TEMPLATES).find(([, template]) => template === templateId)?.[0] || null) as CreativeDirection | null;
+  return CREATIVE_TEMPLATE_DIRECTIONS[templateId] || null;
 }
 
 export function selectCreativeDirection(recentTemplateIds: string[], excluded: CreativeDirection[] = []) {
@@ -386,7 +387,7 @@ export async function enqueueCreativeRegeneration(input: unknown) {
   const controlledTemplateIds = source.archetype === GrowthCreativeArchetype.MINIMAL_STATEMENT
     ? [0, 1, 2].map((variation) => creativeTemplateIdForVariation("minimal-poster-v2", variation))
     : source.archetype === GrowthCreativeArchetype.BEFORE_AFTER
-      ? Object.values(CREATIVE_DIRECTION_TEMPLATES)
+      ? Object.keys(CREATIVE_TEMPLATE_DIRECTIONS)
       : [];
   const [recent, matchedCandidate, usedControlledTemplates] = await Promise.all([
     prisma.growthPinCandidate.findMany({
@@ -519,12 +520,12 @@ export async function generateCreativeCandidate(input: unknown, jobId: string | 
   const visualVariation = payload.visualVariation ?? 0;
   const definition: CreativeDefinition = payload.archetype === GrowthCreativeArchetype.BEFORE_AFTER && payload.creativeDirection
     ? {
-        rendererKey: CREATIVE_AI_COMPOSITE_KEY,
-        rendererVersion: CREATIVE_AI_COMPOSITE_VERSION,
+        rendererKey: CREATIVE_AI_FULL_KEY,
+        rendererVersion: CREATIVE_AI_FULL_VERSION,
         templateId: CREATIVE_DIRECTION_TEMPLATES[payload.creativeDirection],
-        headlinePattern: "transformation-proof-v2",
-        ctaPattern: "see-the-transformation",
-        visualTreatment: `ai-background-deterministic-overlay-${payload.creativeDirection.toLowerCase().replaceAll("_", "-")}`,
+        headlinePattern: "transformation-proof-v3",
+        ctaPattern: "style-aware-transformation-cta",
+        visualTreatment: `full-ai-${payload.creativeDirection.toLowerCase().replaceAll("_", "-")}`,
       }
     : payload.archetype === GrowthCreativeArchetype.MINIMAL_STATEMENT || payload.archetype === GrowthCreativeArchetype.BEFORE_AFTER
       ? { ...baseDefinition, templateId: creativeTemplateIdForVariation(baseDefinition.templateId, visualVariation) }
@@ -558,7 +559,20 @@ export async function generateCreativeCandidate(input: unknown, jobId: string | 
     const budget = createCreativeAiImageBudget(1);
     budget.consume();
     const provider = options.aiProvider || new OpenAICreativeImageProvider();
-    const generated = await provider.generate({ topic: target.topic, direction: payload.creativeDirection, avoidDirections: payload.avoidDirections });
+    if (!copy.exampleInput || !copy.exampleOutput) throw new NonRetryableGrowthJobError("Before-and-after creative requires verified example evidence.");
+    const generated = await provider.generate({
+      topic: target.topic,
+      direction: payload.creativeDirection,
+      avoidDirections: payload.avoidDirections,
+      brandName: "SayTwist",
+      headline: copy.headline,
+      beforeLabel: "BEFORE",
+      beforeText: copy.exampleInput,
+      afterLabel: "AFTER",
+      afterText: copy.exampleOutput,
+      cta: copy.cta,
+      domain: "saytwist.com",
+    });
     validateCreativePng(generated.bytes);
     if (generated.width !== CREATIVE_WIDTH || generated.height !== CREATIVE_HEIGHT || generated.mimeType !== "image/png") throw new NonRetryableGrowthJobError("Creative AI provider returned an invalid image.");
     const providerName = clamp(generated.metadata.provider, 80);
@@ -576,15 +590,25 @@ export async function generateCreativeCandidate(input: unknown, jobId: string | 
         correlationKey: jobId,
       });
     }
-    bytes = await compositeBeforeAfterCreative(generated.bytes, copy, payload.creativeDirection);
-    validateCreativePng(bytes);
+    bytes = generated.bytes;
     generationKind = GrowthAssetGenerationKind.AI;
   } else if (!preexistingExactContent && payload.archetype === GrowthCreativeArchetype.SCENE_BASED) {
     const enabled = options.aiEnabled ?? process.env.GROWTH_AI_IMAGE_ENABLED === "true";
     if (!enabled || !options.aiProvider) throw new NonRetryableGrowthJobError("Creative AI image generation is disabled.");
     const budget = createCreativeAiImageBudget(1);
     budget.consume();
-    const generated = await options.aiProvider.generate({ topic: copy.topic, direction: "BOLD_POSTER" });
+    const generated = await options.aiProvider.generate({
+      topic: copy.topic,
+      direction: "BOLD_POSTER",
+      brandName: "SayTwist",
+      headline: copy.headline,
+      beforeLabel: "IDEA",
+      beforeText: copy.subheadline,
+      afterLabel: "EXPLORE",
+      afterText: copy.description,
+      cta: copy.cta,
+      domain: "saytwist.com",
+    });
     bytes = generated.bytes;
     validateCreativePng(bytes);
     if (generated.width !== CREATIVE_WIDTH || generated.height !== CREATIVE_HEIGHT || generated.mimeType !== "image/png") throw new NonRetryableGrowthJobError("Creative AI provider returned an invalid image.");

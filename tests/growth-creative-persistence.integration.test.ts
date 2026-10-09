@@ -221,6 +221,23 @@ suite("Growth Phase 10 PostgreSQL A-R scenarios", () => {
     expect(calls).toBe(1); expect(result.asset).toMatchObject({ generationKind: "AI", aiImageUnits: 1, estimatedCost: null, aiProvider: "FAKE" });
   });
 
+  it("persists a full-AI Before-and-After image unchanged and uses saved evidence without text AI", async () => {
+    const translator = await seedTranslator();
+    await prisma.translatorEditorialExample.create({ data: { translatorId: translator.id, originalText: "The weather today is sunny and warm.", transformedText: "The day presents itself with sunshine and a genial warmth." } });
+    const finalImage = await renderDeterministicCreative(GrowthCreativeArchetype.MINIMAL_STATEMENT, { ...staticCopy, headline: "Provider final image fixture" });
+    const calls: Array<Parameters<CreativeAiImageProvider["generate"]>[0]> = [];
+    const provider: CreativeAiImageProvider = { generate: async (input) => {
+      calls.push(input);
+      return { bytes: finalImage, mimeType: "image/png", width: 1000, height: 1500, metadata: { provider: "FAKE", model: "fake-full-image-v1", responseId: "full-image-response", imageUnits: 1, estimatedCost: null } };
+    } };
+    const textProvider = { generate: async () => { throw new Error("saved evidence should avoid text AI"); } };
+    const result = await generateCreativeCandidate(payload(translator.id, GrowthCreativeArchetype.BEFORE_AFTER, { useAiExample: true, creativeDirection: "EDITORIAL_SPLIT" }), null, { aiEnabled: true, aiProvider: provider, exampleProvider: textProvider });
+    expect(calls).toEqual([expect.objectContaining({ brandName: "SayTwist", headline: translator.title, beforeLabel: "BEFORE", beforeText: "The weather today is sunny and warm.", afterLabel: "AFTER", afterText: "The day presents itself with sunshine and a genial warmth.", domain: "saytwist.com", direction: "EDITORIAL_SPLIT" })]);
+    expect(result.candidate).toMatchObject({ rendererKey: "creative-ai-full", rendererVersion: "creative_ai_full_v1", templateId: "before-after-full-ai-v1-editorial-split", headlinePattern: "transformation-proof-v3", ctaPattern: "style-aware-transformation-cta", visualTreatment: "full-ai-editorial-split" });
+    expect(result.asset).toMatchObject({ generationKind: GrowthAssetGenerationKind.AI, aiImageUnits: 1 });
+    expect(await readFile(resolveCreativeAssetFile(path.basename(result.asset.publicPath))!)).toEqual(finalImage);
+  });
+
   it("P: Growth kill switch prevents persistence", async () => {
     const translator = await seedTranslator(); await prisma.growthSettings.update({ where: { id: "global" }, data: { enabled: false } });
     await expect(generateCreativeCandidate(payload(translator.id))).rejects.toThrow("Growth is disabled");
