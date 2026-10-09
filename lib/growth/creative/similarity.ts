@@ -11,6 +11,7 @@ export interface SimilarityCandidate {
   accountId: string | null;
   archetype: string;
   templateId: string;
+  visualTreatment: string;
 }
 
 function tokens(value: string) {
@@ -39,6 +40,7 @@ function boundedFlags(input: Omit<SimilarityCandidate, "id">, matched: Similarit
     sameDestination: input.destinationPath === matched.destinationPath,
     sameArchetype: input.archetype === matched.archetype,
     sameTemplate: input.templateId === matched.templateId,
+    sameVisualTreatment: input.visualTreatment === matched.visualTreatment,
     titleSimilarity: Number(titleScore.toFixed(4)),
   };
 }
@@ -56,6 +58,8 @@ export function classifyCreativeSimilarity(input: Omit<SimilarityCandidate, "id"
   const bounded = history.slice(0, MAX_CREATIVE_COMPARISONS);
   let related: SimilarityCandidate | null = null;
   let relatedTitleScore = 0;
+  let visuallyEquivalent: SimilarityCandidate | null = null;
+  let visuallyEquivalentTitleScore = 0;
   for (const item of bounded) {
     const titleScore = titleSimilarity(input.title, item.title);
     const sameDestination = input.destinationPath === item.destinationPath;
@@ -65,13 +69,20 @@ export function classifyCreativeSimilarity(input: Omit<SimilarityCandidate, "id"
       related = item;
       relatedTitleScore = titleScore;
     }
+    const sameVisualSemantics = input.archetype === item.archetype
+      && input.templateId === item.templateId
+      && input.visualTreatment === item.visualTreatment;
+    if (sameVisualSemantics && (!visuallyEquivalent || titleScore > visuallyEquivalentTitleScore)) {
+      visuallyEquivalent = item;
+      visuallyEquivalentTitleScore = titleScore;
+    }
   }
-  if (related && relatedTitleScore >= 0.8) {
+  if (visuallyEquivalent && visuallyEquivalentTitleScore >= 0.8) {
     return {
       modelVersion: CREATIVE_SIMILARITY_VERSION,
       classification: GrowthCreativeSimilarityClassification.NEAR_DUPLICATE,
-      matchedCandidateId: related.id,
-      flags: boundedFlags(input, related, relatedTitleScore, false, false),
+      matchedCandidateId: visuallyEquivalent.id,
+      flags: boundedFlags(input, visuallyEquivalent, visuallyEquivalentTitleScore, false, false),
     };
   }
   return {
@@ -86,6 +97,7 @@ export function classifyCreativeSimilarity(input: Omit<SimilarityCandidate, "id"
       sameDestination: false,
       sameArchetype: false,
       sameTemplate: false,
+      sameVisualTreatment: false,
       titleSimilarity: 0,
     },
   };

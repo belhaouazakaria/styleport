@@ -6,8 +6,8 @@ import { useEffect, useId, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 const archetypeOptions = [
-  { value: GrowthCreativeArchetype.MINIMAL_STATEMENT, label: "Minimal poster", description: "A bold, polished statement with controlled brand variation." },
-  { value: GrowthCreativeArchetype.BEFORE_AFTER, label: "Before → after", description: "Shows a believable message transformation and the Translator’s value." },
+  { value: GrowthCreativeArchetype.MINIMAL_STATEMENT, label: "Minimal poster", description: "Fast deterministic branded creative." },
+  { value: GrowthCreativeArchetype.BEFORE_AFTER, label: "Before → after", description: "AI-assisted conversion creative showing a real transformation." },
 ];
 
 const experimentDimensions = [
@@ -18,7 +18,7 @@ const experimentDimensions = [
   { value: GrowthExperimentDimension.VISUAL_TREATMENT, label: "Visual treatment", help: "Compare two visual treatment IDs." },
 ];
 
-const experimentVariantOptions: Record<GrowthExperimentDimension, Array<{ label: string; value: string }>> = {
+export const experimentVariantOptions: Record<GrowthExperimentDimension, Array<{ label: string; value: string }>> = {
   [GrowthExperimentDimension.ARCHETYPE]: [
     { label: "Minimal poster", value: "MINIMAL_STATEMENT" },
     { label: "Before → after", value: "BEFORE_AFTER" },
@@ -27,13 +27,15 @@ const experimentVariantOptions: Record<GrowthExperimentDimension, Array<{ label:
     { label: "Minimal poster · layout 1", value: "minimal-poster-v2-layout-1" },
     { label: "Minimal poster · layout 2", value: "minimal-poster-v2-layout-2" },
     { label: "Minimal poster · layout 3", value: "minimal-poster-v2-layout-3" },
-    { label: "Before → after · layout 1", value: "before-after-showcase-v1-layout-1" },
-    { label: "Before → after · layout 2", value: "before-after-showcase-v1-layout-2" },
-    { label: "Before → after · layout 3", value: "before-after-showcase-v1-layout-3" },
+    { label: "Before → after · Editorial split", value: "before-after-ai-v1-editorial-split" },
+    { label: "Before → after · Chat focus", value: "before-after-ai-v1-chat-focus" },
+    { label: "Before → after · Bold poster", value: "before-after-ai-v1-bold-poster" },
+    { label: "Before → after · Collage", value: "before-after-ai-v1-collage" },
+    { label: "Before → after · Magazine frame", value: "before-after-ai-v1-magazine-frame" },
   ],
   [GrowthExperimentDimension.HEADLINE_PATTERN]: [
     { label: "Single statement", value: "single-statement-v2" },
-    { label: "Transformation proof", value: "transformation-proof" },
+    { label: "Transformation proof", value: "transformation-proof-v2" },
   ],
   [GrowthExperimentDimension.CTA_PATTERN]: [
     { label: "See full destination", value: "see-full-destination" },
@@ -41,7 +43,11 @@ const experimentVariantOptions: Record<GrowthExperimentDimension, Array<{ label:
   ],
   [GrowthExperimentDimension.VISUAL_TREATMENT]: [
     { label: "Minimal brand poster", value: "minimal-brand-poster" },
-    { label: "Transformation cards", value: "transformation-cards" },
+    { label: "Before → after · Editorial split", value: "ai-background-deterministic-overlay-editorial-split" },
+    { label: "Before → after · Chat focus", value: "ai-background-deterministic-overlay-chat-focus" },
+    { label: "Before → after · Bold poster", value: "ai-background-deterministic-overlay-bold-poster" },
+    { label: "Before → after · Collage", value: "ai-background-deterministic-overlay-collage" },
+    { label: "Before → after · Magazine frame", value: "ai-background-deterministic-overlay-magazine-frame" },
   ],
 };
 
@@ -99,11 +105,12 @@ function TranslatorTargetPicker({ initialOptions, targetId, onSelect }: { initia
   </div>;
 }
 
-export function CreativeGenerationForm({ translators, ideas, accounts, experiments }: {
+export function CreativeGenerationForm({ translators, ideas, accounts, experiments, aiImageEnabled = false }: {
   translators: TranslatorOption[];
   ideas: Array<{ id: string; title: string }>;
   accounts: Array<{ id: string; label: string }>;
   experiments: Array<{ id: string; hypothesis: string; variants: Array<{ key: string; label: string }> }>;
+  aiImageEnabled?: boolean;
 }) {
   const router = useRouter();
   const [kind, setKind] = useState<GrowthCreativeDestinationKind>(GrowthCreativeDestinationKind.TRANSLATOR);
@@ -148,7 +155,7 @@ export function CreativeGenerationForm({ translators, ideas, accounts, experimen
       <fieldset>
         <legend className="text-sm font-extrabold text-ink">3. Pick a creative style</legend>
         <div className="mt-3 grid max-w-3xl gap-3 sm:grid-cols-2">{archetypeOptions.filter((item) => kind === GrowthCreativeDestinationKind.TRANSLATOR || item.value === GrowthCreativeArchetype.MINIMAL_STATEMENT).map((item) => <label key={item.value} className={`relative cursor-pointer rounded-2xl border p-4 transition ${archetype === item.value ? "border-brand-500 bg-brand-50 shadow-[0_4px_0_rgba(20,184,166,0.2)]" : "border-border bg-white hover:border-brand-300"}`}><input type="radio" name="archetype" className="sr-only" value={item.value} checked={archetype === item.value} onChange={() => setArchetype(item.value)} /><span className="block font-display text-base font-bold text-ink">{item.label}</span><span className="mt-1 block text-xs leading-5 text-muted-ink">{item.description}</span>{archetype === item.value ? <span className="absolute right-3 top-3 h-2.5 w-2.5 rounded-full bg-brand-500" aria-hidden="true" /> : null}</label>)}</div>
-        {kind === GrowthCreativeDestinationKind.TRANSLATOR && archetype === GrowthCreativeArchetype.BEFORE_AFTER ? <label className="mt-4 flex max-w-3xl cursor-pointer items-start gap-3 rounded-xl border border-supporting-200 bg-supporting-50 px-4 py-3"><input type="checkbox" checked={useAiExample} onChange={(event) => setUseAiExample(event.target.checked)} className="mt-1 h-4 w-4 accent-teal-600" /><span><span className="block text-sm font-bold text-ink">Generate a real transformation when needed</span><span className="mt-0.5 block text-xs leading-5 text-muted-ink">A saved Translator example is always preferred. Otherwise Creative Lab makes one bounded AI transformation. If that is unavailable, no Before → After candidate is generated.</span></span></label> : null}
+        {kind === GrowthCreativeDestinationKind.TRANSLATOR && archetype === GrowthCreativeArchetype.BEFORE_AFTER ? <div className="mt-4 max-w-3xl rounded-xl border border-supporting-200 bg-supporting-50 px-4 py-3"><label className="flex cursor-pointer items-start gap-3"><input type="checkbox" checked={useAiExample} onChange={(event) => setUseAiExample(event.target.checked)} className="mt-1 h-4 w-4 accent-teal-600" /><span><span className="block text-sm font-bold text-ink">Generate a real transformation when needed</span><span className="mt-0.5 block text-xs leading-5 text-muted-ink">A saved Translator example is preferred. Otherwise Creative Lab makes one bounded text transformation. The visual base uses one controlled AI image call.</span></span></label><p className={`mt-2 text-xs font-bold ${aiImageEnabled ? "text-brand-800" : "text-amber-800"}`}>{aiImageEnabled ? "AI image generation is enabled." : "AI image generation is currently disabled; this concept will not run until enabled."}</p></div> : null}
       </fieldset>
 
       <details className="group border-t border-dashed border-border pt-5">
@@ -161,9 +168,27 @@ export function CreativeGenerationForm({ translators, ideas, accounts, experimen
         </div>
       </details>
 
-      <div className="flex flex-wrap items-center gap-4 border-t border-border pt-5"><button disabled={busy || !targetId || Boolean(experimentId) !== Boolean(variantKey)} className="min-h-11 rounded-full bg-accent-500 px-6 py-2.5 text-sm font-bold text-white shadow-[0_4px_0_#d9563b] transition hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-50 disabled:shadow-none">{busy ? "Adding to queue…" : "Generate one candidate"}</button>{message ? <p role="status" className="text-sm font-medium text-muted-ink">{message}</p> : null}</div>
+      <div className="flex flex-wrap items-center gap-4 border-t border-border pt-5"><button disabled={busy || !targetId || Boolean(experimentId) !== Boolean(variantKey) || (archetype === GrowthCreativeArchetype.BEFORE_AFTER && !aiImageEnabled)} className="min-h-11 rounded-full bg-accent-500 px-6 py-2.5 text-sm font-bold text-white shadow-[0_4px_0_#d9563b] transition hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-50 disabled:shadow-none">{busy ? "Adding to queue…" : "Generate one candidate"}</button>{message ? <p role="status" className="text-sm font-medium text-muted-ink">{message}</p> : null}</div>
     </div>
   </form>;
+}
+
+export function CreativeRegenerateButton({ candidateId }: { candidateId: string }) {
+  const router = useRouter();
+  const [state, setState] = useState<"idle" | "busy" | "queued">("idle");
+  const [error, setError] = useState("");
+  return <div>
+    <button type="button" disabled={state !== "idle"} onClick={async () => {
+      setState("busy"); setError("");
+      try {
+        await post("/api/admin/growth/creative/regenerate", { candidateId });
+        setState("queued"); router.refresh();
+      } catch (caught) {
+        setState("idle"); setError(caught instanceof Error ? caught.message : "Regeneration failed.");
+      }
+    }} className="min-h-10 rounded-full bg-ink px-4 py-2 text-sm font-bold text-white transition hover:bg-brand-700 disabled:opacity-60">{state === "busy" ? "Regenerating…" : state === "queued" ? "Regeneration queued" : "Regenerate"}</button>
+    {error ? <p role="alert" className="mt-2 text-xs font-semibold text-red-700">{error}</p> : null}
+  </div>;
 }
 
 export function CreativeExperimentForm() {

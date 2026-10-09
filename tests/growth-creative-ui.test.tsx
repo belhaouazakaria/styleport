@@ -1,11 +1,12 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { GrowthExperimentDimension } from "@prisma/client";
 
 const router = vi.hoisted(() => ({ refresh: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 
-import { CreativeGenerationForm } from "@/components/admin/creative-lab-actions";
+import { CreativeGenerationForm, CreativeRegenerateButton, experimentVariantOptions } from "@/components/admin/creative-lab-actions";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -13,6 +14,17 @@ afterEach(() => {
 });
 
 describe("Creative Lab target picker", () => {
+  it("exposes only experiment values emitted by current V5 candidates", () => {
+    expect(experimentVariantOptions[GrowthExperimentDimension.HEADLINE_PATTERN].map(({ value }) => value)).toEqual(["single-statement-v2", "transformation-proof-v2"]);
+    expect(experimentVariantOptions[GrowthExperimentDimension.VISUAL_TREATMENT].map(({ value }) => value)).toEqual([
+      "minimal-brand-poster",
+      "ai-background-deterministic-overlay-editorial-split",
+      "ai-background-deterministic-overlay-chat-focus",
+      "ai-background-deterministic-overlay-bold-poster",
+      "ai-background-deterministic-overlay-collage",
+      "ai-background-deterministic-overlay-magazine-frame",
+    ]);
+  });
   it("discovers and selects an active Translator beyond the initial options", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -22,7 +34,7 @@ describe("Creative Lab target picker", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
-    render(<CreativeGenerationForm translators={[{ id: "first", name: "First Translator", slug: "first-translator" }]} ideas={[]} accounts={[]} experiments={[]} />);
+    render(<CreativeGenerationForm translators={[{ id: "first", name: "First Translator", slug: "first-translator" }]} ideas={[]} accounts={[]} experiments={[]} aiImageEnabled />);
 
     expect(screen.getByRole("radio", { name: /minimal poster/i })).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: /before → after/i })).toBeInTheDocument();
@@ -48,7 +60,7 @@ describe("Creative Lab target picker", () => {
     const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ ok: true }) }) as Response);
     vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
-    render(<CreativeGenerationForm translators={[{ id: "first", name: "First Translator", slug: "first-translator" }]} ideas={[]} accounts={[]} experiments={[]} />);
+    render(<CreativeGenerationForm translators={[{ id: "first", name: "First Translator", slug: "first-translator" }]} ideas={[]} accounts={[]} experiments={[]} aiImageEnabled />);
 
     await user.click(screen.getByRole("radio", { name: /before → after/i }));
     expect(screen.getByRole("checkbox", { name: /generate a real transformation/i })).toBeChecked();
@@ -57,5 +69,19 @@ describe("Creative Lab target picker", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
     expect(body).toMatchObject({ archetype: "BEFORE_AFTER", useAiExample: true });
+  });
+
+  it("submits only candidateId and reports regeneration state", async () => {
+    let resolveRequest!: () => void;
+    const fetchMock = vi.fn(() => new Promise<Response>((resolve) => { resolveRequest = () => resolve({ ok: true, json: async () => ({ ok: true }) } as Response); }));
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<CreativeRegenerateButton candidateId="candidate-1" />);
+    await user.click(screen.getByRole("button", { name: "Regenerate" }));
+    expect(screen.getByRole("button", { name: "Regenerating…" })).toBeDisabled();
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({ candidateId: "candidate-1" });
+    resolveRequest();
+    expect(await screen.findByRole("button", { name: "Regeneration queued" })).toBeDisabled();
+    expect(router.refresh).toHaveBeenCalled();
   });
 });

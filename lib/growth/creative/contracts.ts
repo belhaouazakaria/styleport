@@ -5,7 +5,7 @@ import {
 } from "@prisma/client";
 import { z } from "zod";
 
-import { CREATIVE_EXPERIMENT_VERSION, CREATIVE_LAB_VERSION } from "@/lib/growth/creative/constants";
+import { CREATIVE_DIRECTIONS, CREATIVE_EXPERIMENT_VERSION, CREATIVE_LAB_VERSION } from "@/lib/growth/creative/constants";
 
 const identifier = z.string().trim().min(1).max(64).regex(/^[A-Za-z0-9_-]+$/);
 const selectableCreativeArchetypes = new Set<string>([GrowthCreativeArchetype.MINIMAL_STATEMENT, GrowthCreativeArchetype.BEFORE_AFTER]);
@@ -51,7 +51,14 @@ export const creativeGenerationRequestSchema = z.object(creativeGenerationFields
 export const creativeGenerationJobPayloadSchema = z.object({
   ...creativeGenerationFields,
   visualVariation: z.number().int().min(0).max(2).optional(),
+  creativeDirection: z.enum(CREATIVE_DIRECTIONS).optional(),
+  regenerationOfCandidateId: identifier.optional(),
+  regenerationReason: z.enum(["EXACT_DUPLICATE", "NEAR_DUPLICATE"]).optional(),
+  avoidCandidateIds: z.array(identifier).max(10).optional(),
+  avoidDirections: z.array(z.enum(CREATIVE_DIRECTIONS)).max(CREATIVE_DIRECTIONS.length).optional(),
 }).strict().superRefine(validateCreativeGenerationPair);
+
+export const creativeRegenerationRequestSchema = z.object({ candidateId: identifier }).strict();
 
 export const experimentVariantSchema = z.object({
   key: identifier,

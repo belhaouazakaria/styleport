@@ -26,7 +26,10 @@ const mocks = vi.hoisted(() => {
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     translator: { findFirst: vi.fn(async () => mocks.translator) },
-    growthPinCandidate: { findFirst: vi.fn(async () => mocks.candidate) },
+    growthPinCandidate: {
+      findFirst: vi.fn(async () => mocks.candidate),
+      findMany: vi.fn(async () => mocks.candidate ? [mocks.candidate] : []),
+    },
     growthExperiment: { findUnique: vi.fn() },
     growthJob: {
       findFirst: vi.fn(async ({ where }: { where: { idempotencyKey: { startsWith: string } } }) => {
@@ -99,11 +102,11 @@ describe("Creative Lab manual retry idempotency", () => {
     const first = await enqueueCreativeGeneration(request);
     first.job.status = GrowthJobStatus.SUCCEEDED;
     first.job.growthPinCandidate = { id: "candidate-1" };
-    mocks.candidate = { id: "candidate-1", templateId: "before-after-showcase-v1-layout-1" };
+    mocks.candidate = { id: "candidate-1", templateId: "before-after-ai-v1-editorial-split" };
 
     const next = await enqueueCreativeGeneration(request);
     expect(next.created).toBe(true);
-    expect(next.job.payload.visualVariation).toBe(1);
+    expect(next.job.payload.creativeDirection).toBe("CHAT_FOCUS");
     expect(next.job.idempotencyKey).not.toContain(":retry:");
     expect(next.job.idempotencyKey).not.toBe(first.job.idempotencyKey);
   });
