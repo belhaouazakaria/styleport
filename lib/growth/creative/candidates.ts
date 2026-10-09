@@ -6,6 +6,7 @@ import {
   GrowthCreativeDestinationKind,
   GrowthCreativeSimilarityClassification,
   GrowthExperimentStatus,
+  GrowthJobStatus,
   GrowthJobType,
   GrowthPinCandidateStatus,
   GrowthPinterestConnectionStatus,
@@ -231,6 +232,25 @@ async function experimentVariation(request: CreativeGenerationRequest, baseTempl
   return creativeVariationFromTemplateId(variant.value) ?? rotatedVariation;
 }
 
+async function creativeGenerationIdempotencyKey(baseKey: string) {
+  const latest = await prisma.growthJob.findFirst({
+    where: {
+      type: GrowthJobType.CREATIVE_LAB_GENERATE,
+      idempotencyKey: { startsWith: baseKey },
+    },
+    select: {
+      id: true,
+      status: true,
+      idempotencyKey: true,
+      growthPinCandidate: { select: { id: true } },
+    },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+  });
+  if (!latest) return baseKey;
+  if (latest.status !== GrowthJobStatus.FAILED_TERMINAL || latest.growthPinCandidate) return latest.idempotencyKey;
+  return `${baseKey}:retry:${hash(latest.id).slice(0, 32)}`;
+}
+
 export async function enqueueCreativeGeneration(input: unknown) {
   const request = creativeGenerationRequestSchema.parse(input);
   const target = await getEligibleCreativeTarget(request.targetKind, request.targetId);
@@ -249,9 +269,10 @@ export async function enqueueCreativeGeneration(input: unknown) {
   const baseDefinition = getCreativeRendererDefinition(request.archetype);
   const visualVariation = await experimentVariation(request, baseDefinition.templateId, nextCreativeVariation(latest?.templateId));
   const payload: CreativeGenerationJobPayload = { ...request, visualVariation };
-  const key = hash({ request, sourceFingerprint: target.sourceFingerprint, predecessorCandidateId: latest?.id || null, visualVariation }).slice(0, 48);
+  const requestIdentity = hash({ request, sourceFingerprint: target.sourceFingerprint, predecessorCandidateId: latest?.id || null, visualVariation }).slice(0, 48);
+  const idempotencyKey = await creativeGenerationIdempotencyKey(`creative-generate:${requestIdentity}`);
   const requiresPaidExample = request.archetype === GrowthCreativeArchetype.BEFORE_AFTER && !target.savedExample;
-  return enqueueGrowthJob({ type: GrowthJobType.CREATIVE_LAB_GENERATE, idempotencyKey: `creative-generate:${key}`, payload, maxAttempts: requiresPaidExample ? 1 : 3 });
+  return enqueueGrowthJob({ type: GrowthJobType.CREATIVE_LAB_GENERATE, idempotencyKey, payload, maxAttempts: requiresPaidExample ? 1 : 3 });
 }
 
 async function validateCreativeContext(db: CreativeReadClient, payload: CreativeGenerationJobPayload, target: CreativeTarget, definition: CreativeDefinition) {
