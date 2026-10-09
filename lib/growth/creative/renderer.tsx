@@ -141,9 +141,9 @@ function beforeAfterLayout(copy: CreativeCopy, variation?: number) {
 }
 
 function compositeFooter(copy: CreativeCopy, dark = false) {
-  const cta = fitCreativeText(copy.cta, { maximumCharacters: 27, maximumLines: 1, maximumFontSize: 27, minimumFontSize: 20, availableWidth: 430 });
+  const cta = fitCreativeText(copy.cta, { maximumCharacters: 44, maximumLines: 1, maximumFontSize: 32, minimumFontSize: 25, availableWidth: 520 });
   const ink = dark ? BRAND.white : BRAND.ink;
-  return `<g data-element="composite-footer"><text x="70" y="1370" fill="${ink}" font-size="16" font-weight="900" letter-spacing="2">MAKE THE MESSAGE YOURS</text>${renderTextLines(cta, 70, 1420, `fill="${ink}" font-weight="800"`)}<g data-element="cta-domain" transform="translate(682 1350)"><rect width="248" height="82" rx="26" fill="${dark ? BRAND.secondary : BRAND.primary}"/><text x="124" y="41" fill="${BRAND.white}" font-size="24" font-weight="800" text-anchor="middle" dominant-baseline="middle">saytwist.com</text></g></g>`;
+  return `<g data-element="composite-footer"><text x="70" y="1364" fill="${ink}" font-size="18" font-weight="900" letter-spacing="2">YOUR WORDS. THIS ENERGY.</text>${renderTextLines(cta, 70, 1420, `fill="${ink}" font-weight="800"`)}<g data-element="cta-domain" transform="translate(674 1346)"><rect width="256" height="88" rx="28" fill="${dark ? BRAND.secondary : BRAND.primary}"/><text x="128" y="44" fill="${BRAND.white}" font-size="26" font-weight="800" text-anchor="middle" dominant-baseline="middle">saytwist.com</text></g></g>`;
 }
 
 const COMPOSITE_EXAMPLE_FIT: Record<CreativeDirection, {
@@ -151,33 +151,38 @@ const COMPOSITE_EXAMPLE_FIT: Record<CreativeDirection, {
   output: Pick<FitOptions, "maximumCharacters" | "maximumLines" | "minimumFontSize" | "availableWidth">;
 }> = {
   EDITORIAL_SPLIT: {
-    input: { maximumCharacters: 33, maximumLines: 4, minimumFontSize: 22, availableWidth: 624 },
-    output: { maximumCharacters: 34, maximumLines: 6, minimumFontSize: 22, availableWidth: 674 },
+    input: { maximumCharacters: 32, maximumLines: 4, minimumFontSize: 28, availableWidth: 624 },
+    output: { maximumCharacters: 34, maximumLines: 6, minimumFontSize: 28, availableWidth: 674 },
   },
   CHAT_FOCUS: {
-    input: { maximumCharacters: 32, maximumLines: 4, minimumFontSize: 21, availableWidth: 594 },
-    output: { maximumCharacters: 34, maximumLines: 6, minimumFontSize: 22, availableWidth: 630 },
+    input: { maximumCharacters: 31, maximumLines: 4, minimumFontSize: 28, availableWidth: 594 },
+    output: { maximumCharacters: 33, maximumLines: 6, minimumFontSize: 28, availableWidth: 630 },
   },
   BOLD_POSTER: {
-    input: { maximumCharacters: 37, maximumLines: 4, minimumFontSize: 23, availableWidth: 860 },
-    output: { maximumCharacters: 36, maximumLines: 5, minimumFontSize: 23, availableWidth: 790 },
+    input: { maximumCharacters: 36, maximumLines: 4, minimumFontSize: 30, availableWidth: 860 },
+    output: { maximumCharacters: 36, maximumLines: 5, minimumFontSize: 29, availableWidth: 790 },
   },
   COLLAGE: {
-    input: { maximumCharacters: 31, maximumLines: 4, minimumFontSize: 21, availableWidth: 585 },
-    output: { maximumCharacters: 34, maximumLines: 6, minimumFontSize: 22, availableWidth: 686 },
+    input: { maximumCharacters: 30, maximumLines: 4, minimumFontSize: 28, availableWidth: 585 },
+    output: { maximumCharacters: 34, maximumLines: 6, minimumFontSize: 28, availableWidth: 686 },
   },
   MAGAZINE_FRAME: {
-    input: { maximumCharacters: 37, maximumLines: 4, minimumFontSize: 23, availableWidth: 860 },
-    output: { maximumCharacters: 34, maximumLines: 6, minimumFontSize: 22, availableWidth: 760 },
+    input: { maximumCharacters: 36, maximumLines: 4, minimumFontSize: 30, availableWidth: 860 },
+    output: { maximumCharacters: 34, maximumLines: 6, minimumFontSize: 29, availableWidth: 760 },
   },
 };
 
 export function fitCompositeExampleText(copy: CreativeCopy, direction: CreativeDirection) {
   const constraints = COMPOSITE_EXAMPLE_FIT[direction];
   return {
-    input: fitCreativeText(copy.exampleInput!, { ...constraints.input, maximumFontSize: 31, lineHeightRatio: 1.2 }),
-    output: fitCreativeText(copy.exampleOutput!, { ...constraints.output, maximumFontSize: 34, lineHeightRatio: 1.18 }),
+    input: fitCreativeText(copy.exampleInput!, { ...constraints.input, maximumFontSize: 36, lineHeightRatio: 1.18 }),
+    output: fitCreativeText(copy.exampleOutput!, { ...constraints.output, maximumFontSize: 38, lineHeightRatio: 1.16 }),
   };
+}
+
+function centeredTextBaseline(text: FittedText, top: number, bottom: number) {
+  const availableHeight = bottom - top;
+  return Math.round(top + Math.max(0, (availableHeight - textBlockHeight(text)) / 2) + text.fontSize);
 }
 
 function compositeTexts(copy: CreativeCopy, direction: CreativeDirection, headlineWidth: number) {
@@ -192,14 +197,23 @@ export function buildBeforeAfterOverlaySvg(rawCopy: CreativeCopy, direction: Cre
   const copy = creativeCopySchema.parse(rawCopy);
   if (!copy.exampleInput || !copy.exampleOutput) throw new Error("Before-and-after creative requires verified example evidence.");
   const { headline, input, output } = compositeTexts(copy, direction, 24);
+  const textZones: Record<CreativeDirection, { input: [number, number]; output: [number, number] }> = {
+    EDITORIAL_SPLIT: { input: [545, 710], output: [850, 1145] },
+    CHAT_FOCUS: { input: [545, 710], output: [850, 1140] },
+    BOLD_POSTER: { input: [560, 735], output: [850, 1145] },
+    COLLAGE: { input: [550, 715], output: [850, 1145] },
+    MAGAZINE_FRAME: { input: [535, 720], output: [850, 1145] },
+  };
+  const inputBaseline = centeredTextBaseline(input, ...textZones[direction].input);
+  const outputBaseline = centeredTextBaseline(output, ...textZones[direction].output);
   const brand = `<g data-brand="text-wordmark"><text x="70" y="88" font-family="Fredoka, Trebuchet MS, sans-serif" font-size="44" font-weight="700"><tspan fill="${BRAND.ink}">Say</tspan><tspan fill="${BRAND.primary}">Twist</tspan></text></g>`;
   const kicker = `<text data-element="kicker" x="70" y="176" fill="${BRAND.secondary}" font-size="18" font-weight="900" letter-spacing="2.2">SEE THE TWIST IN ACTION</text>`;
   const layouts: Record<CreativeDirection, string> = {
-    EDITORIAL_SPLIT: `<g data-layout="editorial-split"><path d="M0 0h650v1500H0z" fill="${BRAND.light}" opacity=".96"/><path d="M650 0h350v1500H650z" fill="${BRAND.ink}" opacity=".2"/>${brand}${kicker}${renderTextLines(headline, 70, 258, `fill="${BRAND.ink}" font-weight="800"`)}<g data-element="before-card"><rect x="70" y="475" width="700" height="245" rx="18" fill="${BRAND.white}" opacity=".95"/><text x="108" y="528" fill="${BRAND.muted}" font-size="16" font-weight="900" letter-spacing="2">BEFORE</text>${renderTextLines(input, 108, 595, `fill="${BRAND.ink}" font-weight="700"`)}</g><g data-element="after-card"><rect x="160" y="760" width="770" height="330" rx="34" fill="${BRAND.primary}"/><text x="208" y="823" fill="${BRAND.white}" font-size="16" font-weight="900" letter-spacing="2">AFTER</text>${renderTextLines(output, 208, 905, `fill="${BRAND.white}" font-weight="750"`)}</g><path d="M108 1148h310" stroke="${BRAND.secondary}" stroke-width="9" stroke-linecap="round"/>${compositeFooter(copy)}`,
-    CHAT_FOCUS: `<g data-layout="chat-focus"><rect x="34" y="34" width="932" height="1432" rx="54" fill="${BRAND.light}" opacity=".91"/>${brand}${kicker}${renderTextLines(headline, 70, 258, `fill="${BRAND.ink}" font-weight="800"`)}<g data-element="before-card"><rect x="84" y="475" width="690" height="238" rx="54" fill="${BRAND.white}"/><path d="M150 713l-38 48 78-33" fill="${BRAND.white}"/><text x="132" y="530" fill="${BRAND.muted}" font-size="16" font-weight="900" letter-spacing="2">BEFORE</text>${renderTextLines(input, 132, 595, `fill="${BRAND.ink}" font-weight="700"`)}</g><g data-element="transition"><circle cx="840" cy="730" r="42" fill="${BRAND.secondary}"/><path d="m825 730 13 13 23-27" fill="none" stroke="white" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/></g><g data-element="after-card"><rect x="190" y="785" width="726" height="328" rx="58" fill="${BRAND.primaryDark}"/><path d="M850 1113l38 48-78-33" fill="${BRAND.primaryDark}"/><text x="238" y="848" fill="${BRAND.accent}" font-size="16" font-weight="900" letter-spacing="2">AFTER</text>${renderTextLines(output, 238, 930, `fill="${BRAND.white}" font-weight="750"`)}</g>${compositeFooter(copy)}`,
-    BOLD_POSTER: `<g data-layout="bold-poster"><rect width="1000" height="1500" fill="${BRAND.ink}" opacity=".84"/><g transform="translate(0 0)"><text x="70" y="88" fill="${BRAND.white}" font-family="Fredoka, Trebuchet MS, sans-serif" font-size="44" font-weight="700">Say<tspan fill="${BRAND.primary}">Twist</tspan></text></g><text data-element="kicker" x="70" y="176" fill="${BRAND.accent}" font-size="18" font-weight="900" letter-spacing="2.2">SEE THE TWIST IN ACTION</text>${renderTextLines(headline, 70, 260, `fill="${BRAND.white}" font-weight="850"`)}<rect x="70" y="455" width="860" height="14" rx="7" fill="${BRAND.secondary}"/><g data-element="before-card"><text x="70" y="540" fill="${BRAND.accent}" font-size="16" font-weight="900" letter-spacing="2">BEFORE</text>${renderTextLines(input, 70, 615, `fill="${BRAND.white}" font-weight="650"`)}</g><g data-element="after-card"><rect x="52" y="780" width="896" height="355" rx="18" fill="${BRAND.light}"/><text x="105" y="848" fill="${BRAND.secondary}" font-size="16" font-weight="900" letter-spacing="2">AFTER</text>${renderTextLines(output, 105, 938, `fill="${BRAND.ink}" font-weight="800"`)}</g>${compositeFooter(copy, true)}`,
-    COLLAGE: `<g data-layout="collage"><rect width="1000" height="1500" fill="${BRAND.warm}" opacity=".9"/><path d="M18 320 958 248l28 820-940 72z" fill="${BRAND.white}" opacity=".83"/><path d="M720 180h210v210H720z" fill="${BRAND.accent}" opacity=".65" transform="rotate(8 825 285)"/>${brand}${kicker}${renderTextLines(headline, 70, 262, `fill="${BRAND.ink}" font-weight="800"`)}<g data-element="before-card" transform="rotate(-2 390 620)"><rect x="72" y="480" width="665" height="255" rx="10" fill="${BRAND.white}" stroke="${BRAND.ink}" stroke-width="3"/><text x="112" y="538" fill="${BRAND.muted}" font-size="16" font-weight="900" letter-spacing="2">BEFORE</text>${renderTextLines(input, 112, 610, `fill="${BRAND.ink}" font-weight="700"`)}</g><g data-element="after-card" transform="rotate(1.5 560 945)"><rect x="150" y="780" width="790" height="345" rx="14" fill="${BRAND.primary}"/><text x="202" y="847" fill="${BRAND.white}" font-size="16" font-weight="900" letter-spacing="2">AFTER</text>${renderTextLines(output, 202, 932, `fill="${BRAND.white}" font-weight="750"`)}</g><circle cx="110" cy="1150" r="35" fill="${BRAND.secondary}"/>${compositeFooter(copy)}`,
-    MAGAZINE_FRAME: `<g data-layout="magazine-frame"><rect x="42" y="42" width="916" height="1416" fill="${BRAND.light}" opacity=".9"/><rect x="58" y="58" width="884" height="1384" fill="none" stroke="${BRAND.ink}" stroke-width="3"/>${brand}<text x="930" y="88" text-anchor="end" fill="${BRAND.muted}" font-size="15" font-weight="900" letter-spacing="2">FIELD NOTE · 01</text>${kicker}${renderTextLines(headline, 70, 265, `fill="${BRAND.ink}" font-weight="800"`)}<line x1="70" y1="446" x2="930" y2="446" stroke="${BRAND.ink}" stroke-width="2"/><g data-element="before-card"><text x="70" y="515" fill="${BRAND.secondary}" font-size="16" font-weight="900" letter-spacing="2">BEFORE</text>${renderTextLines(input, 70, 590, `fill="${BRAND.ink}" font-weight="700"`)}</g><line x1="70" y1="742" x2="930" y2="742" stroke="${BRAND.ink}" stroke-width="2"/><g data-element="after-card"><rect x="70" y="790" width="860" height="340" fill="${BRAND.primaryDark}"/><text x="120" y="855" fill="${BRAND.accent}" font-size="16" font-weight="900" letter-spacing="2">AFTER</text>${renderTextLines(output, 120, 940, `fill="${BRAND.white}" font-weight="750"`)}</g>${compositeFooter(copy)}`,
+    EDITORIAL_SPLIT: `<g data-layout="editorial-split"><path d="M0 0h650v1500H0z" fill="${BRAND.light}" opacity=".96"/><path d="M650 0h350v1500H650z" fill="${BRAND.ink}" opacity=".2"/>${brand}${kicker}${renderTextLines(headline, 70, 258, `fill="${BRAND.ink}" font-weight="800"`)}<g data-element="before-card"><rect x="70" y="450" width="700" height="285" rx="18" fill="${BRAND.white}" opacity=".95"/><text x="108" y="505" fill="${BRAND.muted}" font-size="19" font-weight="900" letter-spacing="2">BEFORE</text>${renderTextLines(input, 108, inputBaseline, `fill="${BRAND.ink}" font-weight="700"`)}</g><g data-element="after-card"><rect x="160" y="760" width="770" height="420" rx="34" fill="${BRAND.primary}"/><text x="208" y="820" fill="${BRAND.white}" font-size="19" font-weight="900" letter-spacing="2">AFTER</text>${renderTextLines(output, 208, outputBaseline, `fill="${BRAND.white}" font-weight="750"`)}</g>${compositeFooter(copy)}`,
+    CHAT_FOCUS: `<g data-layout="chat-focus"><rect x="34" y="34" width="932" height="1432" rx="54" fill="${BRAND.light}" opacity=".91"/>${brand}${kicker}${renderTextLines(headline, 70, 258, `fill="${BRAND.ink}" font-weight="800"`)}<g data-element="before-card"><rect x="84" y="450" width="690" height="280" rx="54" fill="${BRAND.white}"/><path d="M150 730l-38 48 78-33" fill="${BRAND.white}"/><text x="132" y="505" fill="${BRAND.muted}" font-size="19" font-weight="900" letter-spacing="2">BEFORE</text>${renderTextLines(input, 132, inputBaseline, `fill="${BRAND.ink}" font-weight="700"`)}</g><g data-element="transition"><circle cx="840" cy="746" r="42" fill="${BRAND.secondary}"/><path d="m825 746 13 13 23-27" fill="none" stroke="white" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/></g><g data-element="after-card"><rect x="190" y="770" width="726" height="395" rx="58" fill="${BRAND.primaryDark}"/><path d="M850 1165l38 48-78-33" fill="${BRAND.primaryDark}"/><text x="238" y="830" fill="${BRAND.accent}" font-size="19" font-weight="900" letter-spacing="2">AFTER</text>${renderTextLines(output, 238, outputBaseline, `fill="${BRAND.white}" font-weight="750"`)}</g>${compositeFooter(copy)}`,
+    BOLD_POSTER: `<g data-layout="bold-poster"><rect width="1000" height="1500" fill="${BRAND.ink}" opacity=".84"/><g transform="translate(0 0)"><text x="70" y="88" fill="${BRAND.white}" font-family="Fredoka, Trebuchet MS, sans-serif" font-size="44" font-weight="700">Say<tspan fill="${BRAND.primary}">Twist</tspan></text></g><text data-element="kicker" x="70" y="176" fill="${BRAND.accent}" font-size="18" font-weight="900" letter-spacing="2.2">SEE THE TWIST IN ACTION</text>${renderTextLines(headline, 70, 260, `fill="${BRAND.white}" font-weight="850"`)}<rect x="70" y="440" width="860" height="14" rx="7" fill="${BRAND.secondary}"/><g data-element="before-card"><text x="70" y="515" fill="${BRAND.accent}" font-size="19" font-weight="900" letter-spacing="2">BEFORE</text>${renderTextLines(input, 70, inputBaseline, `fill="${BRAND.white}" font-weight="650"`)}</g><g data-element="after-card"><rect x="52" y="755" width="896" height="425" rx="18" fill="${BRAND.light}"/><text x="105" y="820" fill="${BRAND.secondary}" font-size="19" font-weight="900" letter-spacing="2">AFTER</text>${renderTextLines(output, 105, outputBaseline, `fill="${BRAND.ink}" font-weight="800"`)}</g>${compositeFooter(copy, true)}`,
+    COLLAGE: `<g data-layout="collage"><rect width="1000" height="1500" fill="${BRAND.warm}" opacity=".9"/><path d="M18 320 958 248l28 820-940 72z" fill="${BRAND.white}" opacity=".83"/><path d="M720 180h210v210H720z" fill="${BRAND.accent}" opacity=".65" transform="rotate(8 825 285)"/>${brand}${kicker}${renderTextLines(headline, 70, 262, `fill="${BRAND.ink}" font-weight="800"`)}<g data-element="before-card" transform="rotate(-2 390 600)"><rect x="72" y="455" width="665" height="285" rx="10" fill="${BRAND.white}" stroke="${BRAND.ink}" stroke-width="3"/><text x="112" y="515" fill="${BRAND.muted}" font-size="19" font-weight="900" letter-spacing="2">BEFORE</text>${renderTextLines(input, 112, inputBaseline, `fill="${BRAND.ink}" font-weight="700"`)}</g><g data-element="after-card" transform="rotate(1.5 560 970)"><rect x="150" y="760" width="790" height="420" rx="14" fill="${BRAND.primary}"/><text x="202" y="825" fill="${BRAND.white}" font-size="19" font-weight="900" letter-spacing="2">AFTER</text>${renderTextLines(output, 202, outputBaseline, `fill="${BRAND.white}" font-weight="750"`)}</g><circle cx="110" cy="1192" r="30" fill="${BRAND.secondary}"/>${compositeFooter(copy)}`,
+    MAGAZINE_FRAME: `<g data-layout="magazine-frame"><rect x="42" y="42" width="916" height="1416" fill="${BRAND.light}" opacity=".9"/><rect x="58" y="58" width="884" height="1384" fill="none" stroke="${BRAND.ink}" stroke-width="3"/>${brand}<text x="930" y="88" text-anchor="end" fill="${BRAND.muted}" font-size="15" font-weight="900" letter-spacing="2">FIELD NOTE · 01</text>${kicker}${renderTextLines(headline, 70, 265, `fill="${BRAND.ink}" font-weight="800"`)}<line x1="70" y1="430" x2="930" y2="430" stroke="${BRAND.ink}" stroke-width="2"/><g data-element="before-card"><text x="70" y="500" fill="${BRAND.secondary}" font-size="19" font-weight="900" letter-spacing="2">BEFORE</text>${renderTextLines(input, 70, inputBaseline, `fill="${BRAND.ink}" font-weight="700"`)}</g><line x1="70" y1="745" x2="930" y2="745" stroke="${BRAND.ink}" stroke-width="2"/><g data-element="after-card"><rect x="70" y="760" width="860" height="420" fill="${BRAND.primaryDark}"/><text x="120" y="825" fill="${BRAND.accent}" font-size="19" font-weight="900" letter-spacing="2">AFTER</text>${renderTextLines(output, 120, outputBaseline, `fill="${BRAND.white}" font-weight="750"`)}</g>${compositeFooter(copy)}`,
   };
   return Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${CREATIVE_WIDTH}" height="${CREATIVE_HEIGHT}" viewBox="0 0 ${CREATIVE_WIDTH} ${CREATIVE_HEIGHT}"><defs><clipPath id="safe-canvas"><rect width="1000" height="1500"/></clipPath></defs><g clip-path="url(#safe-canvas)" font-family="Nunito Sans, Arial, Helvetica, sans-serif">${layouts[direction]}</g></g></svg>`);
 }

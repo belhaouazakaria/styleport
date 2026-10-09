@@ -10,7 +10,7 @@ import { describe, expect, it } from "vitest";
 
 import sharp from "sharp";
 import { buildCreativeImagePrompt, createCreativeAiImageBudget } from "@/lib/growth/creative/ai-image-provider";
-import { creativeTemplateIdForVariation, creativeVariationFromTemplateId, nextCreativeVariation, selectCreativeDirection, selectUnusedCreativeDirection, selectUnusedMinimalVariation } from "@/lib/growth/creative/candidates";
+import { buildStyleAwareCreativeCta, creativeTemplateIdForVariation, creativeVariationFromTemplateId, nextCreativeVariation, selectCreativeDirection, selectUnusedCreativeDirection, selectUnusedMinimalVariation } from "@/lib/growth/creative/candidates";
 import { GET as getCreativeAsset } from "@/app/generated/growth-creatives/[filename]/route";
 import { CREATIVE_DIRECTIONS, CREATIVE_RENDERER_VERSION, CREATIVE_SIMILARITY_VERSION, DETERMINISTIC_ARCHETYPES, STATIC_RENDERER_DEFINITIONS } from "@/lib/growth/creative/constants";
 import { creativeGenerationJobPayloadSchema, creativeGenerationRequestSchema, createExperimentSchema } from "@/lib/growth/creative/contracts";
@@ -200,10 +200,19 @@ describe("Phase 10 Creative Lab contracts", () => {
       expect(typical.output.lines.join(" ")).not.toContain("…");
       expect(maximum.input.lines.length).toBeLessThanOrEqual(4);
       expect(maximum.output.lines.length).toBeLessThanOrEqual(6);
-      expect(maximum.input.fontSize).toBeGreaterThanOrEqual(21);
-      expect(maximum.output.fontSize).toBeGreaterThanOrEqual(22);
+      expect(maximum.input.fontSize).toBeGreaterThanOrEqual(28);
+      expect(maximum.output.fontSize).toBeGreaterThanOrEqual(28);
       expect(buildBeforeAfterOverlaySvg({ ...copy, exampleInput: maximumOutput, exampleOutput: maximumOutput }, direction).toString("utf8")).toContain('clip-path="url(#safe-canvas)"');
     }
+  });
+
+  it("builds short deterministic translator-specific calls to action", () => {
+    const fingerprint = "00000000abcdef";
+    expect(buildStyleAwareCreativeCta("Freaky Translator", fingerprint)).toBe("Try the Freaky version");
+    expect(buildStyleAwareCreativeCta("Cold Hearted, Cunning And Manipulative Translator", fingerprint)).toBe("Try the Cold Hearted version");
+    expect(buildStyleAwareCreativeCta("Freaky Translator", fingerprint)).toBe(buildStyleAwareCreativeCta("Freaky Translator", fingerprint));
+    expect(buildStyleAwareCreativeCta("!!!", fingerprint)).toBe("Try it with your own text");
+    expect(buildStyleAwareCreativeCta("Cold Hearted, Cunning And Manipulative Translator", fingerprint).length).toBeLessThanOrEqual(50);
   });
 
   it("selects unused directions, reports finite Minimal exhaustion, and builds a text-free AI brief", () => {
