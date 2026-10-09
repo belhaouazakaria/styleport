@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const router = vi.hoisted(() => ({ refresh: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 
-import { CreativeGenerationForm } from "@/components/admin/creative-lab-actions";
+import { CreativeGenerationForm, CreativeRegenerateButton } from "@/components/admin/creative-lab-actions";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -22,7 +22,7 @@ describe("Creative Lab target picker", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
-    render(<CreativeGenerationForm translators={[{ id: "first", name: "First Translator", slug: "first-translator" }]} ideas={[]} accounts={[]} experiments={[]} />);
+    render(<CreativeGenerationForm translators={[{ id: "first", name: "First Translator", slug: "first-translator" }]} ideas={[]} accounts={[]} experiments={[]} aiImageEnabled />);
 
     expect(screen.getByRole("radio", { name: /minimal poster/i })).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: /before → after/i })).toBeInTheDocument();
@@ -48,7 +48,7 @@ describe("Creative Lab target picker", () => {
     const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ ok: true }) }) as Response);
     vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
-    render(<CreativeGenerationForm translators={[{ id: "first", name: "First Translator", slug: "first-translator" }]} ideas={[]} accounts={[]} experiments={[]} />);
+    render(<CreativeGenerationForm translators={[{ id: "first", name: "First Translator", slug: "first-translator" }]} ideas={[]} accounts={[]} experiments={[]} aiImageEnabled />);
 
     await user.click(screen.getByRole("radio", { name: /before → after/i }));
     expect(screen.getByRole("checkbox", { name: /generate a real transformation/i })).toBeChecked();
@@ -57,5 +57,19 @@ describe("Creative Lab target picker", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
     expect(body).toMatchObject({ archetype: "BEFORE_AFTER", useAiExample: true });
+  });
+
+  it("submits only candidateId and reports regeneration state", async () => {
+    let resolveRequest!: () => void;
+    const fetchMock = vi.fn(() => new Promise<Response>((resolve) => { resolveRequest = () => resolve({ ok: true, json: async () => ({ ok: true }) } as Response); }));
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<CreativeRegenerateButton candidateId="candidate-1" />);
+    await user.click(screen.getByRole("button", { name: "Regenerate" }));
+    expect(screen.getByRole("button", { name: "Regenerating…" })).toBeDisabled();
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({ candidateId: "candidate-1" });
+    resolveRequest();
+    expect(await screen.findByRole("button", { name: "Regeneration queued" })).toBeDisabled();
+    expect(router.refresh).toHaveBeenCalled();
   });
 });

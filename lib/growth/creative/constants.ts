@@ -1,9 +1,11 @@
 import { GrowthCreativeArchetype } from "@prisma/client";
 
 export const CREATIVE_LAB_VERSION = "creative_lab_v1";
-export const CREATIVE_SIMILARITY_VERSION = "creative_similarity_v1";
+export const CREATIVE_SIMILARITY_VERSION = "creative_similarity_v2";
 export const CREATIVE_EXPERIMENT_VERSION = "creative_experiment_v1";
 export const CREATIVE_RENDERER_VERSION = "creative_static_v4";
+export const CREATIVE_AI_COMPOSITE_VERSION = "creative_ai_composite_v1";
+export const CREATIVE_AI_COMPOSITE_KEY = "creative-ai-composite";
 export const CONTROL_RENDERER_KEY = "v1-control";
 export const CONTROL_RENDERER_VERSION = "share_image_v1";
 export const CREATIVE_RENDERER_KEY = "creative-static";
@@ -11,6 +13,28 @@ export const CREATIVE_WIDTH = 1000;
 export const CREATIVE_HEIGHT = 1500;
 export const MAX_CREATIVE_BYTES = 10 * 1024 * 1024;
 export const MAX_CREATIVE_COMPARISONS = 100;
+
+export const CREATIVE_DIRECTIONS = [
+  "EDITORIAL_SPLIT",
+  "CHAT_FOCUS",
+  "BOLD_POSTER",
+  "COLLAGE",
+  "MAGAZINE_FRAME",
+] as const;
+
+export type CreativeDirection = typeof CREATIVE_DIRECTIONS[number];
+
+export const CREATIVE_DIRECTION_TEMPLATES: Record<CreativeDirection, string> = {
+  EDITORIAL_SPLIT: "before-after-ai-v1-editorial-split",
+  CHAT_FOCUS: "before-after-ai-v1-chat-focus",
+  BOLD_POSTER: "before-after-ai-v1-bold-poster",
+  COLLAGE: "before-after-ai-v1-collage",
+  MAGAZINE_FRAME: "before-after-ai-v1-magazine-frame",
+};
+
+export const CREATIVE_TEMPLATE_DIRECTIONS = Object.fromEntries(
+  Object.entries(CREATIVE_DIRECTION_TEMPLATES).map(([direction, template]) => [template, direction]),
+) as Record<string, CreativeDirection>;
 
 export const DETERMINISTIC_ARCHETYPES = [
   GrowthCreativeArchetype.V1_CONTROL,

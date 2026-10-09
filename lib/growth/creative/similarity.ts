@@ -11,6 +11,7 @@ export interface SimilarityCandidate {
   accountId: string | null;
   archetype: string;
   templateId: string;
+  visualTreatment: string;
 }
 
 function tokens(value: string) {
@@ -39,6 +40,7 @@ function boundedFlags(input: Omit<SimilarityCandidate, "id">, matched: Similarit
     sameDestination: input.destinationPath === matched.destinationPath,
     sameArchetype: input.archetype === matched.archetype,
     sameTemplate: input.templateId === matched.templateId,
+    sameVisualTreatment: input.visualTreatment === matched.visualTreatment,
     titleSimilarity: Number(titleScore.toFixed(4)),
   };
 }
@@ -66,7 +68,11 @@ export function classifyCreativeSimilarity(input: Omit<SimilarityCandidate, "id"
       relatedTitleScore = titleScore;
     }
   }
-  if (related && relatedTitleScore >= 0.8) {
+  const substantiallyEquivalentVisual = related
+    && input.archetype === related.archetype
+    && input.templateId === related.templateId
+    && input.visualTreatment === related.visualTreatment;
+  if (related && relatedTitleScore >= 0.8 && substantiallyEquivalentVisual) {
     return {
       modelVersion: CREATIVE_SIMILARITY_VERSION,
       classification: GrowthCreativeSimilarityClassification.NEAR_DUPLICATE,
@@ -86,6 +92,7 @@ export function classifyCreativeSimilarity(input: Omit<SimilarityCandidate, "id"
       sameDestination: false,
       sameArchetype: false,
       sameTemplate: false,
+      sameVisualTreatment: false,
       titleSimilarity: 0,
     },
   };

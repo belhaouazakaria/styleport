@@ -16,7 +16,7 @@ import { createHash } from "node:crypto";
 
 import { recordGrowthActivity } from "@/lib/growth/activity";
 import type { CreativeAiImageProvider } from "@/lib/growth/creative/ai-image-provider";
-import { createCreativeAiImageBudget } from "@/lib/growth/creative/ai-image-provider";
+import { createCreativeAiImageBudget, OpenAICreativeImageProvider } from "@/lib/growth/creative/ai-image-provider";
 import {
   DEFAULT_CREATIVE_EXAMPLE_INPUT,
   generateCreativeExample,
@@ -24,21 +24,28 @@ import {
 } from "@/lib/growth/creative/example-provider";
 import {
   CREATIVE_HEIGHT,
+  CREATIVE_AI_COMPOSITE_KEY,
+  CREATIVE_AI_COMPOSITE_VERSION,
+  CREATIVE_DIRECTIONS,
+  CREATIVE_DIRECTION_TEMPLATES,
   CREATIVE_LAB_VERSION,
   CREATIVE_SIMILARITY_VERSION,
   CREATIVE_WIDTH,
   MAX_CREATIVE_COMPARISONS,
+  type CreativeDirection,
 } from "@/lib/growth/creative/constants";
 import {
   creativeCopySchema,
   creativeGenerationJobPayloadSchema,
   creativeGenerationRequestSchema,
+  creativeRegenerationRequestSchema,
   type CreativeGenerationJobPayload,
   type CreativeGenerationRequest,
 } from "@/lib/growth/creative/contracts";
 import { readExperimentVariant } from "@/lib/growth/creative/experiments";
-import { getCreativeRendererDefinition, renderDeterministicCreative } from "@/lib/growth/creative/renderer";
+import { compositeBeforeAfterCreative, getCreativeRendererDefinition, renderDeterministicCreative } from "@/lib/growth/creative/renderer";
 import { buildExactCreativeSimilarity, classifyCreativeSimilarity, type SimilarityCandidate } from "@/lib/growth/creative/similarity";
+import { parseCreativeSimilarityFlags } from "@/lib/growth/creative/presentation";
 import {
   cleanupCreativeAssetAfterFailure,
   persistCreativeAssetFile,
@@ -52,6 +59,7 @@ import { enqueueGrowthJob } from "@/lib/growth/jobs";
 import { GROWTH_SETTINGS_ID } from "@/lib/growth/contracts";
 import { prisma } from "@/lib/prisma";
 import { ensureTranslatorShareImageById, getStoredShareImageFilePath } from "@/lib/share-images";
+import { getServerEnv } from "@/lib/env";
 
 interface CreativeTarget {
   kind: GrowthCreativeDestinationKind;
@@ -223,6 +231,31 @@ export function nextCreativeVariation(previousTemplateId?: string | null) {
   return previous === null ? 0 : (previous + 1) % 3;
 }
 
+export function creativeDirectionFromTemplateId(templateId?: string | null) {
+  if (!templateId) return null;
+  return (Object.entries(CREATIVE_DIRECTION_TEMPLATES).find(([, template]) => template === templateId)?.[0] || null) as CreativeDirection | null;
+}
+
+export function selectCreativeDirection(recentTemplateIds: string[], excluded: CreativeDirection[] = []) {
+  const excludedSet = new Set(excluded);
+  const recentlyUsed = new Set(recentTemplateIds.map(creativeDirectionFromTemplateId).filter((value): value is CreativeDirection => Boolean(value)));
+  const unused = CREATIVE_DIRECTIONS.find((direction) => !excludedSet.has(direction) && !recentlyUsed.has(direction));
+  if (unused) return unused;
+  return CREATIVE_DIRECTIONS.find((direction) => !excludedSet.has(direction)) || null;
+}
+
+export function selectUnusedCreativeDirection(recentTemplateIds: string[], excluded: CreativeDirection[] = []) {
+  const excludedSet = new Set(excluded);
+  const recentlyUsed = new Set(recentTemplateIds.map(creativeDirectionFromTemplateId).filter((value): value is CreativeDirection => Boolean(value)));
+  return CREATIVE_DIRECTIONS.find((direction) => !excludedSet.has(direction) && !recentlyUsed.has(direction)) || null;
+}
+
+export function selectUnusedMinimalVariation(recentTemplateIds: string[], excluded: number[] = []) {
+  const used = new Set(recentTemplateIds.map(creativeVariationFromTemplateId).filter((value): value is number => value !== null));
+  const excludedSet = new Set(excluded);
+  return [0, 1, 2].find((variation) => !excludedSet.has(variation) && !used.has(variation));
+}
+
 async function experimentVariation(request: CreativeGenerationRequest, baseTemplateId: string, rotatedVariation: number) {
   if (!request.experimentId || !request.variantKey) return rotatedVariation;
   const experiment = await prisma.growthExperiment.findUnique({ where: { id: request.experimentId }, select: { status: true, dimension: true, variants: true } });
@@ -257,7 +290,7 @@ export async function enqueueCreativeGeneration(input: unknown) {
   if (request.archetype === GrowthCreativeArchetype.BEFORE_AFTER && !target.savedExample && !request.useAiExample) {
     throw new NonRetryableGrowthJobError("Before-and-after creative requires a saved example or enabled AI transformation.");
   }
-  const latest = await prisma.growthPinCandidate.findFirst({
+  const recent = await prisma.growthPinCandidate.findMany({
     where: {
       destinationKind: request.targetKind,
       archetype: request.archetype,
@@ -265,14 +298,109 @@ export async function enqueueCreativeGeneration(input: unknown) {
     },
     select: { id: true, templateId: true },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: 25,
   });
+  const latest = recent[0];
   const baseDefinition = getCreativeRendererDefinition(request.archetype);
-  const visualVariation = await experimentVariation(request, baseDefinition.templateId, nextCreativeVariation(latest?.templateId));
-  const payload: CreativeGenerationJobPayload = { ...request, visualVariation };
-  const requestIdentity = hash({ request, sourceFingerprint: target.sourceFingerprint, predecessorCandidateId: latest?.id || null, visualVariation }).slice(0, 48);
+  const visualVariation = request.archetype === GrowthCreativeArchetype.MINIMAL_STATEMENT
+    ? await experimentVariation(request, baseDefinition.templateId, nextCreativeVariation(latest?.templateId))
+    : undefined;
+  let creativeDirection = request.archetype === GrowthCreativeArchetype.BEFORE_AFTER
+    ? selectCreativeDirection(recent.map((candidate) => candidate.templateId))
+    : null;
+  if (request.archetype === GrowthCreativeArchetype.BEFORE_AFTER && request.experimentId && request.variantKey) {
+    const experiment = await prisma.growthExperiment.findUnique({ where: { id: request.experimentId }, select: { status: true, dimension: true, variants: true } });
+    if (experiment?.dimension === "TEMPLATE") {
+      creativeDirection = creativeDirectionFromTemplateId(readExperimentVariant(experiment, request.variantKey).value);
+    }
+  }
+  if (request.archetype === GrowthCreativeArchetype.BEFORE_AFTER && !creativeDirection) throw new NonRetryableGrowthJobError("No controlled Before-and-After direction is available.");
+  const payload: CreativeGenerationJobPayload = {
+    ...request,
+    ...(visualVariation === undefined ? {} : { visualVariation }),
+    ...(creativeDirection ? { creativeDirection } : {}),
+  };
+  const requestIdentity = hash({ request, sourceFingerprint: target.sourceFingerprint, predecessorCandidateId: latest?.id || null, visualVariation, creativeDirection }).slice(0, 48);
   const idempotencyKey = await creativeGenerationIdempotencyKey(`creative-generate:${requestIdentity}`);
-  const requiresPaidExample = request.archetype === GrowthCreativeArchetype.BEFORE_AFTER && !target.savedExample;
-  return enqueueGrowthJob({ type: GrowthJobType.CREATIVE_LAB_GENERATE, idempotencyKey, payload, maxAttempts: requiresPaidExample ? 1 : 3 });
+  const requiresPaidGeneration = request.archetype === GrowthCreativeArchetype.BEFORE_AFTER;
+  return enqueueGrowthJob({ type: GrowthJobType.CREATIVE_LAB_GENERATE, idempotencyKey, payload, maxAttempts: requiresPaidGeneration ? 1 : 3 });
+}
+
+export async function enqueueCreativeRegeneration(input: unknown) {
+  const { candidateId } = creativeRegenerationRequestSchema.parse(input);
+  const source = await prisma.growthPinCandidate.findUnique({
+    where: { id: candidateId },
+    include: { generationJob: { select: { id: true } } },
+  });
+  if (!source || source.status !== GrowthPinCandidateStatus.DEFERRED) throw new NonRetryableGrowthJobError("Only a deferred Creative Lab candidate can be regenerated.");
+  const regenerationReason = source.similarityResult === GrowthCreativeSimilarityClassification.EXACT_DUPLICATE
+    ? "EXACT_DUPLICATE" as const
+    : source.similarityResult === GrowthCreativeSimilarityClassification.NEAR_DUPLICATE
+      ? "NEAR_DUPLICATE" as const
+      : null;
+  if (!regenerationReason) {
+    throw new NonRetryableGrowthJobError("This deferred candidate has no supported regeneration strategy.");
+  }
+  const flags = parseCreativeSimilarityFlags(source.similarityFlags);
+  const matchedCandidateId = flags.matchedCandidateId || null;
+  const recent = await prisma.growthPinCandidate.findMany({
+    where: {
+      destinationKind: source.destinationKind,
+      archetype: source.archetype,
+      ...(source.destinationKind === GrowthCreativeDestinationKind.TRANSLATOR ? { translatorId: source.translatorId } : { ideaId: source.ideaId }),
+    },
+    select: { id: true, templateId: true },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: 25,
+  });
+  const targetId = source.translatorId || source.ideaId;
+  if (!targetId) throw new NonRetryableGrowthJobError("The deferred candidate target is unavailable.");
+  const target = await getEligibleCreativeTarget(source.destinationKind, targetId);
+  const avoidCandidateIds = [source.id, matchedCandidateId].filter((value): value is string => Boolean(value)).slice(0, 10);
+  let visualVariation: number | undefined;
+  let creativeDirection: CreativeDirection | undefined;
+  let avoidDirections: CreativeDirection[] | undefined;
+  if (source.archetype === GrowthCreativeArchetype.MINIMAL_STATEMENT) {
+    const sourceVariation = creativeVariationFromTemplateId(source.templateId);
+    visualVariation = selectUnusedMinimalVariation(recent.map((candidate) => candidate.templateId), sourceVariation === null ? [] : [sourceVariation]);
+    if (visualVariation === undefined) throw new NonRetryableGrowthJobError("All deterministic Minimal Poster variations have already been used for this destination.");
+  } else if (source.archetype === GrowthCreativeArchetype.BEFORE_AFTER) {
+    const matchedTemplate = matchedCandidateId ? recent.find((candidate) => candidate.id === matchedCandidateId)?.templateId : null;
+    avoidDirections = [creativeDirectionFromTemplateId(source.templateId), creativeDirectionFromTemplateId(matchedTemplate)].filter((value): value is CreativeDirection => Boolean(value));
+    creativeDirection = selectUnusedCreativeDirection(recent.map((candidate) => candidate.templateId), avoidDirections) || undefined;
+    if (!creativeDirection) throw new NonRetryableGrowthJobError("All controlled Before-and-After creative directions have already been used for this destination.");
+  } else {
+    throw new NonRetryableGrowthJobError("Historical Creative Lab concepts cannot be regenerated from this action.");
+  }
+  const payload: CreativeGenerationJobPayload = {
+    targetKind: source.destinationKind,
+    targetId,
+    archetype: source.archetype,
+    useAiExample: source.archetype === GrowthCreativeArchetype.BEFORE_AFTER ? true : undefined,
+    accountId: source.accountId || undefined,
+    creativeModelVersion: CREATIVE_LAB_VERSION,
+    ...(visualVariation === undefined ? {} : { visualVariation }),
+    ...(creativeDirection ? { creativeDirection } : {}),
+    regenerationOfCandidateId: source.id,
+    regenerationReason,
+    avoidCandidateIds,
+    ...(avoidDirections?.length ? { avoidDirections } : {}),
+  };
+  const selectedTemplate = creativeDirection ? CREATIVE_DIRECTION_TEMPLATES[creativeDirection] : creativeTemplateIdForVariation("minimal-poster-v2", visualVariation!);
+  const requestIdentity = hash({ candidateId: source.id, sourceFingerprint: target.sourceFingerprint, selectedTemplate, recentHeadId: recent[0]?.id || null }).slice(0, 48);
+  const idempotencyKey = await creativeGenerationIdempotencyKey(`creative-regenerate:${requestIdentity}`);
+  const result = await enqueueGrowthJob({ type: GrowthJobType.CREATIVE_LAB_GENERATE, idempotencyKey, payload, maxAttempts: source.archetype === GrowthCreativeArchetype.BEFORE_AFTER ? 1 : 3 });
+  if (result.created) {
+    await recordGrowthActivity({
+      actorKind: GrowthActivityActorKind.USER,
+      entityType: "GrowthPinCandidate",
+      entityId: source.id,
+      action: "CREATIVE_REGENERATION_REQUESTED",
+      summary: { originalCandidateId: source.id, similarityReason: source.similarityResult, selectedTemplate, matchedCandidateId, archetype: source.archetype },
+      correlationKey: result.job.idempotencyKey,
+    });
+  }
+  return result;
 }
 
 async function validateCreativeContext(db: CreativeReadClient, payload: CreativeGenerationJobPayload, target: CreativeTarget, definition: CreativeDefinition) {
@@ -333,19 +461,26 @@ export async function generateCreativeCandidate(input: unknown, jobId: string | 
     ? { rendererKey: "ai-scene", rendererVersion: CREATIVE_LAB_VERSION, templateId: "scene-based-v1", headlinePattern: "scene-topic-promise", ctaPattern: "destination-action", visualTreatment: "generated-scene" }
     : getCreativeRendererDefinition(payload.archetype);
   const visualVariation = payload.visualVariation ?? 0;
-  const usesControlledLayout = payload.archetype === GrowthCreativeArchetype.MINIMAL_STATEMENT
-    || payload.archetype === GrowthCreativeArchetype.BEFORE_AFTER;
-  const definition = usesControlledLayout
-    ? { ...baseDefinition, templateId: creativeTemplateIdForVariation(baseDefinition.templateId, visualVariation) }
-    : baseDefinition;
+  const definition: CreativeDefinition = payload.archetype === GrowthCreativeArchetype.BEFORE_AFTER && payload.creativeDirection
+    ? {
+        rendererKey: CREATIVE_AI_COMPOSITE_KEY,
+        rendererVersion: CREATIVE_AI_COMPOSITE_VERSION,
+        templateId: CREATIVE_DIRECTION_TEMPLATES[payload.creativeDirection],
+        headlinePattern: "transformation-proof-v2",
+        ctaPattern: "see-the-transformation",
+        visualTreatment: `ai-background-deterministic-overlay-${payload.creativeDirection.toLowerCase().replaceAll("_", "-")}`,
+      }
+    : payload.archetype === GrowthCreativeArchetype.MINIMAL_STATEMENT || payload.archetype === GrowthCreativeArchetype.BEFORE_AFTER
+      ? { ...baseDefinition, templateId: creativeTemplateIdForVariation(baseDefinition.templateId, visualVariation) }
+      : baseDefinition;
   const target = await getEligibleCreativeTarget(payload.targetKind, payload.targetId);
   await validateCreativeContext(prisma as unknown as CreativeReadClient, payload, target, definition);
   const { copy, exampleSource, exampleMetadata } = await buildCopy(target, payload.archetype, payload.useAiExample === true, options.exampleProvider, jobId);
   const contentHash = hash({ target: target.sourceFingerprint, copy, definition, archetype: payload.archetype });
-  const similarityInput = { title: copy.title, contentHash, destinationPath: target.destinationPath, topic: copy.topic, accountId: payload.accountId || null, archetype: payload.archetype, templateId: definition.templateId };
+  const similarityInput = { title: copy.title, contentHash, destinationPath: target.destinationPath, topic: copy.topic, accountId: payload.accountId || null, archetype: payload.archetype, templateId: definition.templateId, visualTreatment: definition.visualTreatment };
   const [preexistingExactContent, history] = await Promise.all([
     prisma.growthPinCandidate.findFirst({ where: { contentHash }, orderBy: { createdAt: "desc" }, include: { asset: true } }),
-    prisma.growthPinCandidate.findMany({ select: { id: true, title: true, contentHash: true, destinationPath: true, topic: true, accountId: true, archetype: true, templateId: true }, orderBy: { createdAt: "desc" }, take: MAX_CREATIVE_COMPARISONS }),
+    prisma.growthPinCandidate.findMany({ select: { id: true, title: true, contentHash: true, destinationPath: true, topic: true, accountId: true, archetype: true, templateId: true, visualTreatment: true }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: MAX_CREATIVE_COMPARISONS }),
   ]);
   const fuzzySimilarity = classifyCreativeSimilarity(similarityInput, history as SimilarityCandidate[]);
 
@@ -358,12 +493,42 @@ export async function generateCreativeCandidate(input: unknown, jobId: string | 
     if (!controlPath) throw new NonRetryableGrowthJobError("Renderer V1 control asset is unavailable.");
     bytes = await readControlAsset(controlPath);
     generationKind = GrowthAssetGenerationKind.REUSED;
+  } else if (!preexistingExactContent && payload.archetype === GrowthCreativeArchetype.BEFORE_AFTER && payload.creativeDirection) {
+    const env = getServerEnv();
+    const enabled = options.aiEnabled ?? env.GROWTH_AI_IMAGE_ENABLED === true;
+    if (!enabled) throw new NonRetryableGrowthJobError("Creative AI image generation is disabled.");
+    const settings = await prisma.growthSettings.findUnique({ where: { id: GROWTH_SETTINGS_ID }, select: { enabled: true } });
+    if (!settings?.enabled) throw new NonRetryableGrowthJobError("Growth is disabled before Creative Lab AI image generation.");
+    const budget = createCreativeAiImageBudget(1);
+    budget.consume();
+    const provider = options.aiProvider || new OpenAICreativeImageProvider();
+    const generated = await provider.generate({ topic: target.topic, direction: payload.creativeDirection, avoidDirections: payload.avoidDirections });
+    validateCreativePng(generated.bytes);
+    if (generated.width !== CREATIVE_WIDTH || generated.height !== CREATIVE_HEIGHT || generated.mimeType !== "image/png") throw new NonRetryableGrowthJobError("Creative AI provider returned an invalid image.");
+    const providerName = clamp(generated.metadata.provider, 80);
+    const model = clamp(generated.metadata.model, 120);
+    const estimatedCost = generated.metadata.estimatedCost ?? null;
+    if (!providerName || !model || generated.metadata.imageUnits !== 1 || (estimatedCost !== null && (!Number.isFinite(estimatedCost) || estimatedCost < 0))) throw new NonRetryableGrowthJobError("Creative AI provider returned invalid metadata.");
+    aiMetadata = { provider: providerName, model, responseId: generated.metadata.responseId ? clamp(generated.metadata.responseId, 191) : null, imageUnits: 1, estimatedCost };
+    if (jobId) {
+      await recordGrowthActivity({
+        actorKind: GrowthActivityActorKind.WORKER,
+        entityType: "GrowthJob",
+        entityId: jobId,
+        action: "CREATIVE_IMAGE_AI_USED",
+        summary: { provider: providerName, model, responseId: aiMetadata.responseId, imageUnits: 1, estimatedCost, creativeDirection: payload.creativeDirection },
+        correlationKey: jobId,
+      });
+    }
+    bytes = await compositeBeforeAfterCreative(generated.bytes, copy, payload.creativeDirection);
+    validateCreativePng(bytes);
+    generationKind = GrowthAssetGenerationKind.AI;
   } else if (!preexistingExactContent && payload.archetype === GrowthCreativeArchetype.SCENE_BASED) {
     const enabled = options.aiEnabled ?? process.env.GROWTH_AI_IMAGE_ENABLED === "true";
     if (!enabled || !options.aiProvider) throw new NonRetryableGrowthJobError("Creative AI image generation is disabled.");
     const budget = createCreativeAiImageBudget(1);
     budget.consume();
-    const generated = await options.aiProvider.generate({ headline: copy.headline, topic: copy.topic, visualTreatment: definition.visualTreatment });
+    const generated = await options.aiProvider.generate({ topic: copy.topic, direction: "BOLD_POSTER" });
     bytes = generated.bytes;
     validateCreativePng(bytes);
     if (generated.width !== CREATIVE_WIDTH || generated.height !== CREATIVE_HEIGHT || generated.mimeType !== "image/png") throw new NonRetryableGrowthJobError("Creative AI provider returned an invalid image.");
@@ -431,7 +596,7 @@ export async function generateCreativeCandidate(input: unknown, jobId: string | 
         similarityModelVersion: CREATIVE_SIMILARITY_VERSION, similarityResult: similarity.classification, similarityFlags: similarity.flags as Prisma.InputJsonValue,
         status: deferred ? GrowthPinCandidateStatus.DEFERRED : GrowthPinCandidateStatus.READY,
       } });
-      await recordGrowthActivity({ actorKind: GrowthActivityActorKind.WORKER, entityType: "GrowthPinCandidate", entityId: candidate.id, action: "CREATIVE_CANDIDATE_GENERATED", toState: candidate.status, summary: { archetype: candidate.archetype, similarity: candidate.similarityResult, targetKind: candidate.destinationKind, exampleSource, exampleProvider: exampleMetadata?.provider || null, exampleModel: exampleMetadata?.model || null, examplePromptTokens: exampleMetadata?.promptTokens ?? null, exampleCompletionTokens: exampleMetadata?.completionTokens ?? null, exampleTotalTokens: exampleMetadata?.totalTokens ?? null }, correlationKey: candidate.candidateKey }, tx);
+      await recordGrowthActivity({ actorKind: GrowthActivityActorKind.WORKER, entityType: "GrowthPinCandidate", entityId: candidate.id, action: "CREATIVE_CANDIDATE_GENERATED", toState: candidate.status, summary: { archetype: candidate.archetype, similarity: candidate.similarityResult, targetKind: candidate.destinationKind, exampleSource, exampleProvider: exampleMetadata?.provider || null, exampleModel: exampleMetadata?.model || null, examplePromptTokens: exampleMetadata?.promptTokens ?? null, exampleCompletionTokens: exampleMetadata?.completionTokens ?? null, exampleTotalTokens: exampleMetadata?.totalTokens ?? null, creativeDirection: payload.creativeDirection || null, regenerationOfCandidateId: payload.regenerationOfCandidateId || null, regenerationReason: payload.regenerationReason || null }, correlationKey: candidate.candidateKey }, tx);
       return { candidate, asset, reused: false };
     });
     if (stored?.created && result.asset.publicPath !== stored.publicPath) {
@@ -448,7 +613,7 @@ export async function generateCreativeCandidate(input: unknown, jobId: string | 
 
 export async function getAdminCreativeOverview() {
   const [candidates, translators, ideaRows, accounts, experiments] = await Promise.all([
-    prisma.growthPinCandidate.findMany({ include: { asset: true, translator: { select: { name: true, slug: true } }, idea: { select: { slug: true, currentVersion: { select: { title: true } } } }, experiment: { select: { hypothesis: true, dimension: true } } }, orderBy: { createdAt: "desc" }, take: 50 }),
+    prisma.growthPinCandidate.findMany({ include: { asset: true, translator: { select: { name: true, slug: true } }, idea: { select: { slug: true, currentVersion: { select: { title: true } } } }, experiment: { select: { hypothesis: true, dimension: true } } }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 50 }),
     prisma.translator.findMany({ where: { isActive: true, archivedAt: null }, select: { id: true, name: true, slug: true }, orderBy: { name: "asc" }, take: 100 }),
     prisma.growthIdea.findMany({ where: { status: "PUBLISHED", archivedAt: null, currentVersionId: { not: null }, category: { isActive: true, archivedAt: null } }, select: { id: true, slug: true, currentVersion: { select: { title: true, blocks: true, publishedAt: true } } }, orderBy: { publishedAt: "desc" }, take: 100 }),
     prisma.growthPinterestAccount.findMany({ where: { connectionStatus: GrowthPinterestConnectionStatus.CONNECTED }, select: { id: true, username: true, publicationRole: true }, orderBy: { username: "asc" }, take: 20 }),
