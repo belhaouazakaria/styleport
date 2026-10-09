@@ -37,7 +37,15 @@ function humanize(value: string) {
   return value.replaceAll("_", " ").toLowerCase().replace(/^./, (letter) => letter.toUpperCase());
 }
 
-const dateFormatter = new Intl.DateTimeFormat("en", { dateStyle: "medium", timeZone: "UTC" });
+const dateFormatter = new Intl.DateTimeFormat("en", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+  timeZone: "UTC",
+});
 
 export default async function AdminCreativeLabPage() {
   await requireAdmin();

@@ -1,11 +1,12 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { GrowthExperimentDimension } from "@prisma/client";
 
 const router = vi.hoisted(() => ({ refresh: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 
-import { CreativeGenerationForm, CreativeRegenerateButton } from "@/components/admin/creative-lab-actions";
+import { CreativeGenerationForm, CreativeRegenerateButton, experimentVariantOptions } from "@/components/admin/creative-lab-actions";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -13,6 +14,17 @@ afterEach(() => {
 });
 
 describe("Creative Lab target picker", () => {
+  it("exposes only experiment values emitted by current V5 candidates", () => {
+    expect(experimentVariantOptions[GrowthExperimentDimension.HEADLINE_PATTERN].map(({ value }) => value)).toEqual(["single-statement-v2", "transformation-proof-v2"]);
+    expect(experimentVariantOptions[GrowthExperimentDimension.VISUAL_TREATMENT].map(({ value }) => value)).toEqual([
+      "minimal-brand-poster",
+      "ai-background-deterministic-overlay-editorial-split",
+      "ai-background-deterministic-overlay-chat-focus",
+      "ai-background-deterministic-overlay-bold-poster",
+      "ai-background-deterministic-overlay-collage",
+      "ai-background-deterministic-overlay-magazine-frame",
+    ]);
+  });
   it("discovers and selects an active Translator beyond the initial options", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);

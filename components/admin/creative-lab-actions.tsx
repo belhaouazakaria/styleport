@@ -18,7 +18,7 @@ const experimentDimensions = [
   { value: GrowthExperimentDimension.VISUAL_TREATMENT, label: "Visual treatment", help: "Compare two visual treatment IDs." },
 ];
 
-const experimentVariantOptions: Record<GrowthExperimentDimension, Array<{ label: string; value: string }>> = {
+export const experimentVariantOptions: Record<GrowthExperimentDimension, Array<{ label: string; value: string }>> = {
   [GrowthExperimentDimension.ARCHETYPE]: [
     { label: "Minimal poster", value: "MINIMAL_STATEMENT" },
     { label: "Before → after", value: "BEFORE_AFTER" },
@@ -35,7 +35,7 @@ const experimentVariantOptions: Record<GrowthExperimentDimension, Array<{ label:
   ],
   [GrowthExperimentDimension.HEADLINE_PATTERN]: [
     { label: "Single statement", value: "single-statement-v2" },
-    { label: "Transformation proof", value: "transformation-proof" },
+    { label: "Transformation proof", value: "transformation-proof-v2" },
   ],
   [GrowthExperimentDimension.CTA_PATTERN]: [
     { label: "See full destination", value: "see-full-destination" },
@@ -43,7 +43,11 @@ const experimentVariantOptions: Record<GrowthExperimentDimension, Array<{ label:
   ],
   [GrowthExperimentDimension.VISUAL_TREATMENT]: [
     { label: "Minimal brand poster", value: "minimal-brand-poster" },
-    { label: "Transformation cards", value: "transformation-cards" },
+    { label: "Before → after · Editorial split", value: "ai-background-deterministic-overlay-editorial-split" },
+    { label: "Before → after · Chat focus", value: "ai-background-deterministic-overlay-chat-focus" },
+    { label: "Before → after · Bold poster", value: "ai-background-deterministic-overlay-bold-poster" },
+    { label: "Before → after · Collage", value: "ai-background-deterministic-overlay-collage" },
+    { label: "Before → after · Magazine frame", value: "ai-background-deterministic-overlay-magazine-frame" },
   ],
 };
 

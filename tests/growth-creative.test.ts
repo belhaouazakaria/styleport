@@ -14,7 +14,7 @@ import { creativeTemplateIdForVariation, creativeVariationFromTemplateId, nextCr
 import { GET as getCreativeAsset } from "@/app/generated/growth-creatives/[filename]/route";
 import { CREATIVE_DIRECTIONS, CREATIVE_RENDERER_VERSION, CREATIVE_SIMILARITY_VERSION, DETERMINISTIC_ARCHETYPES, STATIC_RENDERER_DEFINITIONS } from "@/lib/growth/creative/constants";
 import { creativeGenerationJobPayloadSchema, creativeGenerationRequestSchema, createExperimentSchema } from "@/lib/growth/creative/contracts";
-import { buildBeforeAfterOverlaySvg, buildCreativeSvg, capCreativeTextLines, compositeBeforeAfterCreative, CREATIVE_TEXT_LINE_LIMITS, fitCreativeText, getCreativeRendererDefinition, renderDeterministicCreative } from "@/lib/growth/creative/renderer";
+import { buildBeforeAfterOverlaySvg, buildCreativeSvg, capCreativeTextLines, compositeBeforeAfterCreative, CREATIVE_TEXT_LINE_LIMITS, fitCompositeExampleText, fitCreativeText, getCreativeRendererDefinition, renderDeterministicCreative } from "@/lib/growth/creative/renderer";
 import { buildExactCreativeSimilarity, classifyCreativeSimilarity } from "@/lib/growth/creative/similarity";
 import { deferredCandidatePresentation } from "@/lib/growth/creative/presentation";
 import { cleanupCreativeAssetAfterFailure, persistCreativeAssetFile, readPngDimensions, releaseCreativeAssetLease, resolveCreativeAssetFile } from "@/lib/growth/creative/storage";
@@ -158,6 +158,19 @@ describe("Phase 10 Creative Lab contracts", () => {
     expect(classifyCreativeSimilarity({ ...history[0], contentHash: "d".repeat(64), destinationPath: "/ideas/other", topic: "Classroom", title: "Birthday messages for close friends" }, history).classification).toBe(GrowthCreativeSimilarityClassification.DISTINCT);
   });
 
+  it("does not let a newer different direction mask an older visual-equivalent near duplicate", () => {
+    const input = { title: "Birthday messages for close friends", contentHash: "n".repeat(64), destinationPath: "/ideas/birthday", topic: "Birthdays", accountId: "account-a", archetype: "BEFORE_AFTER", templateId: "before-after-ai-v1-editorial-split", visualTreatment: "ai-background-deterministic-overlay-editorial-split" };
+    const result = classifyCreativeSimilarity(input, [
+      { ...input, id: "newer-different-direction", contentHash: "a".repeat(64), templateId: "before-after-ai-v1-collage", visualTreatment: "ai-background-deterministic-overlay-collage" },
+      { ...input, id: "older-same-direction", contentHash: "b".repeat(64) },
+    ]);
+    expect(result).toMatchObject({
+      classification: GrowthCreativeSimilarityClassification.NEAR_DUPLICATE,
+      matchedCandidateId: "older-same-direction",
+      flags: { sameTemplate: true, sameVisualTreatment: true, titleSimilarity: 1 },
+    });
+  });
+
   it("renders five materially distinct AI overlay structures and composites to 1000x1500", async () => {
     const structures = CREATIVE_DIRECTIONS.map((direction) => buildBeforeAfterOverlaySvg(copy, direction).toString("utf8"));
     expect(new Set(structures.map((svg) => svg.match(/data-layout="([^"]+)"/)?.[1])).size).toBe(5);
@@ -172,6 +185,25 @@ describe("Phase 10 Creative Lab contracts", () => {
     const base = await sharp({ create: { width: 1024, height: 1536, channels: 3, background: "#60C5F7" } }).png().toBuffer();
     const composite = await compositeBeforeAfterCreative(base, copy, "EDITORIAL_SPLIT");
     expect(readPngDimensions(composite)).toEqual({ width: 1000, height: 1500 });
+  });
+
+  it("fits short, typical, and schema-limit transformation evidence within each direction", () => {
+    const typicalOutput = "A warmer answer keeps the meaning clear while making the message feel considerate and natural for the person receiving it today.";
+    const maximumOutput = "A thoughtful rewrite keeps the original meaning intact while adding warmth, clarity, and a natural conversational rhythm for the person receiving this carefully worded message today.".slice(0, 180);
+    for (const direction of CREATIVE_DIRECTIONS) {
+      const short = fitCompositeExampleText({ ...copy, exampleInput: "Call me later.", exampleOutput: "Could you call me when you have a moment?" }, direction);
+      const typical = fitCompositeExampleText({ ...copy, exampleInput: typicalOutput, exampleOutput: typicalOutput }, direction);
+      const maximum = fitCompositeExampleText({ ...copy, exampleInput: maximumOutput, exampleOutput: maximumOutput }, direction);
+      expect(short.input.lines.length).toBeLessThanOrEqual(4);
+      expect(short.output.lines.length).toBeLessThanOrEqual(6);
+      expect(typical.output.lines.join(" ")).toBe(typicalOutput);
+      expect(typical.output.lines.join(" ")).not.toContain("…");
+      expect(maximum.input.lines.length).toBeLessThanOrEqual(4);
+      expect(maximum.output.lines.length).toBeLessThanOrEqual(6);
+      expect(maximum.input.fontSize).toBeGreaterThanOrEqual(21);
+      expect(maximum.output.fontSize).toBeGreaterThanOrEqual(22);
+      expect(buildBeforeAfterOverlaySvg({ ...copy, exampleInput: maximumOutput, exampleOutput: maximumOutput }, direction).toString("utf8")).toContain('clip-path="url(#safe-canvas)"');
+    }
   });
 
   it("selects unused directions, reports finite Minimal exhaustion, and builds a text-free AI brief", () => {

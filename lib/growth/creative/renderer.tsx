@@ -146,18 +146,52 @@ function compositeFooter(copy: CreativeCopy, dark = false) {
   return `<g data-element="composite-footer"><text x="70" y="1370" fill="${ink}" font-size="16" font-weight="900" letter-spacing="2">MAKE THE MESSAGE YOURS</text>${renderTextLines(cta, 70, 1420, `fill="${ink}" font-weight="800"`)}<g data-element="cta-domain" transform="translate(682 1350)"><rect width="248" height="82" rx="26" fill="${dark ? BRAND.secondary : BRAND.primary}"/><text x="124" y="41" fill="${BRAND.white}" font-size="24" font-weight="800" text-anchor="middle" dominant-baseline="middle">saytwist.com</text></g></g>`;
 }
 
-function compositeTexts(copy: CreativeCopy, widths: { headline: number; input: number; output: number }) {
+const COMPOSITE_EXAMPLE_FIT: Record<CreativeDirection, {
+  input: Pick<FitOptions, "maximumCharacters" | "maximumLines" | "minimumFontSize" | "availableWidth">;
+  output: Pick<FitOptions, "maximumCharacters" | "maximumLines" | "minimumFontSize" | "availableWidth">;
+}> = {
+  EDITORIAL_SPLIT: {
+    input: { maximumCharacters: 33, maximumLines: 4, minimumFontSize: 22, availableWidth: 624 },
+    output: { maximumCharacters: 34, maximumLines: 6, minimumFontSize: 22, availableWidth: 674 },
+  },
+  CHAT_FOCUS: {
+    input: { maximumCharacters: 32, maximumLines: 4, minimumFontSize: 21, availableWidth: 594 },
+    output: { maximumCharacters: 34, maximumLines: 6, minimumFontSize: 22, availableWidth: 630 },
+  },
+  BOLD_POSTER: {
+    input: { maximumCharacters: 37, maximumLines: 4, minimumFontSize: 23, availableWidth: 860 },
+    output: { maximumCharacters: 36, maximumLines: 5, minimumFontSize: 23, availableWidth: 790 },
+  },
+  COLLAGE: {
+    input: { maximumCharacters: 31, maximumLines: 4, minimumFontSize: 21, availableWidth: 585 },
+    output: { maximumCharacters: 34, maximumLines: 6, minimumFontSize: 22, availableWidth: 686 },
+  },
+  MAGAZINE_FRAME: {
+    input: { maximumCharacters: 37, maximumLines: 4, minimumFontSize: 23, availableWidth: 860 },
+    output: { maximumCharacters: 34, maximumLines: 6, minimumFontSize: 22, availableWidth: 760 },
+  },
+};
+
+export function fitCompositeExampleText(copy: CreativeCopy, direction: CreativeDirection) {
+  const constraints = COMPOSITE_EXAMPLE_FIT[direction];
   return {
-    headline: fitCreativeText(copy.headline, { maximumCharacters: widths.headline, maximumLines: 3, maximumFontSize: 56, minimumFontSize: 38, availableWidth: widths.headline * 25, lineHeightRatio: 1.05 }),
-    input: fitCreativeText(copy.exampleInput!, { maximumCharacters: widths.input, maximumLines: 3, maximumFontSize: 31, minimumFontSize: 24, availableWidth: widths.input * 22, lineHeightRatio: 1.2 }),
-    output: fitCreativeText(copy.exampleOutput!, { maximumCharacters: widths.output, maximumLines: 4, maximumFontSize: 34, minimumFontSize: 25, availableWidth: widths.output * 22, lineHeightRatio: 1.18 }),
+    input: fitCreativeText(copy.exampleInput!, { ...constraints.input, maximumFontSize: 31, lineHeightRatio: 1.2 }),
+    output: fitCreativeText(copy.exampleOutput!, { ...constraints.output, maximumFontSize: 34, lineHeightRatio: 1.18 }),
+  };
+}
+
+function compositeTexts(copy: CreativeCopy, direction: CreativeDirection, headlineWidth: number) {
+  const examples = fitCompositeExampleText(copy, direction);
+  return {
+    headline: fitCreativeText(copy.headline, { maximumCharacters: headlineWidth, maximumLines: 3, maximumFontSize: 56, minimumFontSize: 38, availableWidth: headlineWidth * 25, lineHeightRatio: 1.05 }),
+    ...examples,
   };
 }
 
 export function buildBeforeAfterOverlaySvg(rawCopy: CreativeCopy, direction: CreativeDirection) {
   const copy = creativeCopySchema.parse(rawCopy);
   if (!copy.exampleInput || !copy.exampleOutput) throw new Error("Before-and-after creative requires verified example evidence.");
-  const { headline, input, output } = compositeTexts(copy, { headline: 24, input: 29, output: 28 });
+  const { headline, input, output } = compositeTexts(copy, direction, 24);
   const brand = `<g data-brand="text-wordmark"><text x="70" y="88" font-family="Fredoka, Trebuchet MS, sans-serif" font-size="44" font-weight="700"><tspan fill="${BRAND.ink}">Say</tspan><tspan fill="${BRAND.primary}">Twist</tspan></text></g>`;
   const kicker = `<text data-element="kicker" x="70" y="176" fill="${BRAND.secondary}" font-size="18" font-weight="900" letter-spacing="2.2">SEE THE TWIST IN ACTION</text>`;
   const layouts: Record<CreativeDirection, string> = {

@@ -13,5 +13,8 @@ describe("Creative Lab gallery ordering", () => {
     expect(page).not.toContain("columns-1");
     expect(page).toContain('id={`candidate-${candidate.id}`}');
     expect(page).toContain("candidate.createdAt.toISOString()");
+    expect(page).toContain('hour: "2-digit"');
+    expect(page).toContain('minute: "2-digit"');
+    expect(page).toContain("UTC</time>");
   });
 });

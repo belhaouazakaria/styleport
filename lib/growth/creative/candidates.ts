@@ -343,18 +343,40 @@ export async function enqueueCreativeRegeneration(input: unknown) {
   }
   const flags = parseCreativeSimilarityFlags(source.similarityFlags);
   const matchedCandidateId = flags.matchedCandidateId || null;
-  const recent = await prisma.growthPinCandidate.findMany({
-    where: {
-      destinationKind: source.destinationKind,
-      archetype: source.archetype,
-      ...(source.destinationKind === GrowthCreativeDestinationKind.TRANSLATOR ? { translatorId: source.translatorId } : { ideaId: source.ideaId }),
-    },
-    select: { id: true, templateId: true },
-    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-    take: 25,
-  });
   const targetId = source.translatorId || source.ideaId;
   if (!targetId) throw new NonRetryableGrowthJobError("The deferred candidate target is unavailable.");
+  const targetWhere = source.destinationKind === GrowthCreativeDestinationKind.TRANSLATOR
+    ? { translatorId: source.translatorId }
+    : { ideaId: source.ideaId };
+  const controlledTemplateIds = source.archetype === GrowthCreativeArchetype.MINIMAL_STATEMENT
+    ? [0, 1, 2].map((variation) => creativeTemplateIdForVariation("minimal-poster-v2", variation))
+    : source.archetype === GrowthCreativeArchetype.BEFORE_AFTER
+      ? Object.values(CREATIVE_DIRECTION_TEMPLATES)
+      : [];
+  const [recent, matchedCandidate, usedControlledTemplates] = await Promise.all([
+    prisma.growthPinCandidate.findMany({
+      where: { destinationKind: source.destinationKind, archetype: source.archetype, ...targetWhere },
+      select: { id: true, templateId: true },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: 25,
+    }),
+    matchedCandidateId
+      ? prisma.growthPinCandidate.findUnique({ where: { id: matchedCandidateId }, select: { id: true, templateId: true } })
+      : Promise.resolve(null),
+    controlledTemplateIds.length
+      ? prisma.growthPinCandidate.findMany({
+        where: {
+          destinationKind: source.destinationKind,
+          archetype: source.archetype,
+          ...targetWhere,
+          templateId: { in: controlledTemplateIds },
+        },
+        select: { templateId: true },
+        distinct: ["templateId"],
+        take: controlledTemplateIds.length,
+      })
+      : Promise.resolve([]),
+  ]);
   const target = await getEligibleCreativeTarget(source.destinationKind, targetId);
   const avoidCandidateIds = [source.id, matchedCandidateId].filter((value): value is string => Boolean(value)).slice(0, 10);
   let visualVariation: number | undefined;
@@ -362,12 +384,13 @@ export async function enqueueCreativeRegeneration(input: unknown) {
   let avoidDirections: CreativeDirection[] | undefined;
   if (source.archetype === GrowthCreativeArchetype.MINIMAL_STATEMENT) {
     const sourceVariation = creativeVariationFromTemplateId(source.templateId);
-    visualVariation = selectUnusedMinimalVariation(recent.map((candidate) => candidate.templateId), sourceVariation === null ? [] : [sourceVariation]);
+    const matchedVariation = creativeVariationFromTemplateId(matchedCandidate?.templateId || "");
+    const excludedVariations = [sourceVariation, matchedVariation].filter((value): value is number => value !== null);
+    visualVariation = selectUnusedMinimalVariation(usedControlledTemplates.map((candidate) => candidate.templateId), excludedVariations);
     if (visualVariation === undefined) throw new NonRetryableGrowthJobError("All deterministic Minimal Poster variations have already been used for this destination.");
   } else if (source.archetype === GrowthCreativeArchetype.BEFORE_AFTER) {
-    const matchedTemplate = matchedCandidateId ? recent.find((candidate) => candidate.id === matchedCandidateId)?.templateId : null;
-    avoidDirections = [creativeDirectionFromTemplateId(source.templateId), creativeDirectionFromTemplateId(matchedTemplate)].filter((value): value is CreativeDirection => Boolean(value));
-    creativeDirection = selectUnusedCreativeDirection(recent.map((candidate) => candidate.templateId), avoidDirections) || undefined;
+    avoidDirections = [creativeDirectionFromTemplateId(source.templateId), creativeDirectionFromTemplateId(matchedCandidate?.templateId)].filter((value): value is CreativeDirection => Boolean(value));
+    creativeDirection = selectUnusedCreativeDirection(usedControlledTemplates.map((candidate) => candidate.templateId), avoidDirections) || undefined;
     if (!creativeDirection) throw new NonRetryableGrowthJobError("All controlled Before-and-After creative directions have already been used for this destination.");
   } else {
     throw new NonRetryableGrowthJobError("Historical Creative Lab concepts cannot be regenerated from this action.");

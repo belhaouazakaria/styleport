@@ -55,7 +55,7 @@ export class OpenAICreativeImageProvider implements CreativeAiImageProvider {
   async generate(input: { topic: string; direction: CreativeDirection; avoidDirections?: CreativeDirection[] }): Promise<CreativeAiImageResult> {
     const env = getServerEnv();
     if (!env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is missing.");
-    const model = env.GROWTH_OPENAI_IMAGE_MODEL || "gpt-image-1.5";
+    const model = env.GROWTH_OPENAI_IMAGE_MODEL || "gpt-image-2";
     const client = new OpenAI({ apiKey: env.OPENAI_API_KEY });
     const response = await client.images.generate({
       model,
