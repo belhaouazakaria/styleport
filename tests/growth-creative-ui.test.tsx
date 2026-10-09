@@ -15,15 +15,27 @@ afterEach(() => {
 
 describe("Creative Lab target picker", () => {
   it("exposes only experiment values emitted by current V5 candidates", () => {
-    expect(experimentVariantOptions[GrowthExperimentDimension.HEADLINE_PATTERN].map(({ value }) => value)).toEqual(["single-statement-v2", "transformation-proof-v2"]);
+    expect(experimentVariantOptions[GrowthExperimentDimension.HEADLINE_PATTERN].map(({ value }) => value)).toEqual(["single-statement-v2", "transformation-proof-v3"]);
+    expect(experimentVariantOptions[GrowthExperimentDimension.TEMPLATE].map(({ value }) => value)).toEqual([
+      "minimal-poster-v2-layout-1",
+      "minimal-poster-v2-layout-2",
+      "minimal-poster-v2-layout-3",
+      "before-after-full-ai-v1-editorial-split",
+      "before-after-full-ai-v1-chat-focus",
+      "before-after-full-ai-v1-bold-poster",
+      "before-after-full-ai-v1-collage",
+      "before-after-full-ai-v1-magazine-frame",
+    ]);
+    expect(experimentVariantOptions[GrowthExperimentDimension.CTA_PATTERN].map(({ value }) => value)).toEqual(["see-full-destination", "style-aware-transformation-cta"]);
     expect(experimentVariantOptions[GrowthExperimentDimension.VISUAL_TREATMENT].map(({ value }) => value)).toEqual([
       "minimal-brand-poster",
-      "ai-background-deterministic-overlay-editorial-split",
-      "ai-background-deterministic-overlay-chat-focus",
-      "ai-background-deterministic-overlay-bold-poster",
-      "ai-background-deterministic-overlay-collage",
-      "ai-background-deterministic-overlay-magazine-frame",
+      "full-ai-editorial-split",
+      "full-ai-chat-focus",
+      "full-ai-bold-poster",
+      "full-ai-collage",
+      "full-ai-magazine-frame",
     ]);
+    expect(JSON.stringify(experimentVariantOptions)).not.toContain("before-after-ai-v1-");
   });
   it("discovers and selects an active Translator beyond the initial options", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {

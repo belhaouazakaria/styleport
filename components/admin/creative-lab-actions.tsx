@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 
 const archetypeOptions = [
   { value: GrowthCreativeArchetype.MINIMAL_STATEMENT, label: "Minimal poster", description: "Fast deterministic branded creative." },
-  { value: GrowthCreativeArchetype.BEFORE_AFTER, label: "Before → after", description: "AI-assisted conversion creative showing a real transformation." },
+  { value: GrowthCreativeArchetype.BEFORE_AFTER, label: "Before → after", description: "AI designs the complete Pin around a real transformation." },
 ];
 
 const experimentDimensions = [
@@ -27,27 +27,27 @@ export const experimentVariantOptions: Record<GrowthExperimentDimension, Array<{
     { label: "Minimal poster · layout 1", value: "minimal-poster-v2-layout-1" },
     { label: "Minimal poster · layout 2", value: "minimal-poster-v2-layout-2" },
     { label: "Minimal poster · layout 3", value: "minimal-poster-v2-layout-3" },
-    { label: "Before → after · Editorial split", value: "before-after-ai-v1-editorial-split" },
-    { label: "Before → after · Chat focus", value: "before-after-ai-v1-chat-focus" },
-    { label: "Before → after · Bold poster", value: "before-after-ai-v1-bold-poster" },
-    { label: "Before → after · Collage", value: "before-after-ai-v1-collage" },
-    { label: "Before → after · Magazine frame", value: "before-after-ai-v1-magazine-frame" },
+    { label: "Before → after · Editorial split", value: "before-after-full-ai-v1-editorial-split" },
+    { label: "Before → after · Chat focus", value: "before-after-full-ai-v1-chat-focus" },
+    { label: "Before → after · Bold poster", value: "before-after-full-ai-v1-bold-poster" },
+    { label: "Before → after · Collage", value: "before-after-full-ai-v1-collage" },
+    { label: "Before → after · Magazine frame", value: "before-after-full-ai-v1-magazine-frame" },
   ],
   [GrowthExperimentDimension.HEADLINE_PATTERN]: [
     { label: "Single statement", value: "single-statement-v2" },
-    { label: "Transformation proof", value: "transformation-proof-v2" },
+    { label: "Transformation proof", value: "transformation-proof-v3" },
   ],
   [GrowthExperimentDimension.CTA_PATTERN]: [
     { label: "See full destination", value: "see-full-destination" },
-    { label: "See the transformation", value: "see-the-transformation" },
+    { label: "Style-aware transformation", value: "style-aware-transformation-cta" },
   ],
   [GrowthExperimentDimension.VISUAL_TREATMENT]: [
     { label: "Minimal brand poster", value: "minimal-brand-poster" },
-    { label: "Before → after · Editorial split", value: "ai-background-deterministic-overlay-editorial-split" },
-    { label: "Before → after · Chat focus", value: "ai-background-deterministic-overlay-chat-focus" },
-    { label: "Before → after · Bold poster", value: "ai-background-deterministic-overlay-bold-poster" },
-    { label: "Before → after · Collage", value: "ai-background-deterministic-overlay-collage" },
-    { label: "Before → after · Magazine frame", value: "ai-background-deterministic-overlay-magazine-frame" },
+    { label: "Before → after · Editorial split", value: "full-ai-editorial-split" },
+    { label: "Before → after · Chat focus", value: "full-ai-chat-focus" },
+    { label: "Before → after · Bold poster", value: "full-ai-bold-poster" },
+    { label: "Before → after · Collage", value: "full-ai-collage" },
+    { label: "Before → after · Magazine frame", value: "full-ai-magazine-frame" },
   ],
 };
 
@@ -155,7 +155,7 @@ export function CreativeGenerationForm({ translators, ideas, accounts, experimen
       <fieldset>
         <legend className="text-sm font-extrabold text-ink">3. Pick a creative style</legend>
         <div className="mt-3 grid max-w-3xl gap-3 sm:grid-cols-2">{archetypeOptions.filter((item) => kind === GrowthCreativeDestinationKind.TRANSLATOR || item.value === GrowthCreativeArchetype.MINIMAL_STATEMENT).map((item) => <label key={item.value} className={`relative cursor-pointer rounded-2xl border p-4 transition ${archetype === item.value ? "border-brand-500 bg-brand-50 shadow-[0_4px_0_rgba(20,184,166,0.2)]" : "border-border bg-white hover:border-brand-300"}`}><input type="radio" name="archetype" className="sr-only" value={item.value} checked={archetype === item.value} onChange={() => setArchetype(item.value)} /><span className="block font-display text-base font-bold text-ink">{item.label}</span><span className="mt-1 block text-xs leading-5 text-muted-ink">{item.description}</span>{archetype === item.value ? <span className="absolute right-3 top-3 h-2.5 w-2.5 rounded-full bg-brand-500" aria-hidden="true" /> : null}</label>)}</div>
-        {kind === GrowthCreativeDestinationKind.TRANSLATOR && archetype === GrowthCreativeArchetype.BEFORE_AFTER ? <div className="mt-4 max-w-3xl rounded-xl border border-supporting-200 bg-supporting-50 px-4 py-3"><label className="flex cursor-pointer items-start gap-3"><input type="checkbox" checked={useAiExample} onChange={(event) => setUseAiExample(event.target.checked)} className="mt-1 h-4 w-4 accent-teal-600" /><span><span className="block text-sm font-bold text-ink">Generate a real transformation when needed</span><span className="mt-0.5 block text-xs leading-5 text-muted-ink">A saved Translator example is preferred. Otherwise Creative Lab makes one bounded text transformation. The visual base uses one controlled AI image call.</span></span></label><p className={`mt-2 text-xs font-bold ${aiImageEnabled ? "text-brand-800" : "text-amber-800"}`}>{aiImageEnabled ? "AI image generation is enabled." : "AI image generation is currently disabled; this concept will not run until enabled."}</p></div> : null}
+      {kind === GrowthCreativeDestinationKind.TRANSLATOR && archetype === GrowthCreativeArchetype.BEFORE_AFTER ? <div className="mt-4 max-w-3xl rounded-xl border border-supporting-200 bg-supporting-50 px-4 py-3"><label className="flex cursor-pointer items-start gap-3"><input type="checkbox" checked={useAiExample} onChange={(event) => setUseAiExample(event.target.checked)} className="mt-1 h-4 w-4 accent-teal-600" /><span><span className="block text-sm font-bold text-ink">Generate a real transformation when needed</span><span className="mt-0.5 block text-xs leading-5 text-muted-ink">A saved Translator example is preferred. Otherwise Creative Lab makes one bounded text transformation. One controlled AI image call designs the complete final Pin.</span></span></label><p className={`mt-2 text-xs font-bold ${aiImageEnabled ? "text-brand-800" : "text-amber-800"}`}>{aiImageEnabled ? "AI image generation is enabled." : "AI image generation is currently disabled; this concept will not run until enabled."}</p></div> : null}
       </fieldset>
 
       <details className="group border-t border-dashed border-border pt-5">

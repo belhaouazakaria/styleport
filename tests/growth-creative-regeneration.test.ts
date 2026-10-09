@@ -62,7 +62,7 @@ describe("Creative Lab reason-aware regeneration", () => {
     const retry = await enqueueCreativeRegeneration({ candidateId: "source" });
     expect(retry).toMatchObject({ created: true, job: { maxAttempts: 1 } });
     expect(retry.job.idempotencyKey).toContain(":retry:");
-    expect(mocks.activity).toHaveBeenCalledWith(expect.objectContaining({ action: "CREATIVE_REGENERATION_REQUESTED", summary: expect.objectContaining({ selectedTemplate: "before-after-ai-v1-bold-poster" }) }));
+    expect(mocks.activity).toHaveBeenCalledWith(expect.objectContaining({ action: "CREATIVE_REGENERATION_REQUESTED", summary: expect.objectContaining({ selectedTemplate: "before-after-full-ai-v1-bold-poster" }) }));
     expect(JSON.stringify(mocks.activity.mock.calls)).not.toContain("Rewrite warmly");
   });
 
@@ -71,8 +71,8 @@ describe("Creative Lab reason-aware regeneration", () => {
     mocks.recent.push({ id: "source", templateId: "before-after-ai-v1-editorial-split" });
     mocks.usedControlledTemplates.push({ templateId: "before-after-ai-v1-editorial-split" });
     const first = await enqueueCreativeRegeneration({ candidateId: "source" });
-    mocks.recent.unshift({ id: "generated", templateId: "before-after-ai-v1-bold-poster" });
-    mocks.usedControlledTemplates.push({ templateId: "before-after-ai-v1-bold-poster" });
+    mocks.recent.unshift({ id: "generated", templateId: "before-after-full-ai-v1-bold-poster" });
+    mocks.usedControlledTemplates.push({ templateId: "before-after-full-ai-v1-bold-poster" });
     const next = await enqueueCreativeRegeneration({ candidateId: "source" });
     expect(first.job.payload).toMatchObject({ creativeDirection: "BOLD_POSTER", regenerationReason: "NEAR_DUPLICATE" });
     expect(next.job.payload.creativeDirection).toBe("COLLAGE");
