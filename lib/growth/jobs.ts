@@ -4,6 +4,7 @@ import {
   GrowthJobStatus,
   GrowthJobType,
   GrowthOpportunityStatus,
+  GrowthPublicationStatus,
   Prisma,
   type GrowthJob,
 } from "@prisma/client";
@@ -24,6 +25,37 @@ export interface EnqueueGrowthJobInput {
   payload?: unknown;
   runAfter?: Date;
   maxAttempts?: number;
+}
+
+async function convergePinterestReconciliation(
+  tx: Prisma.TransactionClient,
+  publication: { id: string; idempotencyKey: string },
+  now: Date,
+  code: string,
+  summary: string,
+) {
+  const reconcile = await tx.growthJob.upsert({
+    where: { idempotencyKey: `pinterest-reconcile:${publication.id}` },
+    update: {},
+    create: { type: GrowthJobType.PINTEREST_PIN_RECONCILE, idempotencyKey: `pinterest-reconcile:${publication.id}`, payload: { publicationId: publication.id }, maxAttempts: 4 },
+  });
+  await tx.growthPinPublication.update({ where: { id: publication.id }, data: { status: GrowthPublicationStatus.RECONCILING, reconciliationStartedAt: now, reconcileJobId: reconcile.id, lastErrorCode: code, lastErrorSummary: summary } });
+  return reconcile;
+}
+
+async function synchronizeExhaustedPublication(tx: Prisma.TransactionClient, job: Pick<GrowthJob, "id" | "type">, now: Date) {
+  if (job.type === GrowthJobType.PINTEREST_PIN_PUBLISH) {
+    const publication = await tx.growthPinPublication.findFirst({ where: { publishJobId: job.id, status: GrowthPublicationStatus.FAILED_RETRYABLE }, select: { id: true, idempotencyKey: true } });
+    if (!publication) return;
+    await tx.growthPinPublication.update({ where: { id: publication.id }, data: { status: GrowthPublicationStatus.FAILED_TERMINAL, lastErrorCode: "PUBLISH_RETRY_EXHAUSTED", lastErrorSummary: "The safe Pinterest publish retry budget was exhausted." } });
+    await recordGrowthActivity({ actorKind: GrowthActivityActorKind.SYSTEM, entityType: "GrowthPinPublication", entityId: publication.id, action: "PIN_PUBLICATION_FAILED_TERMINAL", fromState: GrowthPublicationStatus.FAILED_RETRYABLE, toState: GrowthPublicationStatus.FAILED_TERMINAL, summary: { code: "PUBLISH_RETRY_EXHAUSTED", at: now }, correlationKey: publication.idempotencyKey }, tx);
+  }
+  if (job.type === GrowthJobType.PINTEREST_PIN_RECONCILE) {
+    const publication = await tx.growthPinPublication.findFirst({ where: { reconcileJobId: job.id, status: GrowthPublicationStatus.RECONCILING }, select: { id: true, idempotencyKey: true } });
+    if (!publication) return;
+    await tx.growthPinPublication.update({ where: { id: publication.id }, data: { status: GrowthPublicationStatus.FAILED_TERMINAL, lastErrorCode: "RECONCILIATION_RETRY_EXHAUSTED", lastErrorSummary: "The bounded Pinterest reconciliation retry budget was exhausted." } });
+    await recordGrowthActivity({ actorKind: GrowthActivityActorKind.SYSTEM, entityType: "GrowthPinPublication", entityId: publication.id, action: "PIN_RECONCILIATION_FAILED_TERMINAL", fromState: GrowthPublicationStatus.RECONCILING, toState: GrowthPublicationStatus.FAILED_TERMINAL, summary: { code: "RECONCILIATION_RETRY_EXHAUSTED", at: now }, correlationKey: publication.idempotencyKey }, tx);
+  }
 }
 
 export async function enqueueGrowthJob(input: EnqueueGrowthJobInput) {
@@ -115,6 +147,21 @@ export async function recoverStaleGrowthJobs(now = new Date(), limit = 25) {
 
   let recovered = 0;
   for (const job of stale) {
+    if (job.type === GrowthJobType.PINTEREST_PIN_PUBLISH) {
+      let ambiguousPublishing = false;
+      await prisma.$transaction(async (tx) => {
+        const publication = await tx.growthPinPublication.findFirst({ where: { publishJobId: job.id, status: "PUBLISHING" }, select: { id: true, idempotencyKey: true } });
+        if (!publication) return;
+        const updated = await tx.growthJob.updateMany({ where: { id: job.id, status: job.status, leaseUntil: { lt: now } }, data: { status: GrowthJobStatus.FAILED_TERMINAL, workerId: null, claimedAt: null, leaseUntil: null, heartbeatAt: null, completedAt: now, lastError: "Publishing lease expired after the external request may have started; reconciliation required." } });
+        if (updated.count !== 1) return;
+        const reconcile = await convergePinterestReconciliation(tx, publication, now, "PUBLISH_LEASE_EXPIRED", "The Create Pin outcome is ambiguous after worker lease expiry.");
+        await recordGrowthActivity({ actorKind: GrowthActivityActorKind.SYSTEM, entityType: "GrowthPinPublication", entityId: publication.id, action: "PIN_CREATE_OUTCOME_AMBIGUOUS", fromState: "PUBLISHING", toState: "RECONCILING", summary: { publishJobId: job.id, reconcileJobId: reconcile.id }, correlationKey: publication.idempotencyKey }, tx);
+        await recordGrowthActivity({ actorKind: GrowthActivityActorKind.SYSTEM, entityType: "GrowthJob", entityId: job.id, action: "JOB_FAILED_TERMINAL", fromState: job.status, toState: GrowthJobStatus.FAILED_TERMINAL, summary: { reason: "PUBLISHING_OUTCOME_AMBIGUOUS" }, correlationKey: job.idempotencyKey }, tx);
+        recovered += 1;
+        ambiguousPublishing = true;
+      });
+      if (ambiguousPublishing) continue;
+    }
     const retryable = job.attemptCount < job.maxAttempts;
     const nextStatus = retryable ? GrowthJobStatus.PENDING : GrowthJobStatus.FAILED_TERMINAL;
     await prisma.$transaction(async (tx) => {
@@ -136,6 +183,7 @@ export async function recoverStaleGrowthJobs(now = new Date(), limit = 25) {
       });
       if (updated.count === 1) {
         recovered += 1;
+        if (!retryable) await synchronizeExhaustedPublication(tx, job as GrowthJob, now);
         if (job.type === GrowthJobType.TRANSLATOR_AUTOPILOT_EXECUTE || job.type === GrowthJobType.IDEA_AUTOPILOT_EXECUTE) {
           const decision = await tx.growthDecision.findFirst({
             where: { executionJobId: job.id, status: GrowthDecisionStatus.EXECUTING },
@@ -358,6 +406,23 @@ export async function completeGrowthJob(job: GrowthJob, workerId: string, summar
 }
 
 export async function failGrowthJob(job: GrowthJob, workerId: string, error: unknown) {
+  if (job.type === GrowthJobType.PINTEREST_PIN_PUBLISH) {
+    const ambiguous = await prisma.$transaction(async (tx) => {
+      const publication = await tx.growthPinPublication.findFirst({ where: { publishJobId: job.id, status: GrowthPublicationStatus.PUBLISHING }, select: { id: true, idempotencyKey: true } });
+      if (!publication) return false;
+      const updated = await tx.growthJob.updateMany({
+        where: { id: job.id, status: GrowthJobStatus.RUNNING, workerId },
+        data: { status: GrowthJobStatus.FAILED_TERMINAL, completedAt: new Date(), leaseUntil: null, heartbeatAt: new Date(), lastError: "Pinterest Create Pin may have completed; reconciliation required." },
+      });
+      if (updated.count !== 1) throw new Error("Growth job failure could not be persisted because its claim is no longer active.");
+      const now = new Date();
+      const reconcile = await convergePinterestReconciliation(tx, publication, now, "PUBLISH_HANDLER_OUTCOME_AMBIGUOUS", "The publish handler failed after entering the external-write boundary.");
+      await recordGrowthActivity({ actorKind: GrowthActivityActorKind.SYSTEM, entityType: "GrowthPinPublication", entityId: publication.id, action: "PIN_CREATE_OUTCOME_AMBIGUOUS", fromState: GrowthPublicationStatus.PUBLISHING, toState: GrowthPublicationStatus.RECONCILING, summary: { publishJobId: job.id, reconcileJobId: reconcile.id, code: "PUBLISH_HANDLER_OUTCOME_AMBIGUOUS" }, correlationKey: publication.idempotencyKey }, tx);
+      await recordGrowthActivity({ actorKind: GrowthActivityActorKind.WORKER, entityType: "GrowthJob", entityId: job.id, action: "JOB_FAILED_TERMINAL", fromState: GrowthJobStatus.RUNNING, toState: GrowthJobStatus.FAILED_TERMINAL, summary: { reason: "PUBLISHING_OUTCOME_AMBIGUOUS" }, correlationKey: job.idempotencyKey }, tx);
+      return true;
+    });
+    if (ambiguous) return GrowthJobStatus.FAILED_TERMINAL;
+  }
   const retryable = !(error instanceof NonRetryableGrowthJobError) && job.attemptCount < job.maxAttempts;
   const status = retryable ? GrowthJobStatus.FAILED_RETRYABLE : GrowthJobStatus.FAILED_TERMINAL;
   const now = new Date();
@@ -378,6 +443,7 @@ export async function failGrowthJob(job: GrowthJob, workerId: string, error: unk
       },
     });
     if (updated.count !== 1) throw new Error("Growth job failure could not be persisted because its claim is no longer active.");
+    if (!retryable) await synchronizeExhaustedPublication(tx, job, now);
     await recordGrowthActivity({
       actorKind: GrowthActivityActorKind.WORKER,
       entityType: "GrowthJob",

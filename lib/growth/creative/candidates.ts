@@ -61,6 +61,7 @@ import { GROWTH_SETTINGS_ID } from "@/lib/growth/contracts";
 import { prisma } from "@/lib/prisma";
 import { ensureTranslatorShareImageById, getStoredShareImageFilePath } from "@/lib/share-images";
 import { getServerEnv } from "@/lib/env";
+import { getPinterestConfigurationState } from "@/lib/growth/pinterest/config";
 
 interface CreativeTarget {
   kind: GrowthCreativeDestinationKind;
@@ -693,12 +694,15 @@ export async function generateCreativeCandidate(input: unknown, jobId: string | 
 
 export async function getAdminCreativeOverview() {
   const [candidates, translators, ideaRows, accounts, experiments] = await Promise.all([
-    prisma.growthPinCandidate.findMany({ include: { asset: true, translator: { select: { name: true, slug: true } }, idea: { select: { slug: true, currentVersion: { select: { title: true } } } }, experiment: { select: { hypothesis: true, dimension: true } } }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 50 }),
+    prisma.growthPinCandidate.findMany({ include: { asset: true, translator: { select: { name: true, slug: true } }, idea: { select: { slug: true, currentVersion: { select: { title: true } } } }, experiment: { select: { hypothesis: true, dimension: true } }, approvals: { include: { publication: true, account: { select: { username: true, publicationRole: true } }, board: { select: { name: true } } }, orderBy: { createdAt: "desc" }, take: 1 } }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 50 }),
     prisma.translator.findMany({ where: { isActive: true, archivedAt: null }, select: { id: true, name: true, slug: true }, orderBy: { name: "asc" }, take: 100 }),
     prisma.growthIdea.findMany({ where: { status: "PUBLISHED", archivedAt: null, currentVersionId: { not: null }, category: { isActive: true, archivedAt: null } }, select: { id: true, slug: true, currentVersion: { select: { title: true, blocks: true, publishedAt: true } } }, orderBy: { publishedAt: "desc" }, take: 100 }),
-    prisma.growthPinterestAccount.findMany({ where: { connectionStatus: GrowthPinterestConnectionStatus.CONNECTED }, select: { id: true, username: true, publicationRole: true }, orderBy: { username: "asc" }, take: 20 }),
+    prisma.growthPinterestAccount.findMany({ where: { connectionStatus: GrowthPinterestConnectionStatus.CONNECTED, grantedScopes: { has: "pins:write" }, encryptedCredentials: { not: null } }, select: { id: true, username: true, publicationRole: true, apiEnvironment: true, refreshTokenExpiresAt: true, boards: { where: { isActive: true }, select: { id: true, name: true }, orderBy: { name: "asc" }, take: 250 } }, orderBy: { username: "asc" }, take: 20 }),
     prisma.growthExperiment.findMany({ where: { status: GrowthExperimentStatus.DRAFT }, orderBy: { createdAt: "desc" }, take: 25 }),
   ]);
   const ideas = ideaRows.filter((idea) => idea.currentVersion?.publishedAt && ideaBlocksSchema.safeParse(idea.currentVersion.blocks).success);
-  return { candidates, translators, ideas, accounts, experiments };
+  const pinterestState = getPinterestConfigurationState();
+  const expectedEnvironment = pinterestState.configured ? pinterestState.environment.toUpperCase() : null;
+  const eligibleAccounts = accounts.filter((account) => account.apiEnvironment === expectedEnvironment && (!account.refreshTokenExpiresAt || account.refreshTokenExpiresAt > new Date()) && account.boards.length > 0);
+  return { candidates, translators, ideas, accounts: eligibleAccounts, experiments };
 }

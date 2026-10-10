@@ -191,6 +191,38 @@ export function CreativeRegenerateButton({ candidateId }: { candidateId: string 
   </div>;
 }
 
+type PublishingAccount = { id: string; label: string; boards: Array<{ id: string; name: string }> };
+
+export function PinApprovalPanel({ candidateId, accounts, existing }: { candidateId: string; accounts: PublishingAccount[]; existing?: { approvalStatus: string; publicationId?: string | null; publicationStatus?: string | null; scheduledAt?: string | null; account?: string | null; board?: string | null } }) {
+  const router = useRouter();
+  const [accountId, setAccountId] = useState(accounts[0]?.id || "");
+  const account = accounts.find((item) => item.id === accountId);
+  const [boardId, setBoardId] = useState(account?.boards[0]?.id || "");
+  const [scheduledAt, setScheduledAt] = useState("");
+  const [recommendation, setRecommendation] = useState("");
+  const [confirmed, setConfirmed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    if (!accountId || existing) return;
+    const controller = new AbortController();
+    fetch(`/api/admin/growth/creative/timing?candidateId=${encodeURIComponent(candidateId)}&accountId=${encodeURIComponent(accountId)}`, { signal: controller.signal })
+      .then((response) => response.json().then((payload) => ({ response, payload })))
+      .then(({ response, payload }) => {
+        if (!response.ok || !payload?.data?.scheduledAt) return;
+        const date = new Date(payload.data.scheduledAt);
+        const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+        setScheduledAt(local); setRecommendation(`${date.toLocaleString()} · ${String(payload.data.mode).replaceAll("_", " ").toLowerCase()} · America/New_York model`);
+      }).catch(() => {});
+    return () => controller.abort();
+  }, [accountId, candidateId, existing]);
+
+  if (existing) return <div className="mt-4 rounded-xl border border-brand-200 bg-brand-50 p-4"><p className="text-xs font-extrabold uppercase tracking-wide text-brand-800">Publication</p><p className="mt-1 text-sm font-bold text-ink">{existing.publicationStatus ? existing.publicationStatus.replaceAll("_", " ").toLowerCase() : existing.approvalStatus.toLowerCase()}</p><p className="mt-1 text-xs text-muted-ink">{[existing.account, existing.board, existing.scheduledAt ? new Date(existing.scheduledAt).toLocaleString() : null].filter(Boolean).join(" · ")}</p>{existing.publicationId && ["SCHEDULED", "FAILED_RETRYABLE"].includes(existing.publicationStatus || "") ? <button type="button" disabled={busy} onClick={async () => { setBusy(true); try { await post("/api/admin/growth/creative/cancel", { publicationId: existing.publicationId }); router.refresh(); } catch (error) { setMessage(error instanceof Error ? error.message : "Cancellation failed."); } finally { setBusy(false); } }} className="mt-3 text-xs font-bold text-red-700 underline">Cancel scheduled publication</button> : null}{message ? <p role="status" className="mt-2 text-xs text-red-700">{message}</p> : null}</div>;
+  if (!accounts.length) return <p className="mt-4 rounded-xl bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-900">Connect a Pinterest account with Pins write access and an active board before approval.</p>;
+  return <div className="mt-4 border-t border-dashed border-border pt-4"><p className="text-sm font-extrabold text-ink">Approve for Pinterest</p><p className="mt-1 text-xs leading-5 text-muted-ink">Approval binds this exact image, copy, destination, account, board, and time.</p><div className="mt-3 grid gap-3 sm:grid-cols-2"><label className="text-xs font-bold text-ink">Account<select value={accountId} onChange={(event) => { const id = event.target.value; setAccountId(id); setBoardId(accounts.find((item) => item.id === id)?.boards[0]?.id || ""); setScheduledAt(""); }} className={fieldClass}>{accounts.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label><label className="text-xs font-bold text-ink">Board<select value={boardId} onChange={(event) => setBoardId(event.target.value)} className={fieldClass}>{(account?.boards || []).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label className="text-xs font-bold text-ink sm:col-span-2">Publishing time<input type="datetime-local" value={scheduledAt} onChange={(event) => setScheduledAt(event.target.value)} className={fieldClass} /></label></div>{recommendation ? <p className="mt-2 text-xs text-brand-800"><strong>Recommended:</strong> {recommendation}. You may override it.</p> : null}<label className="mt-3 flex items-start gap-2 text-xs font-bold text-ink"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} className="mt-0.5 h-4 w-4 accent-teal-600" />I approve this exact Pin for publishing.</label><div className="mt-3 flex flex-wrap gap-2"><button type="button" disabled={busy || !confirmed || !accountId || !boardId || !scheduledAt} onClick={async () => { setBusy(true); setMessage(""); try { await post("/api/admin/growth/creative/approve", { candidateId, accountId, boardId, scheduledAt: new Date(scheduledAt).toISOString(), confirmation: true }); setMessage("Pin approved and scheduled."); router.refresh(); } catch (error) { setMessage(error instanceof Error ? error.message : "Approval failed."); } finally { setBusy(false); } }} className="rounded-full bg-brand-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50">Approve exact Pin</button><button type="button" disabled={busy} onClick={async () => { setBusy(true); setMessage(""); try { await post("/api/admin/growth/creative/reject", { candidateId, reason: "Rejected during individual Creative Lab review." }); setMessage("Pin rejected."); router.refresh(); } catch (error) { setMessage(error instanceof Error ? error.message : "Rejection failed."); } finally { setBusy(false); } }} className="rounded-full border border-red-300 px-4 py-2 text-xs font-bold text-red-800">Reject Pin</button></div>{message ? <p role="status" className="mt-2 text-xs font-semibold text-muted-ink">{message}</p> : null}</div>;
+}
+
 export function CreativeExperimentForm() {
   const router = useRouter();
   const [busy, setBusy] = useState(false); const [message, setMessage] = useState("");

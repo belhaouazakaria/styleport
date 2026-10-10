@@ -36,6 +36,8 @@ import {
 } from "@/lib/growth/ideas/service";
 import { creativeGenerationJobPayloadSchema } from "@/lib/growth/creative/contracts";
 import { generateCreativeCandidate } from "@/lib/growth/creative/candidates";
+import { publicationJobPayloadSchema } from "@/lib/growth/publishing/contracts";
+import { publishApprovedPin, reconcilePinterestPublication } from "@/lib/growth/publishing/service";
 
 export interface GrowthJobHandlerContext {
   job: GrowthJob;
@@ -246,6 +248,24 @@ const handlers = new Map<GrowthJobType, GrowthJobHandler>([
         archetype: result.candidate.archetype,
         reused: result.reused,
       };
+    },
+  ],
+  [
+    GrowthJobType.PINTEREST_PIN_PUBLISH,
+    async ({ job }) => {
+      const parsed = publicationJobPayloadSchema.safeParse(job.payload || {});
+      if (!parsed.success) throw new NonRetryableGrowthJobError("Invalid Pinterest publication payload.");
+      const result = await publishApprovedPin(parsed.data.publicationId);
+      return { publicationId: result.publication.id, status: result.publication.status, reused: result.reused };
+    },
+  ],
+  [
+    GrowthJobType.PINTEREST_PIN_RECONCILE,
+    async ({ job }) => {
+      const parsed = publicationJobPayloadSchema.safeParse(job.payload || {});
+      if (!parsed.success) throw new NonRetryableGrowthJobError("Invalid Pinterest reconciliation payload.");
+      const result = await reconcilePinterestPublication(parsed.data.publicationId, job.attemptCount);
+      return { publicationId: result.publication.id, status: result.publication.status, reused: result.reused };
     },
   ],
 ]);

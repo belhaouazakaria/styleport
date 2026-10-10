@@ -90,6 +90,8 @@ export const pinterestPinSchema = z.object({
   }).passthrough().nullable().optional(),
 }).passthrough();
 
+export const pinterestCreatePinResponseSchema = pinterestPinSchema.extend({ id: z.string().min(1) });
+
 export const pinterestPinsPageSchema = z.object({
   items: z.array(pinterestPinSchema),
   bookmark: z.string().nullable().optional(),

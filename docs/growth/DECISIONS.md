@@ -290,7 +290,7 @@ Archive and rollback are ADMIN-only same-origin audited actions. Rollback requir
 
 ## D-034 — Creative Lab produces immutable READY candidates behind deterministic and cost-bounded generation
 
-**Status:** Accepted and implementation validated; not production deployed
+**Status:** Accepted, production deployed, and live visual validation approved
 
 Preserve the established Translator automatic share image as the exact Renderer V1 control. Phase 10 may expose its stored path and copy validated bytes into immutable Growth storage, but it must not change the renderer's layout, copy, palette, hash, regeneration, or public behavior. Record it as `v1-control`, `share_image_v1`, and `translator-share-control-v1`. Add a versioned deterministic registry for typography-led, editorial/list, conversation/chat, and minimal-statement 1000×1500 PNGs. Reserved future archetypes do not become executable until a controlled renderer/provider exists.
 
@@ -298,6 +298,15 @@ Persist `GrowthAsset`, `GrowthPinCandidate`, and `GrowthExperiment` through migr
 
 Use direct indexed lookups across all history for exact content hashes and asset checksums; keep `creative_similarity_v1` fuzzy comparison bounded to at most 100 recent candidates. Title-token Jaccard >=0.8 is near only with the same destination or equivalent normalized topic intent. Bounded flags retain the matched candidate plus exact-content, exact-asset, account, destination, archetype, template, and title-similarity facts. Exact retry for the same immutable candidate context reuses the existing candidate. Exact matches in a different context and near matches persist as `DEFERRED`; safe related/distinct candidates may reach `READY`. The full candidate phase ends at `READY` or `DEFERRED`, with null `pinRef`.
 
-Experiments are DRAFT definitions only: two to four unique bounded variants, one controlled dimension/KPI, and bounded guardrails/model versions. Phase 10 does not launch or analyze them. AI image generation is default-off and injectable, permits one image unit per job, validates returned PNG bytes, has no automatic fallback from deterministic rendering, and persists provider/model/response/unit metadata. No production worker provider is wired, so the default paid-image ceiling is effectively zero. Unknown price is null rather than free. Validation uses fakes only.
+Experiments are DRAFT definitions only: two to four unique bounded variants, one controlled dimension/KPI, and bounded guardrails/model versions. Phase 10 does not launch or analyze them. AI image generation is default-off and injectable, permits one image unit per job, validates returned PNG bytes, has no automatic fallback from deterministic rendering, and persists provider/model/response/unit metadata. The configured production full-image provider uses `gpt-image-2`; its accepted Pin passed live visual validation with exact copy and no deterministic overlay. Unknown price is null rather than free. Validation uses fakes only.
 
-The ADMIN UI and same-origin routes may enqueue one bounded `CREATIVE_LAB_GENERATE` job or create a DRAFT experiment. The final persistence transaction authoritatively revalidates Growth enabled state, target fingerprint and eligibility, complete Idea block schema, optional connected account, DRAFT experiment, variant/dimension, and cluster compatibility before either exact reuse or mutation. There is no production deployment claim, approval, scheduling, publication, Pinterest write, attribution enablement, recurrence, cron, or persistent Growth worker. Phase 11 is next.
+The ADMIN UI and same-origin routes may enqueue one bounded `CREATIVE_LAB_GENERATE` job or create a DRAFT experiment. The final persistence transaction authoritatively revalidates Growth enabled state, target fingerprint and eligibility, complete Idea block schema, optional connected account, DRAFT experiment, variant/dimension, and cluster compatibility before either exact reuse or mutation. Phase 10 is production deployed and live visually approved. Approval, scheduling and publishing begin only in Phase 11; attribution collection, recurrence, cron and persistent Growth workers remain disabled.
+
+
+## D-035 — Phase 11 requires immutable individual approval and reconciliation instead of blind Create Pin retry
+
+**Status:** Accepted and implementation validated; not production deployed
+
+Every Pin requires explicit ADMIN approval of the exact candidate revision, asset, copy, destination, account, board and time. The canonical approved snapshot and SHA-256 checksum are immutable; no score, schedule, worker, experiment, connected account or READY state can create approval automatically. A future `pinterest_organic_v1` ref is issued before publication even while attribution collection is disabled.
+
+`publication_timing_v1` is the US-first America/New_York explore/exploit baseline; its four windows are cold-start test windows rather than universal best-time claims. Phase 12 owns deeper learned scheduling. Pinterest Create Pin has one safe attempt. Known pre-create 429 conditions may retry; ambiguous outcomes reconcile through bounded reads and never blind-retry Create Pin. The Growth worker remains one-shot and bounded, and implementation enables no production cron, PM2 process or polling daemon.

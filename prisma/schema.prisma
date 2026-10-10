@@ -164,6 +164,35 @@ enum GrowthJobType {
   IDEA_AUTOPILOT_DECIDE
   IDEA_AUTOPILOT_EXECUTE
   CREATIVE_LAB_GENERATE
+  PINTEREST_PIN_PUBLISH
+  PINTEREST_PIN_RECONCILE
+}
+
+enum GrowthPinApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  DEFERRED
+  SUPERSEDED
+}
+
+enum GrowthPublicationStatus {
+  SCHEDULED
+  CLAIMED
+  PUBLISHING
+  PUBLISHED
+  RECONCILING
+  RECONCILED
+  FAILED_RETRYABLE
+  FAILED_TERMINAL
+  CANCELLED
+}
+
+enum GrowthPublicationTimingMode {
+  COLD_START
+  EXPLOIT
+  EXPLORE
+  ADMIN_OVERRIDE
 }
 
 enum GrowthCreativeDestinationKind {
@@ -433,6 +462,7 @@ model User {
   growthActivities      GrowthActivity[]            @relation("GrowthActivityUser")
   growthPinterestStates GrowthPinterestOAuthState[] @relation("GrowthPinterestOAuthStateAdmin")
   growthIdeaVersions    GrowthIdeaVersion[]         @relation("GrowthIdeaVersionAuthor")
+  growthPinApprovals    GrowthPinApproval[]         @relation("GrowthPinApprovalApprover")
 }
 
 model Account {
@@ -898,6 +928,8 @@ model GrowthJob {
   growthContentVersions GrowthContentVersion[]
   growthIdeaVersions    GrowthIdeaVersion[]
   growthPinCandidate    GrowthPinCandidate?
+  publishedPin          GrowthPinPublication?  @relation("GrowthPinPublicationPublishJob")
+  reconciledPin         GrowthPinPublication?  @relation("GrowthPinPublicationReconcileJob")
 
   @@index([status, runAfter])
   @@index([leaseUntil])
@@ -968,6 +1000,8 @@ model GrowthPinterestAccount {
   creativeCandidates      GrowthPinCandidate[]
   dailyMetrics            GrowthPinterestAccountMetricDaily[]
   analyticsState          GrowthPinterestAnalyticsState?
+  pinApprovals            GrowthPinApproval[]
+  pinPublications         GrowthPinPublication[]
 
   @@index([connectionStatus, publicationRole])
   @@index([apiEnvironment, connectionStatus])
@@ -989,6 +1023,8 @@ model GrowthPinterestBoard {
   account            GrowthPinterestAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
   pins               GrowthPinterestPin[]
   creativeCandidates GrowthPinCandidate[]
+  pinApprovals       GrowthPinApproval[]
+  pinPublications    GrowthPinPublication[]
 
   @@unique([accountId, pinterestBoardId])
   @@index([accountId, isActive])
@@ -1029,6 +1065,7 @@ model GrowthPinterestPin {
   attributionRefs        GrowthAttributionRef[]
   opportunityMemberships GrowthContentClusterMembership[]
   opportunitySignals     GrowthPinSignal[]
+  publication            GrowthPinPublication?
 
   @@index([accountId, isActive])
   @@index([accountId, isActive, analyticsEligible, lastAnalyticsSyncAt])
@@ -1055,6 +1092,7 @@ model GrowthAttributionRef {
   qualifiedSessions  GrowthAttributionSession[]        @relation("GrowthAttributionQualifiedRef")
   events             GrowthAttributionEvent[]
   dailyAggregates    GrowthAttributionDailyAggregate[]
+  publication        GrowthPinPublication?
 
   @@index([isActive, createdAt])
   @@index([modelVersion, createdAt])
@@ -1517,6 +1555,8 @@ model GrowthPinCandidate {
   translator             Translator?                            @relation(fields: [translatorId], references: [id], onDelete: Restrict)
   idea                   GrowthIdea?                            @relation(fields: [ideaId], references: [id], onDelete: Restrict)
   asset                  GrowthAsset                            @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  approvals              GrowthPinApproval[]
+  publications           GrowthPinPublication[]
 
   @@unique([candidateKey, revision])
   @@index([status, recommendedAt])
@@ -1525,6 +1565,76 @@ model GrowthPinCandidate {
   @@index([accountId, createdAt])
   @@index([experimentId, experimentVariantKey])
   @@index([assetId])
+}
+
+model GrowthPinApproval {
+  id                    String                  @id @default(cuid())
+  candidateId           String
+  candidateRevision     Int
+  status                GrowthPinApprovalStatus @default(PENDING)
+  approvedById          String?
+  reviewedAt            DateTime?
+  accountId             String?
+  boardId               String?
+  scheduledAt           DateTime?
+  snapshotChecksum      String                  @db.VarChar(64)
+  snapshot              Json
+  approvalPolicyVersion String                  @db.VarChar(64)
+  notes                 String?                 @db.VarChar(500)
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+  candidate             GrowthPinCandidate      @relation(fields: [candidateId], references: [id], onDelete: Restrict)
+  approver              User?                   @relation("GrowthPinApprovalApprover", fields: [approvedById], references: [id], onDelete: Restrict)
+  account               GrowthPinterestAccount? @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  board                 GrowthPinterestBoard?   @relation(fields: [boardId], references: [id], onDelete: Restrict)
+  publication           GrowthPinPublication?
+
+  @@index([candidateId, status, createdAt])
+  @@index([status, scheduledAt])
+  @@index([accountId, scheduledAt])
+}
+
+model GrowthPinPublication {
+  id                      String                      @id @default(cuid())
+  candidateId             String
+  approvalId              String                      @unique
+  accountId               String
+  boardId                 String
+  attributionRefId        String?                     @unique
+  pinterestPinId          String?                     @unique
+  idempotencyKey          String                      @unique @db.VarChar(191)
+  publishJobId            String?                     @unique
+  reconcileJobId          String?                     @unique
+  scheduledAt             DateTime
+  publishedAt             DateTime?
+  status                  GrowthPublicationStatus     @default(SCHEDULED)
+  attemptCount            Int                         @default(0)
+  timingModelVersion      String                      @db.VarChar(64)
+  timingMode              GrowthPublicationTimingMode
+  timingEvidence          Json
+  lastErrorCode           String?                     @db.VarChar(80)
+  lastErrorSummary        String?                     @db.VarChar(500)
+  lastAttemptAt           DateTime?
+  reconciliationStartedAt DateTime?
+  reconciledAt            DateTime?
+  lastRateLimitLimit      String?                     @db.VarChar(64)
+  lastRateLimitRemaining  String?                     @db.VarChar(64)
+  lastRateLimitReset      String?                     @db.VarChar(128)
+  createdAt               DateTime                    @default(now())
+  updatedAt               DateTime                    @updatedAt
+  candidate               GrowthPinCandidate          @relation(fields: [candidateId], references: [id], onDelete: Restrict)
+  approval                GrowthPinApproval           @relation(fields: [approvalId], references: [id], onDelete: Restrict)
+  account                 GrowthPinterestAccount      @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  board                   GrowthPinterestBoard        @relation(fields: [boardId], references: [id], onDelete: Restrict)
+  attributionRef          GrowthAttributionRef?       @relation(fields: [attributionRefId], references: [id], onDelete: Restrict)
+  pinterestPin            GrowthPinterestPin?         @relation(fields: [pinterestPinId], references: [pinterestPinId], onDelete: Restrict)
+  publishJob              GrowthJob?                  @relation("GrowthPinPublicationPublishJob", fields: [publishJobId], references: [id], onDelete: SetNull)
+  reconcileJob            GrowthJob?                  @relation("GrowthPinPublicationReconcileJob", fields: [reconcileJobId], references: [id], onDelete: SetNull)
+
+  @@index([status, scheduledAt])
+  @@index([accountId, scheduledAt])
+  @@index([accountId, publishedAt])
+  @@index([pinterestPinId])
 }
 
 model GrowthContentVersion {
