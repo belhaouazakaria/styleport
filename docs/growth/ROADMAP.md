@@ -168,7 +168,7 @@ Implemented in additive migration `20261007140000_growth_ideas`, `lib/growth/ide
 
 ## Phase 10 — Creative Lab
 
-**Status:** Complete — implementation validated; not production deployed
+**Status:** COMPLETE — production deployed and live visual validation approved
 
 Deliver:
 - existing Pin generator integrated as Renderer V1/control;
@@ -185,11 +185,13 @@ Implemented in additive migration `20261008120000_growth_creative_lab`, `lib/gro
 
 The exact Translator share-image generator remains Renderer V1 control (`v1-control`, `share_image_v1`, `translator-share-control-v1`); the adapter materializes its existing 1000×1500 PNG without changing the established renderer. Deterministic 1000×1500 static implementations cover typography-led, editorial/list, conversation/chat, and minimal-statement, with deterministic line caps that keep maximum valid copy inside each layout. `creative_similarity_v1` uses direct indexed lookups across all candidates for exact content hashes and asset checksums, while fuzzy comparison remains bounded to 100 recent candidates. Near duplication requires strong title similarity plus the same destination or equivalent normalized topic; renderer/template/archetype differences are retained in bounded flags. Exact retry for the same candidate context reuses the candidate; exact matches in another context and near matches are retained as `DEFERRED`; safe novel candidates stop at `READY`.
 
-AI image generation is default-off and injectable, but no production worker provider is wired in Phase 10, so its deployed default paid-image ceiling is effectively zero. The reserved boundary permits at most one image unit per job, accepts only validated 1000×1500 PNG output, and records provider/model/response/image-unit metadata; unknown price remains `NULL`. Phase 10 made no live provider call and added no approval, scheduling, publication, Pinterest write, attribution enablement, recurring enqueue, cron, or persistent Growth worker. Phase 11 — Scheduling and Publishing Engine — is next.
+Before → After now uses full-image AI generation through `gpt-image-2`: the model receives exact verified BEFORE/AFTER copy, exact style-aware CTA and domain, and controls the complete composition and typography. New full-AI candidates receive no deterministic text overlay. The accepted production Pin completed live visual validation, so Phase 10 is **COMPLETE — production deployed and live visual validation approved**. Historical hybrid candidates remain readable.
+
+Phase 10 added no approval, scheduling, publication, Pinterest write, recurring enqueue, cron, or persistent Growth worker.
 
 ## Phase 11 — Scheduling and Publishing Engine
 
-**Status:** Not started
+**Status:** Complete — implementation validated; not production deployed
 
 Deliver:
 - exploration/exploitation timing;
@@ -202,6 +204,8 @@ Deliver:
 
 Exit:
 - a specifically approved Pin can publish once at the intended time and reconcile correctly.
+
+Implemented in migration `20261009120000_growth_pin_publishing`, `lib/growth/publishing/*`, the existing Pinterest v5 adapter and bounded worker, ADMIN same-origin approval/rejection/cancellation routes, and the Creative Lab publication controls. Each exact Pin requires individual ADMIN approval of its immutable candidate/asset/account/board/time snapshot. `publication_timing_v1` recommends bounded America/New_York cold-start or deterministic explore/exploit windows. A future `pinterest_organic_v1` attribution ref is issued before publication. Pinterest Create Pin is attempted once; safe 429 responses retry, while ambiguous outcomes transition to bounded read-only reconciliation and never blind retry Create Pin. No production cron, persistent worker, live Pinterest write, or Phase 12 behavior is enabled by implementation. Trial-created Pin reach remains creator-only; Standard access is required before relying on normal public production reach.
 
 ## Phase 12 — Evergreen and Learning Engine
 

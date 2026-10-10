@@ -9,6 +9,9 @@ const mocks = vi.hoisted(() => ({
   updateMany: vi.fn(),
   transaction: vi.fn(),
   activity: vi.fn(),
+  publicationFind: vi.fn(),
+  publicationUpdate: vi.fn(),
+  jobCreate: vi.fn(),
 }));
 
 vi.mock("@/lib/prisma", () => ({
@@ -48,7 +51,8 @@ describe("Growth job persistence", () => {
     mocks.activity.mockResolvedValue({});
     mocks.transaction.mockImplementation(async (callback: (tx: unknown) => unknown) => callback({
       $queryRaw: mocks.queryRaw,
-      growthJob: { updateMany: mocks.updateMany },
+      growthJob: { updateMany: mocks.updateMany, findUnique: mocks.findUnique, create: mocks.jobCreate },
+      growthPinPublication: { findFirst: mocks.publicationFind, update: mocks.publicationUpdate },
     }));
   });
 
@@ -84,6 +88,18 @@ describe("Growth job persistence", () => {
     await expect(recoverStaleGrowthJobs(new Date())).resolves.toBe(1);
     expect(mocks.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: GrowthJobStatus.PENDING }) }));
     expect(mocks.activity).toHaveBeenCalledWith(expect.objectContaining({ action: "JOB_LEASE_RECOVERED" }), expect.any(Object));
+  });
+
+  it("reconciles a stale publishing lease instead of requeuing Create Pin", async () => {
+    mocks.findMany.mockResolvedValue([{ id: "publish-job", type: GrowthJobType.PINTEREST_PIN_PUBLISH, status: GrowthJobStatus.RUNNING, attemptCount: 1, maxAttempts: 3, idempotencyKey: "pinterest-publish:publication" }]);
+    mocks.publicationFind.mockResolvedValue({ id: "publication", idempotencyKey: "pinterest-publish:publication" });
+    mocks.updateMany.mockResolvedValue({ count: 1 });
+    mocks.findUnique.mockResolvedValue(null);
+    mocks.jobCreate.mockResolvedValue({ id: "reconcile-job" });
+    await expect(recoverStaleGrowthJobs(new Date())).resolves.toBe(1);
+    expect(mocks.publicationUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: "RECONCILING", reconcileJobId: "reconcile-job" }) }));
+    expect(mocks.jobCreate).toHaveBeenCalledTimes(1);
+    expect(mocks.updateMany).not.toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: GrowthJobStatus.PENDING }) }));
   });
 
   it("moves an exhausted job to terminal failure", async () => {

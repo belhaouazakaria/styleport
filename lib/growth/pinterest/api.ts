@@ -12,6 +12,7 @@ import {
 import {
   pinterestAccountAnalyticsSchema,
   pinterestBoardsPageSchema,
+  pinterestCreatePinResponseSchema,
   pinterestPinAnalyticsSchema,
   pinterestPinsPageSchema,
   pinterestTopPinsAnalyticsSchema,
@@ -26,6 +27,14 @@ export class PinterestApiError extends Error {
   constructor(readonly status: number, readonly retryable: boolean, readonly retryAfterMs?: number) {
     super(`Pinterest API request failed with HTTP ${status}.`);
   }
+}
+
+export class PinterestCreateAmbiguousError extends Error {
+  constructor(message: string, readonly rateLimit: PinterestRateLimitMetadata = { limit: null, remaining: null, reset: null }) { super(message); }
+}
+
+export class PinterestRateLimitError extends RetryableGrowthJobError {
+  constructor(message: string, retryAfterMs: number | undefined, readonly rateLimit: PinterestRateLimitMetadata) { super(message, retryAfterMs); }
 }
 
 function rateLimitMetadata(headers: Headers): PinterestRateLimitMetadata {
@@ -124,12 +133,44 @@ export async function getPinterestBoardsPage(accountId: string, bookmark?: strin
   }
 }
 
-export async function getPinterestPinsPage(accountId: string, bookmark?: string, fetchImpl?: typeof fetch) {
+export async function getPinterestPinsPage(accountId: string, bookmark?: string, fetchImpl?: typeof fetch, domain?: string) {
   const query = new URLSearchParams({ page_size: "250", pin_metrics: "false" });
   if (bookmark) query.set("bookmark", bookmark);
+  if (domain) query.set("domain", domain);
   return authenticatedPinterestGet({
     accountId, path: `/pins?${query}`, responseName: "Pin inventory response", schema: pinterestPinsPageSchema, fetchImpl,
   });
+}
+
+export async function createPinterestPin(params: { accountId: string; boardId: string; title: string; description: string; link: string; imageUrl: string; fetchImpl?: typeof fetch }) {
+  const config = requirePinterestConfiguration();
+  const accessToken = await getValidPinterestAccessToken(params.accountId, params.fetchImpl);
+  let response: Response;
+  try {
+    response = await (params.fetchImpl || fetch)(`${config.apiBaseUrl}/pins`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json", "content-type": "application/json" },
+      body: JSON.stringify({ board_id: params.boardId, title: params.title, description: params.description, link: params.link, media_source: { source_type: "image_url", url: params.imageUrl, is_standard: true } }),
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch {
+    throw new PinterestCreateAmbiguousError("Pinterest Create Pin ended without a confirmed response.");
+  }
+  const metadata = rateLimitMetadata(response.headers);
+  const raw: unknown = await response.json().catch(() => null);
+  if (!response.ok) {
+    const retryAfter = Number(response.headers.get("retry-after"));
+    if (response.status === 401) {
+      await prisma.growthPinterestAccount.updateMany({ where: { id: params.accountId }, data: { connectionStatus: GrowthPinterestConnectionStatus.REAUTH_REQUIRED, lastConnectionError: "Pinterest API request failed with HTTP 401." } });
+      throw new NonRetryableGrowthJobError("Pinterest rejected the account credential; reconnect required.");
+    }
+    if (response.status === 429) throw new PinterestRateLimitError("Pinterest rate limit reached.", Number.isFinite(retryAfter) ? retryAfter * 1000 : undefined, metadata);
+    if (response.status >= 500) throw new PinterestCreateAmbiguousError(`Pinterest Create Pin returned HTTP ${response.status}.`, metadata);
+    throw new NonRetryableGrowthJobError(`Pinterest Create Pin was rejected with HTTP ${response.status}.`);
+  }
+  const parsed = pinterestCreatePinResponseSchema.safeParse(raw);
+  if (!parsed.success) throw new PinterestCreateAmbiguousError("Pinterest Create Pin returned an invalid potentially successful response.", metadata);
+  return { data: parsed.data, rateLimit: metadata };
 }
 
 function organicAnalyticsQuery(range: { startDate: string; endDate: string }, metrics: readonly string[]) {

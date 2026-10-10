@@ -115,6 +115,24 @@ export async function recoverStaleGrowthJobs(now = new Date(), limit = 25) {
 
   let recovered = 0;
   for (const job of stale) {
+    if (job.type === GrowthJobType.PINTEREST_PIN_PUBLISH) {
+      let ambiguousPublishing = false;
+      await prisma.$transaction(async (tx) => {
+        const publication = await tx.growthPinPublication.findFirst({ where: { publishJobId: job.id, status: "PUBLISHING" }, select: { id: true, idempotencyKey: true } });
+        if (!publication) return;
+        const updated = await tx.growthJob.updateMany({ where: { id: job.id, status: job.status, leaseUntil: { lt: now } }, data: { status: GrowthJobStatus.FAILED_TERMINAL, workerId: null, claimedAt: null, leaseUntil: null, heartbeatAt: null, completedAt: now, lastError: "Publishing lease expired after the external request may have started; reconciliation required." } });
+        if (updated.count !== 1) return;
+        const reconcileKey = `pinterest-reconcile:${publication.id}`;
+        const existing = await tx.growthJob.findUnique({ where: { idempotencyKey: reconcileKey } });
+        const reconcile = existing || await tx.growthJob.create({ data: { type: GrowthJobType.PINTEREST_PIN_RECONCILE, idempotencyKey: reconcileKey, payload: { publicationId: publication.id }, maxAttempts: 4 } });
+        await tx.growthPinPublication.update({ where: { id: publication.id }, data: { status: "RECONCILING", reconciliationStartedAt: now, reconcileJobId: reconcile.id, lastErrorCode: "PUBLISH_LEASE_EXPIRED", lastErrorSummary: "The Create Pin outcome is ambiguous after worker lease expiry." } });
+        await recordGrowthActivity({ actorKind: GrowthActivityActorKind.SYSTEM, entityType: "GrowthPinPublication", entityId: publication.id, action: "PIN_CREATE_OUTCOME_AMBIGUOUS", fromState: "PUBLISHING", toState: "RECONCILING", summary: { publishJobId: job.id, reconcileJobId: reconcile.id }, correlationKey: publication.idempotencyKey }, tx);
+        await recordGrowthActivity({ actorKind: GrowthActivityActorKind.SYSTEM, entityType: "GrowthJob", entityId: job.id, action: "JOB_FAILED_TERMINAL", fromState: job.status, toState: GrowthJobStatus.FAILED_TERMINAL, summary: { reason: "PUBLISHING_OUTCOME_AMBIGUOUS" }, correlationKey: job.idempotencyKey }, tx);
+        recovered += 1;
+        ambiguousPublishing = true;
+      });
+      if (ambiguousPublishing) continue;
+    }
     const retryable = job.attemptCount < job.maxAttempts;
     const nextStatus = retryable ? GrowthJobStatus.PENDING : GrowthJobStatus.FAILED_TERMINAL;
     await prisma.$transaction(async (tx) => {
