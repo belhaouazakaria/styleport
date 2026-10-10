@@ -1,7 +1,7 @@
 import { GrowthPublicationTimingMode } from "@prisma/client";
 import { describe, expect, it } from "vitest";
 import { approvePinSchema, publicationJobPayloadSchema } from "@/lib/growth/publishing/contracts";
-import { buildPublicCreativeAssetUrl, pinApprovalSnapshotChecksum } from "@/lib/growth/publishing/snapshot";
+import { buildPublicCreativeAssetUrl, pinApprovalSnapshotChecksum, pinterestPublicationUrlsMatch } from "@/lib/growth/publishing/snapshot";
 import { planPublicationTiming } from "@/lib/growth/publishing/timing";
 
 function localHour(date: Date) { return Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "2-digit", hourCycle: "h23" }).format(date)); }
@@ -46,5 +46,16 @@ describe("Phase 11 publishing contracts and timing", () => {
     expect(buildPublicCreativeAssetUrl(path, new URL("https://saytwist.com"))).toBe(`https://saytwist.com${path}`);
     expect(() => buildPublicCreativeAssetUrl("/etc/passwd", new URL("https://saytwist.com"))).toThrow("not publishable");
     expect(pinApprovalSnapshotChecksum({ b: 2, a: 1 })).toBe(pinApprovalSnapshotChecksum({ a: 1, b: 2 }));
+  });
+
+  it("matches exact publication URLs independent of query ordering", () => {
+    const expected = "https://saytwist.com/translators/warm?existing=one&utm_source=pinterest&utm_medium=organic&utm_campaign=saytwist&utm_content=content-1&pin_ref=pa_exact";
+    const reordered = "https://saytwist.com/translators/warm?pin_ref=pa_exact&utm_content=content-1&utm_campaign=saytwist&utm_medium=organic&utm_source=pinterest&existing=one";
+    expect(pinterestPublicationUrlsMatch(expected, expected, new URL("https://saytwist.com"))).toBe(true);
+    expect(pinterestPublicationUrlsMatch(reordered, expected, new URL("https://saytwist.com"))).toBe(true);
+    expect(pinterestPublicationUrlsMatch(expected.replace("pa_exact", "pa_other"), expected, new URL("https://saytwist.com"))).toBe(false);
+    expect(pinterestPublicationUrlsMatch(expected.replace("/warm", "/cold"), expected, new URL("https://saytwist.com"))).toBe(false);
+    expect(pinterestPublicationUrlsMatch(`${expected}&utm_source=other`, expected, new URL("https://saytwist.com"))).toBe(false);
+    expect(pinterestPublicationUrlsMatch(`${expected}&unexpected=value`, expected, new URL("https://saytwist.com"))).toBe(false);
   });
 });

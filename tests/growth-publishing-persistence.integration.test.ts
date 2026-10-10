@@ -1,8 +1,8 @@
-import { GrowthAssetGenerationKind, GrowthAssetState, GrowthCreativeArchetype, GrowthCreativeDestinationKind, GrowthCreativeSimilarityClassification, GrowthJobType, GrowthPinCandidateStatus, GrowthPinterestApiEnvironment, GrowthPinterestConnectionStatus, GrowthPinterestPublicationRole, Prisma } from "@prisma/client";
+import { GrowthAssetGenerationKind, GrowthAssetState, GrowthCreativeArchetype, GrowthCreativeDestinationKind, GrowthCreativeSimilarityClassification, GrowthJobStatus, GrowthJobType, GrowthPinCandidateStatus, GrowthPinterestApiEnvironment, GrowthPinterestConnectionStatus, GrowthPinterestPublicationRole, Prisma } from "@prisma/client";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { approvePinCandidate, publishApprovedPin, reconcilePinterestPublication, rejectPinCandidate } from "@/lib/growth/publishing/service";
 import { encryptPinterestCredentials } from "@/lib/growth/pinterest/credentials";
-import { claimGrowthJobs } from "@/lib/growth/jobs";
+import { claimGrowthJobs, failGrowthJob, recoverStaleGrowthJobs } from "@/lib/growth/jobs";
 import { prisma } from "@/lib/prisma";
 
 const enabled = process.env.RUN_GROWTH_PUBLISHING_DB_TESTS === "1";
@@ -41,14 +41,23 @@ suite("Phase 11 PostgreSQL publishing invariants", () => {
     expect(url.searchParams.get("utm_medium")).toBe("organic");
     expect(url.searchParams.get("pin_ref")).toMatch(/^pa_/);
   });
-  it("rejects DEFERRED approval and rejection creates no publication", async () => {
+  it("rejects DEFERRED approval and makes an explicitly rejected candidate permanently ineligible", async () => {
     const deferred = await fixture(GrowthPinCandidateStatus.DEFERRED);
     await expect(approvePinCandidate({ candidateId: deferred.candidate.id, accountId: deferred.account.id, boardId: deferred.board.id, scheduledAt: new Date(Date.now() + 86_400_000).toISOString(), confirmation: true }, deferred.admin.id)).rejects.toThrow("READY");
-    await clean(); const ready = await fixture(); await rejectPinCandidate({ candidateId: ready.candidate.id, reason: "Not suitable" }, ready.admin.id); expect(await prisma.growthPinPublication.count()).toBe(0);
+    await clean(); const ready = await fixture(); await rejectPinCandidate({ candidateId: ready.candidate.id, reason: "Not suitable" }, ready.admin.id);
+    expect(await prisma.growthPinPublication.count()).toBe(0);
+    expect(await prisma.growthPinCandidate.findUniqueOrThrow({ where: { id: ready.candidate.id } })).toMatchObject({ status: GrowthPinCandidateStatus.REJECTED });
+    await expect(approvePinCandidate({ candidateId: ready.candidate.id, accountId: ready.account.id, boardId: ready.board.id, scheduledAt: new Date(Date.now() + 86_400_000).toISOString(), confirmation: true }, ready.admin.id)).rejects.toThrow("READY");
   });
   it("keeps an approved snapshot immutable and one publication per approval", async () => {
     const f = await fixture(); const result = await approvePinCandidate({ candidateId: f.candidate.id, accountId: f.account.id, boardId: f.board.id, scheduledAt: new Date(Date.now() + 86_400_000).toISOString(), confirmation: true }, f.admin.id);
+    const otherAdmin = await prisma.user.create({ data: { email: "other-admin@test.local", passwordHash: "test", role: "ADMIN" } });
+    await expect(prisma.growthPinApproval.update({ where: { id: result.approval.id }, data: { approvedById: otherAdmin.id } })).rejects.toThrow();
+    await expect(prisma.growthPinApproval.update({ where: { id: result.approval.id }, data: { reviewedAt: new Date() } })).rejects.toThrow();
+    await expect(prisma.growthPinApproval.update({ where: { id: result.approval.id }, data: { scheduledAt: new Date() } })).rejects.toThrow();
     await expect(prisma.growthPinApproval.update({ where: { id: result.approval.id }, data: { snapshot: { changed: true } } })).rejects.toThrow();
+    await expect(prisma.growthPinApproval.update({ where: { id: result.approval.id }, data: { status: "SUPERSEDED" } })).resolves.toMatchObject({ status: "SUPERSEDED" });
+    await expect(prisma.growthPinApproval.update({ where: { id: result.approval.id }, data: { approvedById: otherAdmin.id } })).rejects.toThrow();
     const publication = await prisma.growthPinPublication.findFirstOrThrow();
     await expect(prisma.growthPinPublication.create({ data: { candidateId: f.candidate.id, approvalId: result.approval.id, accountId: f.account.id, boardId: f.board.id, idempotencyKey: "duplicate", scheduledAt: publication.scheduledAt, timingModelVersion: "publication_timing_v1", timingMode: "COLD_START", timingEvidence: {} } })).rejects.toBeInstanceOf(Prisma.PrismaClientKnownRequestError);
   });
@@ -72,6 +81,20 @@ suite("Phase 11 PostgreSQL publishing invariants", () => {
     expect(ids).toHaveLength(4);
     expect(new Set(ids).size).toBe(4);
   });
+  it("blocks rejection for active publication but allows cancelled and terminal publication history", async () => {
+    const scheduled = await fixture(); const scheduledAt = new Date(Date.now() + 86_400_000).toISOString();
+    const active = await approvePinCandidate({ candidateId: scheduled.candidate.id, accountId: scheduled.account.id, boardId: scheduled.board.id, scheduledAt, confirmation: true }, scheduled.admin.id);
+    await expect(rejectPinCandidate({ candidateId: scheduled.candidate.id }, scheduled.admin.id)).rejects.toThrow("cancelled or terminal");
+    await prisma.growthPinPublication.update({ where: { id: active.publication!.id }, data: { status: "CANCELLED" } });
+    await expect(rejectPinCandidate({ candidateId: scheduled.candidate.id }, scheduled.admin.id)).resolves.toMatchObject({ status: "REJECTED" });
+    expect(await prisma.growthPinApproval.findUniqueOrThrow({ where: { id: active.approval.id } })).toMatchObject({ status: "SUPERSEDED" });
+
+    await clean(); await prisma.growthSettings.create({ data: { id: "global", enabled: true } });
+    const terminal = await fixture();
+    const failed = await approvePinCandidate({ candidateId: terminal.candidate.id, accountId: terminal.account.id, boardId: terminal.board.id, scheduledAt, confirmation: true }, terminal.admin.id);
+    await prisma.growthPinPublication.update({ where: { id: failed.publication!.id }, data: { status: "FAILED_TERMINAL" } });
+    await expect(rejectPinCandidate({ candidateId: terminal.candidate.id }, terminal.admin.id)).resolves.toMatchObject({ status: "REJECTED" });
+  });
   it("publishes once, persists inventory/ref, and makes repeat handling a no-op", async () => {
     const f = await fixture(); const past = new Date(Date.now() - 2 * 86_400_000); const scheduledAt = new Date(past.getTime() + 60_000).toISOString();
     const approved = await approvePinCandidate({ candidateId: f.candidate.id, accountId: f.account.id, boardId: f.board.id, scheduledAt, confirmation: true }, f.admin.id, past);
@@ -94,6 +117,83 @@ suite("Phase 11 PostgreSQL publishing invariants", () => {
     await reconcilePinterestPublication(publication.id, 1, readFetch);
     expect(createFetch).toHaveBeenCalledTimes(1); expect(readFetch).toHaveBeenCalledTimes(1);
     expect(await prisma.growthPinPublication.findUniqueOrThrow({ where: { id: publication.id } })).toMatchObject({ status: "RECONCILED", pinterestPinId: "reconciled-pin" });
+  });
+  it("reconciles after confirmed Create Pin success when local persistence fails", async () => {
+    const f = await fixture(); const past = new Date(Date.now() - 2 * 86_400_000);
+    const approved = await approvePinCandidate({ candidateId: f.candidate.id, accountId: f.account.id, boardId: f.board.id, scheduledAt: new Date(past.getTime() + 60_000).toISOString(), confirmation: true }, f.admin.id, past);
+    await prisma.$executeRawUnsafe(`CREATE FUNCTION phase11_fail_pin_persistence() RETURNS trigger AS $$ BEGIN RAISE EXCEPTION 'forced persistence failure'; END; $$ LANGUAGE plpgsql`);
+    await prisma.$executeRawUnsafe(`CREATE TRIGGER phase11_fail_pin_persistence BEFORE INSERT OR UPDATE ON "GrowthPinterestPin" FOR EACH ROW EXECUTE FUNCTION phase11_fail_pin_persistence()`);
+    const createFetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ id: "confirmed-pin", board_id: f.board.pinterestBoardId }), { status: 201 }));
+    try {
+      await publishApprovedPin(approved.publication!.id, createFetch);
+    } finally {
+      await prisma.$executeRawUnsafe(`DROP TRIGGER IF EXISTS phase11_fail_pin_persistence ON "GrowthPinterestPin"`);
+      await prisma.$executeRawUnsafe(`DROP FUNCTION IF EXISTS phase11_fail_pin_persistence()`);
+    }
+    expect(createFetch).toHaveBeenCalledTimes(1);
+    expect(await prisma.growthPinPublication.findUniqueOrThrow({ where: { id: approved.publication!.id } })).toMatchObject({ status: "RECONCILING", lastErrorCode: "POST_CREATE_PERSISTENCE_UNCERTAIN" });
+    expect(await prisma.growthJob.count({ where: { type: GrowthJobType.PINTEREST_PIN_RECONCILE } })).toBe(1);
+  });
+
+  it("fails reconciliation closed without moving a Pinterest Pin across accounts", async () => {
+    const f = await fixture(); const past = new Date(Date.now() - 2 * 86_400_000);
+    const foreign = await prisma.growthPinterestAccount.create({ data: { pinterestAccountId: `foreign-${Math.random()}`, publicationRole: GrowthPinterestPublicationRole.SAYTWIST, username: "foreign", apiEnvironment: GrowthPinterestApiEnvironment.SANDBOX, connectionStatus: GrowthPinterestConnectionStatus.DISCONNECTED, grantedScopes: ["pins:read"] } });
+    await prisma.growthPinterestPin.create({ data: { pinterestPinId: "account-collision-pin", accountId: foreign.id, lastSeenAt: new Date(), lastSyncedAt: new Date() } });
+    const approved = await approvePinCandidate({ candidateId: f.candidate.id, accountId: f.account.id, boardId: f.board.id, scheduledAt: new Date(past.getTime() + 60_000).toISOString(), confirmation: true }, f.admin.id, past);
+    const createFetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ id: "account-collision-pin", board_id: f.board.pinterestBoardId }), { status: 201 }));
+    await publishApprovedPin(approved.publication!.id, createFetch);
+    const publication = await prisma.growthPinPublication.findUniqueOrThrow({ where: { id: approved.publication!.id }, include: { approval: true } });
+    expect(publication.status).toBe("RECONCILING");
+    const link = (publication.approval.snapshot as Record<string, string>).destinationUrl;
+    await reconcilePinterestPublication(publication.id, 1, vi.fn().mockResolvedValue(new Response(JSON.stringify({ items: [{ id: "account-collision-pin", board_id: f.board.pinterestBoardId, link }], bookmark: null }), { status: 200 })));
+    expect(await prisma.growthPinPublication.findUniqueOrThrow({ where: { id: publication.id } })).toMatchObject({ status: "FAILED_TERMINAL", lastErrorCode: "PINTEREST_PIN_ACCOUNT_MISMATCH" });
+    expect(await prisma.growthPinterestPin.findUniqueOrThrow({ where: { pinterestPinId: "account-collision-pin" } })).toMatchObject({ accountId: foreign.id });
+    expect(createFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("converts unexpected PUBLISHING failure and exhausted retry states atomically", async () => {
+    const f = await fixture(); const past = new Date(Date.now() - 2 * 86_400_000);
+    const approved = await approvePinCandidate({ candidateId: f.candidate.id, accountId: f.account.id, boardId: f.board.id, scheduledAt: new Date(past.getTime() + 60_000).toISOString(), confirmation: true }, f.admin.id, past);
+    await prisma.growthPinPublication.update({ where: { id: approved.publication!.id }, data: { status: "PUBLISHING" } });
+    const running = await prisma.growthJob.update({ where: { id: approved.publication!.publishJobId! }, data: { status: GrowthJobStatus.RUNNING, workerId: "worker", attemptCount: 1, leaseUntil: new Date(Date.now() + 60_000) } });
+    await failGrowthJob(running, "worker", new Error("unexpected"));
+    expect(await prisma.growthPinPublication.findUniqueOrThrow({ where: { id: approved.publication!.id } })).toMatchObject({ status: "RECONCILING", lastErrorCode: "PUBLISH_HANDLER_OUTCOME_AMBIGUOUS" });
+    expect(await prisma.growthJob.count({ where: { type: GrowthJobType.PINTEREST_PIN_RECONCILE } })).toBe(1);
+
+    await clean(); await prisma.growthSettings.create({ data: { id: "global", enabled: true } });
+    const retryFixture = await fixture();
+    const retryApproval = await approvePinCandidate({ candidateId: retryFixture.candidate.id, accountId: retryFixture.account.id, boardId: retryFixture.board.id, scheduledAt: new Date(past.getTime() + 60_000).toISOString(), confirmation: true }, retryFixture.admin.id, past);
+    await prisma.growthPinPublication.update({ where: { id: retryApproval.publication!.id }, data: { status: "FAILED_RETRYABLE" } });
+    const exhausted = await prisma.growthJob.update({ where: { id: retryApproval.publication!.publishJobId! }, data: { status: GrowthJobStatus.RUNNING, workerId: "worker", attemptCount: 3, maxAttempts: 3, leaseUntil: new Date(Date.now() + 60_000) } });
+    await failGrowthJob(exhausted, "worker", new Error("429"));
+    expect(await prisma.growthPinPublication.findUniqueOrThrow({ where: { id: retryApproval.publication!.id } })).toMatchObject({ status: "FAILED_TERMINAL", lastErrorCode: "PUBLISH_RETRY_EXHAUSTED" });
+  });
+
+  it("synchronizes final and stale reconciliation exhaustion", async () => {
+    const f = await fixture(); const past = new Date(Date.now() - 2 * 86_400_000);
+    const approved = await approvePinCandidate({ candidateId: f.candidate.id, accountId: f.account.id, boardId: f.board.id, scheduledAt: new Date(past.getTime() + 60_000).toISOString(), confirmation: true }, f.admin.id, past);
+    await publishApprovedPin(approved.publication!.id, vi.fn().mockResolvedValue(new Response("{}", { status: 503 })));
+    let publication = await prisma.growthPinPublication.findUniqueOrThrow({ where: { id: approved.publication!.id } });
+    const reconcileJob = await prisma.growthJob.update({ where: { id: publication.reconcileJobId! }, data: { status: GrowthJobStatus.RUNNING, workerId: "worker", attemptCount: 4, maxAttempts: 4, leaseUntil: new Date(Date.now() + 60_000) } });
+    await failGrowthJob(reconcileJob, "worker", new Error("read unavailable"));
+    expect(await prisma.growthPinPublication.findUniqueOrThrow({ where: { id: publication.id } })).toMatchObject({ status: "FAILED_TERMINAL", lastErrorCode: "RECONCILIATION_RETRY_EXHAUSTED" });
+
+    await clean(); await prisma.growthSettings.create({ data: { id: "global", enabled: true } });
+    const staleFixture = await fixture();
+    const staleApproval = await approvePinCandidate({ candidateId: staleFixture.candidate.id, accountId: staleFixture.account.id, boardId: staleFixture.board.id, scheduledAt: new Date(past.getTime() + 60_000).toISOString(), confirmation: true }, staleFixture.admin.id, past);
+    await prisma.growthPinPublication.update({ where: { id: staleApproval.publication!.id }, data: { status: "FAILED_RETRYABLE" } });
+    await prisma.growthJob.update({ where: { id: staleApproval.publication!.publishJobId! }, data: { status: GrowthJobStatus.RUNNING, workerId: "stale", attemptCount: 3, maxAttempts: 3, leaseUntil: new Date(Date.now() - 60_000) } });
+    await recoverStaleGrowthJobs(new Date());
+    expect(await prisma.growthPinPublication.findUniqueOrThrow({ where: { id: staleApproval.publication!.id } })).toMatchObject({ status: "FAILED_TERMINAL", lastErrorCode: "PUBLISH_RETRY_EXHAUSTED" });
+
+    await clean(); await prisma.growthSettings.create({ data: { id: "global", enabled: true } });
+    const staleReconcileFixture = await fixture();
+    const staleReconcileApproval = await approvePinCandidate({ candidateId: staleReconcileFixture.candidate.id, accountId: staleReconcileFixture.account.id, boardId: staleReconcileFixture.board.id, scheduledAt: new Date(past.getTime() + 60_000).toISOString(), confirmation: true }, staleReconcileFixture.admin.id, past);
+    await publishApprovedPin(staleReconcileApproval.publication!.id, vi.fn().mockResolvedValue(new Response("{}", { status: 503 })));
+    publication = await prisma.growthPinPublication.findUniqueOrThrow({ where: { id: staleReconcileApproval.publication!.id } });
+    await prisma.growthJob.update({ where: { id: publication.reconcileJobId! }, data: { status: GrowthJobStatus.RUNNING, workerId: "stale", attemptCount: 4, maxAttempts: 4, leaseUntil: new Date(Date.now() - 60_000) } });
+    await recoverStaleGrowthJobs(new Date());
+    expect(await prisma.growthPinPublication.findUniqueOrThrow({ where: { id: publication.id } })).toMatchObject({ status: "FAILED_TERMINAL", lastErrorCode: "RECONCILIATION_RETRY_EXHAUSTED" });
   });
   it("uses GET-only bounded reconciliation for unresolved and duplicate outcomes", async () => {
     const f = await fixture(); const past = new Date(Date.now() - 2 * 86_400_000);

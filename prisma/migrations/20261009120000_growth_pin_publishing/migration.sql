@@ -91,7 +91,18 @@ ALTER TABLE "GrowthPinPublication" ADD CONSTRAINT "GrowthPinPublication_reconcil
 
 CREATE FUNCTION growth_pin_approval_snapshot_immutable() RETURNS trigger AS $$
 BEGIN
-  IF NEW."snapshot" IS DISTINCT FROM OLD."snapshot" OR NEW."snapshotChecksum" IS DISTINCT FROM OLD."snapshotChecksum" OR NEW."candidateId" IS DISTINCT FROM OLD."candidateId" OR NEW."candidateRevision" IS DISTINCT FROM OLD."candidateRevision" OR NEW."accountId" IS DISTINCT FROM OLD."accountId" OR NEW."boardId" IS DISTINCT FROM OLD."boardId" OR NEW."scheduledAt" IS DISTINCT FROM OLD."scheduledAt" THEN
+  IF OLD."status" IN ('APPROVED', 'SUPERSEDED') AND (
+    NEW."candidateId" IS DISTINCT FROM OLD."candidateId"
+    OR NEW."candidateRevision" IS DISTINCT FROM OLD."candidateRevision"
+    OR NEW."approvedById" IS DISTINCT FROM OLD."approvedById"
+    OR NEW."reviewedAt" IS DISTINCT FROM OLD."reviewedAt"
+    OR NEW."accountId" IS DISTINCT FROM OLD."accountId"
+    OR NEW."boardId" IS DISTINCT FROM OLD."boardId"
+    OR NEW."scheduledAt" IS DISTINCT FROM OLD."scheduledAt"
+    OR NEW."snapshot" IS DISTINCT FROM OLD."snapshot"
+    OR NEW."snapshotChecksum" IS DISTINCT FROM OLD."snapshotChecksum"
+    OR NEW."approvalPolicyVersion" IS DISTINCT FROM OLD."approvalPolicyVersion"
+  ) THEN
     RAISE EXCEPTION 'approved Pin snapshot is immutable';
   END IF;
   RETURN NEW;

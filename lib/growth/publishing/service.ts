@@ -21,7 +21,7 @@ import { requirePinterestConfiguration } from "@/lib/growth/pinterest/config";
 import { isOwnedPinterestDestination } from "@/lib/growth/pinterest/relevance";
 import { prisma } from "@/lib/prisma";
 import { approvePinSchema, PIN_APPROVAL_POLICY_VERSION, PUBLICATION_TIMING_VERSION, rejectPinSchema, type ApprovedPinSnapshot } from "@/lib/growth/publishing/contracts";
-import { buildPublicCreativeAssetUrl, pinApprovalSnapshotChecksum } from "@/lib/growth/publishing/snapshot";
+import { buildPublicCreativeAssetUrl, pinApprovalSnapshotChecksum, pinterestPublicationUrlsMatch } from "@/lib/growth/publishing/snapshot";
 import { planPublicationTiming } from "@/lib/growth/publishing/timing";
 
 function bounded(value: string | null | undefined, max: number) { return value?.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, max) || null; }
@@ -85,10 +85,14 @@ export async function rejectPinCandidate(raw: unknown, adminUserId: string, now 
     await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`pin-approval:${input.candidateId}`}))`);
     const candidate = await readApprovalCandidate(tx, input.candidateId);
     if (!candidate) throw new Error("Only a READY creative candidate can be rejected.");
-    const active = await tx.growthPinApproval.findFirst({ where: { candidateId: candidate.id, status: GrowthPinApprovalStatus.APPROVED }, select: { id: true } });
-    if (active) throw new Error("An approved publication must be cancelled before recording rejection.");
+    const active = await tx.growthPinApproval.findFirst({ where: { candidateId: candidate.id, status: GrowthPinApprovalStatus.APPROVED }, include: { publication: true }, orderBy: { createdAt: "desc" } });
+    if (active && (!active.publication || (active.publication.status !== GrowthPublicationStatus.CANCELLED && active.publication.status !== GrowthPublicationStatus.FAILED_TERMINAL))) throw new Error("An approved publication must be cancelled or terminal before recording rejection.");
+    if (active) await tx.growthPinApproval.update({ where: { id: active.id }, data: { status: GrowthPinApprovalStatus.SUPERSEDED } });
     const snapshot = { candidateId: candidate.id, candidateRevision: candidate.revision, contentHash: candidate.contentHash, assetChecksum: candidate.asset.checksum, action: "REJECTED", approvalPolicyVersion: PIN_APPROVAL_POLICY_VERSION };
     const approval = await tx.growthPinApproval.create({ data: { candidateId: candidate.id, candidateRevision: candidate.revision, status: GrowthPinApprovalStatus.REJECTED, approvedById: adminUserId, reviewedAt: now, snapshotChecksum: pinApprovalSnapshotChecksum(snapshot), snapshot, approvalPolicyVersion: PIN_APPROVAL_POLICY_VERSION, notes: input.reason } });
+    const changed = await tx.growthPinCandidate.updateMany({ where: { id: candidate.id, status: GrowthPinCandidateStatus.READY }, data: { status: GrowthPinCandidateStatus.REJECTED } });
+    if (changed.count !== 1) throw new Error("Creative candidate state changed before rejection completed.");
+    await recordGrowthActivity({ actorKind: GrowthActivityActorKind.USER, actorUserId: adminUserId, entityType: "GrowthPinCandidate", entityId: candidate.id, action: "PIN_CANDIDATE_REJECTED", fromState: GrowthPinCandidateStatus.READY, toState: GrowthPinCandidateStatus.REJECTED, summary: { approvalId: approval.id } }, tx);
     await recordGrowthActivity({ actorKind: GrowthActivityActorKind.USER, actorUserId: adminUserId, entityType: "GrowthPinApproval", entityId: approval.id, action: "PIN_REJECTED", toState: GrowthPinApprovalStatus.REJECTED, summary: { candidateId: candidate.id, reason: input.reason || null } }, tx);
     return approval;
   });
@@ -96,8 +100,7 @@ export async function rejectPinCandidate(raw: unknown, adminUserId: string, now 
 
 async function enqueueReconcile(tx: Prisma.TransactionClient, publicationId: string, now = new Date()) {
   const key = `pinterest-reconcile:${publicationId}`;
-  const existing = await tx.growthJob.findUnique({ where: { idempotencyKey: key } });
-  const job = existing || await tx.growthJob.create({ data: { type: GrowthJobType.PINTEREST_PIN_RECONCILE, idempotencyKey: key, payload: { publicationId }, runAfter: now, maxAttempts: 4 } });
+  const job = await tx.growthJob.upsert({ where: { idempotencyKey: key }, update: {}, create: { type: GrowthJobType.PINTEREST_PIN_RECONCILE, idempotencyKey: key, payload: { publicationId }, runAfter: now, maxAttempts: 4 } });
   await tx.growthPinPublication.update({ where: { id: publicationId }, data: { reconcileJobId: job.id, status: GrowthPublicationStatus.RECONCILING, reconciliationStartedAt: now } });
   return job;
 }
@@ -116,6 +119,36 @@ export async function markPublicationAmbiguous(publicationId: string, code: stri
 function parseSnapshot(value: Prisma.JsonValue): ApprovedPinSnapshot {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new NonRetryableGrowthJobError("Approved Pin snapshot is invalid.");
   return value as unknown as ApprovedPinSnapshot;
+}
+
+class PinterestPinAccountMismatchError extends Error {}
+
+async function persistOwnedPinterestPin(tx: Prisma.TransactionClient, input: {
+  pinterestPinId: string;
+  accountId: string;
+  boardId: string;
+  pinterestBoardId: string;
+  snapshot: ApprovedPinSnapshot;
+  publishedAt: Date;
+  ownedDomains: string[];
+}) {
+  const existing = await tx.growthPinterestPin.findUnique({ where: { pinterestPinId: input.pinterestPinId }, select: { id: true, accountId: true } });
+  if (existing && existing.accountId !== input.accountId) throw new PinterestPinAccountMismatchError("Pinterest Pin belongs to another connected account.");
+  const now = new Date();
+  const data = {
+    boardId: input.boardId,
+    pinterestBoardId: input.pinterestBoardId,
+    title: input.snapshot.title,
+    description: input.snapshot.description,
+    destinationUrl: input.snapshot.destinationUrl,
+    publishedAt: input.publishedAt,
+    isActive: true,
+    analyticsEligible: isOwnedPinterestDestination(input.snapshot.destinationUrl, input.ownedDomains),
+    lastSeenAt: now,
+    lastSyncedAt: now,
+  };
+  if (existing) return tx.growthPinterestPin.update({ where: { id: existing.id }, data });
+  return tx.growthPinterestPin.create({ data: { pinterestPinId: input.pinterestPinId, accountId: input.accountId, ...data } });
 }
 
 export async function publishApprovedPin(publicationId: string, fetchImpl?: typeof fetch) {
@@ -149,12 +182,23 @@ export async function publishApprovedPin(publicationId: string, fetchImpl?: type
   }
   if (publication.status !== GrowthPublicationStatus.PUBLISHING) return { publication, reused: true };
   const snapshot = parseSnapshot(publication.approval.snapshot);
+  let created;
   try {
-    const created = await createPinterestPin({ accountId: publication.accountId, boardId: publication.board.pinterestBoardId, title: snapshot.title, description: snapshot.description, link: snapshot.destinationUrl, imageUrl: snapshot.assetPublicUrl, fetchImpl });
-    const publishedAt = created.data.created_at && !Number.isNaN(Date.parse(created.data.created_at)) ? new Date(created.data.created_at) : new Date();
+    created = await createPinterestPin({ accountId: publication.accountId, boardId: publication.board.pinterestBoardId, title: snapshot.title, description: snapshot.description, link: snapshot.destinationUrl, imageUrl: snapshot.assetPublicUrl, fetchImpl });
+  } catch (error) {
+    if (error instanceof PinterestCreateAmbiguousError) {
+      await markPublicationAmbiguous(publication.id, "CREATE_OUTCOME_AMBIGUOUS", error.message, error.rateLimit);
+      return { publication: await prisma.growthPinPublication.findUniqueOrThrow({ where: { id: publication.id } }), reused: false };
+    }
+    if (error instanceof RetryableGrowthJobError) await prisma.growthPinPublication.update({ where: { id: publication.id }, data: { status: GrowthPublicationStatus.FAILED_RETRYABLE, lastErrorCode: "PINTEREST_RATE_LIMIT", lastErrorSummary: bounded(error.message, 500), ...(error instanceof PinterestRateLimitError ? rateFields(error.rateLimit) : {}) } });
+    else await prisma.growthPinPublication.update({ where: { id: publication.id }, data: { status: GrowthPublicationStatus.FAILED_TERMINAL, lastErrorCode: "PINTEREST_CREATE_REJECTED", lastErrorSummary: bounded(error instanceof Error ? error.message : "Pinterest Create Pin failed.", 500) } });
+    throw error;
+  }
+  const publishedAt = created.data.created_at && !Number.isNaN(Date.parse(created.data.created_at)) ? new Date(created.data.created_at) : new Date();
+  try {
     const result = await prisma.$transaction(async (tx) => {
       const settings = await tx.growthSettings.findUniqueOrThrow({ where: { id: "global" }, select: { ownedDomains: true } });
-      const pin = await tx.growthPinterestPin.upsert({ where: { pinterestPinId: created.data.id }, create: { pinterestPinId: created.data.id, accountId: publication.accountId, boardId: publication.boardId, pinterestBoardId: publication.board.pinterestBoardId, title: snapshot.title, description: snapshot.description, destinationUrl: snapshot.destinationUrl, publishedAt, isActive: true, analyticsEligible: isOwnedPinterestDestination(snapshot.destinationUrl, settings.ownedDomains), lastSeenAt: new Date(), lastSyncedAt: new Date() }, update: { accountId: publication.accountId, boardId: publication.boardId, pinterestBoardId: publication.board.pinterestBoardId, title: snapshot.title, description: snapshot.description, destinationUrl: snapshot.destinationUrl, publishedAt, isActive: true, analyticsEligible: isOwnedPinterestDestination(snapshot.destinationUrl, settings.ownedDomains), lastSeenAt: new Date(), lastSyncedAt: new Date() } });
+      const pin = await persistOwnedPinterestPin(tx, { pinterestPinId: created.data.id, accountId: publication.accountId, boardId: publication.boardId, pinterestBoardId: publication.board.pinterestBoardId, snapshot, publishedAt, ownedDomains: settings.ownedDomains });
       await tx.growthAttributionRef.update({ where: { id: publication.attributionRefId! }, data: { pinId: pin.id } });
       await tx.growthPinPublication.update({ where: { id: publication.id }, data: { pinterestPinId: pin.pinterestPinId, status: GrowthPublicationStatus.PUBLISHED, publishedAt, ...rateFields(created.rateLimit) } });
       await recordGrowthActivity({ actorKind: GrowthActivityActorKind.WORKER, entityType: "GrowthPinPublication", entityId: publication.id, action: "PIN_PUBLISHED", fromState: GrowthPublicationStatus.PUBLISHING, toState: GrowthPublicationStatus.PUBLISHED, summary: { pinterestPinId: pin.pinterestPinId }, correlationKey: publication.idempotencyKey }, tx);
@@ -165,28 +209,33 @@ export async function publishApprovedPin(publicationId: string, fetchImpl?: type
     });
     return { publication: result, reused: false };
   } catch (error) {
-    if (error instanceof PinterestCreateAmbiguousError) {
-      await markPublicationAmbiguous(publication.id, "CREATE_OUTCOME_AMBIGUOUS", error.message, error.rateLimit);
-      return { publication: await prisma.growthPinPublication.findUniqueOrThrow({ where: { id: publication.id } }), reused: false };
-    }
-    if (error instanceof RetryableGrowthJobError) await prisma.growthPinPublication.update({ where: { id: publication.id }, data: { status: GrowthPublicationStatus.FAILED_RETRYABLE, lastErrorCode: "PINTEREST_RATE_LIMIT", lastErrorSummary: bounded(error.message, 500), ...(error instanceof PinterestRateLimitError ? rateFields(error.rateLimit) : {}) } });
-    else await prisma.growthPinPublication.update({ where: { id: publication.id }, data: { status: GrowthPublicationStatus.FAILED_TERMINAL, lastErrorCode: "PINTEREST_CREATE_REJECTED", lastErrorSummary: bounded(error instanceof Error ? error.message : "Pinterest Create Pin failed.", 500) } });
-    throw error;
+    await markPublicationAmbiguous(publication.id, "POST_CREATE_PERSISTENCE_UNCERTAIN", "Pinterest confirmed Pin creation, but local persistence did not complete.", created.rateLimit);
+    return { publication: await prisma.growthPinPublication.findUniqueOrThrow({ where: { id: publication.id } }), reused: false };
   }
 }
 
 async function persistReconciledMatch(publicationId: string, pinterestPinId: string, publishedAt: Date | null) {
-  return prisma.$transaction(async (tx) => {
-    const publication = await tx.growthPinPublication.findUniqueOrThrow({ where: { id: publicationId }, include: { approval: true, board: true, attributionRef: true } });
-    const snapshot = parseSnapshot(publication.approval.snapshot);
-    const settings = await tx.growthSettings.findUniqueOrThrow({ where: { id: "global" }, select: { ownedDomains: true } });
-    const now = new Date();
-    const pin = await tx.growthPinterestPin.upsert({ where: { pinterestPinId }, create: { pinterestPinId, accountId: publication.accountId, boardId: publication.boardId, pinterestBoardId: publication.board.pinterestBoardId, title: snapshot.title, description: snapshot.description, destinationUrl: snapshot.destinationUrl, publishedAt: publishedAt || now, isActive: true, analyticsEligible: isOwnedPinterestDestination(snapshot.destinationUrl, settings.ownedDomains), lastSeenAt: now, lastSyncedAt: now }, update: { accountId: publication.accountId, boardId: publication.boardId, destinationUrl: snapshot.destinationUrl, isActive: true, lastSeenAt: now, lastSyncedAt: now } });
-    await tx.growthAttributionRef.update({ where: { id: publication.attributionRefId! }, data: { pinId: pin.id } });
-    const final = await tx.growthPinPublication.update({ where: { id: publication.id }, data: { pinterestPinId, publishedAt: publishedAt || now, status: GrowthPublicationStatus.RECONCILED, reconciledAt: now, lastErrorCode: null, lastErrorSummary: null } });
-    await recordGrowthActivity({ actorKind: GrowthActivityActorKind.WORKER, entityType: "GrowthPinPublication", entityId: publication.id, action: "PIN_RECONCILED", fromState: GrowthPublicationStatus.RECONCILING, toState: GrowthPublicationStatus.RECONCILED, summary: { pinterestPinId, directCreate: false }, correlationKey: publication.idempotencyKey }, tx);
-    return final;
-  });
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const publication = await tx.growthPinPublication.findUniqueOrThrow({ where: { id: publicationId }, include: { approval: true, board: true, attributionRef: true } });
+      const snapshot = parseSnapshot(publication.approval.snapshot);
+      const settings = await tx.growthSettings.findUniqueOrThrow({ where: { id: "global" }, select: { ownedDomains: true } });
+      const now = new Date();
+      const pin = await persistOwnedPinterestPin(tx, { pinterestPinId, accountId: publication.accountId, boardId: publication.boardId, pinterestBoardId: publication.board.pinterestBoardId, snapshot, publishedAt: publishedAt || now, ownedDomains: settings.ownedDomains });
+      await tx.growthAttributionRef.update({ where: { id: publication.attributionRefId! }, data: { pinId: pin.id } });
+      const final = await tx.growthPinPublication.update({ where: { id: publication.id }, data: { pinterestPinId, publishedAt: publishedAt || now, status: GrowthPublicationStatus.RECONCILED, reconciledAt: now, lastErrorCode: null, lastErrorSummary: null } });
+      await recordGrowthActivity({ actorKind: GrowthActivityActorKind.WORKER, entityType: "GrowthPinPublication", entityId: publication.id, action: "PIN_RECONCILED", fromState: GrowthPublicationStatus.RECONCILING, toState: GrowthPublicationStatus.RECONCILED, summary: { pinterestPinId, directCreate: false }, correlationKey: publication.idempotencyKey }, tx);
+      return final;
+    });
+  } catch (error) {
+    if (!(error instanceof PinterestPinAccountMismatchError)) throw error;
+    return prisma.$transaction(async (tx) => {
+      const current = await tx.growthPinPublication.findUniqueOrThrow({ where: { id: publicationId } });
+      const final = await tx.growthPinPublication.update({ where: { id: publicationId }, data: { status: GrowthPublicationStatus.FAILED_TERMINAL, lastErrorCode: "PINTEREST_PIN_ACCOUNT_MISMATCH", lastErrorSummary: "The matched Pinterest Pin belongs to another connected account." } });
+      await recordGrowthActivity({ actorKind: GrowthActivityActorKind.WORKER, entityType: "GrowthPinPublication", entityId: publicationId, action: "PIN_RECONCILIATION_FAILED", fromState: current.status, toState: GrowthPublicationStatus.FAILED_TERMINAL, summary: { code: "PINTEREST_PIN_ACCOUNT_MISMATCH" }, correlationKey: current.idempotencyKey }, tx);
+      return final;
+    });
+  }
 }
 
 export async function reconcilePinterestPublication(publicationId: string, attemptCount: number, fetchImpl?: typeof fetch) {
@@ -201,7 +250,7 @@ export async function reconcilePinterestPublication(publicationId: string, attem
   try {
     for (let page = 0; page < 4; page += 1) {
       const response = await getPinterestPinsPage(publication.accountId, bookmark, fetchImpl, "saytwist.com");
-      for (const pin of response.data.items) if (pin.link === snapshot.destinationUrl && (!pin.board_id || pin.board_id === publication.board.pinterestBoardId)) matches.push(pin);
+      for (const pin of response.data.items) if (pin.link && pinterestPublicationUrlsMatch(pin.link, snapshot.destinationUrl) && (!pin.board_id || pin.board_id === publication.board.pinterestBoardId)) matches.push(pin);
       const next = response.data.bookmark || undefined;
       if (!next || seen.has(next)) break;
       seen.add(next); bookmark = next;

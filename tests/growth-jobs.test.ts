@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   publicationFind: vi.fn(),
   publicationUpdate: vi.fn(),
   jobCreate: vi.fn(),
+  jobUpsert: vi.fn(),
 }));
 
 vi.mock("@/lib/prisma", () => ({
@@ -51,7 +52,7 @@ describe("Growth job persistence", () => {
     mocks.activity.mockResolvedValue({});
     mocks.transaction.mockImplementation(async (callback: (tx: unknown) => unknown) => callback({
       $queryRaw: mocks.queryRaw,
-      growthJob: { updateMany: mocks.updateMany, findUnique: mocks.findUnique, create: mocks.jobCreate },
+      growthJob: { updateMany: mocks.updateMany, findUnique: mocks.findUnique, create: mocks.jobCreate, upsert: mocks.jobUpsert },
       growthPinPublication: { findFirst: mocks.publicationFind, update: mocks.publicationUpdate },
     }));
   });
@@ -94,11 +95,10 @@ describe("Growth job persistence", () => {
     mocks.findMany.mockResolvedValue([{ id: "publish-job", type: GrowthJobType.PINTEREST_PIN_PUBLISH, status: GrowthJobStatus.RUNNING, attemptCount: 1, maxAttempts: 3, idempotencyKey: "pinterest-publish:publication" }]);
     mocks.publicationFind.mockResolvedValue({ id: "publication", idempotencyKey: "pinterest-publish:publication" });
     mocks.updateMany.mockResolvedValue({ count: 1 });
-    mocks.findUnique.mockResolvedValue(null);
-    mocks.jobCreate.mockResolvedValue({ id: "reconcile-job" });
+    mocks.jobUpsert.mockResolvedValue({ id: "reconcile-job" });
     await expect(recoverStaleGrowthJobs(new Date())).resolves.toBe(1);
     expect(mocks.publicationUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: "RECONCILING", reconcileJobId: "reconcile-job" }) }));
-    expect(mocks.jobCreate).toHaveBeenCalledTimes(1);
+    expect(mocks.jobUpsert).toHaveBeenCalledTimes(1);
     expect(mocks.updateMany).not.toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: GrowthJobStatus.PENDING }) }));
   });
 
@@ -122,5 +122,41 @@ describe("Growth job persistence", () => {
     mocks.updateMany.mockResolvedValue({ count: 1 });
     await expect(failGrowthJob(retryable, "worker-a", new PinterestConfigurationError("Pinterest is not configured (PINTEREST_APP_ID)."))).resolves.toBe(GrowthJobStatus.FAILED_TERMINAL);
     expect(mocks.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: GrowthJobStatus.FAILED_TERMINAL }) }));
+  });
+
+  it("converts an unexpected PUBLISHING handler failure to reconciliation", async () => {
+    const publishing = { ...job, type: GrowthJobType.PINTEREST_PIN_PUBLISH, status: GrowthJobStatus.RUNNING, idempotencyKey: "pinterest-publish:publication" };
+    mocks.publicationFind.mockResolvedValue({ id: "publication", idempotencyKey: publishing.idempotencyKey });
+    mocks.updateMany.mockResolvedValue({ count: 1 });
+    mocks.jobUpsert.mockResolvedValue({ id: "reconcile-job" });
+    await expect(failGrowthJob(publishing, "worker-a", new Error("unexpected"))).resolves.toBe(GrowthJobStatus.FAILED_TERMINAL);
+    expect(mocks.publicationUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: "RECONCILING", lastErrorCode: "PUBLISH_HANDLER_OUTCOME_AMBIGUOUS" }) }));
+    expect(mocks.jobUpsert).toHaveBeenCalledTimes(1);
+    expect(mocks.updateMany).not.toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: GrowthJobStatus.FAILED_RETRYABLE }) }));
+  });
+
+  it("synchronizes exhausted publish and reconciliation retries", async () => {
+    const publication = { id: "publication", idempotencyKey: "pinterest-publish:publication" };
+    mocks.updateMany.mockResolvedValue({ count: 1 });
+    mocks.publicationFind.mockResolvedValueOnce(null).mockResolvedValueOnce(publication);
+    await failGrowthJob({ ...job, type: GrowthJobType.PINTEREST_PIN_PUBLISH, status: GrowthJobStatus.RUNNING, attemptCount: 3, maxAttempts: 3 }, "worker-a", new Error("429"));
+    expect(mocks.publicationUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: "FAILED_TERMINAL", lastErrorCode: "PUBLISH_RETRY_EXHAUSTED" }) }));
+
+    vi.clearAllMocks(); mocks.activity.mockResolvedValue({}); mocks.updateMany.mockResolvedValue({ count: 1 }); mocks.publicationFind.mockResolvedValue(publication);
+    await failGrowthJob({ ...job, type: GrowthJobType.PINTEREST_PIN_RECONCILE, status: GrowthJobStatus.RUNNING, attemptCount: 4, maxAttempts: 4 }, "worker-a", new Error("read failed"));
+    expect(mocks.publicationUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: "FAILED_TERMINAL", lastErrorCode: "RECONCILIATION_RETRY_EXHAUSTED" }) }));
+  });
+
+  it("synchronizes exhausted stale publish and reconcile jobs", async () => {
+    const publication = { id: "publication", idempotencyKey: "pinterest-publish:publication" };
+    mocks.findMany.mockResolvedValue([
+      { id: "publish-job", type: GrowthJobType.PINTEREST_PIN_PUBLISH, status: GrowthJobStatus.RUNNING, attemptCount: 3, maxAttempts: 3, idempotencyKey: "publish-job" },
+      { id: "reconcile-job", type: GrowthJobType.PINTEREST_PIN_RECONCILE, status: GrowthJobStatus.RUNNING, attemptCount: 4, maxAttempts: 4, idempotencyKey: "reconcile-job" },
+    ]);
+    mocks.publicationFind.mockResolvedValueOnce(null).mockResolvedValueOnce(publication).mockResolvedValueOnce(publication);
+    mocks.updateMany.mockResolvedValue({ count: 1 });
+    await expect(recoverStaleGrowthJobs(new Date())).resolves.toBe(2);
+    expect(mocks.publicationUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ lastErrorCode: "PUBLISH_RETRY_EXHAUSTED" }) }));
+    expect(mocks.publicationUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ lastErrorCode: "RECONCILIATION_RETRY_EXHAUSTED" }) }));
   });
 });
