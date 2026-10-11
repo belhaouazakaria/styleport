@@ -191,7 +191,7 @@ Phase 10 added no approval, scheduling, publication, Pinterest write, recurring 
 
 ## Phase 11 — Scheduling and Publishing Engine
 
-**Status:** Complete — implementation validated; not production deployed
+**Status:** In progress — production deployed; successful live Pin publishing remains unvalidated
 
 Deliver:
 - exploration/exploitation timing;
@@ -205,7 +205,9 @@ Deliver:
 Exit:
 - a specifically approved Pin can publish once at the intended time and reconcile correctly.
 
-Implemented in migration `20261009120000_growth_pin_publishing`, `lib/growth/publishing/*`, the existing Pinterest v5 adapter and bounded worker, ADMIN same-origin approval/rejection/cancellation routes, and the Creative Lab publication controls. Each exact Pin requires individual ADMIN approval of its immutable candidate/asset/account/board/time snapshot. `publication_timing_v1` recommends bounded America/New_York cold-start or deterministic explore/exploit windows. A future `pinterest_organic_v1` attribution ref is issued before publication. Pinterest Create Pin is attempted once; safe 429 responses retry, while ambiguous outcomes transition to bounded read-only reconciliation and never blind retry Create Pin. No production cron, persistent worker, live Pinterest write, or Phase 12 behavior is enabled by implementation. Trial-created Pin reach remains creator-only; Standard access is required before relying on normal public production reach.
+Implemented in migration `20261009120000_growth_pin_publishing`, `lib/growth/publishing/*`, the existing Pinterest v5 adapter and bounded worker, ADMIN same-origin approval/rejection/cancellation routes, and the Creative Lab publication controls. Each exact Pin requires individual ADMIN approval of its immutable candidate/asset/account/board/time snapshot. `publication_timing_v1` recommends bounded America/New_York cold-start or deterministic explore/exploit windows. A future `pinterest_organic_v1` attribution ref is issued before publication. Pinterest Create Pin is attempted once; safe 429 responses retry, while ambiguous outcomes transition to bounded read-only reconciliation and never blind retry Create Pin.
+
+The first live production publication ended `FAILED_TERMINAL` after Pinterest rejected the credential with HTTP 401. That publication, approval snapshot, attribution ref and job remain historical evidence; the Pinterest account was reconnected through OAuth and is `CONNECTED`. Recovery requires an ADMIN to choose **Approve again**, receive a fresh timing recommendation, select an eligible account and board, and explicitly confirm the exact Pin. A terminal or cancelled publication is never revived: reapproval supersedes only the previous `APPROVED` marker and creates a new approval, publication, attribution ref, idempotency key and publish job for a future time. Successful live Pin publication and reconciliation remain unvalidated, so Phase 11 is not complete. Growth remains disabled, with no production cron, persistent worker, or Phase 12 behavior enabled. Trial-created Pin reach remains creator-only; Standard access is required before relying on normal public production reach.
 
 ## Phase 12 — Evergreen and Learning Engine
 

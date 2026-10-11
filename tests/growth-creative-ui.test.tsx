@@ -6,7 +6,7 @@ import { GrowthExperimentDimension } from "@prisma/client";
 const router = vi.hoisted(() => ({ refresh: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 
-import { CreativeGenerationForm, CreativeRegenerateButton, experimentVariantOptions } from "@/components/admin/creative-lab-actions";
+import { CreativeGenerationForm, CreativeRegenerateButton, PinApprovalPanel, experimentVariantOptions } from "@/components/admin/creative-lab-actions";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -95,5 +95,34 @@ describe("Creative Lab target picker", () => {
     resolveRequest();
     expect(await screen.findByRole("button", { name: "Regeneration queued" })).toBeDisabled();
     expect(router.refresh).toHaveBeenCalled();
+  });
+
+  it("shows terminal publication evidence and requires an explicit fresh reapproval", async () => {
+    const recommendedAt = new Date(Date.now() + 86_400_000).toISOString();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.startsWith("/api/admin/growth/creative/timing?")) return { ok: true, json: async () => ({ data: { scheduledAt: recommendedAt, mode: "COLD_START" } }) } as Response;
+      if (url === "/api/admin/growth/creative/approve") return { ok: true, json: async () => ({ ok: true }) } as Response;
+      throw new Error(`Unexpected request: ${url} ${init?.method || "GET"}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<PinApprovalPanel candidateId="candidate-1" accounts={[{ id: "account-1", label: "@saytwist", boards: [{ id: "board-1", name: "SayTwist" }] }]} existing={{ approvalStatus: "APPROVED", publicationId: "publication-old", publicationStatus: "FAILED_TERMINAL", scheduledAt: "2026-10-10T12:00:00.000Z", accountId: "account-1", boardId: "board-1", account: "@saytwist", board: "SayTwist", lastErrorCode: "PINTEREST_CREATE_REJECTED", lastErrorSummary: "Pinterest rejected the stored credential with HTTP 401." }} />);
+
+    expect(screen.getByText(/failed terminal/i)).toBeInTheDocument();
+    expect(screen.getByText(/HTTP 401/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Confirm new approval" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Approve again" }));
+
+    expect(await screen.findByText(/Recommended:/)).toBeInTheDocument();
+    const submit = screen.getByRole("button", { name: "Confirm new approval" });
+    expect(submit).toBeDisabled();
+    await user.click(screen.getByRole("checkbox", { name: /approve this exact Pin/i }));
+    expect(submit).toBeEnabled();
+    await user.click(submit);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/admin/growth/creative/approve", expect.objectContaining({ method: "POST" })));
+    const approvalCall = fetchMock.mock.calls.find(([url]) => String(url) === "/api/admin/growth/creative/approve");
+    expect(JSON.parse(String(approvalCall?.[1]?.body))).toMatchObject({ candidateId: "candidate-1", accountId: "account-1", boardId: "board-1", confirmation: true });
+    expect(await screen.findByText("Pin reapproved with a new publication.")).toBeInTheDocument();
   });
 });

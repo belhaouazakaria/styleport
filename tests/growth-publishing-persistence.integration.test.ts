@@ -41,6 +41,54 @@ suite("Phase 11 PostgreSQL publishing invariants", () => {
     expect(url.searchParams.get("utm_medium")).toBe("organic");
     expect(url.searchParams.get("pin_ref")).toMatch(/^pa_/);
   });
+  it("creates one new auditable approval after terminal failure and preserves all failed evidence", async () => {
+    const f = await fixture();
+    const scheduledAt = new Date(Date.now() + 86_400_000).toISOString();
+    const input = { candidateId: f.candidate.id, accountId: f.account.id, boardId: f.board.id, scheduledAt, confirmation: true as const };
+    const failed = await approvePinCandidate(input, f.admin.id);
+    const oldApproval = await prisma.growthPinApproval.findUniqueOrThrow({ where: { id: failed.approval.id } });
+    const oldPublication = await prisma.growthPinPublication.update({ where: { id: failed.publication!.id }, data: { status: "FAILED_TERMINAL", lastErrorCode: "PINTEREST_CREATE_REJECTED", lastErrorSummary: "HTTP 401" } });
+    await prisma.growthJob.update({ where: { id: oldPublication.publishJobId! }, data: { status: GrowthJobStatus.FAILED_TERMINAL, lastError: "HTTP 401" } });
+
+    const results = await Promise.all([approvePinCandidate(input, f.admin.id), approvePinCandidate(input, f.admin.id)]);
+    const created = results.find((result) => result.created)!;
+    expect(results.filter((result) => result.created)).toHaveLength(1);
+    expect(new Set(results.map((result) => result.publication?.id))).toEqual(new Set([created.publication!.id]));
+    expect(created.approval.id).not.toBe(oldApproval.id);
+    expect(created.publication!.id).not.toBe(oldPublication.id);
+    expect(created.publication!.attributionRefId).not.toBe(oldPublication.attributionRefId);
+    expect(created.publication!.publishJobId).not.toBe(oldPublication.publishJobId);
+    expect(created.publication!.idempotencyKey).not.toBe(oldPublication.idempotencyKey);
+    expect(await prisma.growthPinApproval.count()).toBe(2);
+    expect(await prisma.growthPinPublication.count()).toBe(2);
+    expect(await prisma.growthAttributionRef.count()).toBe(2);
+    expect(await prisma.growthJob.count()).toBe(2);
+    expect(await prisma.growthPinApproval.findUniqueOrThrow({ where: { id: oldApproval.id } })).toMatchObject({ status: "SUPERSEDED", snapshotChecksum: oldApproval.snapshotChecksum, snapshot: oldApproval.snapshot });
+    expect(await prisma.growthPinPublication.findUniqueOrThrow({ where: { id: oldPublication.id } })).toMatchObject({ status: "FAILED_TERMINAL", lastErrorCode: "PINTEREST_CREATE_REJECTED", lastErrorSummary: "HTTP 401", publishJobId: oldPublication.publishJobId });
+    expect(await prisma.growthJob.findUniqueOrThrow({ where: { id: oldPublication.publishJobId! } })).toMatchObject({ status: GrowthJobStatus.FAILED_TERMINAL, lastError: "HTTP 401" });
+
+    await expect(approvePinCandidate({ ...input, scheduledAt: new Date(Date.now() + 172_800_000).toISOString() }, f.admin.id)).rejects.toThrow("active approved publication");
+    expect(await prisma.growthPinPublication.count()).toBe(2);
+  });
+  it("requires a future time and creates new evidence when reapproving a cancelled publication", async () => {
+    const f = await fixture();
+    const initialNow = new Date("2026-01-01T12:00:00.000Z");
+    const oldScheduledAt = new Date("2026-01-02T11:59:30.000Z").toISOString();
+    const input = { candidateId: f.candidate.id, accountId: f.account.id, boardId: f.board.id, scheduledAt: oldScheduledAt, confirmation: true as const };
+    const cancelled = await approvePinCandidate(input, f.admin.id, initialNow);
+    await prisma.growthPinPublication.update({ where: { id: cancelled.publication!.id }, data: { status: "CANCELLED" } });
+    await prisma.growthJob.update({ where: { id: cancelled.publication!.publishJobId! }, data: { status: GrowthJobStatus.CANCELLED } });
+
+    const reapprovalNow = new Date("2026-01-02T12:00:00.000Z");
+    await expect(approvePinCandidate(input, f.admin.id, reapprovalNow)).rejects.toThrow("new future publishing time");
+    const reapproved = await approvePinCandidate({ ...input, scheduledAt: new Date("2026-01-03T12:00:00.000Z").toISOString() }, f.admin.id, reapprovalNow);
+    expect(reapproved.created).toBe(true);
+    expect(reapproved.approval.id).not.toBe(cancelled.approval.id);
+    expect(reapproved.publication!.id).not.toBe(cancelled.publication!.id);
+    expect(await prisma.growthPinApproval.findUniqueOrThrow({ where: { id: cancelled.approval.id } })).toMatchObject({ status: "SUPERSEDED" });
+    expect(await prisma.growthPinPublication.findUniqueOrThrow({ where: { id: cancelled.publication!.id } })).toMatchObject({ status: "CANCELLED", idempotencyKey: cancelled.publication!.idempotencyKey, publishJobId: cancelled.publication!.publishJobId });
+    expect(await prisma.growthJob.findUniqueOrThrow({ where: { id: cancelled.publication!.publishJobId! } })).toMatchObject({ status: GrowthJobStatus.CANCELLED });
+  });
   it("rejects DEFERRED approval and makes an explicitly rejected candidate permanently ineligible", async () => {
     const deferred = await fixture(GrowthPinCandidateStatus.DEFERRED);
     await expect(approvePinCandidate({ candidateId: deferred.candidate.id, accountId: deferred.account.id, boardId: deferred.board.id, scheduledAt: new Date(Date.now() + 86_400_000).toISOString(), confirmation: true }, deferred.admin.id)).rejects.toThrow("READY");

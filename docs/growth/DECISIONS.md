@@ -305,8 +305,10 @@ The ADMIN UI and same-origin routes may enqueue one bounded `CREATIVE_LAB_GENERA
 
 ## D-035 — Phase 11 requires immutable individual approval and reconciliation instead of blind Create Pin retry
 
-**Status:** Accepted and implementation validated; not production deployed
+**Status:** Accepted and production deployed; successful live publication remains unvalidated
 
 Every Pin requires explicit ADMIN approval of the exact candidate revision, asset, copy, destination, account, board and time. The canonical approved snapshot and SHA-256 checksum are immutable; no score, schedule, worker, experiment, connected account or READY state can create approval automatically. A future `pinterest_organic_v1` ref is issued before publication even while attribution collection is disabled.
 
 `publication_timing_v1` is the US-first America/New_York explore/exploit baseline; its four windows are cold-start test windows rather than universal best-time claims. Phase 12 owns deeper learned scheduling. Pinterest Create Pin has one safe attempt. Known pre-create 429 conditions may retry; ambiguous outcomes reconcile through bounded reads and never blind-retry Create Pin. The Growth worker remains one-shot and bounded, and implementation enables no production cron, PM2 process or polling daemon.
+
+The first live Create Pin attempt ended terminally on a known HTTP 401 credential rejection; OAuth reconnection restored the account to `CONNECTED`, but successful live publishing is not yet validated. A `FAILED_TERMINAL` or `CANCELLED` publication and its job are immutable history. Recovery is another explicit per-Pin approval for a future time. Under the candidate approval lock, duplicate requests for an active publication remain idempotent, while recovery supersedes the previous approval status and creates new approval, publication, attribution reference, idempotency key and publish job records. It never resets or reuses the failed job, and ambiguity reconciliation behavior is unchanged.

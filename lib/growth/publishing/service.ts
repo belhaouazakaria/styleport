@@ -58,8 +58,14 @@ export async function approvePinCandidate(raw: unknown, adminUserId: string, now
     const board = await tx.growthPinterestBoard.findFirst({ where: { id: input.boardId, accountId: account.id, isActive: true }, select: { id: true } });
     if (!board) throw new Error("Pinterest board is inactive or does not belong to the selected account.");
     const existing = await tx.growthPinApproval.findFirst({ where: { candidateId: candidate.id, status: GrowthPinApprovalStatus.APPROVED }, include: { publication: true }, orderBy: { createdAt: "desc" } });
-    if (existing && existing.accountId === account.id && existing.boardId === board.id && existing.scheduledAt?.getTime() === requestedAt.getTime()) return { approval: existing, publication: existing.publication, created: false };
-    if (existing?.publication && existing.publication.status !== GrowthPublicationStatus.CANCELLED && existing.publication.status !== GrowthPublicationStatus.FAILED_TERMINAL) throw new Error("This candidate already has an active approved publication.");
+    if (existing) {
+      const recoverable = existing.publication?.status === GrowthPublicationStatus.CANCELLED || existing.publication?.status === GrowthPublicationStatus.FAILED_TERMINAL;
+      if (!recoverable) {
+        if (existing.publication && existing.accountId === account.id && existing.boardId === board.id && existing.scheduledAt?.getTime() === requestedAt.getTime()) return { approval: existing, publication: existing.publication, created: false };
+        throw new Error("This candidate already has an active approved publication.");
+      }
+      if (requestedAt <= now) throw new Error("Reapproval requires a new future publishing time.");
+    }
 
     const approvalId = randomUUID();
     const publicationId = randomUUID();
