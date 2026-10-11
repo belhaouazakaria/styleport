@@ -8,7 +8,7 @@ import {
 
 import { recordGrowthActivity } from "@/lib/growth/activity";
 import { encryptPinterestCredentials } from "@/lib/growth/pinterest/credentials";
-import { requirePinterestConfiguration } from "@/lib/growth/pinterest/config";
+import { missingPinterestScopes, requirePinterestConfiguration } from "@/lib/growth/pinterest/config";
 import { tokenExpiries } from "@/lib/growth/pinterest/oauth";
 import type { PinterestTokenResponse, PinterestUserAccount } from "@/lib/growth/pinterest/schemas";
 import { normalizePinterestScopes } from "@/lib/growth/pinterest/tokens";
@@ -26,6 +26,10 @@ export async function connectPinterestAccount(params: {
     refreshToken: params.token.refresh_token,
   });
   const expiries = tokenExpiries(params.token);
+  const grantedScopes = normalizePinterestScopes(params.token.scope);
+  const missingScopes = missingPinterestScopes(grantedScopes);
+  const connectionStatus = missingScopes.length ? GrowthPinterestConnectionStatus.REAUTH_REQUIRED : GrowthPinterestConnectionStatus.CONNECTED;
+  const scopeError = missingScopes.length ? `Pinterest authorization is missing required scopes: ${missingScopes.join(", ")}.` : null;
   return prisma.$transaction(async (tx) => {
     const previous = await tx.growthPinterestAccount.findUnique({ where: { pinterestAccountId: params.profile.id } });
     const account = await tx.growthPinterestAccount.upsert({
@@ -40,12 +44,13 @@ export async function connectPinterestAccount(params: {
         websiteUrl: params.profile.website_url || null,
         pinterestAccountType: params.profile.account_type || null,
         apiEnvironment: config.apiEnvironment,
-        connectionStatus: GrowthPinterestConnectionStatus.CONNECTED,
-        grantedScopes: normalizePinterestScopes(params.token.scope),
+        connectionStatus,
+        grantedScopes,
         encryptedCredentials,
         ...expiries,
         lastAccountSyncAt: new Date(),
         lastSuccessfulApiCallAt: new Date(),
+        lastConnectionError: scopeError,
       },
       update: {
         publicationRole: params.publicationRole,
@@ -56,14 +61,14 @@ export async function connectPinterestAccount(params: {
         websiteUrl: params.profile.website_url || null,
         pinterestAccountType: params.profile.account_type || null,
         apiEnvironment: config.apiEnvironment,
-        connectionStatus: GrowthPinterestConnectionStatus.CONNECTED,
-        grantedScopes: normalizePinterestScopes(params.token.scope),
+        connectionStatus,
+        grantedScopes,
         encryptedCredentials,
         credentialVersion: { increment: 1 },
         ...expiries,
         lastAccountSyncAt: new Date(),
         lastSuccessfulApiCallAt: new Date(),
-        lastConnectionError: null,
+        lastConnectionError: scopeError,
         disconnectedAt: null,
       },
     });
@@ -72,7 +77,7 @@ export async function connectPinterestAccount(params: {
       entityType: "GrowthPinterestAccount", entityId: account.id,
       action: previous ? "PINTEREST_ACCOUNT_RECONNECTED" : "PINTEREST_ACCOUNT_CONNECTED",
       fromState: previous?.connectionStatus || null, toState: account.connectionStatus,
-      summary: { publicationRole: account.publicationRole, username: account.username, apiEnvironment: account.apiEnvironment, grantedScopes: account.grantedScopes },
+      summary: { publicationRole: account.publicationRole, username: account.username, apiEnvironment: account.apiEnvironment, grantedScopes: account.grantedScopes, missingScopes },
       correlationKey: `pinterest-account:${account.pinterestAccountId}`,
     }, tx);
     return account;

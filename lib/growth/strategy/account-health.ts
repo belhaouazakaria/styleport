@@ -5,7 +5,7 @@ import {
   GrowthStrategyEvidenceQuality,
 } from "@prisma/client";
 
-import { PINTEREST_OAUTH_SCOPES } from "@/lib/growth/pinterest/config";
+import { hasPinterestScopes } from "@/lib/growth/pinterest/config";
 import {
   ACCOUNT_STRATEGY_ANALYTICS_FRESH_MS,
   ACCOUNT_STRATEGY_MIN_OBSERVATION_DAYS,
@@ -42,8 +42,7 @@ function stale(value: Date | null, now: Date, maximumAgeMs: number) {
 }
 
 export function requiredPinterestScopesComplete(scopes: string[]) {
-  const granted = new Set(scopes);
-  return PINTEREST_OAUTH_SCOPES.every((scope) => granted.has(scope));
+  return hasPinterestScopes(scopes);
 }
 
 export function evaluateAccountHealth(

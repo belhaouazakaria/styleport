@@ -23,10 +23,26 @@ import { prisma } from "@/lib/prisma";
 
 export interface PinterestRateLimitMetadata { limit: string | null; remaining: string | null; reset: string | null }
 
+type PinterestAuthorizationFailure = "INVALID_CREDENTIAL" | "INSUFFICIENT_SCOPE" | "AUTHORIZATION_REJECTED";
+
 export class PinterestApiError extends Error {
-  constructor(readonly status: number, readonly retryable: boolean, readonly retryAfterMs?: number) {
-    super(`Pinterest API request failed with HTTP ${status}.`);
+  readonly authorizationFailure: PinterestAuthorizationFailure | null;
+
+  constructor(readonly status: number, readonly retryable: boolean, readonly retryAfterMs?: number, readonly providerCode: string | null = null, readonly providerMessage: string | null = null) {
+    super([`Pinterest API request failed with HTTP ${status}.`, providerCode ? `Provider code: ${providerCode}.` : null, providerMessage].filter(Boolean).join(" "));
+    const evidence = `${providerCode || ""} ${providerMessage || ""}`.toLowerCase();
+    this.authorizationFailure = status === 401 || status === 403
+      ? /scope|permission|not authorized|not authorised|access denied/.test(evidence)
+        ? "INSUFFICIENT_SCOPE"
+        : /invalid.{0,24}(token|credential)|expired.{0,24}(token|credential)|authentication/.test(evidence)
+          ? "INVALID_CREDENTIAL"
+          : "AUTHORIZATION_REJECTED"
+      : null;
   }
+}
+
+export class PinterestAuthorizationError extends NonRetryableGrowthJobError {
+  constructor(readonly code: "PINTEREST_INVALID_CREDENTIAL" | "PINTEREST_INSUFFICIENT_SCOPES" | "PINTEREST_AUTHORIZATION_REJECTED", message: string) { super(message); }
 }
 
 export class PinterestCreateAmbiguousError extends Error {
@@ -41,6 +57,53 @@ function rateLimitMetadata(headers: Headers): PinterestRateLimitMetadata {
   return { limit: headers.get("x-ratelimit-limit"), remaining: headers.get("x-ratelimit-remaining"), reset: headers.get("x-ratelimit-reset") };
 }
 
+function safePinterestProviderError(raw: unknown) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { providerCode: null, providerMessage: null };
+  const value = raw as Record<string, unknown>;
+  const rawCode = typeof value.code === "number" && Number.isFinite(value.code) ? String(value.code) : typeof value.code === "string" ? value.code : null;
+  const providerCode = rawCode && /^[A-Za-z0-9_.:-]{1,80}$/.test(rawCode) ? rawCode : null;
+  if (typeof value.message !== "string") return { providerCode, providerMessage: null };
+  const providerMessage = value.message
+    .replace(/[\u0000-\u001f\u007f]/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/https?:\/\/\S+/gi, "[url]")
+    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "[email]")
+    .replace(/\bBearer\s+\S+/gi, "Bearer [redacted]")
+    .replace(/\b(access[_ -]?token|refresh[_ -]?token|client[_ -]?secret|authorization)\s*[:=]\s*\S+/gi, "$1=[redacted]")
+    .replace(/\b[A-Za-z0-9_-]{32,}\b/g, "[redacted]")
+    .trim()
+    .slice(0, 300) || null;
+  return { providerCode, providerMessage };
+}
+
+function pinterestApiError(response: Response, raw: unknown) {
+  const retryAfter = Number(response.headers.get("retry-after"));
+  const evidence = safePinterestProviderError(raw);
+  return new PinterestApiError(response.status, response.status === 429 || response.status >= 500, Number.isFinite(retryAfter) ? retryAfter * 1000 : undefined, evidence.providerCode, evidence.providerMessage);
+}
+
+function authorizationError(error: PinterestApiError) {
+  const code = error.authorizationFailure === "INVALID_CREDENTIAL"
+    ? "PINTEREST_INVALID_CREDENTIAL"
+    : error.authorizationFailure === "INSUFFICIENT_SCOPE"
+      ? "PINTEREST_INSUFFICIENT_SCOPES"
+      : "PINTEREST_AUTHORIZATION_REJECTED";
+  return new PinterestAuthorizationError(code, error.message);
+}
+
+async function throwAuthenticatedPinterestError(accountId: string, error: PinterestApiError): Promise<never> {
+  if (error.status === 401 || error.status === 403) {
+    const needsReauthorization = error.status === 401 || error.authorizationFailure === "INSUFFICIENT_SCOPE" || error.authorizationFailure === "INVALID_CREDENTIAL";
+    await prisma.growthPinterestAccount.updateMany({
+      where: { id: accountId },
+      data: { connectionStatus: needsReauthorization ? GrowthPinterestConnectionStatus.REAUTH_REQUIRED : GrowthPinterestConnectionStatus.DEGRADED, lastConnectionError: error.message },
+    });
+    throw authorizationError(error);
+  }
+  if (!error.retryable) throw new NonRetryableGrowthJobError(error.message);
+  throw new RetryableGrowthJobError(error.message, error.retryAfterMs);
+}
+
 async function pinterestFetch<T>(params: {
   path: string; responseName: string; schema: z.ZodType<T>; accessToken: string; fetchImpl?: typeof fetch;
 }): Promise<{ data: T; rateLimit: PinterestRateLimitMetadata }> {
@@ -53,8 +116,7 @@ async function pinterestFetch<T>(params: {
   const metadata = rateLimitMetadata(response.headers);
   const raw: unknown = await response.json().catch(() => null);
   if (!response.ok) {
-    const retryAfter = Number(response.headers.get("retry-after"));
-    throw new PinterestApiError(response.status, response.status === 429 || response.status >= 500, Number.isFinite(retryAfter) ? retryAfter * 1000 : undefined);
+    throw pinterestApiError(response, raw);
   }
   const parsed = params.schema.safeParse(raw);
   if (!parsed.success) throw new NonRetryableGrowthJobError(pinterestSchemaError(params.responseName, parsed.error.issues));
@@ -79,15 +141,7 @@ async function authenticatedPinterestGet<T>(params: {
     return await pinterestFetch({ path: params.path, responseName: params.responseName, schema: params.schema, accessToken, fetchImpl: params.fetchImpl });
   } catch (error) {
     if (error instanceof PinterestApiError) {
-      if (error.status === 401) {
-        await prisma.growthPinterestAccount.updateMany({
-          where: { id: params.accountId },
-          data: { connectionStatus: GrowthPinterestConnectionStatus.REAUTH_REQUIRED, lastConnectionError: error.message },
-        });
-        throw new NonRetryableGrowthJobError("Pinterest rejected the account credential; reconnect required.");
-      }
-      if (!error.retryable) throw new NonRetryableGrowthJobError(error.message);
-      throw new RetryableGrowthJobError(error.message, error.retryAfterMs);
+      return throwAuthenticatedPinterestError(params.accountId, error);
     }
     throw error;
   }
@@ -103,12 +157,7 @@ export async function getPinterestUserAccount(accountId: string, fetchImpl?: typ
     return await fetchPinterestUserAccountWithToken(accessToken, fetchImpl);
   } catch (error) {
     if (error instanceof PinterestApiError) {
-      if (error.status === 401) {
-        await prisma.growthPinterestAccount.updateMany({ where: { id: accountId }, data: { connectionStatus: GrowthPinterestConnectionStatus.REAUTH_REQUIRED, lastConnectionError: error.message } });
-        throw new NonRetryableGrowthJobError("Pinterest rejected the account credential; reconnect required.");
-      }
-      if (!error.retryable) throw new NonRetryableGrowthJobError(error.message);
-      throw new RetryableGrowthJobError(error.message, error.retryAfterMs);
+      return throwAuthenticatedPinterestError(accountId, error);
     }
     throw error;
   }
@@ -122,12 +171,7 @@ export async function getPinterestBoardsPage(accountId: string, bookmark?: strin
     return await pinterestFetch({ path: `/boards?${query}`, responseName: "board inventory response", schema: pinterestBoardsPageSchema, accessToken, fetchImpl });
   } catch (error) {
     if (error instanceof PinterestApiError) {
-      if (error.status === 401) {
-        await prisma.growthPinterestAccount.updateMany({ where: { id: accountId }, data: { connectionStatus: GrowthPinterestConnectionStatus.REAUTH_REQUIRED, lastConnectionError: error.message } });
-        throw new NonRetryableGrowthJobError("Pinterest credential is invalid; reconnect required.");
-      }
-      if (!error.retryable) throw new NonRetryableGrowthJobError(error.message);
-      throw new RetryableGrowthJobError(error.message, error.retryAfterMs);
+      return throwAuthenticatedPinterestError(accountId, error);
     }
     throw error;
   }
@@ -160,9 +204,11 @@ export async function createPinterestPin(params: { accountId: string; boardId: s
   const raw: unknown = await response.json().catch(() => null);
   if (!response.ok) {
     const retryAfter = Number(response.headers.get("retry-after"));
-    if (response.status === 401) {
-      await prisma.growthPinterestAccount.updateMany({ where: { id: params.accountId }, data: { connectionStatus: GrowthPinterestConnectionStatus.REAUTH_REQUIRED, lastConnectionError: "Pinterest API request failed with HTTP 401." } });
-      throw new NonRetryableGrowthJobError("Pinterest rejected the account credential; reconnect required.");
+    if (response.status === 401 || response.status === 403) {
+      const error = pinterestApiError(response, raw);
+      const needsReauthorization = response.status === 401 || error.authorizationFailure === "INSUFFICIENT_SCOPE" || error.authorizationFailure === "INVALID_CREDENTIAL";
+      await prisma.growthPinterestAccount.updateMany({ where: { id: params.accountId }, data: { connectionStatus: needsReauthorization ? GrowthPinterestConnectionStatus.REAUTH_REQUIRED : GrowthPinterestConnectionStatus.DEGRADED, lastConnectionError: error.message } });
+      throw authorizationError(error);
     }
     if (response.status === 429) throw new PinterestRateLimitError("Pinterest rate limit reached.", Number.isFinite(retryAfter) ? retryAfter * 1000 : undefined, metadata);
     if (response.status >= 500) throw new PinterestCreateAmbiguousError(`Pinterest Create Pin returned HTTP ${response.status}.`, metadata);

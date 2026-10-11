@@ -1,4 +1,4 @@
-import { GrowthPinterestPublicationRole } from "@prisma/client";
+import { GrowthPinterestConnectionStatus, GrowthPinterestPublicationRole } from "@prisma/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -74,6 +74,16 @@ describe("Pinterest OAuth routes", () => {
     expect(response.headers.get("location")).not.toContain("oauth-secret");
     expect(mocks.fetchProfile).toHaveBeenCalledWith("secret");
     expect(mocks.enqueue).toHaveBeenCalledWith("account-1");
+  });
+
+  it("reports a partial OAuth grant as missing scopes and does not enqueue sync", async () => {
+    mocks.consumeState.mockResolvedValue({ publicationRole: GrowthPinterestPublicationRole.SAYTWIST });
+    mocks.exchange.mockResolvedValue({ access_token: "secret", refresh_token: "secret2", scope: "boards:read pins:read pins:write user_accounts:read" });
+    mocks.fetchProfile.mockResolvedValue({ data: { id: "pin-1", username: "saytwist" } });
+    mocks.connect.mockResolvedValue({ id: "account-1", connectionStatus: GrowthPinterestConnectionStatus.REAUTH_REQUIRED });
+    const response = await callback(new Request("https://saytwist.test/api/admin/growth/pinterest/oauth/callback?state=s&code=oauth-secret"));
+    expect(response.headers.get("location")).toBe("https://saytwist.test/admin/growth/accounts?status=missing_scopes");
+    expect(mocks.enqueue).not.toHaveBeenCalled();
   });
 
   it("returns a fixed non-sensitive conflict result for a duplicate role or account", async () => {

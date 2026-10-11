@@ -59,6 +59,19 @@ describe("Pinterest API adapter", () => {
     expect(String(error.message)).not.toContain("leaked");
   });
 
+  it("retains only bounded safe provider authorization evidence", async () => {
+    vi.stubEnv("PINTEREST_API_ENVIRONMENT", "production");
+    const insufficient = await fetchPinterestUserAccountWithToken("token", vi.fn().mockResolvedValue(new Response(JSON.stringify({ code: "AUTHORIZATION_FAILURE", message: "Insufficient permission for required scope. Authorization: Bearer private-token-value", details: { private: "must-not-appear" } }), { status: 403 }))).catch((value) => value);
+    expect(insufficient).toMatchObject<PinterestApiError>({ status: 403, providerCode: "AUTHORIZATION_FAILURE", authorizationFailure: "INSUFFICIENT_SCOPE" });
+    expect(insufficient.message).toContain("Insufficient permission for required scope");
+    expect(insufficient.message).not.toContain("private-token-value");
+    expect(insufficient.message).not.toContain("must-not-appear");
+
+    const unknown = await fetchPinterestUserAccountWithToken("token", vi.fn().mockResolvedValue(new Response(JSON.stringify({ code: "AUTHORIZATION_FAILURE", message: "Request could not be authorized." }), { status: 401 }))).catch((value) => value);
+    expect(unknown).toMatchObject<PinterestApiError>({ status: 401, authorizationFailure: "AUTHORIZATION_REJECTED" });
+    expect(unknown.message).not.toContain("expired");
+  });
+
   it("requests and validates account analytics with the centralized organic metric set", async () => {
     vi.stubEnv("PINTEREST_API_ENVIRONMENT", "production");
     const range = defaultRefreshRange();

@@ -7,9 +7,26 @@ import { PinterestConfigurationError } from "@/lib/growth/errors";
 export const PINTEREST_OAUTH_SCOPES = [
   "user_accounts:read",
   "boards:read",
+  "boards:write",
   "pins:read",
   "pins:write",
 ] as const;
+
+export const PINTEREST_CREATE_PIN_SCOPES = [
+  "boards:read",
+  "boards:write",
+  "pins:read",
+  "pins:write",
+] as const;
+
+export function missingPinterestScopes(grantedScopes: readonly string[], requiredScopes: readonly string[] = PINTEREST_OAUTH_SCOPES) {
+  const granted = new Set(grantedScopes);
+  return requiredScopes.filter((scope) => !granted.has(scope));
+}
+
+export function hasPinterestScopes(grantedScopes: readonly string[], requiredScopes: readonly string[] = PINTEREST_OAUTH_SCOPES) {
+  return missingPinterestScopes(grantedScopes, requiredScopes).length === 0;
+}
 
 export const PINTEREST_OAUTH_CALLBACK_PATH = "/api/admin/growth/pinterest/oauth/callback";
 export const PINTEREST_OAUTH_STATE_TTL_MS = 10 * 60_000;

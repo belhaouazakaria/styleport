@@ -59,7 +59,7 @@ async function createAccount() {
     username: `user-${randomUUID()}`,
     apiEnvironment: GrowthPinterestApiEnvironment.PRODUCTION,
     connectionStatus: GrowthPinterestConnectionStatus.CONNECTED,
-    grantedScopes: ["boards:read", "pins:read", "pins:write", "user_accounts:read"],
+    grantedScopes: ["boards:read", "boards:write", "pins:read", "pins:write", "user_accounts:read"],
     encryptedCredentials: encryptPinterestCredentials({ accessToken: "access", refreshToken: "refresh" }, encryptionKey),
     accessTokenExpiresAt: new Date(Date.now() + 3_600_000),
   } });

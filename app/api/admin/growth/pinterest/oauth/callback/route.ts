@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { GrowthPinterestConnectionStatus } from "@prisma/client";
 
 import { fetchPinterestUserAccountWithToken } from "@/lib/growth/pinterest/api";
 import { connectPinterestAccount, isUniqueConstraintError } from "@/lib/growth/pinterest/accounts";
@@ -33,6 +34,7 @@ export async function GET(request: Request) {
     const account = await connectPinterestAccount({
       profile: profile.data, token, publicationRole: oauthState.publicationRole, adminUserId: session.user.id,
     });
+    if (account.connectionStatus === GrowthPinterestConnectionStatus.REAUTH_REQUIRED) return adminRedirect("missing_scopes");
     await enqueuePinterestSyncJobs(account.id);
     return adminRedirect("connected");
   } catch (error) {

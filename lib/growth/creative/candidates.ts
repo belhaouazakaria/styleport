@@ -47,6 +47,7 @@ import { readExperimentVariant } from "@/lib/growth/creative/experiments";
 import { getCreativeRendererDefinition, renderDeterministicCreative } from "@/lib/growth/creative/renderer";
 import { buildExactCreativeSimilarity, classifyCreativeSimilarity, type SimilarityCandidate } from "@/lib/growth/creative/similarity";
 import { parseCreativeSimilarityFlags } from "@/lib/growth/creative/presentation";
+import { PINTEREST_CREATE_PIN_SCOPES } from "@/lib/growth/pinterest/config";
 import {
   cleanupCreativeAssetAfterFailure,
   persistCreativeAssetFile,
@@ -697,7 +698,7 @@ export async function getAdminCreativeOverview() {
     prisma.growthPinCandidate.findMany({ include: { asset: true, translator: { select: { name: true, slug: true } }, idea: { select: { slug: true, currentVersion: { select: { title: true } } } }, experiment: { select: { hypothesis: true, dimension: true } }, approvals: { include: { publication: true, account: { select: { username: true, publicationRole: true } }, board: { select: { name: true } } }, orderBy: { createdAt: "desc" }, take: 1 } }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 50 }),
     prisma.translator.findMany({ where: { isActive: true, archivedAt: null }, select: { id: true, name: true, slug: true }, orderBy: { name: "asc" }, take: 100 }),
     prisma.growthIdea.findMany({ where: { status: "PUBLISHED", archivedAt: null, currentVersionId: { not: null }, category: { isActive: true, archivedAt: null } }, select: { id: true, slug: true, currentVersion: { select: { title: true, blocks: true, publishedAt: true } } }, orderBy: { publishedAt: "desc" }, take: 100 }),
-    prisma.growthPinterestAccount.findMany({ where: { connectionStatus: GrowthPinterestConnectionStatus.CONNECTED, grantedScopes: { has: "pins:write" }, encryptedCredentials: { not: null } }, select: { id: true, username: true, publicationRole: true, apiEnvironment: true, refreshTokenExpiresAt: true, boards: { where: { isActive: true }, select: { id: true, name: true }, orderBy: { name: "asc" }, take: 250 } }, orderBy: { username: "asc" }, take: 20 }),
+    prisma.growthPinterestAccount.findMany({ where: { connectionStatus: GrowthPinterestConnectionStatus.CONNECTED, grantedScopes: { hasEvery: [...PINTEREST_CREATE_PIN_SCOPES] }, encryptedCredentials: { not: null } }, select: { id: true, username: true, publicationRole: true, apiEnvironment: true, refreshTokenExpiresAt: true, boards: { where: { isActive: true }, select: { id: true, name: true }, orderBy: { name: "asc" }, take: 250 } }, orderBy: { username: "asc" }, take: 20 }),
     prisma.growthExperiment.findMany({ where: { status: GrowthExperimentStatus.DRAFT }, orderBy: { createdAt: "desc" }, take: 25 }),
   ]);
   const ideas = ideaRows.filter((idea) => idea.currentVersion?.publishedAt && ideaBlocksSchema.safeParse(idea.currentVersion.blocks).success);

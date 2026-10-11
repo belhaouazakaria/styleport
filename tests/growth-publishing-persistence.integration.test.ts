@@ -21,7 +21,7 @@ async function clean() {
 async function fixture(status = GrowthPinCandidateStatus.READY) {
   const admin = await prisma.user.create({ data: { email: `admin-${Math.random()}@test.local`, passwordHash: "test", role: "ADMIN" } });
   const translator = await prisma.translator.create({ data: { name: "Warm Translator", slug: `warm-${Math.random().toString(36).slice(2)}`, title: "Warm Translator", subtitle: "Warm", shortDescription: "Warm rewrite", sourceLabel: "Before", targetLabel: "After", promptSystem: "Rewrite", promptInstructions: "Preserve meaning", isActive: true } });
-  const account = await prisma.growthPinterestAccount.create({ data: { pinterestAccountId: `p-${Math.random()}`, publicationRole: GrowthPinterestPublicationRole.SAYTWIST, activeRole: GrowthPinterestPublicationRole.SAYTWIST, username: "saytwist", apiEnvironment: GrowthPinterestApiEnvironment.SANDBOX, connectionStatus: GrowthPinterestConnectionStatus.CONNECTED, grantedScopes: ["pins:read", "pins:write"], encryptedCredentials: encryptPinterestCredentials({ accessToken: "test-access", refreshToken: "test-refresh" }), accessTokenExpiresAt: new Date("2030-01-01"), refreshTokenExpiresAt: new Date("2030-02-01") } });
+  const account = await prisma.growthPinterestAccount.create({ data: { pinterestAccountId: `p-${Math.random()}`, publicationRole: GrowthPinterestPublicationRole.SAYTWIST, activeRole: GrowthPinterestPublicationRole.SAYTWIST, username: "saytwist", apiEnvironment: GrowthPinterestApiEnvironment.SANDBOX, connectionStatus: GrowthPinterestConnectionStatus.CONNECTED, grantedScopes: ["user_accounts:read", "boards:read", "boards:write", "pins:read", "pins:write"], encryptedCredentials: encryptPinterestCredentials({ accessToken: "test-access", refreshToken: "test-refresh" }), accessTokenExpiresAt: new Date("2030-01-01"), refreshTokenExpiresAt: new Date("2030-02-01") } });
   const board = await prisma.growthPinterestBoard.create({ data: { accountId: account.id, pinterestBoardId: `board-${Math.random()}`, name: "SayTwist", isActive: true, lastSeenAt: new Date(), lastSyncedAt: new Date() } });
   const checksum = "a".repeat(64);
   const asset = await prisma.growthAsset.create({ data: { publicPath: `/generated/growth-creatives/creative-${checksum}.png`, checksum, mimeType: "image/png", width: 1000, height: 1500, byteSize: 1000, rendererKey: "creative-ai-full", rendererVersion: "creative_ai_full_v1", templateId: "before-after-full-ai-v1-editorial-split", generationKind: GrowthAssetGenerationKind.AI, state: GrowthAssetState.READY, aiProvider: "OPENAI", aiModel: "gpt-image-2", aiImageUnits: 1 } });
@@ -112,9 +112,11 @@ suite("Phase 11 PostgreSQL publishing invariants", () => {
   it("fails closed for disconnected/scopeless accounts and inactive or foreign boards", async () => {
     const f = await fixture();
     const input = { candidateId: f.candidate.id, accountId: f.account.id, boardId: f.board.id, scheduledAt: new Date(Date.now() + 86_400_000).toISOString(), confirmation: true as const };
+    await prisma.growthPinterestAccount.update({ where: { id: f.account.id }, data: { grantedScopes: ["user_accounts:read", "boards:read", "pins:read", "pins:write"] } });
+    await expect(approvePinCandidate(input, f.admin.id)).rejects.toThrow("not eligible");
     await prisma.growthPinterestAccount.update({ where: { id: f.account.id }, data: { grantedScopes: ["pins:read"] } });
     await expect(approvePinCandidate(input, f.admin.id)).rejects.toThrow("not eligible");
-    await prisma.growthPinterestAccount.update({ where: { id: f.account.id }, data: { grantedScopes: ["pins:read", "pins:write"] } });
+    await prisma.growthPinterestAccount.update({ where: { id: f.account.id }, data: { grantedScopes: ["user_accounts:read", "boards:read", "boards:write", "pins:read", "pins:write"] } });
     await prisma.growthPinterestBoard.update({ where: { id: f.board.id }, data: { isActive: false } });
     await expect(approvePinCandidate(input, f.admin.id)).rejects.toThrow("inactive");
     expect(await prisma.growthPinApproval.count()).toBe(0);
@@ -153,6 +155,17 @@ suite("Phase 11 PostgreSQL publishing invariants", () => {
     expect(publication).toMatchObject({ status: "RECONCILED", pinterestPinId: "published-pin" });
     const pin = await prisma.growthPinterestPin.findUniqueOrThrow({ where: { pinterestPinId: "published-pin" } });
     expect(await prisma.growthAttributionRef.findUniqueOrThrow({ where: { id: publication.attributionRefId! } })).toMatchObject({ pinId: pin.id });
+  });
+  it("persists safe insufficient-scope diagnostics from a rejected Create Pin call", async () => {
+    const f = await fixture(); const past = new Date(Date.now() - 2 * 86_400_000);
+    const approved = await approvePinCandidate({ candidateId: f.candidate.id, accountId: f.account.id, boardId: f.board.id, scheduledAt: new Date(past.getTime() + 60_000).toISOString(), confirmation: true }, f.admin.id, past);
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ code: "AUTHORIZATION_FAILURE", message: "Insufficient scope boards:write. access_token=private-token-value" }), { status: 403 }));
+    await expect(publishApprovedPin(approved.publication!.id, fetchMock)).rejects.toMatchObject({ code: "PINTEREST_INSUFFICIENT_SCOPES" });
+    const publication = await prisma.growthPinPublication.findUniqueOrThrow({ where: { id: approved.publication!.id } });
+    expect(publication).toMatchObject({ status: "FAILED_TERMINAL", lastErrorCode: "PINTEREST_INSUFFICIENT_SCOPES" });
+    expect(publication.lastErrorSummary).toContain("Insufficient scope boards:write");
+    expect(publication.lastErrorSummary).not.toContain("private-token-value");
+    expect(await prisma.growthPinterestAccount.findUniqueOrThrow({ where: { id: f.account.id } })).toMatchObject({ connectionStatus: GrowthPinterestConnectionStatus.REAUTH_REQUIRED });
   });
   it("moves ambiguous create to GET-only reconciliation and resolves an exact attributed URL", async () => {
     const f = await fixture(); const past = new Date(Date.now() - 2 * 86_400_000); const approved = await approvePinCandidate({ candidateId: f.candidate.id, accountId: f.account.id, boardId: f.board.id, scheduledAt: new Date(past.getTime() + 60_000).toISOString(), confirmation: true }, f.admin.id, past);
@@ -271,5 +284,14 @@ suite("Phase 11 PostgreSQL publishing invariants", () => {
     await expect(publishApprovedPin(approved.publication!.id, fetchMock)).rejects.toThrow("no longer valid");
     expect(fetchMock).not.toHaveBeenCalled();
     expect(await prisma.growthPinPublication.findUniqueOrThrow({ where: { id: approved.publication!.id } })).toMatchObject({ status: "FAILED_TERMINAL", lastErrorCode: "PUBLICATION_REVALIDATION_FAILED" });
+
+    await clean(); await prisma.growthSettings.create({ data: { id: "global", enabled: true } });
+    const missingScope = await fixture();
+    const missingScopeApproval = await approvePinCandidate({ candidateId: missingScope.candidate.id, accountId: missingScope.account.id, boardId: missingScope.board.id, scheduledAt: new Date(past.getTime() + 60_000).toISOString(), confirmation: true }, missingScope.admin.id, past);
+    await prisma.growthPinterestAccount.update({ where: { id: missingScope.account.id }, data: { grantedScopes: ["user_accounts:read", "boards:read", "pins:read", "pins:write"] } });
+    const scopedFetch = vi.fn();
+    await expect(publishApprovedPin(missingScopeApproval.publication!.id, scopedFetch)).rejects.toThrow("no longer valid");
+    expect(scopedFetch).not.toHaveBeenCalled();
+    expect(await prisma.growthPinPublication.findUniqueOrThrow({ where: { id: missingScopeApproval.publication!.id } })).toMatchObject({ status: "FAILED_TERMINAL", lastErrorCode: "PUBLICATION_REVALIDATION_FAILED" });
   });
 });

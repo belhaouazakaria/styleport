@@ -7,7 +7,7 @@ import {
 } from "@prisma/client";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { disconnectPinterestAccount } from "@/lib/growth/pinterest/accounts";
+import { connectPinterestAccount, disconnectPinterestAccount } from "@/lib/growth/pinterest/accounts";
 import { decryptPinterestCredentials, encryptPinterestCredentials } from "@/lib/growth/pinterest/credentials";
 import { enqueuePinterestSyncJobs } from "@/lib/growth/pinterest/jobs";
 import { syncPinterestBoards } from "@/lib/growth/pinterest/sync";
@@ -45,7 +45,7 @@ async function createAccount(overrides: Partial<Parameters<typeof prisma.growthP
     username: `user-${randomUUID()}`,
     apiEnvironment: GrowthPinterestApiEnvironment.SANDBOX,
     connectionStatus: GrowthPinterestConnectionStatus.CONNECTED,
-    grantedScopes: ["boards:read", "pins:read", "pins:write", "user_accounts:read"],
+    grantedScopes: ["boards:read", "boards:write", "pins:read", "pins:write", "user_accounts:read"],
     encryptedCredentials: encryptPinterestCredentials({ accessToken: "test-access-original", refreshToken: "test-refresh-original" }, encryptionKey),
     accessTokenExpiresAt: new Date(Date.now() + 3_600_000),
     refreshTokenExpiresAt: new Date(Date.now() + 7_200_000),
@@ -77,9 +77,22 @@ databaseDescribe("Pinterest Phase 3 PostgreSQL persistence", () => {
     expect(decryptPinterestCredentials(account.encryptedCredentials, encryptionKey)).toEqual({ accessToken: "test-access-original", refreshToken: "test-refresh-original" });
   });
 
+  it("persists a partial OAuth grant as reauthorization required instead of publishing-ready", async () => {
+    const admin = await prisma.user.create({ data: { email: `${randomUUID()}@pinterest-phase3.test`, passwordHash: "unused", role: "ADMIN" } });
+    const account = await connectPinterestAccount({
+      profile: { id: `partial-${randomUUID()}`, username: "saytwist" },
+      token: { access_token: "partial-access", refresh_token: "partial-refresh", token_type: "bearer", expires_in: 3600, refresh_token_expires_in: 7200, scope: "boards:read pins:read pins:write user_accounts:read" },
+      publicationRole: GrowthPinterestPublicationRole.SAYTWIST,
+      adminUserId: admin.id,
+    });
+    expect(account).toMatchObject({ connectionStatus: GrowthPinterestConnectionStatus.REAUTH_REQUIRED, grantedScopes: ["boards:read", "pins:read", "pins:write", "user_accounts:read"] });
+    expect(account.lastConnectionError).toContain("boards:write");
+    expect(account.lastConnectionError).not.toContain("partial-access");
+  });
+
   it("serializes concurrent refresh, rotates both tokens, and increments one version", async () => {
     const account = await createAccount({ accessTokenExpiresAt: new Date(Date.now() - 1) });
-    const response = { access_token: "test-access-rotated", refresh_token: "test-refresh-rotated", token_type: "bearer", expires_in: 3600, refresh_token_expires_in: 7200, scope: "boards:read pins:read pins:write user_accounts:read" };
+    const response = { access_token: "test-access-rotated", refresh_token: "test-refresh-rotated", token_type: "bearer", expires_in: 3600, refresh_token_expires_in: 7200, scope: "boards:read boards:write pins:read pins:write user_accounts:read" };
     const fetchMock = vi.fn().mockImplementation(async () => new Response(JSON.stringify(response), { status: 200 }));
     const tokens = await Promise.all([
       getValidPinterestAccessToken(account.id, fetchMock),
@@ -90,6 +103,16 @@ databaseDescribe("Pinterest Phase 3 PostgreSQL persistence", () => {
     const persisted = await prisma.growthPinterestAccount.findUniqueOrThrow({ where: { id: account.id } });
     expect(persisted.credentialVersion).toBe(2);
     expect(decryptPinterestCredentials(persisted.encryptedCredentials!, encryptionKey)).toEqual({ accessToken: "test-access-rotated", refreshToken: "test-refresh-rotated" });
+  });
+
+  it("fails closed when token refresh drops a required publishing scope", async () => {
+    const account = await createAccount({ accessTokenExpiresAt: new Date(Date.now() - 1) });
+    const response = { access_token: "partial-access-rotated", refresh_token: "partial-refresh-rotated", token_type: "bearer", expires_in: 3600, refresh_token_expires_in: 7200, scope: "boards:read pins:read pins:write user_accounts:read" };
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(response), { status: 200 }));
+    await expect(getValidPinterestAccessToken(account.id, fetchMock)).rejects.toThrow("boards:write");
+    const persisted = await prisma.growthPinterestAccount.findUniqueOrThrow({ where: { id: account.id } });
+    expect(persisted).toMatchObject({ connectionStatus: GrowthPinterestConnectionStatus.REAUTH_REQUIRED, grantedScopes: ["boards:read", "pins:read", "pins:write", "user_accounts:read"] });
+    expect(persisted.lastConnectionError).toContain("boards:write");
   });
 
   it("upserts boards and deactivates unseen boards only after a complete sync", async () => {

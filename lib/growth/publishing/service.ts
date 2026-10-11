@@ -16,8 +16,8 @@ import { recordGrowthActivity } from "@/lib/growth/activity";
 import { generateAttributionPublicRef } from "@/lib/growth/attribution/refs";
 import { buildAttributionUrl, normalizeAttributionDestinationPath } from "@/lib/growth/attribution/urls";
 import { NonRetryableGrowthJobError, RetryableGrowthJobError } from "@/lib/growth/errors";
-import { createPinterestPin, getPinterestPinsPage, PinterestCreateAmbiguousError, PinterestRateLimitError } from "@/lib/growth/pinterest/api";
-import { requirePinterestConfiguration } from "@/lib/growth/pinterest/config";
+import { createPinterestPin, getPinterestPinsPage, PinterestAuthorizationError, PinterestCreateAmbiguousError, PinterestRateLimitError } from "@/lib/growth/pinterest/api";
+import { hasPinterestScopes, PINTEREST_CREATE_PIN_SCOPES, requirePinterestConfiguration } from "@/lib/growth/pinterest/config";
 import { isOwnedPinterestDestination } from "@/lib/growth/pinterest/relevance";
 import { prisma } from "@/lib/prisma";
 import { approvePinSchema, PIN_APPROVAL_POLICY_VERSION, PUBLICATION_TIMING_VERSION, rejectPinSchema, type ApprovedPinSnapshot } from "@/lib/growth/publishing/contracts";
@@ -54,7 +54,7 @@ export async function approvePinCandidate(raw: unknown, adminUserId: string, now
     if (candidate.asset.state !== GrowthAssetState.READY || candidate.asset.mimeType !== "image/png" || candidate.asset.width !== 1000 || candidate.asset.height !== 1500) throw new Error("Creative asset is not publishable.");
     const account = await tx.growthPinterestAccount.findFirst({ where: { id: input.accountId, connectionStatus: GrowthPinterestConnectionStatus.CONNECTED }, select: { id: true, publicationRole: true, apiEnvironment: true, grantedScopes: true, encryptedCredentials: true, refreshTokenExpiresAt: true } });
     const config = requirePinterestConfiguration();
-    if (!account || account.apiEnvironment !== config.apiEnvironment || !account.grantedScopes.includes("pins:write") || !account.encryptedCredentials || (account.refreshTokenExpiresAt && account.refreshTokenExpiresAt <= now)) throw new Error("Pinterest account is not eligible for publishing.");
+    if (!account || account.apiEnvironment !== config.apiEnvironment || !hasPinterestScopes(account.grantedScopes, PINTEREST_CREATE_PIN_SCOPES) || !account.encryptedCredentials || (account.refreshTokenExpiresAt && account.refreshTokenExpiresAt <= now)) throw new Error("Pinterest account is not eligible for publishing.");
     const board = await tx.growthPinterestBoard.findFirst({ where: { id: input.boardId, accountId: account.id, isActive: true }, select: { id: true } });
     if (!board) throw new Error("Pinterest board is inactive or does not belong to the selected account.");
     const existing = await tx.growthPinApproval.findFirst({ where: { candidateId: candidate.id, status: GrowthPinApprovalStatus.APPROVED }, include: { publication: true }, orderBy: { createdAt: "desc" } });
@@ -170,7 +170,7 @@ export async function publishApprovedPin(publicationId: string, fetchImpl?: type
       const settings = await tx.growthSettings.findUnique({ where: { id: "global" }, select: { enabled: true } });
       if (!settings?.enabled) throw new NonRetryableGrowthJobError("Growth is disabled before Pinterest publishing.");
       const config = requirePinterestConfiguration();
-      if (row.approval.status !== GrowthPinApprovalStatus.APPROVED || row.approval.candidateRevision !== row.candidate.revision || row.candidate.status !== GrowthPinCandidateStatus.READY || row.candidate.asset.state !== GrowthAssetState.READY || row.candidate.asset.mimeType !== "image/png" || row.candidate.asset.width !== 1000 || row.candidate.asset.height !== 1500 || row.account.connectionStatus !== GrowthPinterestConnectionStatus.CONNECTED || row.account.apiEnvironment !== config.apiEnvironment || !row.account.grantedScopes.includes("pins:write") || !row.account.encryptedCredentials || !row.board.isActive || row.board.accountId !== row.accountId || !row.attributionRef) throw new NonRetryableGrowthJobError("Approved Pin authorization is no longer valid.");
+      if (row.approval.status !== GrowthPinApprovalStatus.APPROVED || row.approval.candidateRevision !== row.candidate.revision || row.candidate.status !== GrowthPinCandidateStatus.READY || row.candidate.asset.state !== GrowthAssetState.READY || row.candidate.asset.mimeType !== "image/png" || row.candidate.asset.width !== 1000 || row.candidate.asset.height !== 1500 || row.account.connectionStatus !== GrowthPinterestConnectionStatus.CONNECTED || row.account.apiEnvironment !== config.apiEnvironment || !hasPinterestScopes(row.account.grantedScopes, PINTEREST_CREATE_PIN_SCOPES) || !row.account.encryptedCredentials || !row.board.isActive || row.board.accountId !== row.accountId || !row.attributionRef) throw new NonRetryableGrowthJobError("Approved Pin authorization is no longer valid.");
       const snapshot = parseSnapshot(row.approval.snapshot);
       const rebuilt: ApprovedPinSnapshot = { candidateId: row.candidate.id, candidateRevision: row.candidate.revision, contentHash: row.candidate.contentHash, assetChecksum: row.candidate.asset.checksum, rendererKey: row.candidate.rendererKey, rendererVersion: row.candidate.rendererVersion, templateId: row.candidate.templateId, title: row.candidate.title, description: row.candidate.description, destinationPath: normalizeAttributionDestinationPath(row.candidate.destinationPath), destinationUrl: buildAttributionUrl(row.attributionRef), assetPublicUrl: buildPublicCreativeAssetUrl(row.candidate.asset.publicPath), accountId: row.accountId, boardId: row.boardId, scheduledAt: row.scheduledAt.toISOString(), approvalPolicyVersion: row.approval.approvalPolicyVersion };
       if (pinApprovalSnapshotChecksum(rebuilt) !== row.approval.snapshotChecksum || pinApprovalSnapshotChecksum(snapshot) !== row.approval.snapshotChecksum) throw new NonRetryableGrowthJobError("Approved Pin snapshot changed; a new approval is required.");
@@ -197,7 +197,7 @@ export async function publishApprovedPin(publicationId: string, fetchImpl?: type
       return { publication: await prisma.growthPinPublication.findUniqueOrThrow({ where: { id: publication.id } }), reused: false };
     }
     if (error instanceof RetryableGrowthJobError) await prisma.growthPinPublication.update({ where: { id: publication.id }, data: { status: GrowthPublicationStatus.FAILED_RETRYABLE, lastErrorCode: "PINTEREST_RATE_LIMIT", lastErrorSummary: bounded(error.message, 500), ...(error instanceof PinterestRateLimitError ? rateFields(error.rateLimit) : {}) } });
-    else await prisma.growthPinPublication.update({ where: { id: publication.id }, data: { status: GrowthPublicationStatus.FAILED_TERMINAL, lastErrorCode: "PINTEREST_CREATE_REJECTED", lastErrorSummary: bounded(error instanceof Error ? error.message : "Pinterest Create Pin failed.", 500) } });
+    else await prisma.growthPinPublication.update({ where: { id: publication.id }, data: { status: GrowthPublicationStatus.FAILED_TERMINAL, lastErrorCode: error instanceof PinterestAuthorizationError ? error.code : "PINTEREST_CREATE_REJECTED", lastErrorSummary: bounded(error instanceof Error ? error.message : "Pinterest Create Pin failed.", 500) } });
     throw error;
   }
   const publishedAt = created.data.created_at && !Number.isNaN(Date.parse(created.data.created_at)) ? new Date(created.data.created_at) : new Date();

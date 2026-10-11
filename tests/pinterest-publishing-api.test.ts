@@ -3,7 +3,7 @@ const mocks = vi.hoisted(() => ({ token: vi.fn(), updateMany: vi.fn() }));
 vi.mock("@/lib/growth/pinterest/tokens", () => ({ getValidPinterestAccessToken: mocks.token }));
 vi.mock("@/lib/growth/pinterest/config", () => ({ requirePinterestConfiguration: () => ({ apiBaseUrl: "https://api.pinterest.test/v5" }) }));
 vi.mock("@/lib/prisma", () => ({ prisma: { growthPinterestAccount: { updateMany: mocks.updateMany } } }));
-import { createPinterestPin, PinterestCreateAmbiguousError } from "@/lib/growth/pinterest/api";
+import { createPinterestPin, PinterestAuthorizationError, PinterestCreateAmbiguousError } from "@/lib/growth/pinterest/api";
 import { NonRetryableGrowthJobError, RetryableGrowthJobError } from "@/lib/growth/errors";
 
 const input = { accountId: "account", boardId: "external-board", title: "Exact title", description: "Exact description", link: "https://saytwist.com/translators/test?pin_ref=pa_ref", imageUrl: `https://saytwist.com/generated/growth-creatives/creative-${"a".repeat(64)}.png` };
@@ -18,7 +18,13 @@ describe("Pinterest publishing adapter", () => {
   });
   it("classifies rate limits, auth, validation, and ambiguous outcomes safely", async () => {
     await expect(createPinterestPin({ ...input, fetchImpl: vi.fn().mockResolvedValue(new Response("{}", { status: 429, headers: { "retry-after": "12" } })) })).rejects.toMatchObject<RetryableGrowthJobError>({ retryAfterMs: 12_000 });
-    await expect(createPinterestPin({ ...input, fetchImpl: vi.fn().mockResolvedValue(new Response("{}", { status: 401 })) })).rejects.toBeInstanceOf(NonRetryableGrowthJobError);
+    const invalidCredential = await createPinterestPin({ ...input, fetchImpl: vi.fn().mockResolvedValue(new Response(JSON.stringify({ code: 8, message: "Invalid access token." }), { status: 401 })) }).catch((error) => error);
+    expect(invalidCredential).toMatchObject<PinterestAuthorizationError>({ code: "PINTEREST_INVALID_CREDENTIAL" });
+    expect(invalidCredential.message).toContain("Provider code: 8");
+    const insufficientScope = await createPinterestPin({ ...input, fetchImpl: vi.fn().mockResolvedValue(new Response(JSON.stringify({ code: "AUTHORIZATION_FAILURE", message: "Insufficient scope boards:write. access_token=private-token-value" }), { status: 403 })) }).catch((error) => error);
+    expect(insufficientScope).toMatchObject<PinterestAuthorizationError>({ code: "PINTEREST_INSUFFICIENT_SCOPES" });
+    expect(insufficientScope.message).toContain("Insufficient scope boards:write");
+    expect(insufficientScope.message).not.toContain("private-token-value");
     expect(mocks.updateMany).toHaveBeenCalled();
     await expect(createPinterestPin({ ...input, fetchImpl: vi.fn().mockResolvedValue(new Response("{}", { status: 400 })) })).rejects.toBeInstanceOf(NonRetryableGrowthJobError);
     await expect(createPinterestPin({ ...input, fetchImpl: vi.fn().mockResolvedValue(new Response("{}", { status: 503 })) })).rejects.toBeInstanceOf(PinterestCreateAmbiguousError);

@@ -30,7 +30,7 @@ describe("Pinterest OAuth primitives", () => {
     }) });
     const url = new URL(result.authorizationUrl);
     expect(`${url.origin}${url.pathname}`).toBe("https://www.pinterest.com/oauth/");
-    expect(url.searchParams.get("scope")).toBe("user_accounts:read,boards:read,pins:read,pins:write");
+    expect(url.searchParams.get("scope")).toBe("user_accounts:read,boards:read,boards:write,pins:read,pins:write");
     expect(url.searchParams.get("redirect_uri")).toBe("https://saytwist.test/api/admin/growth/pinterest/oauth/callback");
   });
 
