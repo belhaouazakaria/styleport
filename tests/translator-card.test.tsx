@@ -92,6 +92,43 @@ describe("TranslatorCard", () => {
     });
   });
 
+  it("orders the mobile flow as input, primary action, then result", () => {
+    renderCard();
+
+    const input = screen.getByLabelText("Input text");
+    const primaryAction = screen.getByRole("button", {
+      name: /twist my words/i,
+    });
+    const result = screen.getByLabelText("Output text").closest("[aria-live]");
+
+    expect(input.compareDocumentPosition(primaryAction)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(primaryAction.compareDocumentPosition(result!)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(result).toHaveClass("hidden");
+  });
+
+  it("prioritizes try again and edit input after a result", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: true, result: "Good morrow to you." }),
+    });
+    Element.prototype.scrollIntoView = vi.fn();
+
+    renderCard();
+    await userEvent.type(screen.getByLabelText("Input text"), "hello there");
+    await userEvent.click(
+      screen.getByRole("button", { name: /twist my words/i }),
+    );
+
+    expect(
+      await screen.findByRole("button", { name: /try again/i }),
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: /edit input/i })).toBeVisible();
+  });
+
   it("supports keyboard shortcut ctrl/cmd + enter", async () => {
     fetchMock.mockResolvedValue({
       ok: true,
