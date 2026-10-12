@@ -1,7 +1,5 @@
 import type {
   CommentModerationStatus,
-  IndexingSource,
-  IndexingStatus,
   Role,
   TranslatorRequestStatus,
 } from "@prisma/client";
@@ -127,6 +125,14 @@ export interface PublicTranslator {
   examples: PublicExample[];
   editorial: TranslatorEditorialContent;
   editorialStatus: "INCOMPLETE" | "NEEDS_REVIEW" | "READY";
+  indexingEligibility: {
+    indexable: boolean;
+    strictIndexable: boolean;
+    technicallyReady: boolean;
+    currentVersionReviewed: boolean;
+    reviewEnforcementEnabled: boolean;
+    reasons: string[];
+  };
 }
 
 export interface RuntimeTranslator {
@@ -223,8 +229,6 @@ export interface TranslatorListItem {
   featuredSource: "AUTO" | "MANUAL";
   shareImagePath: string | null;
   shareImageUpdatedAt: string | null;
-  latestIndexingStatus: IndexingStatus | null;
-  latestIndexingAt: string | null;
   categories: Array<{ id: string; name: string; slug: string }>;
   editorialStatus: "INCOMPLETE" | "NEEDS_REVIEW" | "READY";
   editorialExampleCount: number;
@@ -234,6 +238,7 @@ export interface TranslatorListItem {
   editorialCompletionPercent: number;
   editorialMissing: string[];
   indexableCandidate: boolean;
+  currentVersionReviewed: boolean;
 }
 
 export interface AdminTranslatorDashboardSummary {
@@ -259,37 +264,6 @@ export interface AdminTranslatorDashboard {
   totalPages: number;
 }
 
-export interface GoogleIndexingStatusSummary {
-  enabled: boolean;
-  dryRun: boolean;
-  credentialsConfigured: boolean;
-  credentialMode:
-    | "private_key_base64"
-    | "private_key_raw"
-    | "service_account_json_base64"
-    | "missing"
-    | "invalid";
-  activeCredentialMethod: "private_key_base64" | "private_key_raw" | "service_account_json_base64" | null;
-  projectId: string | null;
-  projectIdConfigured: boolean;
-  serviceAccountEmail: string | null;
-  serviceAccountEmailConfigured: boolean;
-  privateKeyPresent: boolean;
-  privateKeyValid: boolean;
-  missingFields: string[];
-  warnings: string[];
-  validationErrors: string[];
-  baseUrl: string;
-}
-
-export interface IndexingSubmissionResult {
-  ok: boolean;
-  url: string;
-  status: "SUBMITTED" | "FAILED" | "SKIPPED" | "DRY_RUN";
-  provider: "GOOGLE_INDEXING_API";
-  message?: string;
-  response?: unknown;
-}
 
 export interface CategoryUpsertInput {
   name: string;
@@ -517,35 +491,6 @@ export interface AdminTranslatorCommentListItem {
     name: string;
     slug: string;
   };
-}
-
-export interface AdminIndexingLogListItem {
-  id: string;
-  translatorId: string | null;
-  translatorName: string | null;
-  translatorSlug: string | null;
-  url: string;
-  source: IndexingSource;
-  status: IndexingStatus;
-  provider: "GOOGLE_INDEXING_API";
-  message: string | null;
-  responseJson: unknown;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface AdminIndexingLogFilters {
-  q?: string;
-  status?: "all" | IndexingStatus;
-  source?: "all" | IndexingSource;
-}
-
-export interface AdminBulkIndexingSummary {
-  total: number;
-  submitted: number;
-  failed: number;
-  skipped: number;
-  dryRun: number;
 }
 
 export interface UsageProtectionSettingsInput {

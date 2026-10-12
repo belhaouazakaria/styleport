@@ -75,6 +75,7 @@ export async function generateMetadata({
 
   const hasSearch = Boolean(params.q?.trim());
   const hasCategory = Boolean(params.category?.trim());
+  const hasPagination = Math.max(1, Number(params.page || 1) || 1) > 1;
 
   return {
     title: homepageTitle,
@@ -105,7 +106,7 @@ export async function generateMetadata({
         "AI-powered text translators to rewrite text into different styles, tones, and personalities. Give your words a different twist.",
       images: [ogImageUrl],
     },
-    robots: hasSearch
+    robots: hasSearch || hasCategory || hasPagination
       ? {
           index: false,
           follow: true,

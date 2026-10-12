@@ -98,7 +98,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       images: [imageUrl],
     },
     robots: {
-      index: translator.editorialStatus === "READY",
+      index: translator.indexingEligibility.indexable,
       follow: true,
     },
   };

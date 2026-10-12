@@ -1,4 +1,4 @@
-import { FeaturedSource, IndexingProvider, IndexingSource, Prisma, TranslationStatus } from "@prisma/client";
+import { FeaturedSource, Prisma, TranslationStatus } from "@prisma/client";
 
 import {
   AUTO_FEATURED_LIMIT,
@@ -6,9 +6,10 @@ import {
   DEFAULT_AUTO_FEATURED_WINDOW_DAYS,
   APP_SETTING_KEYS,
 } from "@/lib/constants";
-import { logError, logWarn } from "@/lib/logger";
+import { logWarn } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
-import { submitTranslatorToGoogleIndexing } from "@/lib/data/indexing";
+import { assessTranslatorIndexingEligibility } from "@/lib/indexing-eligibility";
+import { getAppBaseUrl } from "@/lib/env";
 import { deleteStoredShareImage, ensureTranslatorShareImageById } from "@/lib/share-images";
 import { ensureUniqueTranslatorSlug } from "@/lib/slug";
 import { getAppSettings } from "@/lib/settings";
@@ -36,9 +37,11 @@ import type {
   PublicTranslator,
   RuntimeTranslator,
   TranslatorListItem,
+  TranslatorEditorialDraft,
   TranslatorUpsertInput,
   UsageSeriesPoint,
 } from "@/lib/types";
+import { translatorEditorialCandidateSchema } from "@/lib/validators";
 
 export { getAdminTranslatorIdsForBulk, getEditorialReadiness } from "@/lib/translator-editorial-data";
 export type { AdminTranslatorFilters, EditorialStatus } from "@/lib/translator-editorial-data";
@@ -144,6 +147,17 @@ const publicTranslatorInclude = {
   editorialLists: { orderBy: [{ kind: "asc" as const }, { sortOrder: "asc" as const }] },
   editorialExamples: { orderBy: { sortOrder: "asc" as const } },
   editorialFaqs: { orderBy: { sortOrder: "asc" as const } },
+  editorialDrafts: {
+    where: {
+      status: "PUBLISHED" as const,
+      reviewedById: { not: null },
+      reviewedAt: { not: null },
+      publishedAt: { not: null },
+    },
+    select: { payload: true },
+    orderBy: { publishedAt: "desc" as const },
+    take: 1,
+  },
   primaryCategory: {
     select: {
       id: true,
@@ -165,6 +179,37 @@ const publicTranslatorInclude = {
   },
 };
 
+interface EditorialRelations {
+  editorialContent?: { about: string | null; whatItDoes: string | null; differenceDescription: string | null } | null;
+  editorialLists: Array<{ kind: string; content: string; sortOrder?: number }>;
+  editorialExamples: Array<{ contextTitle?: string | null; originalText: string; transformedText: string; sortOrder?: number }>;
+  editorialFaqs: Array<{ question: string; answer: string; sortOrder?: number }>;
+}
+
+function currentEditorialDraft(translator: EditorialRelations): TranslatorEditorialDraft {
+  const ordered = <T extends { sortOrder?: number }>(items: T[]) =>
+    [...items].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+  return {
+    about: translator.editorialContent?.about || "",
+    whatItDoes: translator.editorialContent?.whatItDoes || "",
+    differenceDescription: translator.editorialContent?.differenceDescription || "",
+    bestUses: ordered(translator.editorialLists).filter((item) => item.kind === "BEST_USE").map((item) => item.content),
+    howToUse: ordered(translator.editorialLists).filter((item) => item.kind === "HOW_TO_USE").map((item) => item.content),
+    tips: ordered(translator.editorialLists).filter((item) => item.kind === "TIP").map((item) => item.content),
+    examples: ordered(translator.editorialExamples).map((item) => ({
+      contextTitle: item.contextTitle || "",
+      originalText: item.originalText,
+      transformedText: item.transformedText,
+    })),
+    faq: ordered(translator.editorialFaqs).map((item) => ({ question: item.question, answer: item.answer })),
+  };
+}
+
+function reviewedDraftFromPayload(payload: Prisma.JsonValue | undefined) {
+  const parsed = translatorEditorialCandidateSchema.safeParse(payload);
+  return parsed.success ? parsed.data : null;
+}
+
 function mapPublicTranslator(
   translator: Prisma.TranslatorGetPayload<{ include: typeof publicTranslatorInclude }>,
 ): PublicTranslator {
@@ -173,6 +218,13 @@ function mapPublicTranslator(
     lists: translator.editorialLists,
     examples: translator.editorialExamples,
     faqs: translator.editorialFaqs,
+  });
+  const indexingEligibility = assessTranslatorIndexingEligibility({
+    isActive: translator.isActive,
+    archivedAt: translator.archivedAt,
+    slug: translator.slug,
+    currentEditorial: currentEditorialDraft(translator),
+    latestReviewedPublishedDraft: reviewedDraftFromPayload(translator.editorialDrafts[0]?.payload),
   });
 
   return {
@@ -210,6 +262,7 @@ function mapPublicTranslator(
       faq: translator.editorialFaqs,
     },
     editorialStatus: editorialReadiness.status,
+    indexingEligibility,
   };
 }
 
@@ -805,7 +858,7 @@ export async function getNewestPublicTranslators(limit = 3): Promise<PublicTrans
 }
 
 export async function getIndexableTranslatorSlugsForSitemap() {
-  return prisma.translator.findMany({
+  const rows = await prisma.translator.findMany({
     where: {
       isActive: true,
       archivedAt: null,
@@ -813,11 +866,33 @@ export async function getIndexableTranslatorSlugsForSitemap() {
         not: "",
       },
     },
-    select: {
-      slug: true,
-      updatedAt: true,
-    },
+    include: publicTranslatorInclude,
     orderBy: [{ updatedAt: "desc" }],
+  });
+
+  return rows
+    .map((row) => ({ row, eligibility: mapPublicTranslator(row).indexingEligibility }))
+    .filter(({ eligibility }) => eligibility.indexable)
+    .map(({ row }) => ({ slug: row.slug, updatedAt: row.updatedAt }));
+}
+
+export async function getTranslatorIndexingImpactReport() {
+  const rows = await prisma.translator.findMany({
+    where: { isActive: true, archivedAt: null, slug: { not: "" } },
+    include: publicTranslatorInclude,
+    orderBy: [{ slug: "asc" }],
+  });
+
+  return rows.map((row) => {
+    const eligibility = mapPublicTranslator(row).indexingEligibility;
+    return {
+      slug: row.slug,
+      url: new URL(`/translators/${row.slug}`, getAppBaseUrl()).toString(),
+      currentlyIndexable: eligibility.indexable,
+      strictIndexable: eligibility.strictIndexable,
+      currentVersionReviewed: eligibility.currentVersionReviewed,
+      reasons: eligibility.reasons,
+    };
   });
 }
 
@@ -1116,17 +1191,6 @@ export async function listAdminTranslators(filters: {
       featuredSource: true,
       shareImagePath: true,
       shareImageUpdatedAt: true,
-      indexingLogs: {
-        where: {
-          provider: IndexingProvider.GOOGLE_INDEXING_API,
-        },
-        select: {
-          status: true,
-          createdAt: true,
-        },
-        orderBy: [{ createdAt: "desc" }],
-        take: 1,
-      },
       archivedAt: true,
       updatedAt: true,
       sortOrder: true,
@@ -1144,9 +1208,13 @@ export async function listAdminTranslators(filters: {
       editorialContent: {
         select: { about: true, whatItDoes: true, differenceDescription: true, updatedAt: true },
       },
-      editorialLists: { select: { content: true, kind: true } },
-      editorialExamples: { select: { originalText: true, transformedText: true } },
-      editorialFaqs: { select: { question: true, answer: true } },
+      editorialLists: { select: { content: true, kind: true, sortOrder: true } },
+      editorialExamples: { select: { contextTitle: true, originalText: true, transformedText: true, sortOrder: true } },
+      editorialFaqs: { select: { question: true, answer: true, sortOrder: true } },
+      editorialDrafts: {
+        where: { status: "PUBLISHED", reviewedById: { not: null }, reviewedAt: { not: null }, publishedAt: { not: null } },
+        select: { payload: true }, orderBy: { publishedAt: "desc" }, take: 1,
+      },
     },
     orderBy,
   });
@@ -1163,14 +1231,19 @@ export async function listAdminTranslators(filters: {
       row.updatedAt,
     ].filter(Boolean).sort((a, b) => b!.getTime() - a!.getTime())[0] || null;
 
+    const eligibility = assessTranslatorIndexingEligibility({
+      isActive: row.isActive,
+      archivedAt: row.archivedAt,
+      slug: row.slug,
+      currentEditorial: currentEditorialDraft(row),
+      latestReviewedPublishedDraft: reviewedDraftFromPayload(row.editorialDrafts[0]?.payload),
+    });
     return {
     ...row,
     categories: row.categories.map((item) => item.category),
     archivedAt: row.archivedAt ? row.archivedAt.toISOString() : null,
     updatedAt: row.updatedAt.toISOString(),
     shareImageUpdatedAt: row.shareImageUpdatedAt ? row.shareImageUpdatedAt.toISOString() : null,
-    latestIndexingStatus: row.indexingLogs[0]?.status || null,
-    latestIndexingAt: row.indexingLogs[0]?.createdAt ? row.indexingLogs[0].createdAt.toISOString() : null,
       editorialStatus: editorialReadiness.status,
       editorialExampleCount: row.editorialExamples.length,
       editorialFaqCount: row.editorialFaqs.length,
@@ -1178,7 +1251,8 @@ export async function listAdminTranslators(filters: {
       editorialUpdatedAt: editorialUpdatedAt ? editorialUpdatedAt.toISOString() : null,
       editorialCompletionPercent: editorialReadiness.completionPercent,
       editorialMissing: editorialReadiness.missing,
-      indexableCandidate: row.isActive && !row.archivedAt && editorialReadiness.status === "READY",
+      indexableCandidate: eligibility.indexable,
+      currentVersionReviewed: eligibility.currentVersionReviewed,
     };
   });
 
@@ -1192,12 +1266,17 @@ export async function listAdminTranslators(filters: {
 
 const adminEditorialAuditSelect = {
   id: true,
+  slug: true,
   isActive: true,
   archivedAt: true,
   editorialContent: { select: { about: true, whatItDoes: true, differenceDescription: true, updatedAt: true } },
-  editorialLists: { select: { content: true, kind: true } },
-  editorialExamples: { select: { originalText: true, transformedText: true } },
-  editorialFaqs: { select: { question: true, answer: true } },
+  editorialLists: { select: { content: true, kind: true, sortOrder: true } },
+  editorialExamples: { select: { contextTitle: true, originalText: true, transformedText: true, sortOrder: true } },
+  editorialFaqs: { select: { question: true, answer: true, sortOrder: true } },
+  editorialDrafts: {
+    where: { status: "PUBLISHED" as const, reviewedById: { not: null }, reviewedAt: { not: null }, publishedAt: { not: null } },
+    select: { payload: true }, orderBy: { publishedAt: "desc" as const }, take: 1,
+  },
 } as const;
 
 function summarizeAdminEditorialRows(rows: Array<Prisma.TranslatorGetPayload<{ select: typeof adminEditorialAuditSelect }>>): AdminTranslatorDashboardSummary {
@@ -1252,7 +1331,12 @@ export async function getAdminTranslatorDashboard(filters: AdminTranslatorFilter
     const auditedRows = editorialRows.map((row) => ({ row, readiness: getEditorialReadiness({ content: row.editorialContent, lists: row.editorialLists, examples: row.editorialExamples, faqs: row.editorialFaqs }) }));
     const filteredRows = auditedRows.filter(({ row, readiness }) => {
       const editorialMatch = !filters.editorialStatus || filters.editorialStatus === "all" || readiness.status === (filters.editorialStatus === "needs-review" ? "NEEDS_REVIEW" : filters.editorialStatus.toUpperCase());
-      const indexingMatch = !filters.indexing || filters.indexing === "all" || (filters.indexing === "indexable" ? row.isActive && !row.archivedAt && readiness.status === "READY" : !(row.isActive && !row.archivedAt && readiness.status === "READY"));
+      const eligibility = assessTranslatorIndexingEligibility({
+        isActive: row.isActive, archivedAt: row.archivedAt, slug: row.slug,
+        currentEditorial: currentEditorialDraft(row),
+        latestReviewedPublishedDraft: reviewedDraftFromPayload(row.editorialDrafts[0]?.payload),
+      });
+      const indexingMatch = !filters.indexing || filters.indexing === "all" || (filters.indexing === "indexable" ? eligibility.indexable : !eligibility.indexable);
       return editorialMatch && indexingMatch;
     });
     if (filters.sort === "word-count") filteredRows.sort((a, b) => b.readiness.wordCount - a.readiness.wordCount);
@@ -1289,17 +1373,15 @@ export async function getAdminTranslatorDashboard(filters: AdminTranslatorFilter
         archivedAt: true,
         updatedAt: true,
         sortOrder: true,
-        indexingLogs: {
-          where: { provider: IndexingProvider.GOOGLE_INDEXING_API },
-          select: { status: true, createdAt: true },
-          orderBy: [{ createdAt: "desc" }],
-          take: 1,
-        },
         categories: { select: { category: { select: { id: true, name: true, slug: true } } } },
         editorialContent: { select: { about: true, whatItDoes: true, differenceDescription: true, updatedAt: true } },
-        editorialLists: { select: { content: true, kind: true } },
-        editorialExamples: { select: { originalText: true, transformedText: true } },
-        editorialFaqs: { select: { question: true, answer: true } },
+        editorialLists: { select: { content: true, kind: true, sortOrder: true } },
+        editorialExamples: { select: { contextTitle: true, originalText: true, transformedText: true, sortOrder: true } },
+        editorialFaqs: { select: { question: true, answer: true, sortOrder: true } },
+        editorialDrafts: {
+          where: { status: "PUBLISHED", reviewedById: { not: null }, reviewedAt: { not: null }, publishedAt: { not: null } },
+          select: { payload: true }, orderBy: { publishedAt: "desc" }, take: 1,
+        },
       },
       orderBy,
       ...(sortedIds ? { skip: 0, take: sortedIds.length } : { skip: (page - 1) * pageSize, take: pageSize }),
@@ -1308,6 +1390,11 @@ export async function getAdminTranslatorDashboard(filters: AdminTranslatorFilter
 
   const mappedTranslators = rows.map((row) => {
     const editorialReadiness = getEditorialReadiness({ content: row.editorialContent, lists: row.editorialLists, examples: row.editorialExamples, faqs: row.editorialFaqs });
+    const eligibility = assessTranslatorIndexingEligibility({
+      isActive: row.isActive, archivedAt: row.archivedAt, slug: row.slug,
+      currentEditorial: currentEditorialDraft(row),
+      latestReviewedPublishedDraft: reviewedDraftFromPayload(row.editorialDrafts[0]?.payload),
+    });
     const editorialUpdatedAt = [row.editorialContent?.updatedAt, row.updatedAt].filter(Boolean).sort((a, b) => b!.getTime() - a!.getTime())[0] || null;
     return {
       ...row,
@@ -1315,8 +1402,6 @@ export async function getAdminTranslatorDashboard(filters: AdminTranslatorFilter
       archivedAt: row.archivedAt ? row.archivedAt.toISOString() : null,
       updatedAt: row.updatedAt.toISOString(),
       shareImageUpdatedAt: row.shareImageUpdatedAt ? row.shareImageUpdatedAt.toISOString() : null,
-      latestIndexingStatus: row.indexingLogs[0]?.status || null,
-      latestIndexingAt: row.indexingLogs[0]?.createdAt ? row.indexingLogs[0].createdAt.toISOString() : null,
       editorialStatus: editorialReadiness.status,
       editorialExampleCount: row.editorialExamples.length,
       editorialFaqCount: row.editorialFaqs.length,
@@ -1324,7 +1409,8 @@ export async function getAdminTranslatorDashboard(filters: AdminTranslatorFilter
       editorialUpdatedAt: editorialUpdatedAt ? editorialUpdatedAt.toISOString() : null,
       editorialCompletionPercent: editorialReadiness.completionPercent,
       editorialMissing: editorialReadiness.missing,
-      indexableCandidate: row.isActive && !row.archivedAt && editorialReadiness.status === "READY",
+      indexableCandidate: eligibility.indexable,
+      currentVersionReviewed: eligibility.currentVersionReviewed,
     } satisfies TranslatorListItem;
   });
 
@@ -1496,23 +1582,6 @@ export async function createTranslator(input: TranslatorUpsertInput) {
 
   await ensureTranslatorShareImageById(created.id);
 
-  if (created.isActive) {
-    try {
-      await submitTranslatorToGoogleIndexing({
-        translatorId: created.id,
-        slug: created.slug,
-        source: IndexingSource.AUTO_ACTIVE,
-      });
-    } catch (error) {
-      logError(
-        "auto_google_indexing_on_create_failed",
-        "Auto Google indexing submission failed after translator creation.",
-        { translatorId: created.id, slug: created.slug },
-        error,
-      );
-    }
-  }
-
   if (settings.autoFeaturedEnabled) {
     await maybeRecalculateAutoFeaturedTranslators("settings-save");
   }
@@ -1631,23 +1700,6 @@ export async function updateTranslator(id: string, input: TranslatorUpsertInput)
         categories: { include: { category: true } },
       },
     });
-  }
-
-  if (!existing?.isActive && updated.isActive) {
-    try {
-      await submitTranslatorToGoogleIndexing({
-        translatorId: updated.id,
-        slug: updated.slug,
-        source: IndexingSource.AUTO_ACTIVE,
-      });
-    } catch (error) {
-      logError(
-        "auto_google_indexing_on_update_failed",
-        "Auto Google indexing submission failed after translator activation via update.",
-        { translatorId: updated.id, slug: updated.slug },
-        error,
-      );
-    }
   }
 
   if (settings.autoFeaturedEnabled) {
@@ -1798,23 +1850,6 @@ export async function toggleTranslatorActive(id: string, active?: boolean) {
     },
   });
 
-  if (!current.isActive && updated.isActive) {
-    try {
-      await submitTranslatorToGoogleIndexing({
-        translatorId: updated.id,
-        slug: updated.slug,
-        source: IndexingSource.AUTO_ACTIVE,
-      });
-    } catch (error) {
-      logError(
-        "auto_google_indexing_on_toggle_failed",
-        "Auto Google indexing submission failed after translator activation toggle.",
-        { translatorId: updated.id, slug: updated.slug },
-        error,
-      );
-    }
-  }
-
   await maybeRecalculateAutoFeaturedTranslators("settings-save");
   invalidatePublicTranslatorCaches();
   return updated;
@@ -1844,23 +1879,6 @@ export async function unarchiveTranslator(id: string) {
       isActive: true,
     },
   });
-
-  if (updated.isActive) {
-    try {
-      await submitTranslatorToGoogleIndexing({
-        translatorId: updated.id,
-        slug: updated.slug,
-        source: IndexingSource.AUTO_ACTIVE,
-      });
-    } catch (error) {
-      logError(
-        "auto_google_indexing_on_unarchive_failed",
-        "Auto Google indexing submission failed after translator unarchive.",
-        { translatorId: updated.id, slug: updated.slug },
-        error,
-      );
-    }
-  }
 
   await maybeRecalculateAutoFeaturedTranslators("settings-save");
   invalidatePublicTranslatorCaches();
