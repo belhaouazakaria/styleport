@@ -1,23 +1,127 @@
-import { IndexingProvider, IndexingSource, IndexingStatus, Prisma } from "@prisma/client";
+import {
+  IndexingProvider,
+  IndexingSource,
+  IndexingStatus,
+  Prisma,
+} from "@prisma/client";
 
 import { submitUrlToGoogleIndexing } from "@/lib/google-indexing";
 import { logError, logInfo } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
 import { getAppBaseUrl } from "@/lib/env";
+import { assessEditorialQuality } from "@/lib/editorial-quality";
+import type { TranslatorEditorialDraft as EditorialDraftPayload } from "@/lib/types";
 import type {
   AdminBulkIndexingSummary,
   AdminIndexingLogFilters,
   AdminIndexingLogListItem,
 } from "@/lib/types";
 
-function mapResultStatusToDb(status: "SUBMITTED" | "FAILED" | "SKIPPED" | "DRY_RUN") {
+function mapResultStatusToDb(
+  status: "SUBMITTED" | "FAILED" | "SKIPPED" | "DRY_RUN",
+) {
   if (status === "SUBMITTED") return IndexingStatus.SUBMITTED;
   if (status === "FAILED") return IndexingStatus.FAILED;
   if (status === "DRY_RUN") return IndexingStatus.DRY_RUN;
   return IndexingStatus.SKIPPED;
 }
 
-export function buildTranslatorPublicUrl(slug: string, options?: { requestUrl?: string }) {
+const indexingEditorialSelect = {
+  id: true,
+  slug: true,
+  name: true,
+  isActive: true,
+  archivedAt: true,
+  editorialContent: {
+    select: { about: true, whatItDoes: true, differenceDescription: true },
+  },
+  editorialLists: { select: { kind: true, content: true, sortOrder: true } },
+  editorialExamples: {
+    select: {
+      contextTitle: true,
+      originalText: true,
+      transformedText: true,
+      sortOrder: true,
+    },
+  },
+  editorialFaqs: {
+    select: { question: true, answer: true, sortOrder: true },
+  },
+  editorialDrafts: {
+    where: {
+      status: "PUBLISHED" as const,
+      reviewedById: { not: null },
+      reviewedAt: { not: null },
+      publishedAt: { not: null },
+    },
+    select: { id: true },
+    orderBy: { publishedAt: "desc" as const },
+    take: 1,
+  },
+} as const;
+
+type IndexingEditorialRecord = Prisma.TranslatorGetPayload<{
+  select: typeof indexingEditorialSelect;
+}>;
+
+function toEditorialDraft(row: IndexingEditorialRecord): EditorialDraftPayload {
+  const byOrder = <T extends { sortOrder: number }>(items: T[]) =>
+    [...items].sort((a, b) => a.sortOrder - b.sortOrder);
+
+  return {
+    about: row.editorialContent?.about || "",
+    whatItDoes: row.editorialContent?.whatItDoes || "",
+    differenceDescription: row.editorialContent?.differenceDescription || "",
+    bestUses: byOrder(row.editorialLists)
+      .filter((item) => item.kind === "BEST_USE")
+      .map((item) => item.content),
+    howToUse: byOrder(row.editorialLists)
+      .filter((item) => item.kind === "HOW_TO_USE")
+      .map((item) => item.content),
+    tips: byOrder(row.editorialLists)
+      .filter((item) => item.kind === "TIP")
+      .map((item) => item.content),
+    examples: byOrder(row.editorialExamples).map((item) => ({
+      contextTitle: item.contextTitle || "",
+      originalText: item.originalText,
+      transformedText: item.transformedText,
+    })),
+    faq: byOrder(row.editorialFaqs).map((item) => ({
+      question: item.question,
+      answer: item.answer,
+    })),
+  };
+}
+
+export function assessTranslatorForIndexing(row: IndexingEditorialRecord) {
+  const quality = assessEditorialQuality(toEditorialDraft(row), {
+    humanReviewed: row.editorialDrafts.length > 0,
+  });
+  const issues = [...quality.issues];
+  if (!row.isActive || row.archivedAt) {
+    issues.unshift("Translator must be active and non-archived");
+  }
+  return {
+    ...quality,
+    eligibleForIndexing:
+      row.isActive && !row.archivedAt && quality.eligibleForIndexing,
+    issues: [...new Set(issues)],
+  };
+}
+
+export async function getTranslatorIndexingEligibility(id: string) {
+  const translator = await prisma.translator.findUnique({
+    where: { id },
+    select: indexingEditorialSelect,
+  });
+  if (!translator) return null;
+  return { translator, assessment: assessTranslatorForIndexing(translator) };
+}
+
+export function buildTranslatorPublicUrl(
+  slug: string,
+  options?: { requestUrl?: string },
+) {
   const baseUrl = getAppBaseUrl({ requestUrl: options?.requestUrl });
   return new URL(`/translators/${slug}`, baseUrl).toString();
 }
@@ -49,7 +153,9 @@ export async function submitTranslatorToGoogleIndexing(input: {
   source: IndexingSource;
   requestUrl?: string;
 }) {
-  const publicUrl = buildTranslatorPublicUrl(input.slug, { requestUrl: input.requestUrl });
+  const publicUrl = buildTranslatorPublicUrl(input.slug, {
+    requestUrl: input.requestUrl,
+  });
   const result = await submitUrlToGoogleIndexing(publicUrl);
 
   const logEntry = await createIndexingLog({
@@ -58,7 +164,9 @@ export async function submitTranslatorToGoogleIndexing(input: {
     source: input.source,
     status: mapResultStatusToDb(result.status),
     message: result.message || null,
-    responseJson: result.response ? (result.response as Prisma.InputJsonValue) : null,
+    responseJson: result.response
+      ? (result.response as Prisma.InputJsonValue)
+      : null,
   });
 
   if (!result.ok) {
@@ -74,13 +182,17 @@ export async function submitTranslatorToGoogleIndexing(input: {
       },
     );
   } else {
-    logInfo("google_indexing_submit_result", "Google Indexing API submission finished.", {
-      translatorId: input.translatorId,
-      url: publicUrl,
-      source: input.source,
-      status: result.status,
-      message: result.message,
-    });
+    logInfo(
+      "google_indexing_submit_result",
+      "Google Indexing API submission finished.",
+      {
+        translatorId: input.translatorId,
+        url: publicUrl,
+        source: input.source,
+        status: result.status,
+        message: result.message,
+      },
+    );
   }
 
   return {
@@ -89,17 +201,15 @@ export async function submitTranslatorToGoogleIndexing(input: {
   };
 }
 
-export async function submitAllActiveTranslatorsToGoogleIndexing(input?: { requestUrl?: string }) {
+export async function submitAllActiveTranslatorsToGoogleIndexing(input?: {
+  requestUrl?: string;
+}) {
   const activeTranslators = await prisma.translator.findMany({
     where: {
       isActive: true,
       archivedAt: null,
     },
-    select: {
-      id: true,
-      slug: true,
-      name: true,
-    },
+    select: indexingEditorialSelect,
     orderBy: [{ updatedAt: "desc" }],
   });
 
@@ -122,6 +232,32 @@ export async function submitAllActiveTranslatorsToGoogleIndexing(input?: { reque
   }> = [];
 
   for (const translator of activeTranslators) {
+    const assessment = assessTranslatorForIndexing(translator);
+    if (!assessment.eligibleForIndexing) {
+      const url = buildTranslatorPublicUrl(translator.slug, {
+        requestUrl: input?.requestUrl,
+      });
+      const message = `Skipped: ${assessment.issues.join("; ")}`;
+      const log = await createIndexingLog({
+        translatorId: translator.id,
+        url,
+        source: IndexingSource.MANUAL_BULK,
+        status: IndexingStatus.SKIPPED,
+        message,
+      });
+      summary.skipped += 1;
+      results.push({
+        translatorId: translator.id,
+        translatorName: translator.name,
+        translatorSlug: translator.slug,
+        url,
+        status: "SKIPPED",
+        message,
+        logId: log.id,
+      });
+      continue;
+    }
+
     const submission = await submitTranslatorToGoogleIndexing({
       translatorId: translator.id,
       slug: translator.slug,
@@ -151,7 +287,9 @@ export async function submitAllActiveTranslatorsToGoogleIndexing(input?: { reque
   };
 }
 
-export async function listAdminIndexingLogs(filters: AdminIndexingLogFilters = {}): Promise<AdminIndexingLogListItem[]> {
+export async function listAdminIndexingLogs(
+  filters: AdminIndexingLogFilters = {},
+): Promise<AdminIndexingLogListItem[]> {
   const where: Prisma.IndexingLogWhereInput = {
     provider: IndexingProvider.GOOGLE_INDEXING_API,
   };
