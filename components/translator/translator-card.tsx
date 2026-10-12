@@ -464,6 +464,10 @@ export function TranslatorCard({
     `${storagePrefix}:last-output`,
     "",
   );
+  const [translatedSourceText, setTranslatedSourceText] = useLocalStorage<string>(
+    `${storagePrefix}:last-source-used`,
+    "",
+  );
   const [modeKey, setModeKey] = useLocalStorage<string>(
     `${storagePrefix}:last-mode`,
     initialMode,
@@ -657,8 +661,10 @@ export function TranslatorCard({
   }
 
   function clearPreparedResultPin() {
+    resultPinRequestIdRef.current += 1;
     setResultPinMediaUrl(null);
     setResultPinError(null);
+    setIsPreparingResultPin(false);
   }
 
   async function translate() {
@@ -704,6 +710,7 @@ export function TranslatorCard({
 
       clearPreparedResultPin();
       revealNextResultRef.current = true;
+      setTranslatedSourceText(sourceText);
       setOutputText(payload.result);
     } catch {
       setError("We couldn't refine that text just now.");
@@ -714,6 +721,7 @@ export function TranslatorCard({
 
   function handleSwap() {
     setDirection(direction === "forward" ? "reverse" : "forward");
+    setTranslatedSourceText(outputText);
     setInputText(outputText);
     setOutputText(inputText);
     clearPreparedResultPin();
@@ -743,6 +751,7 @@ export function TranslatorCard({
   function handleClear() {
     setInputText("");
     setOutputText("");
+    setTranslatedSourceText("");
     clearPreparedResultPin();
     setError(null);
   }
@@ -926,13 +935,25 @@ export function TranslatorCard({
       return;
     }
 
-    const prepared = await prepareResultPin({
-      sourceText: inputText || "No source text provided.",
+    if (!translatedSourceText.trim()) {
+      setResultPinError("Translate again before sharing this saved result.");
+      return;
+    }
+
+    await prepareResultPin({
+      sourceText: translatedSourceText,
       translatedText: outputText,
       announceFailure: true,
     });
-    if (prepared) openPinterestIntent(prepared, outputText);
   }
+
+  const resultShareLabel = isPreparingResultPin
+    ? "Preparing image..."
+    : resultPinMediaUrl
+      ? "Continue to Pinterest"
+      : resultPinError
+        ? "Retry result image"
+        : "Share result";
 
   return (
     <section className="relative mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -1203,7 +1224,7 @@ export function TranslatorCard({
                       ) : (
                         <PinterestIcon className="h-4 w-4" />
                       )}
-                      Share result
+                      {resultShareLabel}
                     </Button>
                     <Button
                       type="button"
@@ -1288,11 +1309,7 @@ export function TranslatorCard({
               ) : (
                 <PinterestIcon className="h-4 w-4" />
               )}
-              {isPreparingResultPin
-                ? "Preparing image..."
-                : resultPinError
-                  ? "Retry result image"
-                  : "Share result"}
+              {resultShareLabel}
             </Button>
             <Button
               type="button"
