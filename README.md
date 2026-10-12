@@ -63,13 +63,6 @@ Copy `.env.production.example` to `.env.production` and fill values:
 - `DATABASE_URL=<local-vps-postgres-connection>`
 - `OPENAI_API_KEY=<openai-key>`
 - `OPENAI_MODEL=<model>`
-- `GOOGLE_INDEXING_ENABLED=false`
-- `GOOGLE_INDEXING_DRY_RUN=false`
-- `GOOGLE_CLIENT_EMAIL=<service-account-client-email>`
-- `GOOGLE_PROJECT_ID=<google-cloud-project-id>`
-- `GOOGLE_PRIVATE_KEY_BASE64=<base64-encoded-private-key>`
-- `GOOGLE_PRIVATE_KEY=<fallback-raw-private-key-optional>`
-- `GOOGLE_SERVICE_ACCOUNT_JSON_BASE64=<fallback-full-json-base64-optional>`
 - `NEXT_PUBLIC_APP_NAME=SayTwist`
 - `IP_HASH_SECRET=<random-secret>`
 - `ALERT_ADMIN_EMAIL=<ops-email>`
@@ -80,101 +73,19 @@ Production validation is fail-fast for critical vars, so missing required values
 
 ---
 
-## Google Indexing API Setup
+## Search discovery and Search Console
 
-Google Indexing API support in this app is optional and admin-triggered.  
-Sitemap remains the primary indexing method.
+SayTwist does not use the Google Indexing API or any automatic submission service. Search discovery and monitoring use the dynamic XML sitemap and Google Search Console only.
 
-Important limitation:
+- Sitemap: `https://saytwist.com/sitemap.xml`
+- Robots: `https://saytwist.com/robots.txt`
+- Submit the sitemap in Search Console under **Indexing → Sitemaps** using `sitemap.xml`.
+- Use **URL Inspection** for representative homepage, translator, and Idea URLs. Confirm the live test returns HTTP 200, allows crawling, exposes the production canonical, and does not emit `noindex` before requesting indexing.
+- Run `npm run seo:verify-production` for a read-only live crawlability check. It never submits or modifies content.
 
-- Google officially documents the Indexing API for limited content types (for example JobPosting and BroadcastEvent).
-- Use this feature as an extra submission tool only.
-- Indexing is never guaranteed, even after a successful submission response.
+Google decides whether and when an eligible URL is indexed; sitemap presence is not an indexing guarantee.
 
-### 1. Verify Search Console property
-
-1. Open Google Search Console.
-2. Verify this exact property:
-   - `https://saytwist.com`
-
-### 2. Google Cloud project and API
-
-1. Create or select a Google Cloud project.
-2. Enable **Google Indexing API** for that project.
-
-### 3. Create service account and JSON key
-
-1. Create a service account in Google Cloud IAM.
-2. Generate and download a JSON private key for that service account.
-3. Open the JSON file and keep it secure.
-
-### 4. Grant Search Console access to service account
-
-1. Copy `client_email` from the downloaded JSON.
-2. Add that email as a user on the Search Console property.
-3. Grant enough permission to submit indexing requests.
-
-### 5. Configure runtime environment (recommended: Base64 private key)
-
-Set these server-only variables:
-
-- `GOOGLE_CLIENT_EMAIL`
-- `GOOGLE_PROJECT_ID`
-- `GOOGLE_PRIVATE_KEY_BASE64` (recommended)
-
-Primary mapping from downloaded service account JSON:
-
-- `client_email` -> `GOOGLE_CLIENT_EMAIL`
-- `project_id` -> `GOOGLE_PROJECT_ID`
-- `private_key` -> `GOOGLE_PRIVATE_KEY_BASE64` (after base64 encoding)
-
-Recommended setup:
-
-```bash
-GOOGLE_CLIENT_EMAIL=your-service-account@your-project.iam.gserviceaccount.com
-GOOGLE_PROJECT_ID=your-project-id
-GOOGLE_PRIVATE_KEY_BASE64=base64_encoded_private_key
-```
-
-How to generate `GOOGLE_PRIVATE_KEY_BASE64` on Mac:
-
-1. Copy only the `private_key` value from the JSON file.
-2. Run:
-
-```bash
-pbpaste | base64 | tr -d '\n'
-```
-
-3. Paste the output into `GOOGLE_PRIVATE_KEY_BASE64`.
-
-Alternative from JSON file directly:
-
-```bash
-node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('service-account.json','utf8')); process.stdout.write(Buffer.from(j.private_key).toString('base64'))"
-```
-
-Fallback envs (optional only):
-
-- `GOOGLE_PRIVATE_KEY` (raw key fallback)
-- `GOOGLE_SERVICE_ACCOUNT_JSON_BASE64` (full JSON base64 fallback)
-
-Steps:
-
-1. Open the downloaded service account JSON file.
-2. Copy `client_email` into `GOOGLE_CLIENT_EMAIL`.
-3. Copy `project_id` into `GOOGLE_PROJECT_ID`.
-4. Encode `private_key` and set it as `GOOGLE_PRIVATE_KEY_BASE64`.
-5. Do not use a `NEXT_PUBLIC_` prefix for any Google credential vars.
-6. Restart the Node.js app after changing env vars.
-
-The service account JSON contains a private key. Treat it like a password. Never expose it in frontend code, public repositories, screenshots, or logs.
-
-### 6. Dry-run mode
-
-Use dry-run to test safely without sending requests to Google:
-
-- `GOOGLE_INDEXING_ENABLED=true`
-- `GOOGLE_INDEXING_DRY_RUN=true`
+See `docs/search-console-operations.md` for the eligibility contract, safe production impact report, live verification, sitemap submission, and URL Inspection checklist.
 
 ---
 
@@ -186,6 +97,8 @@ Core scripts:
 - `npm run build` — production build
 - `npm run start` — production start (`next start -p ${PORT:-3000}`)
 - `npm run check` — lint + typecheck + tests
+- `npm run seo:verify-production` — read-only live robots/sitemap/status/canonical/noindex audit
+- `npm run seo:report-indexing-impact` — read-only URL-level report before strict current-review enforcement
 - `npm run prisma:generate`
 - `npm run prisma:migrate` (dev)
 - `npm run prisma:deploy` (production-safe migration apply)
@@ -278,45 +191,6 @@ If Hostinger auto-detects your app as `Other` and leaves build settings as `null
 - Entry file: `server.js`
 - Startup command: `npm run start:hostinger`
 
-### Google Indexing API production env setup on Hostinger
-
-In Hostinger Node.js app environment variables, add:
-
-- `GOOGLE_INDEXING_ENABLED=true`
-- `GOOGLE_INDEXING_DRY_RUN=false`
-- `NEXT_PUBLIC_APP_URL=https://saytwist.com`
-- `NEXTAUTH_URL=https://saytwist.com`
-- `GOOGLE_PROJECT_ID=<project_id from JSON>`
-- `GOOGLE_CLIENT_EMAIL=<client_email from JSON>`
-- `GOOGLE_PRIVATE_KEY_BASE64=<base64 encoded private_key>`
-
-Steps:
-
-1. Open the downloaded Google service account JSON file.
-2. Copy `client_email` and `project_id` into their matching env vars.
-3. Encode `private_key` as base64 and paste it into `GOOGLE_PRIVATE_KEY_BASE64`.
-4. Recommended command on Mac after copying only `private_key`:
-   - `pbpaste | base64 | tr -d '\n'`
-5. Paste the command output into `GOOGLE_PRIVATE_KEY_BASE64`.
-6. Do not commit this private key to GitHub.
-7. Do not expose it in frontend code.
-8. Restart the Node.js app after changing env vars.
-
-Notes:
-
-- Optional fallback only:
-  - `GOOGLE_PRIVATE_KEY=<raw private key>`
-  - `GOOGLE_SERVICE_ACCOUNT_JSON_BASE64=<full service account JSON in base64>`
-- Do not prefix any Google secret with `NEXT_PUBLIC_`.
-
-### Do I need GitHub secrets for Google Indexing API?
-
-- For this project, Google indexing runs at runtime from the Hostinger app.
-- Therefore, GitHub does **not** need Google credential secrets for normal build/deploy.
-- Add Google secrets to GitHub only if a future workflow directly calls Google Indexing API.
-- Do not expose Google service account JSON in public files.
-- Do not commit `.env.production`.
-
 ### 5. Deploy sequence
 
 Preferred production deploy is GitHub Actions artifact deployment:
@@ -404,24 +278,7 @@ npm run prisma:seed
   - translator summary text
 - Make sure `APP_BASE_URL` (or `NEXTAUTH_URL`) is set correctly in production so share URLs resolve to the public domain.
 - Pin images are generated server-side when translators are created/updated and can be manually regenerated from admin translator edit/list screens.
-
-## Optional Admin Google Indexing Tool
-
-The admin dashboard now includes **Indexing** at `/admin/indexing`:
-
-- status/config panel
-- bulk action: **Index all active translators**
-- indexing logs table with source/status/message
-
-Automatic behavior:
-
-- when a translator is created active, it is submitted automatically
-- when a translator becomes active later, it is submitted automatically
-- failures are logged and never block translator create/update flows
-
-Admin message reminder:
-
-- "Google Indexing API submission requested. Final indexing is not guaranteed."
+- Result sharing is lazy: the first action prepares the result image; a separate, user-initiated **Continue to Pinterest** action opens Pinterest without popup-blocking risk.
 
 ## Public Create-Translator Flow
 

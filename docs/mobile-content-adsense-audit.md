@@ -18,7 +18,7 @@ AdSense's “Low-value content” message does not identify a page or one techni
 | P0 | Mobile translator | The DOM sequence is input, empty result, secondary actions, then a mobile-only sticky primary CTA. | The main task is harder to understand and requires avoidable scrolling. | Render input, primary CTA, then result on mobile. Hide the empty result until loading, error, or success. |
 | P0 | Mobile viewport | The global mobile bottom navigation is fixed at `bottom: 0`; the translator CTA is sticky above it; a mobile ad may also be fixed at `bottom: 0`. | Controls can compete for space, obscure content, and behave poorly with the software keyboard/safe area. | Remove the fixed bottom navigation, keep the drawer, use in-flow translator actions, and make mobile ads non-fixed. |
 | P0 | Translator content | Local data has 4 active translators; 4 are `INCOMPLETE`, 4 have no editorial record, and 3 descriptions are under 80 characters. | Active pages can be functionally useful but provide little standalone context or differentiation. | Keep pages accessible, retain current `noindex` behavior for incomplete pages, and add an exact content-quality report for editorial work. |
-| P1 | Editorial readiness | `READY` is computed from field counts, minimum lengths, and exact-string uniqueness. It does not require evidence of human review, translator-specific language, limitations, or semantic originality. | Long or templated generated copy can be treated as indexable without a reliable editorial checkpoint. | Split structural completeness from publication readiness. Indexing requires an approved/published editorial draft or an explicit manual legacy review marker; no bulk status change is applied. |
+| P1 | Editorial readiness | `READY` is computed from field counts, minimum lengths, and exact-string uniqueness. It does not require evidence of human review, translator-specific language, limitations, or semantic originality. | Long or templated generated copy can be treated as indexable without a reliable editorial checkpoint. | A shared contract now compares the current published payload with the latest reviewed/published draft. Strict enforcement is held until the production URL-level impact report is approved. |
 | P1 | Ads | The homepage can render multiple desktop placements before the translator catalog, and the mobile placement is fixed. | Ads may be disproportionately prominent when the page inventory is thin and can interfere with mobile navigation. | Preserve AdSense integration but make the mobile placement in-flow and keep content ahead of secondary placements. Do not add ads. |
 | P1 | Ideas | Public queries require published, unarchived Ideas with a current version, and invalid block payloads are not rendered. The local database does not contain the `GrowthIdea` table. | Code-level publication gating is present, but live inventory, originality, and completeness are unverified. | Add content-quality guidance and require manual review; do not invent or bulk-publish articles. |
 | P1 | ads.txt | `public/ads.txt` directly serves one Google seller line; no Ezoic redirect exists. | Ezoic's managed inventory is not served at the required URL. | Add an exact `/ads.txt` 301 in `next.config.ts`, remove the conflicting static file, and add regression tests. |
@@ -29,7 +29,7 @@ AdSense's “Low-value content” message does not identify a page or one techni
 ## Confirmed strengths to preserve
 
 - Public translator pages already include About, what-it-does, examples, best uses, instructions, tips, differences, FAQs, related translators, and moderated comments when data exists.
-- Translator pages use canonical URLs and gate indexing on editorial status; search result pages are `noindex,follow`.
+- Translator pages use canonical URLs; metadata and sitemap now use the same eligibility result. Search, category-filter, and pagination parameter pages are `noindex,follow`.
 - The sitemap limits translator entries to indexable records and Ideas to published records.
 - Robots excludes admin, APIs, verification, login, and temporary generated assets.
 - Translation validation, quota/error responses, modes, reverse direction, examples, speech, copy, clear, regeneration, and Pinterest sharing are already implemented.
@@ -44,6 +44,14 @@ AdSense's “Low-value content” message does not identify a page or one techni
 - Search Console coverage, AdSense crawler observations, engagement, and actual indexed URLs may identify narrower causes.
 
 Before any bulk indexation change, export the exact production URL set with readiness signals, human-review evidence, and proposed action. This audit intentionally applies no mass `noindex`, deletion, publication, or database change.
+
+## Follow-up implementation record
+
+- The Google Indexing API request code, automatic CRUD submissions, manual/bulk admin routes, admin controls, credentials, environment variables, and setup instructions were removed. Historical Prisma enums, the `IndexingLog` table, its relation, migration, and existing records were preserved.
+- `lib/indexing-eligibility.ts` is the single translator contract used by public metadata, sitemap selection, and admin reporting. It exposes both the safe current result and strict current-version-review result.
+- `npm run seo:report-indexing-impact` is read-only and produces the exact URL list that strict review enforcement would remove for the connected database.
+- `npm run seo:verify-production` is read-only and validates robots, sitemap XML, origin, duplicates, query parameters, live statuses, canonicals, and `noindex` conflicts.
+- Result Pinterest sharing is popup-safe: preparation happens on the first click; the second user gesture opens Pinterest. The source snapshot is stored when translation succeeds, so later input edits cannot be combined with an older result.
 
 ## Implementation boundaries
 

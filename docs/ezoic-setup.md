@@ -16,6 +16,8 @@ https://srv.adstxtmanager.com/19390/saytwist.com
 
 The redirect uses explicit `statusCode: 301`. The former `public/ads.txt` was removed so the static asset cannot intercept the route. Existing old-domain redirects and security headers are unchanged. SayTwist runs through the Next.js request handler in `server.js`, so the redirect is part of the production runtime configuration after a fresh build and process restart.
 
+The Google Indexing API removal does not affect this redirect or Ezoic. Search discovery now uses Search Console and `sitemap.xml`; ads.txt remains a separate advertising authorization concern.
+
 Ezoic's managed endpoint was checked on 2026-10-12. It returned HTTP 200, `text/plain`, `ownerdomain=saytwist.com`, an Ezoic manager declaration, and seller records. It did **not** contain the existing SayTwist AdSense authorization:
 
 ```text

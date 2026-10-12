@@ -18,11 +18,11 @@ The most credible root-cause hypothesis remains site-wide perceived value rather
 | Empty mobile result consumed space before any translation.                                      | Verified in rendered production build.                                                               | Fixed: hidden until loading or a result exists. Validation errors render directly below the CTA.                                                                    |
 | Fixed mobile navigation and optional fixed ad could compete with the keyboard and CTA.          | Verified in source.                                                                                  | Fixed: bottom navigation removed; mobile ad is in-flow with safe-area padding; translator CTA is in-flow.                                                           |
 | Result actions were not prioritized for the mobile completion task.                             | Verified in source.                                                                                  | Fixed: Copy/Speak remain in the result header; Try Again and Edit Input are the first mobile result actions; sharing remains available below.                       |
-| Every successful translation generated and uploaded a Pinterest result image in the background. | Verified in the client component and test diagnostics.                                               | Fixed: the image is generated only when the user chooses Share result, avoiding an unnecessary request on the core path.                                            |
+| Every successful translation generated and uploaded a Pinterest result image in the background. | Verified in the client component and test diagnostics.                                               | Fixed: the first Share result click prepares the image; only a separate Continue to Pinterest click opens Pinterest synchronously.                                   |
 | Active local translators have thin editorial coverage.                                          | Local DB: 4 active, 4 `INCOMPLETE`, 4 without editorial content, 3 descriptions under 80 characters. | Not auto-filled. Exact pages are listed below for human work.                                                                                                       |
 | Structural readiness did not establish human review or useful specificity.                      | `getEditorialReadiness` only checked counts, lengths, and exact duplicates.                          | Added a second quality assessment for context-rich examples, limitations, practical depth, generic filler, repeated openings, and human-review evidence.            |
-| Manual/bulk indexing could submit any active translator.                                        | Verified in indexing routes.                                                                         | Fixed: new submissions require active state, strong editorial quality, and a reviewed/published editorial draft. Bulk results include every skipped URL and reason. |
-| Sitemap includes all active translators even when page metadata says `noindex`.                 | Verified in `getIndexableTranslatorSlugsForSitemap`.                                                 | Unchanged pending production URL review; see indexation assessment below.                                                                                           |
+| Google Indexing API was wired to CRUD activation plus manual/bulk admin submissions.             | Verified in data functions, admin routes/UI, credentials, and environment examples.                  | Removed completely. Search Console and the XML sitemap are the only discovery/monitoring mechanisms. Historical log schema and records remain intact.               |
+| Sitemap included active translators even when page metadata said `noindex`.                      | Verified in `getIndexableTranslatorSlugsForSitemap`.                                                 | Fixed: metadata, sitemap, and admin reporting now consume one eligibility contract.                                                                                 |
 | Existing mobile ad placement was fixed at the viewport bottom.                                  | Verified in homepage source.                                                                         | Fixed: placement remains available but is now in normal content flow. No ads were added or removed.                                                                 |
 | Ezoic managed ads.txt was not configured.                                                       | `public/ads.txt` directly served one Google line.                                                    | Fixed in app: exact `/ads.txt` HTTP 301 to AdsTxtManager; static conflict removed. Account-side AdSense seller inventory remains unresolved.                        |
 
@@ -69,15 +69,17 @@ Remaining concern: the Growth Ideas worker can publish validated generated conte
 
 ## Indexable versus non-indexable assessment
 
-Current behavior:
+Current safe-rollout behavior:
 
-- Translator page metadata is indexable only when structural editorial status is `READY`.
-- Search query pages are `noindex,follow` and canonicalize to `/`.
+- Translator page metadata and sitemap inclusion both require an active, non-archived, non-empty slug and structurally complete editorial content.
+- The shared contract separately records whether the latest reviewed/published draft exactly matches the current published editorial payload.
+- Enforcing that current-version review as a hard indexing requirement is intentionally held pending an exact production database report. The read-only `npm run seo:report-indexing-impact` command prints every URL that would lose eligibility.
+- Search, category-filter, and page-2+ parameter pages are `noindex,follow` and canonicalize to their stable directory route.
 - Public Ideas require published state and a current published version.
 - Trust pages and the Ideas directory are indexable static routes.
-- The sitemap currently includes every active translator, even when its page emits `noindex`.
+The strict reviewed-version switch remains deliberately unapplied. The local read-only report found 4 active translators, 0 currently eligible, 0 strict-current-review eligible, and therefore 0 additional local URLs that would lose eligibility. This is not a production impact report. Production database access was not used, so approval remains blocked until the same command is run against a read-only production connection and its URL-level output is reviewed.
 
-Recommended but deliberately unapplied bulk change: limit translator sitemap entries to pages that pass the new editorial quality assessment and have recorded human review. Applying that rule could remove production URLs, so it requires an exact production report and approval first. In the local database, the affected set is the four translator URLs listed above. All four currently emit `noindex` and should not be submitted manually.
+The live read-only HTTP verification on 2026-10-12 found 363 sitemap URLs (8 static, 355 translators, 0 Ideas), HTTP 200 for robots and sitemap, and no status/canonical/noindex errors among sitemap entries. The `www` host returns the expected 301, the singular legacy `translator.whattypeof.com` host returns the expected 308, and missing translator pages return 404. The plural legacy `translators.whattypeof.com` host did not resolve in DNS; its redirect rule remains preserved in source, but DNS must be restored if that hostname still needs to redirect. These observations describe the currently deployed site, not this undeployed branch.
 
 No translators, Ideas, comments, or other user content were deleted. No bulk `noindex` was applied.
 
@@ -105,10 +107,10 @@ No translators, Ideas, comments, or other user content were deleted. No bulk `no
 
 ## Remaining risks and blockers
 
-- Production content was not queried or changed, so its exact readiness is unknown.
+- Production content was not queried or changed, so strict current-review enforcement remains blocked on the production URL-level impact report.
 - Local Ideas inventory is unavailable because the local DB lacks the Growth Ideas migration.
 - The managed Ezoic file currently omits `google.com, pub-7927856375186557, DIRECT, f08c47fec0942fa0`.
-- One existing Growth Ideas worker test and repository-wide lint have unrelated baseline failures; see QA notes below.
+- Repository-wide baseline QA failures are tracked separately from feature regressions; see the final QA record after the full rerun.
 - A real mobile software keyboard and successful live AI response were unavailable during local browser QA. The in-flow layout, focus, error state, and successful-result component behavior were tested separately.
 
 ## QA record
@@ -116,9 +118,10 @@ No translators, Ideas, comments, or other user content were deleted. No bulk `no
 - Responsive production-build checks: 320, 360, 375, 390, 430, 768, 1024, and 1440px; no document-level horizontal overflow.
 - Mobile rendered checks: input focus, in-flow CTA, hidden empty result, visible API error, drawer focus/Escape/body-scroll restoration, categories, search, cards, related cards, and absence of site-owned fixed bottom controls.
 - Desktop rendered check at 1440px: navigation, hero, search, categories, featured discovery, and translator two-column layout.
-- TypeScript: pass.
+- TypeScript: pass after regenerating Next route types.
 - Production build: pass. Existing warnings cover Edge runtime deprecation, dynamic filesystem tracing, and a missing local `GrowthIdea` table during sitemap generation; sitemap gracefully continued.
-- Relevant tests: pass (editorial quality, editorial jobs, translator card/directory, ads.txt redirect).
-- Full Vitest: 350 passed, 142 skipped, 1 failed in the pre-existing Growth Ideas handler payload fixture.
-- Full ESLint: blocked by eight pre-existing errors in `components/admin/creative-lab-actions.tsx` and Growth creative tests. Targeted lint for changed files passes.
+- Focused regressions: pass for indexing eligibility, sitemap/robots, translator card/Pinterest flow, and ads.txt.
+- Full Vitest: 359 passed, 142 skipped, 1 failed in the pre-existing Growth Ideas handler payload fixture.
+- Full ESLint: 8 errors and 5 warnings. The error-bearing files and failing Growth Ideas test/handler have byte-identical Git blob hashes to latest `origin/main`; changed-file ESLint passes.
+- Production SEO verifier: pass against all 363 live sitemap URLs; robots and sitemap returned 200, with no duplicates, query URLs, status failures, canonical mismatches, or sitemap/noindex conflicts. A deliberately missing translator returned 404; `www` returned 301 to the canonical host; both legacy domains returned 308 while preserving the path.
 - Visual QA limitation: live translation returned the existing generic API error locally, so successful-result visual state relied on passing component tests rather than a live model response.
