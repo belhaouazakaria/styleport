@@ -20,6 +20,12 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   compress: true,
   async redirects() {
+    const ezoicAdsTxtRedirect = {
+      source: "/ads.txt",
+      destination: "https://srv.adstxtmanager.com/19390/saytwist.com",
+      statusCode: 301,
+    } as const;
+
     // Old domain redirects for SayTwist migration
     // These handle permanent redirects from the old whattypeof.com domains
     const oldHostnames = [
@@ -42,7 +48,7 @@ const nextConfig: NextConfig = {
       },
     ]);
 
-    return redirects;
+    return [ezoicAdsTxtRedirect, ...redirects];
   },
   async headers() {
     return [
@@ -73,7 +79,9 @@ const nextConfig: NextConfig = {
             key: "Strict-Transport-Security",
             value: "max-age=31536000; includeSubDomains; preload",
           },
-        ].filter((header) => (isProduction ? true : header.key !== "Strict-Transport-Security")),
+        ].filter((header) =>
+          isProduction ? true : header.key !== "Strict-Transport-Security",
+        ),
       },
     ];
   },

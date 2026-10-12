@@ -2,29 +2,55 @@
 
 ## Current state
 
-Ezoic is not enabled in application code. The official Ezoic Setup MCP was used to review the Next.js App Router integration for `saytwist.com`, but the required dashboard prerequisites and site-specific Ads.txt Manager URL are not yet available in this repository.
+Ezoic JavaScript is not enabled in application code. Managed ads.txt is configured independently through an exact Next.js redirect; no Ezoic bootstrap, CMP, placement, or analytics scripts are included.
 
 Do not add Ezoic bootstrap, CMP, analytics, or placement scripts until the domain is present in the Ezoic account, Google MCM account and domain approval are complete, and Ezoic confirms how the scripts should be limited to public routes. Ezoic's documented Next.js setup places `beforeInteractive` CMP scripts in the root layout; its guidance does not establish support for that strategy in the nested public route-group layout. The root layout also serves `/admin`, so adding the scripts there would violate SayTwist's public-only requirement.
 
-## ads.txt
+## Managed ads.txt
 
-The repository currently serves [`public/ads.txt`](../public/ads.txt) directly. It must retain this exact AdSense authorization:
+`next.config.ts` returns HTTP 301 for exactly `/ads.txt`:
+
+```text
+https://srv.adstxtmanager.com/19390/saytwist.com
+```
+
+The redirect uses explicit `statusCode: 301`. The former `public/ads.txt` was removed so the static asset cannot intercept the route. Existing old-domain redirects and security headers are unchanged. SayTwist runs through the Next.js request handler in `server.js`, so the redirect is part of the production runtime configuration after a fresh build and process restart.
+
+Ezoic's managed endpoint was checked on 2026-10-12. It returned HTTP 200, `text/plain`, `ownerdomain=saytwist.com`, an Ezoic manager declaration, and seller records. It did **not** contain the existing SayTwist AdSense authorization:
 
 ```text
 google.com, pub-7927856375186557, DIRECT, f08c47fec0942fa0
 ```
 
-For a non-WordPress JavaScript integration, Ezoic recommends a permanent redirect from exactly `/ads.txt` at nginx to the site-specific Ads.txt Manager URL shown in the Ezoic dashboard. JavaScript integration does not maintain ads.txt automatically. No redirect is configured yet because the site-specific URL or manager account ID cannot be inferred from the domain or AdSense publisher ID and must not be guessed.
+This is an account-side blocker. Add or import that authorization in Ezoic Ads.txt Manager if the AdSense account should remain authorized. Do not copy a second seller list into the repository.
 
-To complete ads.txt setup:
+## Deployment validation
+
+After deploying a build from this branch and restarting the Node process, run:
+
+```bash
+curl -sSI https://saytwist.com/ads.txt
+curl -fsSL https://saytwist.com/ads.txt
+curl -fsSL https://saytwist.com/ads.txt | grep -F \
+  'google.com, pub-7927856375186557, DIRECT, f08c47fec0942fa0'
+```
+
+The first command must show a `301` response and this exact `Location`:
+
+```text
+https://srv.adstxtmanager.com/19390/saytwist.com
+```
+
+The second must follow the redirect and return meaningful authorized seller records. The third must succeed before claiming the existing AdSense account remains represented. At implementation time, the third check fails against the managed endpoint and must be resolved in the Ezoic dashboard before production sign-off.
+
+If a CDN or Hostinger proxy serves `/ads.txt` before requests reach Next.js, configure the same exact redirect at that outer layer or remove the conflicting rule. Do not create a redirect at both layers if it produces a loop. Clear caches, repeat the commands above, and verify an unrelated path does not redirect to AdsTxtManager.
+
+To complete account setup:
 
 1. In **EzoicAds > Ad Transparency > Ads.txt**, select **JavaScript** and save.
-2. Review the imported seller entries and confirm the exact AdSense line above is present.
-3. Copy the dashboard-provided Ads.txt Manager redirect URL.
-4. Configure nginx with a permanent redirect scoped exactly to `/ads.txt`, before the request reaches Node.
-5. Use **Verify** in Ezoic and confirm the public URL resolves to the managed seller list containing the AdSense authorization. Dashboard and crawler status can take 24 to 48 hours.
-
-Keep the static file in place until the managed target has been verified. Do not add a Next.js ads.txt route or a second redirect.
+2. Import or add the existing AdSense authorization and confirm the exact line above is present.
+3. Use **Verify** in Ezoic after the application deployment.
+4. Run all three validation commands and save their output with the deployment record.
 
 ## Remaining dashboard and integration work
 
@@ -40,4 +66,4 @@ When those prerequisites are complete, follow the current Ezoic Next.js guide fo
 
 ## Disable or roll back
 
-For a future JavaScript integration, remove the two privacy scripts, `sa.min.js`, the `ezstandalone` queue setup, `analytics.js`, and all placement calls together, then clear caches and verify public pages. Removing only one part can leave an incomplete integration. Remove the nginx `/ads.txt` redirect only after restoring and verifying a directly served seller list that still contains the required AdSense authorization.
+For a future JavaScript integration, remove the two privacy scripts, `sa.min.js`, the `ezstandalone` queue setup, `analytics.js`, and all placement calls together, then clear caches and verify public pages. Removing only one part can leave an incomplete integration. Remove the Next.js `/ads.txt` redirect only after restoring and verifying a directly served seller list that still contains the required AdSense authorization.
