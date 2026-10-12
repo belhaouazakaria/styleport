@@ -135,6 +135,9 @@ export function Navbar({
             />
             <aside
               id="mobile-nav-drawer"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Navigation menu"
               className="border-border bg-page fixed top-0 right-0 z-50 flex h-dvh w-[86vw] max-w-sm flex-col gap-3 border-l p-5 shadow-2xl"
             >
               <div className="flex items-center justify-between">

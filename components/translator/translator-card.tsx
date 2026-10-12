@@ -705,11 +705,6 @@ export function TranslatorCard({
       clearPreparedResultPin();
       revealNextResultRef.current = true;
       setOutputText(payload.result);
-      void prepareResultPin({
-        sourceText,
-        translatedText: payload.result,
-        announceFailure: false,
-      });
     } catch {
       setError("We couldn't refine that text just now.");
     } finally {
@@ -931,22 +926,12 @@ export function TranslatorCard({
       return;
     }
 
-    if (resultPinError) {
-      const prepared = await prepareResultPin({
-        sourceText: inputText || "No source text provided.",
-        translatedText: outputText,
-        announceFailure: true,
-      });
-      if (prepared) {
-        openPinterestIntent(prepared, outputText);
-      }
-      return;
-    }
-
-    toast({
-      title: "Pinterest image is still preparing",
-      description: "Please wait a moment, then try sharing again.",
+    const prepared = await prepareResultPin({
+      sourceText: inputText || "No source text provided.",
+      translatedText: outputText,
+      announceFailure: true,
     });
+    if (prepared) openPinterestIntent(prepared, outputText);
   }
 
   return (

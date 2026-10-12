@@ -90,6 +90,9 @@ describe("TranslatorCard", () => {
         "Good morrow to you.",
       );
     });
+    expect(fetchMock.mock.calls.map(([path]) => path)).not.toContain(
+      "/api/pinterest/result-image",
+    );
   });
 
   it("orders the mobile flow as input, primary action, then result", () => {

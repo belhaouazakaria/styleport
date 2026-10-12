@@ -1,6 +1,7 @@
 # SayTwist Platform
 
 SayTwist is a production-grade multi-translator discovery platform with:
+
 - public translator discovery + translator runtime pages
 - secure admin dashboard (CRUD for translators/categories/requests/ads/settings)
 - OpenAI translation + AI draft generation
@@ -12,13 +13,21 @@ This repository is **feature-complete** and this hardening pass is focused on **
 
 ## Production Architecture (Hostinger target)
 
+Implementation and release notes for the current mobile/editorial/ads.txt work are in:
+
+- [`docs/mobile-content-adsense-audit.md`](docs/mobile-content-adsense-audit.md)
+- [`docs/adsense-readiness-report.md`](docs/adsense-readiness-report.md)
+- [`docs/ezoic-setup.md`](docs/ezoic-setup.md)
+
 Recommended runtime for this project:
+
 1. **Hostinger Node.js Web App** in hPanel
 2. **Primary domain** (`saytwist.com`)
 3. **PostgreSQL 18 self-hosted on the VPS** (local SayTwist database)
 4. Existing app stack unchanged (Next.js + Prisma + Auth.js + OpenAI)
 
 Important:
+
 - Production SayTwist connects to the VPS-local PostgreSQL service at `127.0.0.1:5433`, using database `saytwist` and application role `saytwist_app`.
 - App features and behavior are unchanged; only infrastructure/config are hardened.
 
@@ -27,14 +36,17 @@ Important:
 ## Environment Files
 
 ### Local development
+
 - Use `.env.example` as template for `.env.local`.
 - Local URLs remain localhost-based.
 
 ### Production (Hostinger)
+
 - Use `.env.production.example` as template for `.env.production`.
 - Must use your HTTPS domain URL (no localhost values).
 
 ### Public vs server env vars
+
 - Public-safe (client-exposed): `NEXT_PUBLIC_*`
 - Server-only secrets: all others (`DATABASE_URL`, `OPENAI_API_KEY`, `NEXTAUTH_SECRET`, etc.)
 
@@ -74,41 +86,50 @@ Google Indexing API support in this app is optional and admin-triggered.
 Sitemap remains the primary indexing method.
 
 Important limitation:
+
 - Google officially documents the Indexing API for limited content types (for example JobPosting and BroadcastEvent).
 - Use this feature as an extra submission tool only.
 - Indexing is never guaranteed, even after a successful submission response.
 
 ### 1. Verify Search Console property
+
 1. Open Google Search Console.
 2. Verify this exact property:
    - `https://saytwist.com`
 
 ### 2. Google Cloud project and API
+
 1. Create or select a Google Cloud project.
 2. Enable **Google Indexing API** for that project.
 
 ### 3. Create service account and JSON key
+
 1. Create a service account in Google Cloud IAM.
 2. Generate and download a JSON private key for that service account.
 3. Open the JSON file and keep it secure.
 
 ### 4. Grant Search Console access to service account
+
 1. Copy `client_email` from the downloaded JSON.
 2. Add that email as a user on the Search Console property.
 3. Grant enough permission to submit indexing requests.
 
 ### 5. Configure runtime environment (recommended: Base64 private key)
+
 Set these server-only variables:
+
 - `GOOGLE_CLIENT_EMAIL`
 - `GOOGLE_PROJECT_ID`
 - `GOOGLE_PRIVATE_KEY_BASE64` (recommended)
 
 Primary mapping from downloaded service account JSON:
+
 - `client_email` -> `GOOGLE_CLIENT_EMAIL`
 - `project_id` -> `GOOGLE_PROJECT_ID`
 - `private_key` -> `GOOGLE_PRIVATE_KEY_BASE64` (after base64 encoding)
 
 Recommended setup:
+
 ```bash
 GOOGLE_CLIENT_EMAIL=your-service-account@your-project.iam.gserviceaccount.com
 GOOGLE_PROJECT_ID=your-project-id
@@ -116,23 +137,29 @@ GOOGLE_PRIVATE_KEY_BASE64=base64_encoded_private_key
 ```
 
 How to generate `GOOGLE_PRIVATE_KEY_BASE64` on Mac:
+
 1. Copy only the `private_key` value from the JSON file.
 2. Run:
+
 ```bash
 pbpaste | base64 | tr -d '\n'
 ```
+
 3. Paste the output into `GOOGLE_PRIVATE_KEY_BASE64`.
 
 Alternative from JSON file directly:
+
 ```bash
 node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('service-account.json','utf8')); process.stdout.write(Buffer.from(j.private_key).toString('base64'))"
 ```
 
 Fallback envs (optional only):
+
 - `GOOGLE_PRIVATE_KEY` (raw key fallback)
 - `GOOGLE_SERVICE_ACCOUNT_JSON_BASE64` (full JSON base64 fallback)
 
 Steps:
+
 1. Open the downloaded service account JSON file.
 2. Copy `client_email` into `GOOGLE_CLIENT_EMAIL`.
 3. Copy `project_id` into `GOOGLE_PROJECT_ID`.
@@ -143,7 +170,9 @@ Steps:
 The service account JSON contains a private key. Treat it like a password. Never expose it in frontend code, public repositories, screenshots, or logs.
 
 ### 6. Dry-run mode
+
 Use dry-run to test safely without sending requests to Google:
+
 - `GOOGLE_INDEXING_ENABLED=true`
 - `GOOGLE_INDEXING_DRY_RUN=true`
 
@@ -152,6 +181,7 @@ Use dry-run to test safely without sending requests to Google:
 ## Scripts
 
 Core scripts:
+
 - `npm run dev` — local development
 - `npm run build` — production build
 - `npm run start` — production start (`next start -p ${PORT:-3000}`)
@@ -169,31 +199,37 @@ Core scripts:
 ## Local Development
 
 1. Install:
+
 ```bash
 npm ci
 ```
 
 2. Create local env:
+
 ```bash
 cp .env.example .env.local
 ```
 
 3. Generate Prisma client:
+
 ```bash
 npm run prisma:generate
 ```
 
 4. Run migrations:
+
 ```bash
 npm run prisma:migrate
 ```
 
 5. Seed:
+
 ```bash
 npm run prisma:seed
 ```
 
 6. Start dev:
+
 ```bash
 npm run dev
 ```
@@ -203,33 +239,41 @@ npm run dev
 ## Hostinger Deployment Guide (Node.js Web App + Subdomain)
 
 ### 1. Verify local VPS PostgreSQL
+
 1. Confirm PostgreSQL 18 is running on the VPS and reachable locally by the SayTwist app.
 2. Confirm the app uses the existing `saytwist` database and `saytwist_app` role.
 3. Verify connectivity from the app process without exposing connection credentials.
 
 ### 2. Configure domain
+
 1. In Hostinger hPanel, point `saytwist.com` to your Node.js app location.
 2. Set up the domain to point to your Node.js app location in hPanel.
 
 ### 3. Create Node.js Web App in hPanel
+
 1. Select Node.js app (Node 20+ recommended).
 2. Set app root to this project.
 3. Set startup command to:
+
 ```bash
 npm run start:hostinger
 ```
+
 4. Ensure build step is run before startup.
 
 ### 4. Configure production env in Hostinger
+
 Set all variables from `.env.production.example` in hPanel environment settings.
 
 Critical for auth/domain:
+
 - `APP_BASE_URL=https://saytwist.com`
 - `NEXT_PUBLIC_APP_URL=https://saytwist.com`
 - `NEXTAUTH_URL=https://saytwist.com`
 - `NEXTAUTH_SECRET=<strong random value>`
 
 If Hostinger auto-detects your app as `Other` and leaves build settings as `null`, set:
+
 - Output directory: `.next`
 - Entry file: `server.js`
 - Startup command: `npm run start:hostinger`
@@ -237,6 +281,7 @@ If Hostinger auto-detects your app as `Other` and leaves build settings as `null
 ### Google Indexing API production env setup on Hostinger
 
 In Hostinger Node.js app environment variables, add:
+
 - `GOOGLE_INDEXING_ENABLED=true`
 - `GOOGLE_INDEXING_DRY_RUN=false`
 - `NEXT_PUBLIC_APP_URL=https://saytwist.com`
@@ -246,6 +291,7 @@ In Hostinger Node.js app environment variables, add:
 - `GOOGLE_PRIVATE_KEY_BASE64=<base64 encoded private_key>`
 
 Steps:
+
 1. Open the downloaded Google service account JSON file.
 2. Copy `client_email` and `project_id` into their matching env vars.
 3. Encode `private_key` as base64 and paste it into `GOOGLE_PRIVATE_KEY_BASE64`.
@@ -257,6 +303,7 @@ Steps:
 8. Restart the Node.js app after changing env vars.
 
 Notes:
+
 - Optional fallback only:
   - `GOOGLE_PRIVATE_KEY=<raw private key>`
   - `GOOGLE_SERVICE_ACCOUNT_JSON_BASE64=<full service account JSON in base64>`
@@ -271,7 +318,9 @@ Notes:
 - Do not commit `.env.production`.
 
 ### 5. Deploy sequence
+
 Preferred production deploy is GitHub Actions artifact deployment:
+
 - CI gate runs lint, typecheck, tests, Prisma migrations, and build on GitHub runners.
 - CI then creates a production release bundle (`release.tar.gz`) containing:
   - `.next`
@@ -282,17 +331,21 @@ Preferred production deploy is GitHub Actions artifact deployment:
 - Server-side `npm install` and `next build` are intentionally avoided to prevent process-limit spikes.
 
 If your Hostinger runtime uses restart files, deployment touches:
+
 ```bash
 tmp/restart.txt
 ```
 
 GitHub deploy workflow notes:
+
 - `deploy-hostinger.yml` CI gate now also runs `npm run prisma:deploy` using `DATABASE_URL` secret.
 - Remote deploy script is low-overhead and lock-protected (`.deploy-lock`) to avoid overlapping deployments.
 - Deploy no longer depends on server-side `.git`.
 
 ### 6. Post-deploy verification
+
 Check:
+
 1. `/api/healthz` returns ok
 2. `/api/readyz` returns ready
 3. public homepage `/` loads and search works
@@ -309,9 +362,11 @@ Check:
 - Use `npm run prisma:deploy` in production (not `prisma migrate dev`).
 - Run migrations before app startup.
 - Seed only when explicitly needed:
+
 ```bash
 npm run prisma:seed
 ```
+
 - Keep backups/snapshots enabled at your DB provider.
 
 ---
@@ -353,16 +408,19 @@ npm run prisma:seed
 ## Optional Admin Google Indexing Tool
 
 The admin dashboard now includes **Indexing** at `/admin/indexing`:
+
 - status/config panel
 - bulk action: **Index all active translators**
 - indexing logs table with source/status/message
 
 Automatic behavior:
+
 - when a translator is created active, it is submitted automatically
 - when a translator becomes active later, it is submitted automatically
 - failures are logged and never block translator create/update flows
 
 Admin message reminder:
+
 - "Google Indexing API submission requested. Final indexing is not guaranteed."
 
 ## Public Create-Translator Flow
@@ -406,10 +464,12 @@ Use these for deployment checks and uptime monitors.
 ## CI/CD
 
 GitHub Actions included:
+
 - `.github/workflows/ci.yml`: lint, typecheck, test, build
 - `.github/workflows/deploy-hostinger.yml`: validated deployment scaffold using SSH + migration + build
 
 Required GitHub secrets for deploy workflow:
+
 - `HOSTINGER_SSH_HOST`
 - `HOSTINGER_SSH_USER`
 - `HOSTINGER_SSH_PRIVATE_KEY`
@@ -421,21 +481,25 @@ Required GitHub secrets for deploy workflow:
 ## Troubleshooting (Hostinger + local VPS PostgreSQL)
 
 ### App starts but auth fails
+
 - Check `NEXTAUTH_URL` exactly matches production URL.
 - Check `NEXTAUTH_SECRET` is present and stable.
 - Ensure HTTPS is active on domain.
 
 ### Prisma connection errors
+
 - Verify the server-only database configuration points to the local VPS PostgreSQL service.
 - Confirm the local PostgreSQL service is listening on the expected loopback port and the app role has the required access.
 - Run `npm run prisma:status` and `npm run prisma:deploy`.
 
 ### Translation unavailable
+
 - Check usage-protection state in `/admin/usage-protection`.
 - Review `GLOBAL_DAILY_TOKEN_CAP` and emergency flags.
 - Confirm `OPENAI_API_KEY` is valid.
 
 ### Alert emails not sent
+
 - Verify `BREVO_API_KEY`, `EMAIL_FROM`, `ALERT_ADMIN_EMAIL`.
 - Check server logs for structured `email_alert_*` events.
 
