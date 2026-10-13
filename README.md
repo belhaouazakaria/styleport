@@ -105,11 +105,11 @@ Core scripts:
 - `DATABASE_URL="$READ_ONLY_PRODUCTION_DATABASE_URL" SEO_IMPACT_ENVIRONMENT=production SEO_IMPACT_DEPLOYED_VERSION=<actual-deployed-release> SEO_IMPACT_BASE_URL=https://saytwist.com npm run --silent seo:report-indexing-impact` — transaction-enforced read-only comparison of deployed, proposed, and future strict translator eligibility
 - `npm run prisma:generate`
 - `npm run prisma:migrate` (dev)
-- `npm run prisma:deploy` (production-safe migration apply)
+- `npm run prisma:deploy` (VPS-only production migration command; use through the protected deployment workflow)
 - `npm run prisma:seed`
 - `npm run prisma:status`
 - `npm run validate:env:production`
-- `npm run deploy:hostinger` (helper build pipeline script)
+- `npm run deploy:hostinger` (VPS-only deployment helper; requires the protected workflow inputs)
 
 ---
 
@@ -199,24 +199,20 @@ If Hostinger auto-detects your app as `Other` and leaves build settings as `null
 
 Preferred production deploy is GitHub Actions artifact deployment:
 
-- CI gate runs lint, typecheck, tests, Prisma migrations, and build on GitHub runners.
+- CI gate runs a clean install, lint, typecheck, tests, build, dependency pruning, and artifact validation on GitHub runners. It cannot connect to or migrate the private production database.
 - CI then creates a production release bundle (`release.tar.gz`) containing:
   - `.next`
   - `node_modules` (production-pruned)
   - runtime config and assets (`public`, `prisma`, `package.json`, `server.js`, etc.)
-- Deploy job uploads only the bundle + deploy script to Hostinger.
-- Remote script extracts staged files and atomically swaps runtime paths in app root.
+- After the protected `production` environment is approved, the deploy job uploads only the bundle and deployment script to Hostinger.
+- The authenticated VPS script uses the existing Node.js installation at `/home/saytwist/.nvm/versions/node/v24.20.0/bin`, verifies a PostgreSQL backup, requires an already-current Prisma migration status for this release, and only then publishes the staged files.
+- The remote script restarts the existing PM2 `saytwist` process and requires both health and readiness checks to pass. It leaves every other PM2 process untouched and never starts the Growth worker.
 - Server-side `npm install` and `next build` are intentionally avoided to prevent process-limit spikes.
-
-If your Hostinger runtime uses restart files, deployment touches:
-
-```bash
-tmp/restart.txt
-```
 
 GitHub deploy workflow notes:
 
-- `deploy-hostinger.yml` CI gate now also runs `npm run prisma:deploy` using `DATABASE_URL` secret.
+- PostgreSQL remains private at `127.0.0.1:5433`; Prisma status and deploy commands run only inside the authenticated VPS session using its existing `.env` configuration.
+- The current release expects no pending migration. Any unexpected pending migration stops deployment before application files are replaced.
 - Remote deploy script is low-overhead and lock-protected (`.deploy-lock`) to avoid overlapping deployments.
 - Deploy no longer depends on server-side `.git`.
 
@@ -237,8 +233,10 @@ Check:
 
 ## Prisma Production Safety
 
-- Use `npm run prisma:deploy` in production (not `prisma migrate dev`).
-- Run migrations before app startup.
+- Use `prisma migrate status` followed by `prisma migrate deploy` only through the protected VPS deployment script. Never run production migrations from a GitHub-hosted runner.
+- Verify a custom-format `pg_dump` with `pg_restore --list` before migration execution.
+- This release must find zero pending migrations. A future release containing a reviewed migration must update the explicit migration gate as part of that reviewed change.
+- Never use `prisma migrate reset` in production.
 - Seed only when explicitly needed:
 
 ```bash
@@ -327,7 +325,7 @@ Use these for deployment checks and uptime monitors.
 GitHub Actions included:
 
 - `.github/workflows/ci.yml`: lint, typecheck, test, build
-- `.github/workflows/deploy-hostinger.yml`: validated deployment scaffold using SSH + migration + build
+- `.github/workflows/deploy-hostinger.yml`: validated artifact deployment with protected SSH-side backup, migration checks, PM2 restart, health checks, and application rollback
 
 Required GitHub secrets for deploy workflow:
 
@@ -351,7 +349,7 @@ Required GitHub secrets for deploy workflow:
 
 - Verify the server-only database configuration points to the local VPS PostgreSQL service.
 - Confirm the local PostgreSQL service is listening on the expected loopback port and the app role has the required access.
-- Run `npm run prisma:status` and `npm run prisma:deploy`.
+- Use the protected deployment workflow for Prisma status/deploy so the private database URL never leaves the VPS.
 
 ### Translation unavailable
 

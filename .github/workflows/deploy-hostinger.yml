@@ -16,7 +16,7 @@ jobs:
       APP_BASE_URL: https://translators.example.com
       NEXTAUTH_SECRET: test_nextauth_secret_please_replace
       NEXTAUTH_URL: https://translators.example.com
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/saytwist_ci
       OPENAI_API_KEY: test_key
       OPENAI_MODEL: gpt-4.1-mini
       NEXT_PUBLIC_APP_NAME: SayTwist
@@ -32,8 +32,13 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 20.20.2
           cache: npm
+
+      - name: Verify Node and npm toolchain
+        run: |
+          node -e 'if (process.version !== "v20.20.2") process.exit(1)'
+          npm --version | grep -Fx '10.8.2'
 
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
@@ -49,6 +54,9 @@ jobs:
 
       - name: Test
         run: npm run test
+
+      - name: Validate deployment shell
+        run: bash -n scripts/hostinger-deploy.sh
 
       - name: Build
         run: npm run build
@@ -122,11 +130,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Setup Node
-        uses: actions/setup-node@v5
-        with:
-          node-version: 20
-
       - name: Download deploy artifact
         uses: actions/download-artifact@v4
         with:
@@ -153,18 +156,6 @@ jobs:
             exit 1
           fi
 
-      - name: Apply approved production migrations
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: |
-          set -eu
-          test -n "$DATABASE_URL" || { echo "::error::Missing DATABASE_URL"; exit 1; }
-          migration_dir="$(mktemp -d)"
-          trap 'rm -rf "$migration_dir"' EXIT
-          tar -xzf release.tar.gz -C "$migration_dir"
-          cd "$migration_dir"
-          node node_modules/prisma/build/index.js migrate deploy
-
       - name: Upload application files to Hostinger
         uses: appleboy/scp-action@v1.0.0
         with:
@@ -188,12 +179,15 @@ jobs:
           command_timeout: 40m
           script: |
             set -eu
-            cd ${{ secrets.HOSTINGER_APP_PATH || vars.HOSTINGER_APP_PATH }}
+            cd "${{ secrets.HOSTINGER_APP_PATH || vars.HOSTINGER_APP_PATH }}"
             echo "[gha][ssh] pwd=$(pwd)"
-            echo "[gha][ssh] listing current directory"
-            ls -la
-            echo "[gha][ssh] listing scripts directory"
-            ls -la scripts || true
             command -v bash >/dev/null 2>&1 || { echo "[gha][ssh][error] bash not found"; exit 1; }
             chmod +x ./scripts/hostinger-deploy.sh
-            HOSTINGER_DEPLOY_DEBUG=1 HOSTINGER_DEPLOY_ARCHIVE="${{ secrets.HOSTINGER_APP_PATH || vars.HOSTINGER_APP_PATH }}/release.tar.gz" bash ./scripts/hostinger-deploy.sh
+            HOSTINGER_NODE_BIN="/home/saytwist/.nvm/versions/node/v24.20.0/bin" \
+              HOSTINGER_PM2_PROCESS="saytwist" \
+              HOSTINGER_HEALTH_BASE_URL="http://127.0.0.1:3000" \
+              HOSTINGER_ENV_FILE="${{ secrets.HOSTINGER_APP_PATH || vars.HOSTINGER_APP_PATH }}/.env" \
+              HOSTINGER_EXPECT_NO_PENDING_MIGRATIONS="1" \
+              HOSTINGER_RELEASE_SHA="${{ github.sha }}" \
+              HOSTINGER_DEPLOY_ARCHIVE="${{ secrets.HOSTINGER_APP_PATH || vars.HOSTINGER_APP_PATH }}/release.tar.gz" \
+              bash ./scripts/hostinger-deploy.sh

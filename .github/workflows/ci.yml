@@ -16,7 +16,7 @@ jobs:
       APP_BASE_URL: https://translators.example.com
       NEXTAUTH_SECRET: test_nextauth_secret_please_replace
       NEXTAUTH_URL: https://translators.example.com
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/saytwist_ci
       OPENAI_API_KEY: test_key
       OPENAI_MODEL: gpt-4.1-mini
       NEXT_PUBLIC_APP_NAME: SayTwist
@@ -32,11 +32,16 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 20.20.2
           cache: npm
 
+      - name: Verify Node and npm toolchain
+        run: |
+          node -e 'if (process.version !== "v20.20.2") process.exit(1)'
+          npm --version | grep -Fx '10.8.2'
+
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --no-audit --no-fund
 
       - name: Prisma generate
         run: npm run prisma:generate

@@ -3,16 +3,41 @@ set -Eeuo pipefail
 
 APP_PATH="${HOSTINGER_APP_PATH:-$(pwd)}"
 DEPLOY_ARCHIVE="${HOSTINGER_DEPLOY_ARCHIVE:-$APP_PATH/release.tar.gz}"
+NODE_BIN_DIR="${HOSTINGER_NODE_BIN:-/home/saytwist/.nvm/versions/node/v24.20.0/bin}"
+PM2_PROCESS="${HOSTINGER_PM2_PROCESS:-saytwist}"
+HEALTH_BASE_URL="${HOSTINGER_HEALTH_BASE_URL:-http://127.0.0.1:3000}"
+PRODUCTION_ENV_FILE="${HOSTINGER_ENV_FILE:-$APP_PATH/.env}"
+EXPECT_NO_PENDING_MIGRATIONS="${HOSTINGER_EXPECT_NO_PENDING_MIGRATIONS:-1}"
+RELEASE_SHA="${HOSTINGER_RELEASE_SHA:-unknown}"
 LOCK_DIR="$APP_PATH/.deploy-lock"
-RELEASE_ID="$(date +%Y%m%d%H%M%S)"
+RELEASE_ID="$(date +%Y%m%d%H%M%S)-${RELEASE_SHA:0:12}"
 STAGING_DIR="$APP_PATH/.deploy-stage-$RELEASE_ID"
-DEPLOY_DEBUG="${HOSTINGER_DEPLOY_DEBUG:-0}"
+ROLLBACK_ROOT="$APP_PATH/.deploy-releases"
+ROLLBACK_DIR="$ROLLBACK_ROOT/$RELEASE_ID"
+BACKUP_ROOT="$APP_PATH/.deploy-backups"
+DATABASE_BACKUP="$BACKUP_ROOT/saytwist-$RELEASE_ID.dump"
 CURRENT_STEP="bootstrap"
 DEPLOY_STATUS="failed"
+PUBLISH_STARTED=0
+OLD_WEB_PID=""
 
-if [[ "$DEPLOY_DEBUG" == "1" ]]; then
-  set -x
-fi
+RELEASE_PATHS=(
+  ".next"
+  "public"
+  "prisma"
+  "lib"
+  "workers"
+  "ecosystem.config.cjs"
+  "tsconfig.json"
+  "node_modules"
+  "package.json"
+  "package-lock.json"
+  "next.config.ts"
+  "server.js"
+  "next-env.d.ts"
+)
+BACKED_UP_PATHS=()
+PUBLISHED_PATHS=()
 
 timestamp() {
   date +"%Y-%m-%dT%H:%M:%S%z"
@@ -28,91 +53,15 @@ warn() {
 
 fail() {
   echo "[hostinger][$(timestamp)][${CURRENT_STEP}][ERROR] $*" >&2
+  trap - ERR
+  set +e
+  rollback_application
   exit 1
 }
 
 step() {
   CURRENT_STEP="$1"
   log "Starting step."
-}
-
-load_profile_if_exists() {
-  local profile_path="$1"
-  if [[ -f "$profile_path" ]]; then
-    # shellcheck disable=SC1090
-    . "$profile_path" >/dev/null 2>&1 || true
-  fi
-}
-
-prepend_path_if_dir_exists() {
-  local dir_path="$1"
-  if [ -d "$dir_path" ]; then
-    case ":$PATH:" in
-      *":$dir_path:"*) return 0 ;;
-    esac
-    PATH="$dir_path:$PATH"
-    export PATH
-    log "Added PATH candidate: $dir_path"
-    return 0
-  fi
-  log "Skipping missing PATH candidate: $dir_path"
-}
-
-bootstrap_runtime_path_candidates() {
-  local candidate
-
-  for candidate in \
-    "/usr/local/bin" \
-    "/usr/bin" \
-    "/bin" \
-    "$HOME/bin" \
-    "$HOME/.local/bin" \
-    "$HOME/.npm-global/bin"; do
-    prepend_path_if_dir_exists "$candidate"
-  done
-
-  # Hostinger/cPanel alt-node locations (explicit, shell-portable checks).
-  for candidate in \
-    "/opt/alt/alt-nodejs18/root/usr/bin" \
-    "/opt/alt/alt-nodejs20/root/usr/bin" \
-    "/opt/alt/alt-nodejs22/root/usr/bin" \
-    "/opt/alt/alt-nodejs24/root/usr/bin"; do
-    prepend_path_if_dir_exists "$candidate"
-  done
-
-  # Optional common alternatives.
-  for candidate in \
-    "/opt/nodejs18/bin" \
-    "/opt/nodejs20/bin" \
-    "/opt/nodejs22/bin" \
-    "/opt/nodejs24/bin"; do
-    prepend_path_if_dir_exists "$candidate"
-  done
-}
-
-print_runtime_diagnostics() {
-  log "Runtime diagnostics:"
-  log "shell=${SHELL:-unknown}"
-  log "user=$(whoami 2>/dev/null || echo unknown)"
-  log "pwd=$(pwd 2>/dev/null || echo unknown)"
-  log "PATH=$PATH"
-  log "command -v node => $(command -v node 2>/dev/null || echo not-found)"
-  log "command -v npm  => $(command -v npm 2>/dev/null || echo not-found)"
-
-  if ls -d /opt/alt/alt-nodejs* >/dev/null 2>&1; then
-    log "Detected /opt/alt/alt-nodejs* directories:"
-    ls -d /opt/alt/alt-nodejs* 2>/dev/null || true
-  fi
-
-  if ls -1 /opt/alt/alt-nodejs*/root/usr/bin/node >/dev/null 2>&1; then
-    log "Candidate node binaries:"
-    ls -1 /opt/alt/alt-nodejs*/root/usr/bin/node 2>/dev/null || true
-  fi
-
-  if ls -1 /opt/alt/alt-nodejs*/root/usr/bin/npm >/dev/null 2>&1; then
-    log "Candidate npm binaries:"
-    ls -1 /opt/alt/alt-nodejs*/root/usr/bin/npm 2>/dev/null || true
-  fi
 }
 
 ensure_command_exists() {
@@ -135,80 +84,198 @@ ensure_directory_writable() {
   [[ -w "$dir_path" ]] || fail "Directory is not writable: $dir_path"
 }
 
+validate_safe_app_path() {
+  [[ "$APP_PATH" == /* ]] || fail "HOSTINGER_APP_PATH must be absolute."
+  [[ "$APP_PATH" != "/" && "$APP_PATH" != "$HOME" ]] || fail "Refusing unsafe application path."
+}
+
+bootstrap_runtime() {
+  step "runtime"
+  ensure_file_exists "$NODE_BIN_DIR/node"
+  ensure_file_exists "$NODE_BIN_DIR/npm"
+  PATH="$NODE_BIN_DIR:$HOME/.local/bin:$HOME/.npm-global/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+  export PATH
+
+  [[ "$(command -v node)" == "$NODE_BIN_DIR/node" ]] || fail "The approved production Node.js binary was not selected."
+  [[ "$(command -v npm)" == "$NODE_BIN_DIR/npm" ]] || fail "The approved production npm binary was not selected."
+  ensure_command_exists pm2
+  ensure_command_exists curl
+  ensure_command_exists pg_dump
+  ensure_command_exists pg_restore
+  ensure_command_exists tar
+
+  log "node=$(node --version), npm=$(npm --version), node_path=$(command -v node), pm2_path=$(command -v pm2)"
+}
+
 acquire_lock() {
   step "lock"
   if mkdir "$LOCK_DIR" >/dev/null 2>&1; then
-    log "Acquired deploy lock: $LOCK_DIR"
+    log "Acquired deploy lock."
     return
   fi
-  fail "Another deployment appears to be running. Lock path: $LOCK_DIR"
+  fail "Another deployment appears to be running."
 }
 
 validate_environment() {
   step "environment"
-  mkdir -p "$APP_PATH"
+  validate_safe_app_path
   ensure_directory_exists "$APP_PATH"
   ensure_directory_writable "$APP_PATH"
+  [[ "$EXPECT_NO_PENDING_MIGRATIONS" == "1" ]] || fail "This release only permits an already up-to-date migration state."
+  [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] || fail "HOSTINGER_RELEASE_SHA must be the full Git commit SHA."
   cd "$APP_PATH"
-  log "App path: $APP_PATH"
-  print_runtime_diagnostics
 
-  ensure_command_exists node
-  ensure_command_exists npm
+  if [[ ! -f "$PRODUCTION_ENV_FILE" ]]; then
+    PRODUCTION_ENV_FILE="$STAGING_DIR/.production-runtime.env"
+    (
+      umask 077
+      # shellcheck disable=SC2016
+      pm2 jlist | node -e '
+        const fs = require("node:fs");
+        let input = "";
+        process.stdin.setEncoding("utf8");
+        process.stdin.on("data", (chunk) => { input += chunk; });
+        process.stdin.on("end", () => {
+          const item = JSON.parse(input).find((entry) => entry.name === process.argv[1]);
+          const value = item?.pm2_env?.DATABASE_URL;
+          if (!value) process.exit(2);
+          fs.writeFileSync(process.argv[2], `DATABASE_URL=${JSON.stringify(value)}\n`, { mode: 0o600 });
+        });
+      ' "$PM2_PROCESS" "$PRODUCTION_ENV_FILE"
+    ) || fail "DATABASE_URL was not available from the application .env or existing PM2 process."
+    log "Using the existing PM2 process database configuration."
+  else
+    log "Using the existing application environment file."
+  fi
 
-  log "which node: $(command -v node)"
-  log "which npm: $(command -v npm)"
-  log "node version: $(node -v 2>/dev/null || echo unknown)"
-  log "npm version: $(npm -v 2>/dev/null || echo unknown)"
+  node --env-file="$PRODUCTION_ENV_FILE" -e '
+    const value = process.env.DATABASE_URL;
+    if (!value) throw new Error("DATABASE_URL is missing from the production environment file");
+    const url = new URL(value);
+    if (url.protocol !== "postgresql:" && url.protocol !== "postgres:") throw new Error("DATABASE_URL must use PostgreSQL");
+    if (url.hostname !== "127.0.0.1" || url.port !== "5433") throw new Error("Production PostgreSQL must remain private on 127.0.0.1:5433");
+    if (decodeURIComponent(url.pathname.slice(1)) !== "saytwist") throw new Error("Unexpected production database name");
+  '
+  log "Production configuration is present and targets the approved private PostgreSQL endpoint."
 }
 
 validate_archive() {
   step "validate-archive"
-  log "Deploy archive path: $DEPLOY_ARCHIVE"
-  ensure_command_exists tar
   ensure_file_exists "$DEPLOY_ARCHIVE"
-
-  local archive_dir
-  archive_dir="$(dirname "$DEPLOY_ARCHIVE")"
-  log "Archive parent directory listing ($archive_dir):"
-  ls -la "$archive_dir"
-
-  log "Validating archive readability..."
   tar -tzf "$DEPLOY_ARCHIVE" >/dev/null
-
-  log "Archive top-level preview:"
-  tar -tzf "$DEPLOY_ARCHIVE" | head -n 40 || true
+  log "Release archive is readable."
 }
 
 extract_archive() {
   step "extract"
   mkdir -p "$STAGING_DIR"
-  ensure_directory_exists "$STAGING_DIR"
   ensure_directory_writable "$STAGING_DIR"
-  log "Extracting archive into staging dir: $STAGING_DIR"
   tar -xzf "$DEPLOY_ARCHIVE" -C "$STAGING_DIR"
-
-  log "Staging directory content:"
-  ls -la "$STAGING_DIR"
 }
 
 validate_staging_layout() {
   step "validate-staging"
-  ensure_file_exists "$STAGING_DIR/package.json"
-  ensure_directory_exists "$STAGING_DIR/.next"
-  ensure_directory_exists "$STAGING_DIR/node_modules"
+  ensure_file_exists "$STAGING_DIR/.next/BUILD_ID"
   ensure_directory_exists "$STAGING_DIR/public"
-  ensure_directory_exists "$STAGING_DIR/prisma"
+  ensure_directory_exists "$STAGING_DIR/prisma/migrations"
   ensure_directory_exists "$STAGING_DIR/lib"
   ensure_directory_exists "$STAGING_DIR/workers"
+  ensure_directory_exists "$STAGING_DIR/node_modules"
+  ensure_file_exists "$STAGING_DIR/package.json"
+  ensure_file_exists "$STAGING_DIR/package-lock.json"
   ensure_file_exists "$STAGING_DIR/server.js"
   ensure_file_exists "$STAGING_DIR/ecosystem.config.cjs"
+  ensure_file_exists "$STAGING_DIR/next.config.ts"
+  ensure_file_exists "$STAGING_DIR/next-env.d.ts"
   ensure_file_exists "$STAGING_DIR/tsconfig.json"
   ensure_file_exists "$STAGING_DIR/workers/editorial-worker.ts"
   ensure_file_exists "$STAGING_DIR/workers/growth-worker.ts"
+  ensure_file_exists "$STAGING_DIR/node_modules/prisma/build/index.js"
   ensure_file_exists "$STAGING_DIR/node_modules/tsx/dist/cli.mjs"
   ensure_file_exists "$STAGING_DIR/node_modules/.prisma/client/libquery_engine-debian-openssl-1.1.x.so.node"
   ensure_file_exists "$STAGING_DIR/node_modules/.prisma/client/libquery_engine-debian-openssl-3.0.x.so.node"
+
+  node -e '
+    const config = require(process.argv[1]);
+    const app = config?.apps?.find((candidate) => candidate.name === process.argv[2]);
+    if (!app || app.script !== "server.js" || app.instances !== 1 || app.exec_mode !== "fork") process.exit(1);
+  ' "$STAGING_DIR/ecosystem.config.cjs" "$PM2_PROCESS" || fail "Artifact PM2 configuration does not match the existing SayTwist web process contract."
+  log "Artifact layout and PM2 configuration are valid."
+}
+
+get_pm2_process_info() {
+  pm2 jlist | node -e '
+    let input = "";
+    process.stdin.setEncoding("utf8");
+    process.stdin.on("data", (chunk) => { input += chunk; });
+    process.stdin.on("end", () => {
+      const processName = process.argv[1];
+      const item = JSON.parse(input).find((entry) => entry.name === processName);
+      if (!item) process.exit(2);
+      const env = item.pm2_env || {};
+      process.stdout.write([item.pid || 0, env.status || "unknown", env.pm_exec_path || "", env.pm_cwd || "", env.restart_time || 0].join("\t"));
+    });
+  ' "$PM2_PROCESS"
+}
+
+validate_pm2_process() {
+  step "validate-pm2"
+  local info status exec_path cwd restart_count
+  info="$(get_pm2_process_info)" || fail "The existing PM2 process '$PM2_PROCESS' was not found."
+  IFS=$'\t' read -r OLD_WEB_PID status exec_path cwd restart_count <<<"$info"
+  [[ "$OLD_WEB_PID" =~ ^[1-9][0-9]*$ ]] || fail "The existing PM2 web process has no live PID."
+  [[ "$status" == "online" ]] || fail "The existing PM2 web process is not online."
+  [[ "$exec_path" == "$APP_PATH/server.js" ]] || fail "PM2 executes an unexpected web entry point: $exec_path"
+  [[ "$cwd" == "$APP_PATH" ]] || fail "PM2 uses an unexpected working directory: $cwd"
+  log "Verified existing PM2 process '$PM2_PROCESS' (pid=$OLD_WEB_PID, restarts=$restart_count)."
+  log "Only '$PM2_PROCESS' will be restarted; all other PM2 processes, including an editorial worker, are left untouched."
+}
+
+create_database_backup() {
+  step "database-backup"
+  mkdir -p "$BACKUP_ROOT"
+  chmod 700 "$BACKUP_ROOT"
+  [[ ! -e "$DATABASE_BACKUP" ]] || fail "Refusing to overwrite an existing database backup."
+
+  node --env-file="$PRODUCTION_ENV_FILE" -e '
+    const { spawnSync } = require("node:child_process");
+    const url = new URL(process.env.DATABASE_URL);
+    const env = { ...process.env };
+    delete env.DATABASE_URL;
+    env.PGHOST = url.hostname;
+    env.PGPORT = url.port;
+    env.PGUSER = decodeURIComponent(url.username);
+    env.PGPASSWORD = decodeURIComponent(url.password);
+    env.PGDATABASE = decodeURIComponent(url.pathname.slice(1));
+    const result = spawnSync("pg_dump", ["--format=custom", "--file", process.argv[1]], { env, stdio: "inherit" });
+    process.exit(result.status ?? 1);
+  ' "$DATABASE_BACKUP"
+
+  chmod 600 "$DATABASE_BACKUP"
+  [[ -s "$DATABASE_BACKUP" ]] || fail "The production database backup is empty."
+  pg_restore --list "$DATABASE_BACKUP" >/dev/null
+  log "Verified production database backup: $DATABASE_BACKUP"
+}
+
+run_prisma() {
+  (
+    cd "$STAGING_DIR"
+    node --env-file="$PRODUCTION_ENV_FILE" node_modules/prisma/build/index.js "$@"
+  )
+}
+
+validate_and_apply_migrations() {
+  step "migration-status-before"
+  if ! run_prisma migrate status; then
+    fail "Migration status is not up to date. This release expects no pending migrations, so deployment stopped before changing application files."
+  fi
+
+  step "migration-deploy"
+  run_prisma migrate deploy
+
+  step "migration-status-after"
+  run_prisma migrate status
+  log "Migration state remains current; no new migration was expected for this release."
 }
 
 preserve_generated_assets() {
@@ -222,97 +289,147 @@ preserve_generated_assets() {
   fi
 
   mkdir -p "$staging_generated_dir"
-  ensure_directory_writable "$staging_generated_dir"
-  log "Preserving generated assets from $existing_generated_dir into staging."
   cp -a "$existing_generated_dir/." "$staging_generated_dir/"
+  log "Copied persistent generated assets into the staged release."
 }
 
-replace_path_from_staging() {
-  local rel_path="$1"
-  local source_path="$STAGING_DIR/$rel_path"
-  local target_path="$APP_PATH/$rel_path"
+backup_current_release() {
+  step "backup-current-release"
+  local rel_path target_path backup_path
+  PUBLISH_STARTED=1
+  mkdir -p "$ROLLBACK_DIR"
 
-  if [[ ! -e "$source_path" && ! -L "$source_path" ]]; then
-    warn "Skipping '$rel_path' (not present in staging)."
-    return
-  fi
-
-  if [[ -e "$target_path" || -L "$target_path" ]]; then
-    log "Removing existing target path: $target_path"
-    rm -rf "$target_path"
-  fi
-
-  log "Publishing '$rel_path'"
-  mv "$source_path" "$target_path"
+  for rel_path in "${RELEASE_PATHS[@]}"; do
+    target_path="$APP_PATH/$rel_path"
+    backup_path="$ROLLBACK_DIR/$rel_path"
+    if [[ -e "$target_path" || -L "$target_path" ]]; then
+      mkdir -p "$(dirname "$backup_path")"
+      mv "$target_path" "$backup_path"
+      BACKED_UP_PATHS+=("$rel_path")
+    fi
+  done
+  log "Saved the previous application release at $ROLLBACK_DIR"
 }
 
 publish_release() {
   step "publish"
-  replace_path_from_staging ".next"
-  replace_path_from_staging "public"
-  replace_path_from_staging "prisma"
-  replace_path_from_staging "lib"
-  replace_path_from_staging "workers"
-  replace_path_from_staging "ecosystem.config.cjs"
-  replace_path_from_staging "tsconfig.json"
-  replace_path_from_staging "node_modules"
-  replace_path_from_staging "package.json"
-  replace_path_from_staging "package-lock.json"
-  replace_path_from_staging "next.config.ts"
-  replace_path_from_staging "server.js"
-  replace_path_from_staging "next-env.d.ts"
+  local rel_path source_path target_path
 
-  rm -f "$DEPLOY_ARCHIVE"
-  log "Removed archive: $DEPLOY_ARCHIVE"
+  for rel_path in "${RELEASE_PATHS[@]}"; do
+    source_path="$STAGING_DIR/$rel_path"
+    target_path="$APP_PATH/$rel_path"
+    [[ -e "$source_path" || -L "$source_path" ]] || fail "Staged release path disappeared before publish: $rel_path"
+    mkdir -p "$(dirname "$target_path")"
+    mv "$source_path" "$target_path"
+    PUBLISHED_PATHS+=("$rel_path")
+  done
+  log "Published all validated release paths. Persistent storage was not replaced."
 }
 
-signal_restart() {
-  step "restart"
-  if [[ -f "$APP_PATH/tmp/restart.txt" ]]; then
-    touch "$APP_PATH/tmp/restart.txt"
-    log "Restart signal sent via tmp/restart.txt"
-    return
-  fi
+wait_for_health() {
+  local attempt
+  for attempt in $(seq 1 30); do
+    if curl --fail --silent --show-error --max-time 5 "$HEALTH_BASE_URL/api/healthz" >/dev/null 2>&1 \
+      && curl --fail --silent --show-error --max-time 5 "$HEALTH_BASE_URL/api/readyz" >/dev/null 2>&1; then
+      log "Health and readiness checks passed on attempt $attempt."
+      return 0
+    fi
+    sleep 2
+  done
+  return 1
+}
 
-  warn "tmp/restart.txt not found. Restart the Node.js app from Hostinger hPanel if needed."
+restart_web_process() {
+  step "restart-web"
+  local info new_pid status exec_path cwd restart_count
+  pm2 restart "$PM2_PROCESS" --update-env >/dev/null
+
+  info="$(get_pm2_process_info)" || fail "PM2 process disappeared after restart."
+  IFS=$'\t' read -r new_pid status exec_path cwd restart_count <<<"$info"
+  [[ "$status" == "online" ]] || fail "PM2 did not return the web process to online state."
+  [[ "$new_pid" =~ ^[1-9][0-9]*$ ]] || fail "PM2 did not assign a live PID after restart."
+  [[ "$new_pid" != "$OLD_WEB_PID" ]] || fail "PM2 retained the old web PID; refusing to report the new release as active."
+  [[ "$exec_path" == "$APP_PATH/server.js" && "$cwd" == "$APP_PATH" ]] || fail "PM2 restarted with an unexpected runtime configuration."
+  wait_for_health || fail "The restarted web process failed health or readiness checks."
+  log "PM2 restarted '$PM2_PROCESS' from pid=$OLD_WEB_PID to pid=$new_pid (restarts=$restart_count)."
+}
+
+rollback_application() {
+  [[ "$PUBLISH_STARTED" == "1" ]] || return 0
+  CURRENT_STEP="rollback"
+  warn "Restoring the previous application release. Database rollback is intentionally not automatic."
+  local failed_dir="$STAGING_DIR/failed-release"
+  local rel_path target_path backup_path failed_path
+  mkdir -p "$failed_dir"
+
+  for rel_path in "${PUBLISHED_PATHS[@]}"; do
+    target_path="$APP_PATH/$rel_path"
+    failed_path="$failed_dir/$rel_path"
+    if [[ -e "$target_path" || -L "$target_path" ]]; then
+      mkdir -p "$(dirname "$failed_path")"
+      mv "$target_path" "$failed_path"
+    fi
+  done
+
+  for rel_path in "${BACKED_UP_PATHS[@]}"; do
+    target_path="$APP_PATH/$rel_path"
+    backup_path="$ROLLBACK_DIR/$rel_path"
+    if [[ -e "$backup_path" || -L "$backup_path" ]]; then
+      mkdir -p "$(dirname "$target_path")"
+      mv "$backup_path" "$target_path"
+    fi
+  done
+
+  pm2 restart "$PM2_PROCESS" --update-env >/dev/null 2>&1 || warn "PM2 restart of the restored release failed; operator intervention is required."
+  wait_for_health || warn "The restored release did not become healthy; operator intervention is required."
+}
+
+finalize_release() {
+  step "finalize"
+  printf '%s\n' "$RELEASE_SHA" > "$APP_PATH/.deployed-release"
+  rm -f "$DEPLOY_ARCHIVE"
+  PUBLISH_STARTED=0
+  log "Recorded deployed release $RELEASE_SHA and removed the uploaded archive."
 }
 
 cleanup() {
-  step "cleanup"
+  local exit_code="$?"
   rm -rf "$STAGING_DIR" >/dev/null 2>&1 || true
   rmdir "$LOCK_DIR" >/dev/null 2>&1 || true
   log "Cleanup complete (status=$DEPLOY_STATUS)."
+  return "$exit_code"
 }
 
 on_error() {
   local exit_code="$?"
   local line_no="${BASH_LINENO[0]:-unknown}"
   local cmd="${BASH_COMMAND:-unknown}"
+  trap - ERR
+  set +e
   echo "[hostinger][$(timestamp)][${CURRENT_STEP}][ERROR] Command failed with exit ${exit_code} at line ${line_no}: ${cmd}" >&2
-  echo "[hostinger][$(timestamp)][${CURRENT_STEP}][ERROR] pwd=$(pwd 2>/dev/null || echo unknown)" >&2
-  echo "[hostinger][$(timestamp)][${CURRENT_STEP}][ERROR] PATH=${PATH}" >&2
+  rollback_application
   exit "$exit_code"
 }
 
 trap on_error ERR
-trap cleanup EXIT INT TERM
+trap cleanup EXIT
+trap 'exit 130' INT TERM
 
-step "bootstrap"
-log "Bootstrapping shell environment..."
-load_profile_if_exists "$HOME/.profile"
-load_profile_if_exists "$HOME/.bash_profile"
-load_profile_if_exists "$HOME/.bashrc"
-load_profile_if_exists "$HOME/.zshrc"
-bootstrap_runtime_path_candidates
-
+validate_safe_app_path
+bootstrap_runtime
 acquire_lock
-validate_environment
 validate_archive
 extract_archive
 validate_staging_layout
+validate_pm2_process
+validate_environment
+create_database_backup
+validate_and_apply_migrations
 preserve_generated_assets
+backup_current_release
 publish_release
-signal_restart
+restart_web_process
+finalize_release
 
 DEPLOY_STATUS="success"
 step "done"
