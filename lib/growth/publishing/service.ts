@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import {
   GrowthActivityActorKind,
   GrowthAssetState,
-  GrowthJobStatus,
   GrowthJobType,
   GrowthPinApprovalStatus,
   GrowthPinCandidateStatus,
@@ -214,7 +213,7 @@ export async function publishApprovedPin(publicationId: string, fetchImpl?: type
       return final;
     });
     return { publication: result, reused: false };
-  } catch (error) {
+  } catch {
     await markPublicationAmbiguous(publication.id, "POST_CREATE_PERSISTENCE_UNCERTAIN", "Pinterest confirmed Pin creation, but local persistence did not complete.", created.rateLimit);
     return { publication: await prisma.growthPinPublication.findUniqueOrThrow({ where: { id: publication.id } }), reused: false };
   }
