@@ -81,7 +81,9 @@ SayTwist does not use the Google Indexing API or any automatic submission servic
 - Robots: `https://saytwist.com/robots.txt`
 - Submit the sitemap in Search Console under **Indexing → Sitemaps** using `sitemap.xml`.
 - Use **URL Inspection** for representative homepage, translator, and Idea URLs. Confirm the live test returns HTTP 200, allows crawling, exposes the production canonical, and does not emit `noindex` before requesting indexing.
-- Run `npm run seo:verify-production` for a read-only live crawlability check. It never submits or modifies content.
+- Run `SEO_VERIFY_DEPLOYED_VERSION=<actual-deployed-release> npm run --silent seo:verify-production` for a read-only live crawlability check. The required version label prevents old production responses from being presented as evidence that this branch is deployed. It never submits or modifies content.
+
+The release remains blocked until the production database impact report is generated through a read-only connection and every URL transition is reviewed. The report distinguishes the existing deployed sitemap rule, this branch's proposed technical-completeness rule, and the disabled future strict human-review rule. Do not deploy a sitemap-removal change from local counts.
 
 Google decides whether and when an eligible URL is indexed; sitemap presence is not an indexing guarantee.
 
@@ -97,8 +99,8 @@ Core scripts:
 - `npm run build` — production build
 - `npm run start` — production start (`next start -p ${PORT:-3000}`)
 - `npm run check` — lint + typecheck + tests
-- `npm run seo:verify-production` — read-only live robots/sitemap/status/canonical/noindex audit
-- `npm run seo:report-indexing-impact` — read-only URL-level report before strict current-review enforcement
+- `SEO_VERIFY_DEPLOYED_VERSION=<actual-deployed-release> npm run --silent seo:verify-production` — read-only live robots/sitemap/status/canonical/noindex audit
+- `DATABASE_URL="$READ_ONLY_PRODUCTION_DATABASE_URL" SEO_IMPACT_ENVIRONMENT=production SEO_IMPACT_DEPLOYED_VERSION=<actual-deployed-release> SEO_IMPACT_BASE_URL=https://saytwist.com npm run --silent seo:report-indexing-impact` — transaction-enforced read-only comparison of deployed, proposed, and future strict translator eligibility
 - `npm run prisma:generate`
 - `npm run prisma:migrate` (dev)
 - `npm run prisma:deploy` (production-safe migration apply)

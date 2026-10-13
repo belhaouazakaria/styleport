@@ -3,6 +3,7 @@ import type {
   Role,
   TranslatorRequestStatus,
 } from "@prisma/client";
+import type { IndexingExclusionReasonCode } from "@/lib/indexing-eligibility";
 
 export type ApiErrorCode =
   | "VALIDATION_ERROR"
@@ -126,11 +127,15 @@ export interface PublicTranslator {
   editorial: TranslatorEditorialContent;
   editorialStatus: "INCOMPLETE" | "NEEDS_REVIEW" | "READY";
   indexingEligibility: {
-    indexable: boolean;
-    strictIndexable: boolean;
+    deployedBaselineIndexable: boolean;
+    deployedBaselineRobotsIndexable: boolean;
+    newVersionIndexable: boolean;
+    strictReviewIndexable: boolean;
     technicallyReady: boolean;
     currentVersionReviewed: boolean;
     reviewEnforcementEnabled: boolean;
+    newVersionExclusionReasonCodes: IndexingExclusionReasonCode[];
+    strictReviewExclusionReasonCodes: IndexingExclusionReasonCode[];
     reasons: string[];
   };
 }

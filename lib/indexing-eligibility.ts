@@ -3,6 +3,18 @@ import type { TranslatorEditorialDraft } from "@/lib/types";
 
 export const CURRENT_REVIEW_ENFORCEMENT_ENABLED = false;
 
+export const INDEXING_EXCLUSION_REASON_CODES = {
+  missingPublicSlug: "MISSING_PUBLIC_SLUG",
+  inactive: "INACTIVE",
+  archived: "ARCHIVED",
+  technicalEditorialIncomplete: "TECHNICAL_EDITORIAL_INCOMPLETE",
+  currentEditorialNotReviewed: "CURRENT_EDITORIAL_NOT_REVIEWED",
+  editorialQualityRequirementsNotMet: "EDITORIAL_QUALITY_REQUIREMENTS_NOT_MET",
+} as const;
+
+export type IndexingExclusionReasonCode =
+  (typeof INDEXING_EXCLUSION_REASON_CODES)[keyof typeof INDEXING_EXCLUSION_REASON_CODES];
+
 export interface TranslatorIndexingEligibilityInput {
   isActive: boolean;
   archivedAt: Date | string | null;
@@ -12,11 +24,15 @@ export interface TranslatorIndexingEligibilityInput {
 }
 
 export interface TranslatorIndexingEligibility {
-  indexable: boolean;
-  strictIndexable: boolean;
+  deployedBaselineIndexable: boolean;
+  deployedBaselineRobotsIndexable: boolean;
+  newVersionIndexable: boolean;
+  strictReviewIndexable: boolean;
   technicallyReady: boolean;
   currentVersionReviewed: boolean;
   reviewEnforcementEnabled: boolean;
+  newVersionExclusionReasonCodes: IndexingExclusionReasonCode[];
+  strictReviewExclusionReasonCodes: IndexingExclusionReasonCode[];
   reasons: string[];
 }
 
@@ -65,10 +81,36 @@ export function assessTranslatorIndexingEligibility(
   const quality = assessEditorialQuality(input.currentEditorial, {
     humanReviewed: currentVersionReviewed,
   });
-  const publiclyAvailable = Boolean(input.slug.trim()) && input.isActive && !input.archivedAt;
-  const strictIndexable = publiclyAvailable && quality.eligibleForIndexing;
-  const indexable = publiclyAvailable && quality.technicallyComplete &&
+  const hasPublicSlug = Boolean(input.slug.trim());
+  const publiclyAvailable = hasPublicSlug && input.isActive && !input.archivedAt;
+  const deployedBaselineIndexable = publiclyAvailable;
+  const deployedBaselineRobotsIndexable = publiclyAvailable && quality.technicallyComplete;
+  const strictReviewIndexable = publiclyAvailable && quality.eligibleForIndexing;
+  const newVersionIndexable = publiclyAvailable && quality.technicallyComplete &&
     (!reviewEnforcementEnabled || currentVersionReviewed);
+  const availabilityReasonCodes: IndexingExclusionReasonCode[] = [];
+  if (!hasPublicSlug) availabilityReasonCodes.push(INDEXING_EXCLUSION_REASON_CODES.missingPublicSlug);
+  if (!input.isActive) availabilityReasonCodes.push(INDEXING_EXCLUSION_REASON_CODES.inactive);
+  if (input.archivedAt) availabilityReasonCodes.push(INDEXING_EXCLUSION_REASON_CODES.archived);
+
+  const newVersionExclusionReasonCodes = [...availabilityReasonCodes];
+  if (!quality.technicallyComplete) {
+    newVersionExclusionReasonCodes.push(INDEXING_EXCLUSION_REASON_CODES.technicalEditorialIncomplete);
+  }
+  if (reviewEnforcementEnabled && !currentVersionReviewed) {
+    newVersionExclusionReasonCodes.push(INDEXING_EXCLUSION_REASON_CODES.currentEditorialNotReviewed);
+  }
+
+  const strictReviewExclusionReasonCodes = [...availabilityReasonCodes];
+  if (!quality.technicallyComplete) {
+    strictReviewExclusionReasonCodes.push(INDEXING_EXCLUSION_REASON_CODES.technicalEditorialIncomplete);
+  }
+  if (!currentVersionReviewed) {
+    strictReviewExclusionReasonCodes.push(INDEXING_EXCLUSION_REASON_CODES.currentEditorialNotReviewed);
+  }
+  if (quality.technicallyComplete && quality.issues.some((issue) => issue !== "Human editorial review is required")) {
+    strictReviewExclusionReasonCodes.push(INDEXING_EXCLUSION_REASON_CODES.editorialQualityRequirementsNotMet);
+  }
   const reasons: string[] = [];
 
   if (!input.slug.trim()) reasons.push("A public slug is required");
@@ -77,11 +119,15 @@ export function assessTranslatorIndexingEligibility(
   reasons.push(...quality.issues);
 
   return {
-    indexable,
-    strictIndexable,
+    deployedBaselineIndexable,
+    deployedBaselineRobotsIndexable,
+    newVersionIndexable,
+    strictReviewIndexable,
     technicallyReady: quality.technicallyComplete,
     currentVersionReviewed,
     reviewEnforcementEnabled,
+    newVersionExclusionReasonCodes: [...new Set(newVersionExclusionReasonCodes)],
+    strictReviewExclusionReasonCodes: [...new Set(strictReviewExclusionReasonCodes)],
     reasons: [...new Set(reasons)],
   };
 }

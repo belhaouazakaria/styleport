@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   assessTranslatorIndexingEligibility,
+  INDEXING_EXCLUSION_REASON_CODES,
   isCurrentEditorialVersionReviewed,
 } from "@/lib/indexing-eligibility";
 import type { TranslatorEditorialDraft } from "@/lib/types";
@@ -31,7 +32,7 @@ describe("translator indexing eligibility", () => {
     expect(isCurrentEditorialVersionReviewed({ ...editorial, about: `${editorial.about} Changed.` }, editorial)).toBe(false);
   });
 
-  it("keeps the safe rollout eligible but reports strict review eligibility separately", () => {
+  it("distinguishes deployed sitemap, deployed robots, proposed, and strict eligibility", () => {
     const result = assessTranslatorIndexingEligibility({
       isActive: true,
       archivedAt: null,
@@ -39,14 +40,25 @@ describe("translator indexing eligibility", () => {
       currentEditorial: editorial,
       latestReviewedPublishedDraft: null,
     });
-    expect(result.indexable).toBe(true);
-    expect(result.strictIndexable).toBe(false);
+    expect(result.deployedBaselineIndexable).toBe(true);
+    expect(result.deployedBaselineRobotsIndexable).toBe(true);
+    expect(result.newVersionIndexable).toBe(true);
+    expect(result.strictReviewIndexable).toBe(false);
     expect(result.currentVersionReviewed).toBe(false);
+    expect(result.strictReviewExclusionReasonCodes).toContain(
+      INDEXING_EXCLUSION_REASON_CODES.currentEditorialNotReviewed,
+    );
   });
 
   it("excludes inactive, archived, and technically incomplete translators", () => {
-    expect(assessTranslatorIndexingEligibility({ isActive: false, archivedAt: null, slug: "inactive", currentEditorial: editorial, latestReviewedPublishedDraft: editorial }).indexable).toBe(false);
-    expect(assessTranslatorIndexingEligibility({ isActive: true, archivedAt: new Date(), slug: "archived", currentEditorial: editorial, latestReviewedPublishedDraft: editorial }).indexable).toBe(false);
-    expect(assessTranslatorIndexingEligibility({ isActive: true, archivedAt: null, slug: "thin", currentEditorial: { ...editorial, faq: [] }, latestReviewedPublishedDraft: null }).indexable).toBe(false);
+    expect(assessTranslatorIndexingEligibility({ isActive: false, archivedAt: null, slug: "inactive", currentEditorial: editorial, latestReviewedPublishedDraft: editorial }).newVersionIndexable).toBe(false);
+    expect(assessTranslatorIndexingEligibility({ isActive: true, archivedAt: new Date(), slug: "archived", currentEditorial: editorial, latestReviewedPublishedDraft: editorial }).newVersionIndexable).toBe(false);
+    const thin = assessTranslatorIndexingEligibility({ isActive: true, archivedAt: null, slug: "thin", currentEditorial: { ...editorial, faq: [] }, latestReviewedPublishedDraft: null });
+    expect(thin.deployedBaselineIndexable).toBe(true);
+    expect(thin.deployedBaselineRobotsIndexable).toBe(false);
+    expect(thin.newVersionIndexable).toBe(false);
+    expect(thin.newVersionExclusionReasonCodes).toEqual([
+      INDEXING_EXCLUSION_REASON_CODES.technicalEditorialIncomplete,
+    ]);
   });
 });

@@ -872,12 +872,15 @@ export async function getIndexableTranslatorSlugsForSitemap() {
 
   return rows
     .map((row) => ({ row, eligibility: mapPublicTranslator(row).indexingEligibility }))
-    .filter(({ eligibility }) => eligibility.indexable)
+    .filter(({ eligibility }) => eligibility.newVersionIndexable)
     .map(({ row }) => ({ slug: row.slug, updatedAt: row.updatedAt }));
 }
 
-export async function getTranslatorIndexingImpactReport() {
-  const rows = await prisma.translator.findMany({
+export async function getTranslatorIndexingImpactReport(
+  database: Pick<Prisma.TransactionClient, "translator"> = prisma,
+  reportBaseUrl: URL = getAppBaseUrl(),
+) {
+  const rows = await database.translator.findMany({
     where: { isActive: true, archivedAt: null, slug: { not: "" } },
     include: publicTranslatorInclude,
     orderBy: [{ slug: "asc" }],
@@ -887,11 +890,15 @@ export async function getTranslatorIndexingImpactReport() {
     const eligibility = mapPublicTranslator(row).indexingEligibility;
     return {
       slug: row.slug,
-      url: new URL(`/translators/${row.slug}`, getAppBaseUrl()).toString(),
-      currentlyIndexable: eligibility.indexable,
-      strictIndexable: eligibility.strictIndexable,
+      url: new URL(`/translators/${row.slug}`, reportBaseUrl).toString(),
+      deployedBaselineIndexable: eligibility.deployedBaselineIndexable,
+      deployedBaselineRobotsIndexable: eligibility.deployedBaselineRobotsIndexable,
+      newVersionIndexable: eligibility.newVersionIndexable,
+      strictReviewIndexable: eligibility.strictReviewIndexable,
       currentVersionReviewed: eligibility.currentVersionReviewed,
-      reasons: eligibility.reasons,
+      newVersionExclusionReasonCodes: eligibility.newVersionExclusionReasonCodes,
+      strictReviewExclusionReasonCodes: eligibility.strictReviewExclusionReasonCodes,
+      reasonDetails: eligibility.reasons,
     };
   });
 }
@@ -1251,7 +1258,7 @@ export async function listAdminTranslators(filters: {
       editorialUpdatedAt: editorialUpdatedAt ? editorialUpdatedAt.toISOString() : null,
       editorialCompletionPercent: editorialReadiness.completionPercent,
       editorialMissing: editorialReadiness.missing,
-      indexableCandidate: eligibility.indexable,
+      indexableCandidate: eligibility.newVersionIndexable,
       currentVersionReviewed: eligibility.currentVersionReviewed,
     };
   });
@@ -1336,7 +1343,7 @@ export async function getAdminTranslatorDashboard(filters: AdminTranslatorFilter
         currentEditorial: currentEditorialDraft(row),
         latestReviewedPublishedDraft: reviewedDraftFromPayload(row.editorialDrafts[0]?.payload),
       });
-      const indexingMatch = !filters.indexing || filters.indexing === "all" || (filters.indexing === "indexable" ? eligibility.indexable : !eligibility.indexable);
+      const indexingMatch = !filters.indexing || filters.indexing === "all" || (filters.indexing === "indexable" ? eligibility.newVersionIndexable : !eligibility.newVersionIndexable);
       return editorialMatch && indexingMatch;
     });
     if (filters.sort === "word-count") filteredRows.sort((a, b) => b.readiness.wordCount - a.readiness.wordCount);
@@ -1409,7 +1416,7 @@ export async function getAdminTranslatorDashboard(filters: AdminTranslatorFilter
       editorialUpdatedAt: editorialUpdatedAt ? editorialUpdatedAt.toISOString() : null,
       editorialCompletionPercent: editorialReadiness.completionPercent,
       editorialMissing: editorialReadiness.missing,
-      indexableCandidate: eligibility.indexable,
+      indexableCandidate: eligibility.newVersionIndexable,
       currentVersionReviewed: eligibility.currentVersionReviewed,
     } satisfies TranslatorListItem;
   });

@@ -50,11 +50,15 @@ const translator: PublicTranslator = {
   },
   editorialStatus: "INCOMPLETE",
   indexingEligibility: {
-    indexable: false,
-    strictIndexable: false,
+    deployedBaselineIndexable: true,
+    deployedBaselineRobotsIndexable: false,
+    newVersionIndexable: false,
+    strictReviewIndexable: false,
     technicallyReady: false,
     currentVersionReviewed: false,
     reviewEnforcementEnabled: false,
+    newVersionExclusionReasonCodes: ["TECHNICAL_EDITORIAL_INCOMPLETE"],
+    strictReviewExclusionReasonCodes: ["TECHNICAL_EDITORIAL_INCOMPLETE", "CURRENT_EDITORIAL_NOT_REVIEWED"],
     reasons: [],
   },
 };

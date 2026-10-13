@@ -1,6 +1,6 @@
 # AdSense readiness and editorial action report
 
-Updated: 2026-10-12
+Updated: 2026-10-13
 
 This report records verified repository and local-data findings. It does not guarantee Google AdSense approval, and it does not claim the rejection identifies a specific URL or defect.
 
@@ -22,7 +22,7 @@ The most credible root-cause hypothesis remains site-wide perceived value rather
 | Active local translators have thin editorial coverage.                                          | Local DB: 4 active, 4 `INCOMPLETE`, 4 without editorial content, 3 descriptions under 80 characters. | Not auto-filled. Exact pages are listed below for human work.                                                                                                       |
 | Structural readiness did not establish human review or useful specificity.                      | `getEditorialReadiness` only checked counts, lengths, and exact duplicates.                          | Added a second quality assessment for context-rich examples, limitations, practical depth, generic filler, repeated openings, and human-review evidence.            |
 | Google Indexing API was wired to CRUD activation plus manual/bulk admin submissions.             | Verified in data functions, admin routes/UI, credentials, and environment examples.                  | Removed completely. Search Console and the XML sitemap are the only discovery/monitoring mechanisms. Historical log schema and records remain intact.               |
-| Sitemap included active translators even when page metadata said `noindex`.                      | Verified in `getIndexableTranslatorSlugsForSitemap`.                                                 | Fixed: metadata, sitemap, and admin reporting now consume one eligibility contract.                                                                                 |
+| Deployed sitemap includes active translators even when page metadata says `noindex`.             | Verified against the pre-feature implementation of `getIndexableTranslatorSlugsForSitemap`.          | The branch proposes one metadata/sitemap contract, but release is blocked until the production URL-level removal impact is reviewed.                                 |
 | Existing mobile ad placement was fixed at the viewport bottom.                                  | Verified in homepage source.                                                                         | Fixed: placement remains available but is now in normal content flow. No ads were added or removed.                                                                 |
 | Ezoic managed ads.txt was not configured.                                                       | `public/ads.txt` directly served one Google line.                                                    | Fixed in app: exact `/ads.txt` HTTP 301 to AdsTxtManager; static conflict removed. Account-side AdSense seller inventory remains unresolved.                        |
 
@@ -69,15 +69,16 @@ Remaining concern: the Growth Ideas worker can publish validated generated conte
 
 ## Indexable versus non-indexable assessment
 
-Current safe-rollout behavior:
+Proposed branch behavior and deployed baseline:
 
-- Translator page metadata and sitemap inclusion both require an active, non-archived, non-empty slug and structurally complete editorial content.
-- The shared contract separately records whether the latest reviewed/published draft exactly matches the current published editorial payload.
-- Enforcing that current-version review as a hard indexing requirement is intentionally held pending an exact production database report. The read-only `npm run seo:report-indexing-impact` command prints every URL that would lose eligibility.
+- The currently deployed sitemap includes active, non-archived translators with non-empty slugs. Currently deployed translator metadata is narrower and indexes only pages whose editorial status is `READY`.
+- This undeployed branch proposes one consistent sitemap/metadata rule requiring the deployed baseline plus technically complete editorial content. It may therefore remove sitemap URLs without changing those URLs' existing `noindex` metadata.
+- The shared contract separately computes future strict eligibility, where the latest reviewed/published draft must exactly match the current published editorial payload and pass stronger quality checks. Strict enforcement remains disabled.
+- The transaction-enforced read-only `npm run seo:report-indexing-impact` report compares `deployedBaselineIndexable`, `newVersionIndexable`, and `strictReviewIndexable`, including exact URL transitions and reason codes.
 - Search, category-filter, and page-2+ parameter pages are `noindex,follow` and canonicalize to their stable directory route.
 - Public Ideas require published state and a current published version.
 - Trust pages and the Ideas directory are indexable static routes.
-The strict reviewed-version switch remains deliberately unapplied. The local read-only report found 4 active translators, 0 currently eligible, 0 strict-current-review eligible, and therefore 0 additional local URLs that would lose eligibility. This is not a production impact report. Production database access was not used, so approval remains blocked until the same command is run against a read-only production connection and its URL-level output is reviewed.
+The strict reviewed-version switch remains deliberately unapplied. Local counts are not production evidence and are intentionally not used for release approval. Production database access was not used during implementation, so the release remains blocked until the report is run with a read-only production credential and its full URL-level output is reviewed.
 
 The live read-only HTTP verification on 2026-10-12 found 363 sitemap URLs (8 static, 355 translators, 0 Ideas), HTTP 200 for robots and sitemap, and no status/canonical/noindex errors among sitemap entries. The `www` host returns the expected 301, the singular legacy `translator.whattypeof.com` host returns the expected 308, and missing translator pages return 404. The plural legacy `translators.whattypeof.com` host did not resolve in DNS; its redirect rule remains preserved in source, but DNS must be restored if that hostname still needs to redirect. These observations describe the currently deployed site, not this undeployed branch.
 
@@ -107,7 +108,7 @@ No translators, Ideas, comments, or other user content were deleted. No bulk `no
 
 ## Remaining risks and blockers
 
-- Production content was not queried or changed, so strict current-review enforcement remains blocked on the production URL-level impact report.
+- Production content was not queried or changed. Release approval for the proposed sitemap policy and any future strict-review enforcement remains blocked on the production URL-level impact report.
 - Local Ideas inventory is unavailable because the local DB lacks the Growth Ideas migration.
 - The managed Ezoic file currently omits `google.com, pub-7927856375186557, DIRECT, f08c47fec0942fa0`.
 - Repository-wide baseline QA failures are tracked separately from feature regressions; see the final QA record after the full rerun.
@@ -120,8 +121,8 @@ No translators, Ideas, comments, or other user content were deleted. No bulk `no
 - Desktop rendered check at 1440px: navigation, hero, search, categories, featured discovery, and translator two-column layout.
 - TypeScript: pass after regenerating Next route types.
 - Production build: pass. Existing warnings cover Edge runtime deprecation, dynamic filesystem tracing, and a missing local `GrowthIdea` table during sitemap generation; sitemap gracefully continued.
-- Focused regressions: pass for indexing eligibility, sitemap/robots, translator card/Pinterest flow, and ads.txt.
-- Full Vitest: 359 passed, 142 skipped, 1 failed in the pre-existing Growth Ideas handler payload fixture.
+- Focused regressions: 24 passed for indexing eligibility and comparisons, sitemap/robots timestamps, translator card/Pinterest flow, and ads.txt.
+- Full Vitest: 363 passed, 142 skipped, 1 failed in the pre-existing Growth Ideas handler payload fixture.
 - Full ESLint: 8 errors and 5 warnings. The error-bearing files and failing Growth Ideas test/handler have byte-identical Git blob hashes to latest `origin/main`; changed-file ESLint passes.
-- Production SEO verifier: pass against all 363 live sitemap URLs; robots and sitemap returned 200, with no duplicates, query URLs, status failures, canonical mismatches, or sitemap/noindex conflicts. A deliberately missing translator returned 404; `www` returned 301 to the canonical host; both legacy domains returned 308 while preserving the path.
+- Historical production SEO check against the previously deployed site: all 363 live sitemap URLs passed status, canonical, and noindex consistency checks; robots and sitemap returned 200; a deliberately missing translator returned 404; `www` returned 301; and singular `translator.whattypeof.com` returned 308. Plural `translators.whattypeof.com` failed DNS resolution. This is evidence about the old deployed version only, not evidence that this branch is deployed.
 - Visual QA limitation: live translation returned the existing generic API error locally, so successful-result visual state relied on passing component tests rather than a live model response.
