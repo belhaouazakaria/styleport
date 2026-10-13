@@ -116,6 +116,55 @@ describe("Hostinger PM2 process contract", () => {
   });
 });
 
+describe("Hostinger PostgreSQL backup-tool contract", () => {
+  function createVersionExecutable(directory, name, major) {
+    const executable = path.join(directory, name);
+    writeFileSync(executable, `#!/usr/bin/env bash\nprintf '%s\\n' '${name} (PostgreSQL) ${major}.0'\n`);
+    chmodSync(executable, 0o700);
+    return executable;
+  }
+
+  function createBackupToolFixtures(dumpMajor = 18, restoreMajor = 18) {
+    const directory = mkdtempSync(path.join(tmpdir(), "saytwist-postgresql-tools-"));
+    temporaryDirectories.push(directory);
+    return {
+      dump: createVersionExecutable(directory, "pg_dump", dumpMajor),
+      restore: createVersionExecutable(directory, "pg_restore", restoreMajor),
+    };
+  }
+
+  function validateBackupTools(dump, restore) {
+    return runSourcedBash(
+      'PG_DUMP_BIN="$TEST_PG_DUMP"\nPG_RESTORE_BIN="$TEST_PG_RESTORE"\nvalidate_postgresql_backup_tools',
+      { TEST_PG_DUMP: dump, TEST_PG_RESTORE: restore },
+    );
+  }
+
+  it("accepts PostgreSQL 18 pg_dump and pg_restore executables", () => {
+    const tools = createBackupToolFixtures();
+    const result = validateBackupTools(tools.dump, tools.restore);
+    expect(result.status, result.stderr).toBe(0);
+  });
+
+  it.each(["pg_dump", "pg_restore"])("rejects a missing %s executable", (missingTool) => {
+    const tools = createBackupToolFixtures();
+    tools[missingTool === "pg_dump" ? "dump" : "restore"] = "/definitely/missing/postgresql-tool";
+    const result = validateBackupTools(tools.dump, tools.restore);
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("missing or not executable");
+  });
+
+  it.each([
+    ["pg_dump", 16, 18],
+    ["pg_restore", 18, 17],
+  ])("rejects an incompatible %s major version", (_tool, dumpMajor, restoreMajor) => {
+    const tools = createBackupToolFixtures(dumpMajor, restoreMajor);
+    const result = validateBackupTools(tools.dump, tools.restore);
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("must be PostgreSQL major 18");
+  });
+});
+
 describe("Hostinger restart and rollback safeguards", () => {
   it("rolls back when restarting the existing process fails", () => {
     const directory = mkdtempSync(path.join(tmpdir(), "saytwist-restart-failure-"));

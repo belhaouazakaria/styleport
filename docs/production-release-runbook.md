@@ -14,7 +14,7 @@ Before merging:
 4. Confirm strict human-review indexing enforcement is still disabled.
 5. Confirm the Ezoic managed response contains the operator-approved AdSense seller authorization.
 6. Confirm the GitHub `production` environment has required reviewers so a push to `main` cannot migrate or deploy without approval.
-7. Configure `HOSTINGER_PM2_CLI` as the absolute path to the already-installed PM2 7.0.4 CLI that connects to `/home/saytwist/.pm2`. The deploy script never searches for, downloads, or installs PM2.
+7. Configure `HOSTINGER_PM2_CLI=/home/saytwist/.npm/_npx/5f7878ce38f1eb13/node_modules/pm2/bin/pm2` for the verified PM2 7.0.4 CLI that connects to `/home/saytwist/.pm2`. The deploy script never searches for, downloads, or installs PM2.
 
 The deploy workflow must finish its pinned Node `20.20.2` / npm `10.8.2` clean install, lint, typecheck, tests, build, production-dependency pruning, Prisma-engine checks, and bundle validation before the production-environment job can start. A GitHub-hosted runner never receives authority to migrate the VPS-local database.
 
@@ -43,8 +43,11 @@ After production-environment approval, the authenticated SSH script performs the
 ```bash
 # Internally, the script parses DATABASE_URL into PGHOST/PGPORT/PGUSER/
 # PGPASSWORD/PGDATABASE and passes them only through the pg_dump environment.
-pg_dump --format=custom --file "$APP_PATH/.deploy-backups/saytwist-<release>.dump"
-pg_restore --list "$APP_PATH/.deploy-backups/saytwist-<release>.dump" >/dev/null
+/usr/lib/postgresql/18/bin/pg_dump \
+  --format=custom \
+  --file "$APP_PATH/.deploy-backups/saytwist-<release>.dump"
+/usr/lib/postgresql/18/bin/pg_restore \
+  --list "$APP_PATH/.deploy-backups/saytwist-<release>.dump" >/dev/null
 
 cd "$STAGING_DIR"
 /home/saytwist/.nvm/versions/node/v24.20.0/bin/node \
@@ -58,7 +61,9 @@ cd "$STAGING_DIR"
   node_modules/prisma/build/index.js migrate status
 ```
 
-The first status command must report that the schema is already current. Any connection error, failed migration, drift, or pending migration stops this release before application files are replaced. The backup must be non-empty and readable by `pg_restore --list` before `migrate deploy` is invoked.
+Production PostgreSQL is server version `18.6`. The default `pg_dump` is version `16.15` and is incompatible, so it must never be used. Before acquiring the deployment lock or creating a backup, the script requires executable PostgreSQL 18 binaries at `/usr/lib/postgresql/18/bin/pg_dump` and `/usr/lib/postgresql/18/bin/pg_restore`, parses both reported versions, and rejects every major version other than 18. There is no PATH fallback to PostgreSQL 16 or 17 tooling.
+
+The first status command must report that the schema is already current. Any connection error, failed migration, drift, or pending migration stops this release before application files are replaced. The backup must be non-empty and readable by the PostgreSQL 18 `pg_restore --list` before `migrate deploy` is invoked.
 
 For this and future releases:
 
@@ -82,14 +87,16 @@ The 2026-10-13 VPS preflight established this production contract:
 - process manager: PM2 `7.0.4`, using the existing user-owned daemon (observed PID `270612` during preflight), with no SayTwist PM2 systemd unit;
 - local probes: `http://127.0.0.1:3001/api/healthz` and `/api/readyz`. Port `3000` is not the SayTwist runtime and returned HTTP 404 during preflight.
 
-PM2 was not available from the standard, global, or NVM CLI locations inspected during preflight. Before merging, the operator must locate the existing PM2 7.0.4 CLI without installing anything, verify its absolute path, and store that path in the GitHub production environment as `HOSTINGER_PM2_CLI`. Validate the candidate on the VPS with the production user:
+PM2 was not available from the standard, global, or NVM CLI locations inspected during preflight. The existing PM2 7.0.4 CLI was verified at `/home/saytwist/.npm/_npx/5f7878ce38f1eb13/node_modules/pm2/bin/pm2`; store that exact path in the GitHub production environment as `HOSTINGER_PM2_CLI`. Validate it on the VPS with the production user:
 
 ```bash
-test -x /absolute/path/to/existing/pm2
+test -x /home/saytwist/.npm/_npx/5f7878ce38f1eb13/node_modules/pm2/bin/pm2
 test -S /home/saytwist/.pm2/rpc.sock
 test -S /home/saytwist/.pm2/pub.sock
-PM2_HOME=/home/saytwist/.pm2 /absolute/path/to/existing/pm2 --version
-PM2_HOME=/home/saytwist/.pm2 /absolute/path/to/existing/pm2 jlist
+PM2_HOME=/home/saytwist/.pm2 \
+  /home/saytwist/.npm/_npx/5f7878ce38f1eb13/node_modules/pm2/bin/pm2 --version
+PM2_HOME=/home/saytwist/.pm2 \
+  /home/saytwist/.npm/_npx/5f7878ce38f1eb13/node_modules/pm2/bin/pm2 jlist
 ```
 
 The version must be `7.0.4`, `jlist` must show exactly one `saytwist` process with the contract above, and the PID in `/home/saytwist/.pm2/pm2.pid` must remain unchanged. Do not use `npx`, install PM2, start another daemon, recreate the application process, or add a systemd service to satisfy this prerequisite.
@@ -114,7 +121,7 @@ At deployment time, the script checks the configured CLI is an executable absolu
 ## Application rollback
 
 1. Stop or pause the rollout if health, readiness, sitemap, authentication, asset, or worker checks fail. The deployment script automatically restores the immediately previous application paths when restart or local health validation fails.
-2. With the operator-approved absolute CLI path, run `PM2_HOME=/home/saytwist/.pm2 /absolute/path/to/existing/pm2 describe saytwist`. Confirm it reports the production npm binary, `args: start`, application working directory, `PORT=3001`, and `NODE_ENV=production`. Restart only with `PM2_HOME=/home/saytwist/.pm2 /absolute/path/to/existing/pm2 restart saytwist`; do not use `--update-env`, delete/recreate the process, restart an editorial worker, or start a persistent Growth worker.
+2. Run `PM2_HOME=/home/saytwist/.pm2 /home/saytwist/.npm/_npx/5f7878ce38f1eb13/node_modules/pm2/bin/pm2 describe saytwist`. Confirm it reports the production npm binary, `args: start`, application working directory, `PORT=3001`, and `NODE_ENV=production`. Restart only with `PM2_HOME=/home/saytwist/.pm2 /home/saytwist/.npm/_npx/5f7878ce38f1eb13/node_modules/pm2/bin/pm2 restart saytwist`; do not use `--update-env`, delete/recreate the process, restart an editorial worker, or start a persistent Growth worker.
 3. If manual application rollback is required, select `.deploy-releases/<failed-release>` or the last known-good SHA-addressed artifact, restore only the runtime paths listed in the deploy script, and restart `saytwist`.
 4. Record whether a migration was applied. For this release, none is expected because the pre-migration status gate refuses pending migrations.
 5. Re-run local and public health/readiness checks, followed by the SEO, ads.txt, authentication, generated-asset, and non-publishing Pinterest smoke checks.

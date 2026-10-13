@@ -11,6 +11,9 @@ EXPECTED_PM2_HOME="/home/saytwist/.pm2"
 EXPECTED_PM2_VERSION="${HOSTINGER_EXPECTED_PM2_VERSION:-7.0.4}"
 EXPECTED_PORT="${HOSTINGER_EXPECTED_PORT:-3001}"
 PM2_CONTRACT_SCRIPT="${HOSTINGER_PM2_CONTRACT_SCRIPT:-$APP_PATH/scripts/pm2-process-contract.mjs}"
+PG_DUMP_BIN="/usr/lib/postgresql/18/bin/pg_dump"
+PG_RESTORE_BIN="/usr/lib/postgresql/18/bin/pg_restore"
+EXPECTED_POSTGRESQL_BACKUP_MAJOR="18"
 HEALTH_BASE_URL=""
 PRODUCTION_ENV_FILE="${HOSTINGER_ENV_FILE:-$APP_PATH/.env}"
 EXPECT_NO_PENDING_MIGRATIONS="${HOSTINGER_EXPECT_NO_PENDING_MIGRATIONS:-1}"
@@ -107,12 +110,29 @@ bootstrap_runtime() {
   [[ "$(command -v node)" == "$NODE_BIN_DIR/node" ]] || fail "The approved production Node.js binary was not selected."
   [[ "$(command -v npm)" == "$NODE_BIN_DIR/npm" ]] || fail "The approved production npm binary was not selected."
   ensure_command_exists curl
-  ensure_command_exists pg_dump
-  ensure_command_exists pg_restore
   ensure_command_exists tar
 
   ensure_file_exists "$PM2_CONTRACT_SCRIPT"
   log "node=$(node --version), npm=$(npm --version), node_path=$(command -v node)"
+}
+
+validate_postgresql_backup_tools() {
+  step "validate-postgresql-backup-tools"
+  local binary label version major
+
+  for binary in "$PG_DUMP_BIN" "$PG_RESTORE_BIN"; do
+    label="$(basename "$binary")"
+    [[ -f "$binary" && -x "$binary" ]] || fail "Required PostgreSQL 18 backup executable is missing or not executable: $binary"
+    version="$("$binary" --version)" || fail "Could not read the version of $binary"
+    if [[ "$version" =~ PostgreSQL\)\ ([0-9]+)(\.|$) ]]; then
+      major="${BASH_REMATCH[1]}"
+    else
+      fail "Could not parse the PostgreSQL client version reported by $binary"
+    fi
+    [[ "$major" == "$EXPECTED_POSTGRESQL_BACKUP_MAJOR" ]] \
+      || fail "$label must be PostgreSQL major $EXPECTED_POSTGRESQL_BACKUP_MAJOR; refusing incompatible client version $major."
+    log "Validated $label major $major at $binary."
+  done
 }
 
 run_pm2() {
@@ -283,13 +303,13 @@ create_database_backup() {
     env.PGUSER = decodeURIComponent(url.username);
     env.PGPASSWORD = decodeURIComponent(url.password);
     env.PGDATABASE = decodeURIComponent(url.pathname.slice(1));
-    const result = spawnSync("pg_dump", ["--format=custom", "--file", process.argv[1]], { env, stdio: "inherit" });
+    const result = spawnSync(process.argv[2], ["--format=custom", "--file", process.argv[1]], { env, stdio: "inherit" });
     process.exit(result.status ?? 1);
-  ' "$DATABASE_BACKUP"
+  ' "$DATABASE_BACKUP" "$PG_DUMP_BIN"
 
   chmod 600 "$DATABASE_BACKUP"
   [[ -s "$DATABASE_BACKUP" ]] || fail "The production database backup is empty."
-  pg_restore --list "$DATABASE_BACKUP" >/dev/null
+  "$PG_RESTORE_BIN" --list "$DATABASE_BACKUP" >/dev/null
   log "Verified production database backup: $DATABASE_BACKUP"
 }
 
@@ -462,6 +482,7 @@ main() {
 
   validate_safe_app_path
   bootstrap_runtime
+  validate_postgresql_backup_tools
   acquire_lock
   validate_archive
   extract_archive

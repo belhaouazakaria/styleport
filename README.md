@@ -234,7 +234,7 @@ Check:
 ## Prisma Production Safety
 
 - Use `prisma migrate status` followed by `prisma migrate deploy` only through the protected VPS deployment script. Never run production migrations from a GitHub-hosted runner.
-- Verify a custom-format `pg_dump` with `pg_restore --list` before migration execution.
+- Use only `/usr/lib/postgresql/18/bin/pg_dump` and `/usr/lib/postgresql/18/bin/pg_restore`, verify both report major version 18, and validate the custom-format backup before migration execution. The incompatible default PostgreSQL 16 tools must not be used.
 - This release must find zero pending migrations. A future release containing a reviewed migration must update the explicit migration gate as part of that reviewed change.
 - Never use `prisma migrate reset` in production.
 - Seed only when explicitly needed:
