@@ -551,11 +551,14 @@ export function TranslatorCard({
       const reduceMotion =
         window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ??
         false;
-      resultRef.current?.scrollIntoView({
-        behavior: reduceMotion ? "auto" : "smooth",
-        block: "start",
-      });
-      resultRef.current?.focus({ preventScroll: true });
+      const result = resultRef.current;
+      if (typeof result?.scrollIntoView === "function") {
+        result.scrollIntoView({
+          behavior: reduceMotion ? "auto" : "smooth",
+          block: "start",
+        });
+      }
+      result?.focus({ preventScroll: true });
     });
 
     return () => window.cancelAnimationFrame(frame);

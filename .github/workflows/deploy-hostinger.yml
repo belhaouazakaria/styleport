@@ -56,7 +56,9 @@ jobs:
         run: npm run test
 
       - name: Validate deployment shell
-        run: bash -n scripts/hostinger-deploy.sh
+        run: |
+          bash -n scripts/hostinger-deploy.sh
+          node --check scripts/pm2-process-contract.mjs
 
       - name: Build
         run: npm run build
@@ -143,6 +145,7 @@ jobs:
           SSH_PORT: ${{ secrets.HOSTINGER_SSH_PORT || vars.HOSTINGER_SSH_PORT }}
           SSH_KEY: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
           APP_PATH: ${{ secrets.HOSTINGER_APP_PATH || vars.HOSTINGER_APP_PATH }}
+          PM2_CLI: ${{ secrets.HOSTINGER_PM2_CLI || vars.HOSTINGER_PM2_CLI }}
         run: |
           set -eu
           missing=""
@@ -151,6 +154,7 @@ jobs:
           [ -n "$SSH_PORT" ] || missing="$missing HOSTINGER_SSH_PORT"
           [ -n "$SSH_KEY" ] || missing="$missing HOSTINGER_SSH_PRIVATE_KEY"
           [ -n "$APP_PATH" ] || missing="$missing HOSTINGER_APP_PATH"
+          [ -n "$PM2_CLI" ] || missing="$missing HOSTINGER_PM2_CLI"
           if [ -n "$missing" ]; then
             echo "::error::Missing deploy configuration:$missing"
             exit 1
@@ -164,12 +168,14 @@ jobs:
           key: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
           port: ${{ secrets.HOSTINGER_SSH_PORT || vars.HOSTINGER_SSH_PORT }}
           source: >-
-            release.tar.gz,scripts/hostinger-deploy.sh
+            release.tar.gz,scripts/hostinger-deploy.sh,scripts/pm2-process-contract.mjs
           target: ${{ secrets.HOSTINGER_APP_PATH || vars.HOSTINGER_APP_PATH }}
           overwrite: true
 
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.2.0
+        env:
+          PM2_CLI: ${{ secrets.HOSTINGER_PM2_CLI || vars.HOSTINGER_PM2_CLI }}
         with:
           host: ${{ secrets.HOSTINGER_SSH_HOST || vars.HOSTINGER_SSH_HOST }}
           username: ${{ secrets.HOSTINGER_SSH_USER || vars.HOSTINGER_SSH_USER }}
@@ -177,6 +183,7 @@ jobs:
           port: ${{ secrets.HOSTINGER_SSH_PORT || vars.HOSTINGER_SSH_PORT }}
           script_stop: true
           command_timeout: 40m
+          envs: PM2_CLI
           script: |
             set -eu
             cd "${{ secrets.HOSTINGER_APP_PATH || vars.HOSTINGER_APP_PATH }}"
@@ -185,7 +192,10 @@ jobs:
             chmod +x ./scripts/hostinger-deploy.sh
             HOSTINGER_NODE_BIN="/home/saytwist/.nvm/versions/node/v24.20.0/bin" \
               HOSTINGER_PM2_PROCESS="saytwist" \
-              HOSTINGER_HEALTH_BASE_URL="http://127.0.0.1:3000" \
+              HOSTINGER_PM2_CLI="$PM2_CLI" \
+              HOSTINGER_PM2_HOME="/home/saytwist/.pm2" \
+              HOSTINGER_EXPECTED_PM2_VERSION="7.0.4" \
+              HOSTINGER_EXPECTED_PORT="3001" \
               HOSTINGER_ENV_FILE="${{ secrets.HOSTINGER_APP_PATH || vars.HOSTINGER_APP_PATH }}/.env" \
               HOSTINGER_EXPECT_NO_PENDING_MIGRATIONS="1" \
               HOSTINGER_RELEASE_SHA="${{ github.sha }}" \

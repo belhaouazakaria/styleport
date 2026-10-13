@@ -14,6 +14,7 @@ Before merging:
 4. Confirm strict human-review indexing enforcement is still disabled.
 5. Confirm the Ezoic managed response contains the operator-approved AdSense seller authorization.
 6. Confirm the GitHub `production` environment has required reviewers so a push to `main` cannot migrate or deploy without approval.
+7. Configure `HOSTINGER_PM2_CLI` as the absolute path to the already-installed PM2 7.0.4 CLI that connects to `/home/saytwist/.pm2`. The deploy script never searches for, downloads, or installs PM2.
 
 The deploy workflow must finish its pinned Node `20.20.2` / npm `10.8.2` clean install, lint, typecheck, tests, build, production-dependency pruning, Prisma-engine checks, and bundle validation before the production-environment job can start. A GitHub-hosted runner never receives authority to migrate the VPS-local database.
 
@@ -70,17 +71,42 @@ For this and future releases:
 
 Prisma does not provide automatic down migrations. If a future migration causes a production problem, stop incompatible application and worker processes, then either apply a reviewed forward corrective migration or restore the verified pre-deployment database backup. Do not improvise a reverse migration against live data.
 
+## Verified production runtime and PM2 prerequisite
+
+The 2026-10-13 VPS preflight established this production contract:
+
+- application directory: `/home/saytwist/htdocs/saytwist.com`;
+- Node/npm directory: `/home/saytwist/.nvm/versions/node/v24.20.0/bin` (Node `24.20.0`);
+- existing web process: the single PM2 process named `saytwist`, registered as the approved npm binary with argument `start` and the application directory as `pm_cwd`;
+- environment: `NODE_ENV=production`, `PORT=3001`, and `PM2_HOME=/home/saytwist/.pm2`;
+- process manager: PM2 `7.0.4`, using the existing user-owned daemon (observed PID `270612` during preflight), with no SayTwist PM2 systemd unit;
+- local probes: `http://127.0.0.1:3001/api/healthz` and `/api/readyz`. Port `3000` is not the SayTwist runtime and returned HTTP 404 during preflight.
+
+PM2 was not available from the standard, global, or NVM CLI locations inspected during preflight. Before merging, the operator must locate the existing PM2 7.0.4 CLI without installing anything, verify its absolute path, and store that path in the GitHub production environment as `HOSTINGER_PM2_CLI`. Validate the candidate on the VPS with the production user:
+
+```bash
+test -x /absolute/path/to/existing/pm2
+test -S /home/saytwist/.pm2/rpc.sock
+test -S /home/saytwist/.pm2/pub.sock
+PM2_HOME=/home/saytwist/.pm2 /absolute/path/to/existing/pm2 --version
+PM2_HOME=/home/saytwist/.pm2 /absolute/path/to/existing/pm2 jlist
+```
+
+The version must be `7.0.4`, `jlist` must show exactly one `saytwist` process with the contract above, and the PID in `/home/saytwist/.pm2/pm2.pid` must remain unchanged. Do not use `npx`, install PM2, start another daemon, recreate the application process, or add a systemd service to satisfy this prerequisite.
+
+At deployment time, the script checks the configured CLI is an executable absolute path, confirms the existing daemon PID and both sockets before invoking it, runs the CLI with the explicit production `PM2_HOME`, and confirms the daemon PID did not change. These checks occur before the database backup, Prisma commands, or replacement of application files.
+
 ## Recommended merge and deployment sequence
 
 1. Review the final branch diff and QA record.
 2. Merge the approved pull request into `main` without squashing away the release evidence unless repository policy requires it.
 3. Wait for the standalone CI workflow and the deploy workflow's CI Gate to pass for the exact merge SHA.
 4. Verify the uploaded artifact is named for that SHA and that its bundle-content check passed.
-5. Record the current production application SHA, health status, PM2 `saytwist` PID, migration state, disk space, and intentionally active worker configuration.
+5. Record the current production application SHA, health status on port 3001, PM2 `saytwist` PID and restart count, PM2 daemon PID, migration state, disk space, and intentionally active worker configuration. Confirm the configured `HOSTINGER_PM2_CLI` passes the prerequisite above.
 6. Approve the GitHub `production` environment. The workflow then uploads the already-validated artifact and invokes the authenticated VPS script.
-7. The VPS script validates the archive and staged layout, verifies the existing PM2 `saytwist` process points to `<app-path>/server.js`, takes and verifies the PostgreSQL backup, confirms migration status is already current, and runs the expected no-op `migrate deploy`.
-8. The script preserves `public/generated` and does not touch `storage/`, `.env`, or non-web PM2 processes. It moves the current runtime paths into `.deploy-releases/<release>`, publishes all staged paths, and runs `pm2 restart saytwist --update-env`.
-9. The script requires a new PM2 PID plus successful local `/api/healthz` and `/api/readyz` responses. A restart or readiness failure restores the previous application paths and restarts `saytwist`; it cannot report success while the old PID remains active.
+7. The VPS script validates the archive and staged layout, connects to the existing PM2 daemon, and verifies the single `saytwist` process still runs `/home/saytwist/.nvm/versions/node/v24.20.0/bin/npm start` from `/home/saytwist/htdocs/saytwist.com` with `NODE_ENV=production` and `PORT=3001`. It then takes and verifies the PostgreSQL backup, confirms migration status is already current, and runs the expected no-op `migrate deploy`.
+8. The script preserves `public/generated` and does not touch `storage/`, `.env`, or non-web PM2 processes. It moves the current runtime paths into `.deploy-releases/<release>`, publishes all staged paths, and asks the existing daemon to restart only `saytwist`. It deliberately omits `--update-env`, so the registered npm command, runtime paths, port, and environment are preserved.
+9. The script requires an increased PM2 restart count, a changed application PID, the unchanged daemon PID, the complete runtime identity above, and successful local `/api/healthz` and `/api/readyz` responses on validated port 3001. A restart or readiness failure restores the previous application paths and restarts the same registered process; it cannot report success while the old application PID remains active.
 10. Verify public `/api/healthz`, `/api/readyz`, `/robots.txt`, `/sitemap.xml`, representative translator canonicals/robots metadata, `/ads.txt`, admin authentication, and generated asset routes.
 11. Confirm the sitemap still contains the approved 355 translator URLs and no sitemap URL emits `noindex`.
 12. Run a non-publishing Pinterest configuration/admin smoke check. Do not create a Pin merely to validate deployment.
@@ -88,7 +114,7 @@ Prisma does not provide automatic down migrations. If a future migration causes 
 ## Application rollback
 
 1. Stop or pause the rollout if health, readiness, sitemap, authentication, asset, or worker checks fail. The deployment script automatically restores the immediately previous application paths when restart or local health validation fails.
-2. Confirm `pm2 describe saytwist` reports the expected `<app-path>/server.js`, then run `pm2 restart saytwist --update-env`. Do not restart, delete, or recreate an editorial worker; never start a persistent Growth worker.
+2. With the operator-approved absolute CLI path, run `PM2_HOME=/home/saytwist/.pm2 /absolute/path/to/existing/pm2 describe saytwist`. Confirm it reports the production npm binary, `args: start`, application working directory, `PORT=3001`, and `NODE_ENV=production`. Restart only with `PM2_HOME=/home/saytwist/.pm2 /absolute/path/to/existing/pm2 restart saytwist`; do not use `--update-env`, delete/recreate the process, restart an editorial worker, or start a persistent Growth worker.
 3. If manual application rollback is required, select `.deploy-releases/<failed-release>` or the last known-good SHA-addressed artifact, restore only the runtime paths listed in the deploy script, and restart `saytwist`.
 4. Record whether a migration was applied. For this release, none is expected because the pre-migration status gate refuses pending migrations.
 5. Re-run local and public health/readiness checks, followed by the SEO, ads.txt, authentication, generated-asset, and non-publishing Pinterest smoke checks.

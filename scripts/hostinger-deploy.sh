@@ -5,7 +5,13 @@ APP_PATH="${HOSTINGER_APP_PATH:-$(pwd)}"
 DEPLOY_ARCHIVE="${HOSTINGER_DEPLOY_ARCHIVE:-$APP_PATH/release.tar.gz}"
 NODE_BIN_DIR="${HOSTINGER_NODE_BIN:-/home/saytwist/.nvm/versions/node/v24.20.0/bin}"
 PM2_PROCESS="${HOSTINGER_PM2_PROCESS:-saytwist}"
-HEALTH_BASE_URL="${HOSTINGER_HEALTH_BASE_URL:-http://127.0.0.1:3000}"
+PM2_CLI="${HOSTINGER_PM2_CLI:-}"
+PM2_HOME_DIR="${HOSTINGER_PM2_HOME:-/home/saytwist/.pm2}"
+EXPECTED_PM2_HOME="/home/saytwist/.pm2"
+EXPECTED_PM2_VERSION="${HOSTINGER_EXPECTED_PM2_VERSION:-7.0.4}"
+EXPECTED_PORT="${HOSTINGER_EXPECTED_PORT:-3001}"
+PM2_CONTRACT_SCRIPT="${HOSTINGER_PM2_CONTRACT_SCRIPT:-$APP_PATH/scripts/pm2-process-contract.mjs}"
+HEALTH_BASE_URL=""
 PRODUCTION_ENV_FILE="${HOSTINGER_ENV_FILE:-$APP_PATH/.env}"
 EXPECT_NO_PENDING_MIGRATIONS="${HOSTINGER_EXPECT_NO_PENDING_MIGRATIONS:-1}"
 RELEASE_SHA="${HOSTINGER_RELEASE_SHA:-unknown}"
@@ -20,6 +26,8 @@ CURRENT_STEP="bootstrap"
 DEPLOY_STATUS="failed"
 PUBLISH_STARTED=0
 OLD_WEB_PID=""
+OLD_RESTART_COUNT=""
+PM2_DAEMON_PID=""
 
 RELEASE_PATHS=(
   ".next"
@@ -98,13 +106,49 @@ bootstrap_runtime() {
 
   [[ "$(command -v node)" == "$NODE_BIN_DIR/node" ]] || fail "The approved production Node.js binary was not selected."
   [[ "$(command -v npm)" == "$NODE_BIN_DIR/npm" ]] || fail "The approved production npm binary was not selected."
-  ensure_command_exists pm2
   ensure_command_exists curl
   ensure_command_exists pg_dump
   ensure_command_exists pg_restore
   ensure_command_exists tar
 
-  log "node=$(node --version), npm=$(npm --version), node_path=$(command -v node), pm2_path=$(command -v pm2)"
+  ensure_file_exists "$PM2_CONTRACT_SCRIPT"
+  log "node=$(node --version), npm=$(npm --version), node_path=$(command -v node)"
+}
+
+run_pm2() {
+  PM2_HOME="$PM2_HOME_DIR" "$PM2_CLI" "$@"
+}
+
+read_pm2_daemon_pid() {
+  local daemon_pid
+  ensure_file_exists "$PM2_HOME_DIR/pm2.pid"
+  daemon_pid="$(tr -d '[:space:]' < "$PM2_HOME_DIR/pm2.pid")"
+  [[ "$daemon_pid" =~ ^[1-9][0-9]*$ ]] || fail "The existing PM2 daemon PID file is invalid."
+  kill -0 "$daemon_pid" >/dev/null 2>&1 || fail "The existing PM2 daemon is not running."
+  printf '%s' "$daemon_pid"
+}
+
+validate_pm2_cli() {
+  step "validate-pm2-cli"
+  [[ -n "$PM2_CLI" ]] || fail "HOSTINGER_PM2_CLI must provide the existing absolute PM2 CLI path."
+  [[ "$PM2_CLI" == /* ]] || fail "HOSTINGER_PM2_CLI must be absolute."
+  [[ -x "$PM2_CLI" ]] || fail "The operator-supplied PM2 CLI is missing or not executable: $PM2_CLI"
+  [[ "$PM2_HOME_DIR" == /* ]] || fail "HOSTINGER_PM2_HOME must be absolute."
+  [[ "$PM2_HOME_DIR" == "$EXPECTED_PM2_HOME" ]] || fail "HOSTINGER_PM2_HOME does not match the verified production daemon home."
+  ensure_directory_exists "$PM2_HOME_DIR"
+  [[ -S "$PM2_HOME_DIR/rpc.sock" ]] || fail "The existing PM2 RPC socket is unavailable."
+  [[ -S "$PM2_HOME_DIR/pub.sock" ]] || fail "The existing PM2 publish socket is unavailable."
+  PM2_DAEMON_PID="$(read_pm2_daemon_pid)"
+
+  local reported_version daemon_pid_after
+  reported_version="$(run_pm2 --version)" || fail "The supplied PM2 CLI could not connect using PM2_HOME=$PM2_HOME_DIR."
+  [[ "$reported_version" == "$EXPECTED_PM2_VERSION" ]] || fail "Expected PM2 $EXPECTED_PM2_VERSION but the supplied CLI reported $reported_version."
+  daemon_pid_after="$(read_pm2_daemon_pid)"
+  [[ "$daemon_pid_after" == "$PM2_DAEMON_PID" ]] || fail "PM2 daemon identity changed during CLI validation; refusing to continue."
+  run_pm2 jlist >/dev/null || fail "The supplied PM2 CLI could not query the existing daemon."
+  daemon_pid_after="$(read_pm2_daemon_pid)"
+  [[ "$daemon_pid_after" == "$PM2_DAEMON_PID" ]] || fail "PM2 daemon identity changed while querying the process list."
+  log "Connected PM2 CLI $PM2_CLI (version=$reported_version) to the existing daemon pid=$PM2_DAEMON_PID."
 }
 
 acquire_lock() {
@@ -130,7 +174,7 @@ validate_environment() {
     (
       umask 077
       # shellcheck disable=SC2016
-      pm2 jlist | node -e '
+      run_pm2 jlist | node -e '
         const fs = require("node:fs");
         let input = "";
         process.stdin.setEncoding("utf8");
@@ -198,36 +242,28 @@ validate_staging_layout() {
   node -e '
     const config = require(process.argv[1]);
     const app = config?.apps?.find((candidate) => candidate.name === process.argv[2]);
-    if (!app || app.script !== "server.js" || app.instances !== 1 || app.exec_mode !== "fork") process.exit(1);
-  ' "$STAGING_DIR/ecosystem.config.cjs" "$PM2_PROCESS" || fail "Artifact PM2 configuration does not match the existing SayTwist web process contract."
+    const expectedNpm = process.argv[3];
+    const expectedCwd = process.argv[4];
+    const expectedPort = process.argv[5];
+    if (!app || app.script !== expectedNpm || app.args !== "start" || app.cwd !== expectedCwd || app.instances !== 1 || app.exec_mode !== "fork" || String(app.env?.PORT) !== expectedPort || app.env?.NODE_ENV !== "production") process.exit(1);
+  ' "$STAGING_DIR/ecosystem.config.cjs" "$PM2_PROCESS" "$NODE_BIN_DIR/npm" "$APP_PATH" "$EXPECTED_PORT" || fail "Artifact PM2 configuration does not document the existing SayTwist npm start contract."
   log "Artifact layout and PM2 configuration are valid."
 }
 
 get_pm2_process_info() {
-  pm2 jlist | node -e '
-    let input = "";
-    process.stdin.setEncoding("utf8");
-    process.stdin.on("data", (chunk) => { input += chunk; });
-    process.stdin.on("end", () => {
-      const processName = process.argv[1];
-      const item = JSON.parse(input).find((entry) => entry.name === processName);
-      if (!item) process.exit(2);
-      const env = item.pm2_env || {};
-      process.stdout.write([item.pid || 0, env.status || "unknown", env.pm_exec_path || "", env.pm_cwd || "", env.restart_time || 0].join("\t"));
-    });
-  ' "$PM2_PROCESS"
+  run_pm2 jlist | node "$PM2_CONTRACT_SCRIPT" \
+    "$PM2_PROCESS" "$NODE_BIN_DIR/npm" "$APP_PATH" "$PM2_HOME_DIR" "$EXPECTED_PORT"
 }
 
 validate_pm2_process() {
   step "validate-pm2"
-  local info status exec_path cwd restart_count
-  info="$(get_pm2_process_info)" || fail "The existing PM2 process '$PM2_PROCESS' was not found."
-  IFS=$'\t' read -r OLD_WEB_PID status exec_path cwd restart_count <<<"$info"
-  [[ "$OLD_WEB_PID" =~ ^[1-9][0-9]*$ ]] || fail "The existing PM2 web process has no live PID."
-  [[ "$status" == "online" ]] || fail "The existing PM2 web process is not online."
-  [[ "$exec_path" == "$APP_PATH/server.js" ]] || fail "PM2 executes an unexpected web entry point: $exec_path"
-  [[ "$cwd" == "$APP_PATH" ]] || fail "PM2 uses an unexpected working directory: $cwd"
-  log "Verified existing PM2 process '$PM2_PROCESS' (pid=$OLD_WEB_PID, restarts=$restart_count)."
+  local info status exec_path cwd runtime_port daemon_pid_after
+  info="$(get_pm2_process_info)" || fail "The existing PM2 process '$PM2_PROCESS' failed its npm start runtime contract."
+  IFS=$'\t' read -r OLD_WEB_PID status exec_path cwd OLD_RESTART_COUNT runtime_port <<<"$info"
+  daemon_pid_after="$(read_pm2_daemon_pid)"
+  [[ "$daemon_pid_after" == "$PM2_DAEMON_PID" ]] || fail "The PM2 daemon identity changed during process validation."
+  HEALTH_BASE_URL="http://127.0.0.1:$runtime_port"
+  log "Verified existing PM2 npm start process '$PM2_PROCESS' (pid=$OLD_WEB_PID, restarts=$OLD_RESTART_COUNT, port=$runtime_port, cwd=$cwd)."
   log "Only '$PM2_PROCESS' will be restarted; all other PM2 processes, including an editorial worker, are left untouched."
 }
 
@@ -341,15 +377,17 @@ wait_for_health() {
 
 restart_web_process() {
   step "restart-web"
-  local info new_pid status exec_path cwd restart_count
-  pm2 restart "$PM2_PROCESS" --update-env >/dev/null
+  local info new_pid status exec_path cwd restart_count runtime_port daemon_pid_after
+  run_pm2 restart "$PM2_PROCESS" >/dev/null || fail "PM2 failed to restart the existing web process."
 
   info="$(get_pm2_process_info)" || fail "PM2 process disappeared after restart."
-  IFS=$'\t' read -r new_pid status exec_path cwd restart_count <<<"$info"
-  [[ "$status" == "online" ]] || fail "PM2 did not return the web process to online state."
-  [[ "$new_pid" =~ ^[1-9][0-9]*$ ]] || fail "PM2 did not assign a live PID after restart."
+  IFS=$'\t' read -r new_pid status exec_path cwd restart_count runtime_port <<<"$info"
   [[ "$new_pid" != "$OLD_WEB_PID" ]] || fail "PM2 retained the old web PID; refusing to report the new release as active."
-  [[ "$exec_path" == "$APP_PATH/server.js" && "$cwd" == "$APP_PATH" ]] || fail "PM2 restarted with an unexpected runtime configuration."
+  [[ "$restart_count" =~ ^[0-9]+$ && "$OLD_RESTART_COUNT" =~ ^[0-9]+$ && "$restart_count" -gt "$OLD_RESTART_COUNT" ]] \
+    || fail "PM2 did not record a restart of the existing process."
+  daemon_pid_after="$(read_pm2_daemon_pid)"
+  [[ "$daemon_pid_after" == "$PM2_DAEMON_PID" ]] || fail "The PM2 daemon changed during application restart."
+  HEALTH_BASE_URL="http://127.0.0.1:$runtime_port"
   wait_for_health || fail "The restarted web process failed health or readiness checks."
   log "PM2 restarted '$PM2_PROCESS' from pid=$OLD_WEB_PID to pid=$new_pid (restarts=$restart_count)."
 }
@@ -359,7 +397,7 @@ rollback_application() {
   CURRENT_STEP="rollback"
   warn "Restoring the previous application release. Database rollback is intentionally not automatic."
   local failed_dir="$STAGING_DIR/failed-release"
-  local rel_path target_path backup_path failed_path
+  local rel_path target_path backup_path failed_path rollback_info rollback_port
   mkdir -p "$failed_dir"
 
   for rel_path in "${PUBLISHED_PATHS[@]}"; do
@@ -380,7 +418,13 @@ rollback_application() {
     fi
   done
 
-  pm2 restart "$PM2_PROCESS" --update-env >/dev/null 2>&1 || warn "PM2 restart of the restored release failed; operator intervention is required."
+  run_pm2 restart "$PM2_PROCESS" >/dev/null 2>&1 || warn "PM2 restart of the restored npm start process failed; operator intervention is required."
+  if rollback_info="$(get_pm2_process_info)"; then
+    IFS=$'\t' read -r _ _ _ _ _ rollback_port <<<"$rollback_info"
+    HEALTH_BASE_URL="http://127.0.0.1:$rollback_port"
+  else
+    warn "The restored process no longer matches the original npm start runtime contract."
+  fi
   wait_for_health || warn "The restored release did not become healthy; operator intervention is required."
 }
 
@@ -411,26 +455,33 @@ on_error() {
   exit "$exit_code"
 }
 
-trap on_error ERR
-trap cleanup EXIT
-trap 'exit 130' INT TERM
+main() {
+  trap on_error ERR
+  trap cleanup EXIT
+  trap 'exit 130' INT TERM
 
-validate_safe_app_path
-bootstrap_runtime
-acquire_lock
-validate_archive
-extract_archive
-validate_staging_layout
-validate_pm2_process
-validate_environment
-create_database_backup
-validate_and_apply_migrations
-preserve_generated_assets
-backup_current_release
-publish_release
-restart_web_process
-finalize_release
+  validate_safe_app_path
+  bootstrap_runtime
+  acquire_lock
+  validate_archive
+  extract_archive
+  validate_staging_layout
+  validate_pm2_cli
+  validate_pm2_process
+  validate_environment
+  create_database_backup
+  validate_and_apply_migrations
+  preserve_generated_assets
+  backup_current_release
+  publish_release
+  restart_web_process
+  finalize_release
 
-DEPLOY_STATUS="success"
-step "done"
-log "Deployment complete."
+  DEPLOY_STATUS="success"
+  step "done"
+  log "Deployment complete."
+}
+
+if [[ "${HOSTINGER_DEPLOY_SOURCE_ONLY:-0}" != "1" ]]; then
+  main "$@"
+fi

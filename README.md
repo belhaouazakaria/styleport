@@ -204,9 +204,9 @@ Preferred production deploy is GitHub Actions artifact deployment:
   - `.next`
   - `node_modules` (production-pruned)
   - runtime config and assets (`public`, `prisma`, `package.json`, `server.js`, etc.)
-- After the protected `production` environment is approved, the deploy job uploads only the bundle and deployment script to Hostinger.
+- After the protected `production` environment is approved, the deploy job uploads only the bundle, deployment script, and PM2 contract validator to Hostinger.
 - The authenticated VPS script uses the existing Node.js installation at `/home/saytwist/.nvm/versions/node/v24.20.0/bin`, verifies a PostgreSQL backup, requires an already-current Prisma migration status for this release, and only then publishes the staged files.
-- The remote script restarts the existing PM2 `saytwist` process and requires both health and readiness checks to pass. It leaves every other PM2 process untouched and never starts the Growth worker.
+- The remote script requires an operator-configured absolute `HOSTINGER_PM2_CLI` path, connects it only to the existing `/home/saytwist/.pm2` daemon, and validates the current `npm start` registration, working directory, `NODE_ENV=production`, and `PORT=3001` before any backup or migration. It restarts only the existing PM2 `saytwist` process, preserves its environment, and requires both health and readiness checks on port 3001 to pass. It leaves every other PM2 process untouched and never starts the Growth worker.
 - Server-side `npm install` and `next build` are intentionally avoided to prevent process-limit spikes.
 
 GitHub deploy workflow notes:
