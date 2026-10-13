@@ -17,7 +17,6 @@ const STATIC_INDEXABLE_ROUTES = [
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = getAppBaseUrl().toString().replace(/\/$/, "");
-  const now = new Date();
 
   let translators: Awaited<ReturnType<typeof getIndexableTranslatorSlugsForSitemap>> = [];
   let ideas: Awaited<ReturnType<typeof getIndexableIdeaSlugsForSitemap>> = [];
@@ -49,7 +48,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     url: `${base}${path}`,
     changeFrequency: path === "/" ? "daily" : "monthly",
     priority: path === "/" ? 1 : 0.6,
-    lastModified: now,
   }));
 
   const translatorEntries: MetadataRoute.Sitemap = translators.map((translator) => ({

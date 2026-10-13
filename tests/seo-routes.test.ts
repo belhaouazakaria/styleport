@@ -28,6 +28,18 @@ describe("SEO route contracts", () => {
     expect(urls.every((url) => !url.includes("?") && !url.includes("/admin") && !url.includes("/api"))).toBe(true);
   });
 
+  it("omits invented static last-modified dates and preserves genuine content timestamps", async () => {
+    const entries = await sitemap();
+    const byUrl = new Map(entries.map((entry) => [entry.url, entry]));
+    expect(byUrl.get("https://saytwist.com/about")).not.toHaveProperty("lastModified");
+    expect(byUrl.get("https://saytwist.com/translators/friendly-rewrite")?.lastModified).toEqual(
+      new Date("2026-10-01"),
+    );
+    expect(byUrl.get("https://saytwist.com/ideas/better-follow-up")?.lastModified).toEqual(
+      new Date("2026-10-02"),
+    );
+  });
+
   it("continues with static and Idea entries when translator data is unavailable", async () => {
     mocks.translators.mockRejectedValueOnce(new Error("optional service unavailable"));
     const urls = (await sitemap()).map((entry) => entry.url);
