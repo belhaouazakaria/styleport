@@ -2,6 +2,10 @@
   "name": "saytwist-platform",
   "version": "2.0.0",
   "private": true,
+  "packageManager": "npm@10.8.2",
+  "engines": {
+    "node": ">=20.19.0"
+  },
   "scripts": {
     "dev": "next dev",
     "prebuild": "node node_modules/prisma/build/index.js generate",
@@ -32,9 +36,11 @@
     "prisma:seed": "node node_modules/prisma/build/index.js db seed",
     "prisma:studio": "node node_modules/prisma/build/index.js studio",
     "validate:env:production": "tsx scripts/validate-production-env.ts",
-    "prepare:production": "npm run validate:env:production && npm run prisma:generate && npm run prisma:deploy && npm run build",
-    "deploy:hostinger": "sh ./scripts/hostinger-deploy.sh",
+    "prepare:production": "npm run validate:env:production && npm run prisma:generate && npm run build",
+    "deploy:hostinger": "bash ./scripts/hostinger-deploy.sh",
     "featured:recalculate": "tsx scripts/recalculate-featured-translators.ts",
+    "seo:report-indexing-impact": "tsx scripts/report-indexing-impact.ts",
+    "seo:verify-production": "tsx scripts/verify-production-seo.ts",
     "test:growth-publishing-db": "sh scripts/test-growth-publishing-db.sh"
   },
   "postinstall": "node node_modules/prisma/build/index.js generate",

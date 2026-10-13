@@ -5,6 +5,7 @@ import {
   ArrowRightLeft,
   Copy,
   Loader2,
+  PencilLine,
   RefreshCcw,
   Sparkles,
   Square,
@@ -463,6 +464,10 @@ export function TranslatorCard({
     `${storagePrefix}:last-output`,
     "",
   );
+  const [translatedSourceText, setTranslatedSourceText] = useLocalStorage<string>(
+    `${storagePrefix}:last-source-used`,
+    "",
+  );
   const [modeKey, setModeKey] = useLocalStorage<string>(
     `${storagePrefix}:last-mode`,
     initialMode,
@@ -484,6 +489,8 @@ export function TranslatorCard({
 
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const outputRef = useRef<HTMLTextAreaElement | null>(null);
+  const resultRef = useRef<HTMLDivElement | null>(null);
+  const revealNextResultRef = useRef(false);
   const resultPinRequestIdRef = useRef(0);
   const attributionReadyRef = useRef<Promise<void>>(Promise.resolve());
   const attributionLandingPendingRef = useRef(false);
@@ -532,6 +539,30 @@ export function TranslatorCard({
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    if (!outputText.trim() || !revealNextResultRef.current) return;
+    revealNextResultRef.current = false;
+
+    const frame = window.requestAnimationFrame(() => {
+      const isMobile =
+        window.matchMedia?.("(max-width: 767px)").matches ?? true;
+      if (!isMobile) return;
+      const reduceMotion =
+        window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ??
+        false;
+      const result = resultRef.current;
+      if (typeof result?.scrollIntoView === "function") {
+        result.scrollIntoView({
+          behavior: reduceMotion ? "auto" : "smooth",
+          block: "start",
+        });
+      }
+      result?.focus({ preventScroll: true });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [outputText]);
 
   useEffect(() => {
     if (!attributionEnabled || typeof window === "undefined") return;
@@ -633,8 +664,10 @@ export function TranslatorCard({
   }
 
   function clearPreparedResultPin() {
+    resultPinRequestIdRef.current += 1;
     setResultPinMediaUrl(null);
     setResultPinError(null);
+    setIsPreparingResultPin(false);
   }
 
   async function translate() {
@@ -679,12 +712,9 @@ export function TranslatorCard({
       }
 
       clearPreparedResultPin();
+      revealNextResultRef.current = true;
+      setTranslatedSourceText(sourceText);
       setOutputText(payload.result);
-      void prepareResultPin({
-        sourceText,
-        translatedText: payload.result,
-        announceFailure: false,
-      });
     } catch {
       setError("We couldn't refine that text just now.");
     } finally {
@@ -694,6 +724,7 @@ export function TranslatorCard({
 
   function handleSwap() {
     setDirection(direction === "forward" ? "reverse" : "forward");
+    setTranslatedSourceText(outputText);
     setInputText(outputText);
     setOutputText(inputText);
     clearPreparedResultPin();
@@ -723,8 +754,19 @@ export function TranslatorCard({
   function handleClear() {
     setInputText("");
     setOutputText("");
+    setTranslatedSourceText("");
     clearPreparedResultPin();
     setError(null);
+  }
+
+  function handleEditInput() {
+    const reduceMotion =
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+    inputRef.current?.scrollIntoView({
+      behavior: reduceMotion ? "auto" : "smooth",
+      block: "center",
+    });
+    inputRef.current?.focus({ preventScroll: true });
   }
 
   function handleSpeakOutput() {
@@ -896,23 +938,25 @@ export function TranslatorCard({
       return;
     }
 
-    if (resultPinError) {
-      const prepared = await prepareResultPin({
-        sourceText: inputText || "No source text provided.",
-        translatedText: outputText,
-        announceFailure: true,
-      });
-      if (prepared) {
-        openPinterestIntent(prepared, outputText);
-      }
+    if (!translatedSourceText.trim()) {
+      setResultPinError("Translate again before sharing this saved result.");
       return;
     }
 
-    toast({
-      title: "Pinterest image is still preparing",
-      description: "Please wait a moment, then try sharing again.",
+    await prepareResultPin({
+      sourceText: translatedSourceText,
+      translatedText: outputText,
+      announceFailure: true,
     });
   }
+
+  const resultShareLabel = isPreparingResultPin
+    ? "Preparing image..."
+    : resultPinMediaUrl
+      ? "Continue to Pinterest"
+      : resultPinError
+        ? "Retry result image"
+        : "Share result";
 
   return (
     <section className="relative mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -959,7 +1003,7 @@ export function TranslatorCard({
           </div>
         ) : null}
 
-        <div className="relative grid w-full grid-cols-1 gap-5 md:grid-cols-2 md:items-stretch md:gap-5">
+        <div className="relative grid w-full grid-cols-1 gap-4 md:grid-cols-2 md:items-stretch md:gap-5">
           <div className="border-border flex h-full w-full min-w-0 flex-col rounded-[1.75rem] border bg-white p-4 shadow-[var(--shadow-soft)] sm:p-6">
             <div className="mb-2 flex items-center justify-between">
               <p className="font-display text-ink text-lg font-bold">
@@ -1014,12 +1058,64 @@ export function TranslatorCard({
                   ))}
                 </div>
               ) : null}
-              <div aria-hidden="true" className="mt-3 min-h-14" />
+              <div className="mt-4 flex flex-wrap items-center gap-2 md:hidden">
+                {translator.showSwap ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleSwap}
+                    disabled={isLoading}
+                  >
+                    <ArrowRightLeft className="h-4 w-4" />
+                    Reverse
+                  </Button>
+                ) : null}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleClear}
+                  disabled={isLoading || (!inputText && !outputText)}
+                  aria-label="Reset input and result"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Clear
+                </Button>
+                <span className="text-muted-ink ml-auto text-xs tabular-nums">
+                  {inputText.length} / {MAX_INPUT_CHARS}
+                </span>
+              </div>
             </div>
           </div>
 
+          <div className="md:hidden">
+            <Button
+              type="button"
+              aria-label="Twist my words"
+              onClick={() => void translate()}
+              disabled={isLoading}
+              className="min-h-14 w-full rounded-2xl text-base shadow-[0_5px_0_#0d9488]"
+            >
+              {isLoading ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <Sparkles className="h-5 w-5" />
+              )}
+              {isLoading ? LOADING_COPY : "Twist my words"}
+            </Button>
+            {error ? (
+              <p
+                role="alert"
+                className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700"
+              >
+                {error}
+              </p>
+            ) : null}
+          </div>
+
           {translator.showSwap ? (
-            <div className="relative z-10 -my-8 flex items-center justify-center md:absolute md:top-1/2 md:left-1/2 md:my-0 md:-translate-x-1/2 md:-translate-y-1/2">
+            <div className="relative z-10 hidden items-center justify-center md:absolute md:top-1/2 md:left-1/2 md:flex md:-translate-x-1/2 md:-translate-y-1/2">
               <Button
                 type="button"
                 size="icon"
@@ -1034,7 +1130,13 @@ export function TranslatorCard({
             </div>
           ) : null}
 
-          <div className="border-brand-200 bg-brand-50 flex h-full w-full min-w-0 flex-col rounded-[1.75rem] border p-4 shadow-[var(--shadow-soft)] sm:p-6">
+          <div
+            ref={resultRef}
+            tabIndex={-1}
+            aria-live="polite"
+            aria-busy={isLoading}
+            className={`border-brand-200 bg-brand-50 h-full w-full min-w-0 scroll-mt-24 flex-col rounded-[1.75rem] border p-4 shadow-[var(--shadow-soft)] sm:p-6 ${outputText.trim() || isLoading ? "flex" : "hidden md:flex"}`}
+          >
             <div className="mb-2 flex items-center justify-between">
               <p className="font-display text-ink text-lg font-bold">
                 {activeOutputLabel}
@@ -1090,11 +1192,63 @@ export function TranslatorCard({
                   </p>
                 ) : null}
               </div>
+
+              {outputText.trim() ? (
+                <div className="border-brand-200 mt-3 space-y-3 border-t pt-4 md:hidden">
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => void translate()}
+                      disabled={isLoading}
+                    >
+                      <RefreshCcw className="h-4 w-4" />
+                      Try again
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleEditInput}
+                    >
+                      <PencilLine className="h-4 w-4" />
+                      Edit input
+                    </Button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => void handlePinterestResultShare()}
+                      disabled={isLoading || isPreparingResultPin}
+                      className="bg-[#E60023] text-white hover:bg-[#cc001f]"
+                    >
+                      {isPreparingResultPin ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <PinterestIcon className="h-4 w-4" />
+                      )}
+                      {resultShareLabel}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={handlePinterestShare}
+                    >
+                      <PinterestIcon className="h-4 w-4" />
+                      Share translator
+                    </Button>
+                  </div>
+                  {resultPinError ? (
+                    <p className="text-muted-ink text-xs">{resultPinError}</p>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
 
-        <div className="border-border mt-5 flex flex-col gap-3 border-t border-dashed pt-5">
+        <div className="border-border mt-5 hidden flex-col gap-3 border-t border-dashed pt-5 md:flex">
           <div className="flex flex-wrap items-center gap-2">
             <Button
               type="button"
@@ -1158,11 +1312,7 @@ export function TranslatorCard({
               ) : (
                 <PinterestIcon className="h-4 w-4" />
               )}
-              {isPreparingResultPin
-                ? "Preparing image..."
-                : resultPinError
-                  ? "Retry result image"
-                  : "Share result"}
+              {resultShareLabel}
             </Button>
             <Button
               type="button"
@@ -1204,23 +1354,6 @@ export function TranslatorCard({
           ) : null}
         </div>
       </Card>
-
-      <div className="sticky bottom-20 z-20 mt-5 md:hidden">
-        <Button
-          type="button"
-          aria-label="Translate"
-          onClick={() => void translate()}
-          disabled={isLoading}
-          className="h-14 w-full rounded-full text-base"
-        >
-          {isLoading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Sparkles className="h-4 w-4" />
-          )}
-          Twist my words
-        </Button>
-      </div>
     </section>
   );
 }

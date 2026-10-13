@@ -1,6 +1,8 @@
 import { GrowthDecisionStatus, GrowthDecisionType, GrowthJobStatus, GrowthJobType, type GrowthJob } from "@prisma/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { IDEA_AUTOPILOT_VERSION } from "@/lib/growth/ideas/constants";
+
 const mocks = vi.hoisted(() => ({ decide: vi.fn(), execute: vi.fn() }));
 vi.mock("@/lib/growth/ideas/service", () => ({ decideIdeaOpportunity: mocks.decide, executeIdeaDecision: mocks.execute }));
 
@@ -18,7 +20,7 @@ describe("Phase 9 worker handlers", () => {
     mocks.execute.mockResolvedValue({ decision: { id: "decision", status: GrowthDecisionStatus.COMPLETED, ideaId: "idea" }, ideaId: "idea", reused: false });
   });
   it("dispatches strict one-shot decision and execution jobs", async () => {
-    await dispatchGrowthJob(job(GrowthJobType.IDEA_AUTOPILOT_DECIDE, { opportunityId: "opportunity", decisionModelVersion: "idea_autopilot_v1" }));
+    await dispatchGrowthJob(job(GrowthJobType.IDEA_AUTOPILOT_DECIDE, { opportunityId: "opportunity", decisionModelVersion: IDEA_AUTOPILOT_VERSION }));
     expect(mocks.decide).toHaveBeenCalledWith("opportunity");
     await dispatchGrowthJob(job(GrowthJobType.IDEA_AUTOPILOT_EXECUTE, { decisionId: "decision" }));
     expect(mocks.execute).toHaveBeenCalledWith("decision", { jobId: "job" });

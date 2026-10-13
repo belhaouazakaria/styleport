@@ -4,6 +4,8 @@ import { getIndexableIdeaSlugsForSitemap } from "@/lib/data/ideas";
 import { getIndexableTranslatorSlugsForSitemap } from "@/lib/data/translators";
 import { getAppBaseUrl } from "@/lib/env";
 
+export const dynamic = "force-dynamic";
+
 const STATIC_INDEXABLE_ROUTES = [
   "/",
   "/about",
@@ -17,9 +19,10 @@ const STATIC_INDEXABLE_ROUTES = [
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = getAppBaseUrl().toString().replace(/\/$/, "");
-  const now = new Date();
 
-  let translators: Awaited<ReturnType<typeof getIndexableTranslatorSlugsForSitemap>> = [];
+  let translators: Awaited<
+    ReturnType<typeof getIndexableTranslatorSlugsForSitemap>
+  > = [];
   let ideas: Awaited<ReturnType<typeof getIndexableIdeaSlugsForSitemap>> = [];
 
   const [translatorResult, ideaResult] = await Promise.allSettled([
@@ -45,19 +48,22 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     );
   }
 
-  const staticEntries: MetadataRoute.Sitemap = STATIC_INDEXABLE_ROUTES.map((path) => ({
-    url: `${base}${path}`,
-    changeFrequency: path === "/" ? "daily" : "monthly",
-    priority: path === "/" ? 1 : 0.6,
-    lastModified: now,
-  }));
+  const staticEntries: MetadataRoute.Sitemap = STATIC_INDEXABLE_ROUTES.map(
+    (path) => ({
+      url: `${base}${path}`,
+      changeFrequency: path === "/" ? "daily" : "monthly",
+      priority: path === "/" ? 1 : 0.6,
+    }),
+  );
 
-  const translatorEntries: MetadataRoute.Sitemap = translators.map((translator) => ({
-    url: `${base}/translators/${translator.slug}`,
-    changeFrequency: "weekly",
-    priority: 0.8,
-    lastModified: translator.updatedAt,
-  }));
+  const translatorEntries: MetadataRoute.Sitemap = translators.map(
+    (translator) => ({
+      url: `${base}/translators/${translator.slug}`,
+      changeFrequency: "weekly",
+      priority: 0.8,
+      lastModified: translator.updatedAt,
+    }),
+  );
 
   const ideaEntries: MetadataRoute.Sitemap = ideas.map((idea) => ({
     url: `${base}/ideas/${idea.slug}`,

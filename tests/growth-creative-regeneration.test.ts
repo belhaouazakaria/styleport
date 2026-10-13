@@ -1,12 +1,46 @@
 import { GrowthCreativeArchetype, GrowthCreativeDestinationKind, GrowthCreativeSimilarityClassification, GrowthJobStatus, GrowthPinCandidateStatus } from "@prisma/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+interface MockRegenerationPayload {
+  creativeDirection: string;
+  regenerationReason: string;
+  avoidDirections?: string[];
+  [key: string]: unknown;
+}
+
+interface MockRegenerationJobInput {
+  idempotencyKey: string;
+  maxAttempts: number;
+  payload: MockRegenerationPayload;
+  [key: string]: unknown;
+}
+
+interface MockRegenerationJob extends MockRegenerationJobInput {
+  id: string;
+  status: GrowthJobStatus;
+  growthPinCandidate: { id: string } | null;
+}
+
+interface MockSourceCandidate {
+  id: string;
+  status: GrowthPinCandidateStatus;
+  similarityResult: GrowthCreativeSimilarityClassification;
+  similarityFlags: { matchedCandidateId: string };
+  destinationKind: GrowthCreativeDestinationKind;
+  translatorId: string;
+  ideaId: null;
+  archetype: GrowthCreativeArchetype;
+  accountId: null;
+  generationJob: null;
+  templateId: string;
+}
+
 const mocks = vi.hoisted(() => ({
-  jobs: [] as Array<Record<string, any>>,
+  jobs: [] as MockRegenerationJob[],
   recent: [] as Array<{ id: string; templateId: string }>,
   usedControlledTemplates: [] as Array<{ templateId: string }>,
   matched: { id: "matched", templateId: "before-after-ai-v1-chat-focus" } as { id: string; templateId: string } | null,
-  source: null as Record<string, any> | null,
+  source: null as MockSourceCandidate | null,
   enqueue: vi.fn(),
   activity: vi.fn(),
   translator: {
@@ -19,18 +53,18 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/prisma", () => ({ prisma: {
   translator: { findFirst: vi.fn(async () => mocks.translator) },
   growthPinCandidate: {
-    findUnique: vi.fn(async ({ where }: any) => where.id === "source" ? mocks.source : where.id === mocks.matched?.id ? mocks.matched : null),
+    findUnique: vi.fn(async ({ where }: { where: { id: string } }) => where.id === "source" ? mocks.source : where.id === mocks.matched?.id ? mocks.matched : null),
     findMany: vi.fn(async () => mocks.recent),
     groupBy: vi.fn(async () => mocks.usedControlledTemplates),
   },
-  growthJob: { findFirst: vi.fn(async ({ where }: any) => mocks.jobs.filter((job) => String(job.idempotencyKey).startsWith(where.idempotencyKey.startsWith)).at(-1) || null) },
+  growthJob: { findFirst: vi.fn(async ({ where }: { where: { idempotencyKey: { startsWith: string } } }) => mocks.jobs.filter((job) => job.idempotencyKey.startsWith(where.idempotencyKey.startsWith)).at(-1) || null) },
 } }));
 vi.mock("@/lib/growth/jobs", () => ({ enqueueGrowthJob: mocks.enqueue }));
 vi.mock("@/lib/growth/activity", () => ({ recordGrowthActivity: mocks.activity }));
 
 import { enqueueCreativeRegeneration } from "@/lib/growth/creative/candidates";
 
-function deferred(archetype = GrowthCreativeArchetype.BEFORE_AFTER) {
+function deferred(archetype = GrowthCreativeArchetype.BEFORE_AFTER): MockSourceCandidate {
   return {
     id: "source", status: GrowthPinCandidateStatus.DEFERRED, similarityResult: GrowthCreativeSimilarityClassification.EXACT_DUPLICATE,
     similarityFlags: { matchedCandidateId: "matched" }, destinationKind: GrowthCreativeDestinationKind.TRANSLATOR,
@@ -43,7 +77,7 @@ describe("Creative Lab reason-aware regeneration", () => {
   beforeEach(() => {
     mocks.jobs.length = 0; mocks.recent.length = 0; mocks.usedControlledTemplates.length = 0; mocks.activity.mockReset(); mocks.source = deferred();
     mocks.matched = { id: "matched", templateId: "before-after-ai-v1-chat-focus" };
-    mocks.enqueue.mockReset().mockImplementation(async (input: any) => {
+    mocks.enqueue.mockReset().mockImplementation(async (input: MockRegenerationJobInput) => {
       const existing = mocks.jobs.find((job) => job.idempotencyKey === input.idempotencyKey);
       if (existing) return { job: existing, created: false };
       const job = { id: `job-${mocks.jobs.length + 1}`, status: GrowthJobStatus.PENDING, growthPinCandidate: null, ...input };

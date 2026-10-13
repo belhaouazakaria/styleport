@@ -38,6 +38,29 @@ const translator: PublicTranslator = {
     },
   ],
   examples: [],
+  editorial: {
+    about: null,
+    whatItDoes: null,
+    differenceDescription: null,
+    bestUses: [],
+    howToUse: [],
+    tips: [],
+    examples: [],
+    faq: [],
+  },
+  editorialStatus: "INCOMPLETE",
+  indexingEligibility: {
+    deployedBaselineIndexable: true,
+    deployedBaselineRobotsIndexable: false,
+    newVersionIndexable: false,
+    strictReviewIndexable: false,
+    technicallyReady: false,
+    currentVersionReviewed: false,
+    reviewEnforcementEnabled: false,
+    newVersionExclusionReasonCodes: ["TECHNICAL_EDITORIAL_INCOMPLETE"],
+    strictReviewExclusionReasonCodes: ["TECHNICAL_EDITORIAL_INCOMPLETE", "CURRENT_EDITORIAL_NOT_REVIEWED"],
+    reasons: [],
+  },
 };
 
 function renderCard(attributionEnabled = false) {
@@ -63,6 +86,33 @@ describe("TranslatorCard", () => {
     });
 
     localStorage.clear();
+
+    const canvasContext = {
+      createLinearGradient: () => ({ addColorStop: vi.fn() }),
+      fillRect: vi.fn(),
+      beginPath: vi.fn(),
+      roundRect: vi.fn(),
+      fill: vi.fn(),
+      stroke: vi.fn(),
+      moveTo: vi.fn(),
+      lineTo: vi.fn(),
+      quadraticCurveTo: vi.fn(),
+      closePath: vi.fn(),
+      measureText: (value: string) => ({ width: value.length * 10 }),
+      fillText: vi.fn(),
+      set fillStyle(_value: string | CanvasGradient) {},
+      set strokeStyle(_value: string | CanvasGradient) {},
+      set lineWidth(_value: number) {},
+      set font(_value: string) {},
+      set textAlign(_value: CanvasTextAlign) {},
+      set textBaseline(_value: CanvasTextBaseline) {},
+    };
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(
+      canvasContext as unknown as CanvasRenderingContext2D,
+    );
+    vi.spyOn(HTMLCanvasElement.prototype, "toBlob").mockImplementation(
+      (callback) => callback(new Blob(["pin"], { type: "image/png" })),
+    );
   });
 
   afterEach(() => {
@@ -90,6 +140,46 @@ describe("TranslatorCard", () => {
         "Good morrow to you.",
       );
     });
+    expect(fetchMock.mock.calls.map(([path]) => path)).not.toContain(
+      "/api/pinterest/result-image",
+    );
+  });
+
+  it("orders the mobile flow as input, primary action, then result", () => {
+    renderCard();
+
+    const input = screen.getByLabelText("Input text");
+    const primaryAction = screen.getByRole("button", {
+      name: /twist my words/i,
+    });
+    const result = screen.getByLabelText("Output text").closest("[aria-live]");
+
+    expect(input.compareDocumentPosition(primaryAction)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(primaryAction.compareDocumentPosition(result!)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(result).toHaveClass("hidden");
+  });
+
+  it("prioritizes try again and edit input after a result", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: true, result: "Good morrow to you." }),
+    });
+    Element.prototype.scrollIntoView = vi.fn();
+
+    renderCard();
+    await userEvent.type(screen.getByLabelText("Input text"), "hello there");
+    await userEvent.click(
+      screen.getByRole("button", { name: /twist my words/i }),
+    );
+
+    expect(
+      await screen.findByRole("button", { name: /try again/i }),
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: /edit input/i })).toBeVisible();
   });
 
   it("supports keyboard shortcut ctrl/cmd + enter", async () => {
@@ -220,5 +310,83 @@ describe("TranslatorCard", () => {
     expect(timeoutSpy.mock.calls.some(([, delay]) => delay === 1_200)).toBe(
       false,
     );
+  });
+
+  it("prepares on the first result-share click and opens Pinterest only on the second", async () => {
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, result: "Refined output" }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, mediaUrl: "https://saytwist.com/generated/result.png" }) });
+    const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
+
+    renderCard();
+    await userEvent.type(screen.getByLabelText("Input text"), "Original source");
+    await userEvent.click(screen.getAllByRole("button", { name: /^translate$/i })[0]);
+    await userEvent.click((await screen.findAllByRole("button", { name: /share result/i }))[0]);
+
+    const continueButtons = await screen.findAllByRole("button", { name: /continue to pinterest/i });
+    expect(continueButtons).toHaveLength(2);
+    expect(continueButtons[0]).toBeVisible();
+    expect(openSpy).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getAllByRole("button", { name: /continue to pinterest/i })[0]);
+    expect(openSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the translated source snapshot when the input is edited later", async () => {
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, result: "Older result" }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, mediaUrl: "https://saytwist.com/generated/result.png" }) });
+
+    renderCard();
+    const input = screen.getByLabelText("Input text");
+    await userEvent.type(input, "Exact original");
+    await userEvent.click(screen.getAllByRole("button", { name: /^translate$/i })[0]);
+    await userEvent.clear(input);
+    await userEvent.type(input, "Edited later");
+    await userEvent.click((await screen.findAllByRole("button", { name: /share result/i }))[0]);
+
+    await screen.findAllByRole("button", { name: /continue to pinterest/i });
+    expect(localStorage.getItem("saytwist:regal-rewrite:last-source-used")).toBe(
+      JSON.stringify("Exact original"),
+    );
+  });
+
+  it("shows a retry state when result image preparation fails", async () => {
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, result: "Refined output" }) })
+      .mockResolvedValueOnce({ ok: false, status: 503, json: async () => ({ ok: false }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, mediaUrl: "https://saytwist.com/generated/retried.png" }) });
+
+    renderCard();
+    await userEvent.type(screen.getByLabelText("Input text"), "Original source");
+    await userEvent.click(screen.getAllByRole("button", { name: /^translate$/i })[0]);
+    await userEvent.click((await screen.findAllByRole("button", { name: /share result/i }))[0]);
+
+    expect((await screen.findAllByRole("button", { name: /retry result image/i }))[0]).toBeVisible();
+    expect(screen.getAllByText(/unable to prepare pinterest image/i).length).toBeGreaterThan(0);
+
+    await userEvent.click(screen.getAllByRole("button", { name: /retry result image/i })[0]);
+    expect((await screen.findAllByRole("button", { name: /continue to pinterest/i }))[0]).toBeVisible();
+  });
+
+  it("invalidates a prepared image when a newer translation replaces the result", async () => {
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, result: "First result" }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, mediaUrl: "https://saytwist.com/generated/first.png" }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, result: "Second result" }) });
+
+    renderCard();
+    const input = screen.getByLabelText("Input text");
+    await userEvent.type(input, "First source");
+    await userEvent.click(screen.getAllByRole("button", { name: /^translate$/i })[0]);
+    await userEvent.click((await screen.findAllByRole("button", { name: /share result/i }))[0]);
+    await screen.findAllByRole("button", { name: /continue to pinterest/i });
+
+    await userEvent.clear(input);
+    await userEvent.type(input, "Second source");
+    await userEvent.click(screen.getAllByRole("button", { name: /try again/i })[0]);
+
+    expect((await screen.findAllByRole("button", { name: /share result/i }))[0]).toBeVisible();
+    expect(screen.queryByRole("button", { name: /continue to pinterest/i })).not.toBeInTheDocument();
   });
 });

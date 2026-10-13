@@ -44,7 +44,10 @@ async function withPublicDataFallback<T>(
       task,
       new Promise<T>((_, reject) => {
         timeout = setTimeout(
-          () => reject(new Error(`${label} timed out after ${PUBLIC_DATA_TIMEOUT_MS}ms`)),
+          () =>
+            reject(
+              new Error(`${label} timed out after ${PUBLIC_DATA_TIMEOUT_MS}ms`),
+            ),
           PUBLIC_DATA_TIMEOUT_MS,
         );
       }),
@@ -57,18 +60,22 @@ async function withPublicDataFallback<T>(
   }
 }
 
-export async function generateMetadata({ searchParams }: PageProps): Promise<Metadata> {
+export async function generateMetadata({
+  searchParams,
+}: PageProps): Promise<Metadata> {
   const params = await searchParams;
   const settings = await getAppSettings();
   const baseUrl = getAppBaseUrl();
   const ogImageUrl = new URL("/og-image.png", baseUrl).toString();
   const homeUrl = new URL("/", baseUrl).toString();
   const platformName = settings.platformName?.trim() || "SayTwist";
-  const homepageTitle = settings.homepageTitle?.trim() || "Give Your Words a Different Twist";
+  const homepageTitle =
+    settings.homepageTitle?.trim() || "Give Your Words a Different Twist";
   const siteTitle = `${platformName} | ${homepageTitle}`;
 
   const hasSearch = Boolean(params.q?.trim());
   const hasCategory = Boolean(params.category?.trim());
+  const hasPagination = Math.max(1, Number(params.page || 1) || 1) > 1;
 
   return {
     title: homepageTitle,
@@ -99,7 +106,7 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
         "AI-powered text translators to rewrite text into different styles, tones, and personalities. Give your words a different twist.",
       images: [ogImageUrl],
     },
-    robots: hasSearch
+    robots: hasSearch || hasCategory || hasPagination
       ? {
           index: false,
           follow: true,
@@ -118,103 +125,149 @@ export default async function HomePage({ searchParams }: PageProps) {
   const page = Math.max(1, Number(params.page || 1) || 1);
   const pageSize = settings.discoveryPageSize || DISCOVERY_DEFAULT_PAGE_SIZE;
 
-  const [discovery, newestCatalog, featured, desktopAds, mobileAds] = await Promise.all([
-    withPublicDataFallback(
-      "discovery",
-      getDiscoveryResult({ q, category, page, pageSize }),
-      {
-        translators: [],
-        total: 0,
-        page,
-        pageSize,
-        totalPages: 1,
-        categories: [],
-        q,
-        category,
-      },
-    ),
-    useNewestCatalog
-      ? withPublicDataFallback(
-          "newest translators",
-          getNewestPublicTranslatorsPage({ page, pageSize }),
-          {
-            translators: [],
-            total: 0,
-            page,
-            pageSize,
-            totalPages: 1,
-          },
-        )
-      : Promise.resolve(null),
-    withPublicDataFallback("featured translators", getFeaturedPublicTranslators(6), []),
-    withPublicDataFallback(
-      "desktop ads",
-      getRenderableAdPlacements({
-        pageType: AdPageType.HOMEPAGE,
-        deviceType: AdDeviceType.DESKTOP,
-      }),
-      [],
-    ),
-    withPublicDataFallback(
-      "mobile ads",
-      getRenderableAdPlacements({
-        pageType: AdPageType.HOMEPAGE,
-        deviceType: AdDeviceType.MOBILE,
-      }),
-      [],
-    ),
-  ]);
-  const catalogTranslators = useNewestCatalog && newestCatalog ? newestCatalog.translators : discovery.translators;
-  const catalogTotal = useNewestCatalog && newestCatalog ? newestCatalog.total : discovery.total;
-  const catalogPage = useNewestCatalog && newestCatalog ? newestCatalog.page : discovery.page;
-  const catalogTotalPages = useNewestCatalog && newestCatalog ? newestCatalog.totalPages : discovery.totalPages;
+  const [discovery, newestCatalog, featured, desktopAds, mobileAds] =
+    await Promise.all([
+      withPublicDataFallback(
+        "discovery",
+        getDiscoveryResult({ q, category, page, pageSize }),
+        {
+          translators: [],
+          total: 0,
+          page,
+          pageSize,
+          totalPages: 1,
+          categories: [],
+          q,
+          category,
+        },
+      ),
+      useNewestCatalog
+        ? withPublicDataFallback(
+            "newest translators",
+            getNewestPublicTranslatorsPage({ page, pageSize }),
+            {
+              translators: [],
+              total: 0,
+              page,
+              pageSize,
+              totalPages: 1,
+            },
+          )
+        : Promise.resolve(null),
+      withPublicDataFallback(
+        "featured translators",
+        getFeaturedPublicTranslators(6),
+        [],
+      ),
+      withPublicDataFallback(
+        "desktop ads",
+        getRenderableAdPlacements({
+          pageType: AdPageType.HOMEPAGE,
+          deviceType: AdDeviceType.DESKTOP,
+        }),
+        [],
+      ),
+      withPublicDataFallback(
+        "mobile ads",
+        getRenderableAdPlacements({
+          pageType: AdPageType.HOMEPAGE,
+          deviceType: AdDeviceType.MOBILE,
+        }),
+        [],
+      ),
+    ]);
+  const catalogTranslators =
+    useNewestCatalog && newestCatalog
+      ? newestCatalog.translators
+      : discovery.translators;
+  const catalogTotal =
+    useNewestCatalog && newestCatalog ? newestCatalog.total : discovery.total;
+  const catalogPage =
+    useNewestCatalog && newestCatalog ? newestCatalog.page : discovery.page;
+  const catalogTotalPages =
+    useNewestCatalog && newestCatalog
+      ? newestCatalog.totalPages
+      : discovery.totalPages;
 
   return (
     <div className="relative overflow-x-hidden">
-      <Navbar logoUrl={settings.logoUrl} logoDesktopHeight={settings.logoDesktopHeight} logoMobileHeight={settings.logoMobileHeight} />
+      <Navbar
+        logoUrl={settings.logoUrl}
+        logoDesktopHeight={settings.logoDesktopHeight}
+        logoMobileHeight={settings.logoMobileHeight}
+      />
       <main className="pb-10">
-        <Hero title={settings.homepageTitle} subtitle={settings.homepageSubtitle} />
+        <Hero
+          title={settings.homepageTitle}
+          subtitle={settings.homepageSubtitle}
+        />
 
-        <section id="search-translators" className="mx-auto mt-2 w-full max-w-7xl space-y-4 px-4 sm:px-6 lg:px-8">
+        <section
+          id="search-translators"
+          className="mx-auto mt-2 w-full max-w-7xl space-y-4 px-4 sm:px-6 lg:px-8"
+        >
           <div>
             <p className="section-kicker">Find your flavor</p>
-            <p className="mt-1 text-sm text-muted-ink">{settings.catalogIntro}</p>
+            <p className="text-muted-ink mt-1 text-sm">
+              {settings.catalogIntro}
+            </p>
           </div>
           <div className="min-w-0">
             <DiscoverySearch q={q || ""} category={category} />
           </div>
           <div id="categories">
-            <CategoryNav categories={discovery.categories} activeCategory={category} q={q} />
+            <CategoryNav
+              categories={discovery.categories}
+              activeCategory={category}
+              q={q}
+            />
           </div>
         </section>
 
         {desktopAds.length ? (
           <section className="mx-auto mt-6 w-full max-w-7xl px-4 sm:px-6 lg:px-8">
-            <AdSlot placement={desktopAds[0]} adSenseClientId={settings.adSenseClientId} />
+            <AdSlot
+              placement={desktopAds[0]}
+              adSenseClientId={settings.adSenseClientId}
+            />
           </section>
         ) : null}
 
         {settings.featuredTranslatorsEnabled ? (
-          <FeaturedTranslators translators={featured} sectionId="featured-translators" />
+          <FeaturedTranslators
+            translators={featured}
+            sectionId="featured-translators"
+          />
         ) : null}
 
         {desktopAds.length > 1 ? (
           <section className="mx-auto mt-6 w-full max-w-7xl px-4 sm:px-6 lg:px-8">
-            <AdSlot placement={desktopAds[1]} adSenseClientId={settings.adSenseClientId} />
+            <AdSlot
+              placement={desktopAds[1]}
+              adSenseClientId={settings.adSenseClientId}
+            />
           </section>
         ) : null}
 
-        <section id="translator-catalog" className="mx-auto mt-12 w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+        <section
+          id="translator-catalog"
+          className="mx-auto mt-12 w-full max-w-7xl px-4 sm:px-6 lg:px-8"
+        >
           <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="section-kicker">Pick a voice</p>
-              <h2 className="font-display mt-1 text-3xl font-bold tracking-tight text-ink sm:text-4xl">All translators</h2>
+              <h2 className="font-display text-ink mt-1 text-3xl font-bold tracking-tight sm:text-4xl">
+                All translators
+              </h2>
             </div>
-            <p className="text-sm text-muted-ink">
+            <p className="text-muted-ink text-sm">
               {catalogTotal} result{catalogTotal === 1 ? "" : "s"}
             </p>
           </div>
-          <TranslatorDirectory translators={catalogTranslators} searchQuery={discovery.q} />
+          <TranslatorDirectory
+            translators={catalogTranslators}
+            searchQuery={discovery.q}
+          />
           <div className="mt-6">
             <DiscoveryPagination
               page={catalogPage}
@@ -226,8 +279,11 @@ export default async function HomePage({ searchParams }: PageProps) {
         </section>
 
         {mobileAds.length ? (
-          <section className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-white p-2 md:hidden">
-            <AdSlot placement={mobileAds[0]} adSenseClientId={settings.adSenseClientId} />
+          <section className="mx-auto mt-8 w-full max-w-7xl px-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:px-6 md:hidden">
+            <AdSlot
+              placement={mobileAds[0]}
+              adSenseClientId={settings.adSenseClientId}
+            />
           </section>
         ) : null}
       </main>

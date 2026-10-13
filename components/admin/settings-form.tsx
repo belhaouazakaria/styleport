@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { RefreshCcw, Upload, X } from "lucide-react";
 
@@ -192,9 +193,12 @@ export function SettingsForm({
 
             <div className="flex h-20 items-center justify-center rounded-lg border border-dashed border-border bg-muted-surface">
               {form.logoUrl ? (
-                <img
+                <Image
                   src={form.logoUrl}
                   alt="Logo preview"
+                  width={320}
+                  height={64}
+                  unoptimized
                   className="max-h-16 max-w-full object-contain"
                 />
               ) : (
@@ -251,9 +255,12 @@ export function SettingsForm({
 
             <div className="flex h-20 items-center justify-center rounded-lg border border-dashed border-border bg-muted-surface">
               {form.faviconUrl ? (
-                <img
+                <Image
                   src={form.faviconUrl}
                   alt="Favicon preview"
+                  width={40}
+                  height={40}
+                  unoptimized
                   className="h-10 w-10 object-contain"
                 />
               ) : (

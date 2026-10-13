@@ -1,8 +1,20 @@
 import { GrowthCreativeArchetype, GrowthCreativeDestinationKind, GrowthJobStatus } from "@prisma/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+interface MockCreativeJob {
+  id: string;
+  idempotencyKey: string;
+  status: GrowthJobStatus;
+  growthPinCandidate: { id: string } | null;
+  maxAttempts: number;
+  payload: {
+    visualVariation: number;
+    creativeDirection?: string;
+  };
+}
+
 const mocks = vi.hoisted(() => {
-  const jobs: Array<Record<string, any>> = [];
+  const jobs: MockCreativeJob[] = [];
   return {
     jobs,
     candidate: null as { id: string; templateId: string } | null,

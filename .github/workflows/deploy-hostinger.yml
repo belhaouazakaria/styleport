@@ -16,7 +16,7 @@ jobs:
       APP_BASE_URL: https://translators.example.com
       NEXTAUTH_SECRET: test_nextauth_secret_please_replace
       NEXTAUTH_URL: https://translators.example.com
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/saytwist_ci
       OPENAI_API_KEY: test_key
       OPENAI_MODEL: gpt-4.1-mini
       NEXT_PUBLIC_APP_NAME: SayTwist
@@ -32,8 +32,13 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 20.20.2
           cache: npm
+
+      - name: Verify Node and npm toolchain
+        run: |
+          node -e 'if (process.version !== "v20.20.2") process.exit(1)'
+          npm --version | grep -Fx '10.8.2'
 
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
@@ -50,8 +55,10 @@ jobs:
       - name: Test
         run: npm run test
 
-      - name: Apply Prisma migrations to production database
-        run: npm run prisma:deploy
+      - name: Validate deployment shell
+        run: |
+          bash -n scripts/hostinger-deploy.sh
+          node --check scripts/pm2-process-contract.mjs
 
       - name: Build
         run: npm run build
@@ -64,6 +71,9 @@ jobs:
           set -eu
           test -f node_modules/.prisma/client/libquery_engine-debian-openssl-1.1.x.so.node
           test -f node_modules/.prisma/client/libquery_engine-debian-openssl-3.0.x.so.node
+          test -x node_modules/.bin/tsx
+          test -f node_modules/tsx/dist/cli.mjs
+          node node_modules/tsx/dist/cli.mjs --version
 
       - name: Create deploy bundle
         run: |
@@ -72,19 +82,44 @@ jobs:
             .next \
             public \
             prisma \
+            lib \
+            workers \
             node_modules \
             package.json \
             package-lock.json \
+            ecosystem.config.cjs \
             next.config.ts \
             server.js \
-            next-env.d.ts
+            next-env.d.ts \
+            tsconfig.json
+
+      - name: Verify deploy bundle contents
+        run: |
+          set -eu
+          for entry in \
+            .next/BUILD_ID \
+            public/ \
+            prisma/schema.prisma \
+            lib/translator-editorial-jobs.ts \
+            lib/growth/worker.ts \
+            workers/editorial-worker.ts \
+            workers/growth-worker.ts \
+            node_modules/.bin/tsx \
+            node_modules/tsx/dist/cli.mjs \
+            node_modules/.prisma/client/libquery_engine-debian-openssl-1.1.x.so.node \
+            node_modules/.prisma/client/libquery_engine-debian-openssl-3.0.x.so.node \
+            ecosystem.config.cjs \
+            tsconfig.json \
+            server.js; do
+            tar -tzf release.tar.gz "$entry" >/dev/null
+          done
 
       - name: Upload deploy artifact
         uses: actions/upload-artifact@v4
         with:
-          name: hostinger-release
+          name: hostinger-release-${{ github.sha }}
           path: release.tar.gz
-          retention-days: 1
+          retention-days: 14
 
   deploy:
     name: Production Deploy
@@ -100,7 +135,7 @@ jobs:
       - name: Download deploy artifact
         uses: actions/download-artifact@v4
         with:
-          name: hostinger-release
+          name: hostinger-release-${{ github.sha }}
           path: .
 
       - name: Validate deploy configuration
@@ -110,6 +145,7 @@ jobs:
           SSH_PORT: ${{ secrets.HOSTINGER_SSH_PORT || vars.HOSTINGER_SSH_PORT }}
           SSH_KEY: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
           APP_PATH: ${{ secrets.HOSTINGER_APP_PATH || vars.HOSTINGER_APP_PATH }}
+          PM2_CLI: ${{ secrets.HOSTINGER_PM2_CLI || vars.HOSTINGER_PM2_CLI }}
         run: |
           set -eu
           missing=""
@@ -118,6 +154,7 @@ jobs:
           [ -n "$SSH_PORT" ] || missing="$missing HOSTINGER_SSH_PORT"
           [ -n "$SSH_KEY" ] || missing="$missing HOSTINGER_SSH_PRIVATE_KEY"
           [ -n "$APP_PATH" ] || missing="$missing HOSTINGER_APP_PATH"
+          [ -n "$PM2_CLI" ] || missing="$missing HOSTINGER_PM2_CLI"
           if [ -n "$missing" ]; then
             echo "::error::Missing deploy configuration:$missing"
             exit 1
@@ -131,12 +168,14 @@ jobs:
           key: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
           port: ${{ secrets.HOSTINGER_SSH_PORT || vars.HOSTINGER_SSH_PORT }}
           source: >-
-            release.tar.gz,scripts/hostinger-deploy.sh
+            release.tar.gz,scripts/hostinger-deploy.sh,scripts/pm2-process-contract.mjs
           target: ${{ secrets.HOSTINGER_APP_PATH || vars.HOSTINGER_APP_PATH }}
           overwrite: true
 
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.2.0
+        env:
+          PM2_CLI: ${{ secrets.HOSTINGER_PM2_CLI || vars.HOSTINGER_PM2_CLI }}
         with:
           host: ${{ secrets.HOSTINGER_SSH_HOST || vars.HOSTINGER_SSH_HOST }}
           username: ${{ secrets.HOSTINGER_SSH_USER || vars.HOSTINGER_SSH_USER }}
@@ -144,14 +183,21 @@ jobs:
           port: ${{ secrets.HOSTINGER_SSH_PORT || vars.HOSTINGER_SSH_PORT }}
           script_stop: true
           command_timeout: 40m
+          envs: PM2_CLI
           script: |
             set -eu
-            cd ${{ secrets.HOSTINGER_APP_PATH || vars.HOSTINGER_APP_PATH }}
+            cd "${{ secrets.HOSTINGER_APP_PATH || vars.HOSTINGER_APP_PATH }}"
             echo "[gha][ssh] pwd=$(pwd)"
-            echo "[gha][ssh] listing current directory"
-            ls -la
-            echo "[gha][ssh] listing scripts directory"
-            ls -la scripts || true
             command -v bash >/dev/null 2>&1 || { echo "[gha][ssh][error] bash not found"; exit 1; }
             chmod +x ./scripts/hostinger-deploy.sh
-            HOSTINGER_DEPLOY_DEBUG=1 HOSTINGER_DEPLOY_ARCHIVE="${{ secrets.HOSTINGER_APP_PATH || vars.HOSTINGER_APP_PATH }}/release.tar.gz" bash ./scripts/hostinger-deploy.sh
+            HOSTINGER_NODE_BIN="/home/saytwist/.nvm/versions/node/v24.20.0/bin" \
+              HOSTINGER_PM2_PROCESS="saytwist" \
+              HOSTINGER_PM2_CLI="$PM2_CLI" \
+              HOSTINGER_PM2_HOME="/home/saytwist/.pm2" \
+              HOSTINGER_EXPECTED_PM2_VERSION="7.0.4" \
+              HOSTINGER_EXPECTED_PORT="3001" \
+              HOSTINGER_ENV_FILE="${{ secrets.HOSTINGER_APP_PATH || vars.HOSTINGER_APP_PATH }}/.env" \
+              HOSTINGER_EXPECT_NO_PENDING_MIGRATIONS="1" \
+              HOSTINGER_RELEASE_SHA="${{ github.sha }}" \
+              HOSTINGER_DEPLOY_ARCHIVE="${{ secrets.HOSTINGER_APP_PATH || vars.HOSTINGER_APP_PATH }}/release.tar.gz" \
+              bash ./scripts/hostinger-deploy.sh

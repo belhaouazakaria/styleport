@@ -70,14 +70,15 @@ function TranslatorTargetPicker({ initialOptions, targetId, onSelect }: { initia
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const selected = options.find((item) => item.id === targetId) || initialSelection;
+  const normalizedQuery = query.trim();
+  const visibleOptions = normalizedQuery
+    ? normalizedQuery.length >= 2 ? options : []
+    : initialOptions;
+  const searchInProgress = open && normalizedQuery.length >= 2 && loading;
 
   useEffect(() => {
     const normalized = query.trim();
-    if (!open || normalized.length < 2) {
-      if (!normalized) setOptions(initialOptions);
-      setLoading(false);
-      return;
-    }
+    if (!open || normalized.length < 2) return;
     const controller = new AbortController();
     const timer = window.setTimeout(async () => {
       setLoading(true);
@@ -99,8 +100,8 @@ function TranslatorTargetPicker({ initialOptions, targetId, onSelect }: { initia
   return <div className="relative max-w-2xl">
     <label htmlFor={`${listId}-input`} className="block text-sm font-extrabold text-ink">2. Find an active Translator</label>
     <p className="mt-1 text-xs leading-5 text-muted-ink">Search by name or slug. Results include every active, non-archived Translator.</p>
-    <div className="relative mt-2"><Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-ink" aria-hidden="true" /><input id={`${listId}-input`} role="combobox" aria-autocomplete="list" aria-expanded={open} aria-controls={`${listId}-list`} autoComplete="off" value={query} onFocus={() => setOpen(true)} onBlur={() => window.setTimeout(() => setOpen(false), 150)} onChange={(event) => { setQuery(event.target.value); onSelect(""); setOpen(true); }} placeholder="Search active Translators…" className={`${fieldClass} mt-0 pl-10 pr-12`} />{loading ? <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-brand-700">Searching…</span> : null}</div>
-    {open ? <div id={`${listId}-list`} role="listbox" className="absolute z-30 mt-2 max-h-72 w-full overflow-y-auto rounded-2xl border border-border bg-white p-1.5 shadow-[0_20px_55px_-28px_rgba(15,23,42,0.4)]">{options.length ? options.map((item) => <button key={item.id} type="button" role="option" aria-selected={item.id === targetId} onMouseDown={(event) => event.preventDefault()} onClick={() => { onSelect(item.id); setQuery(item.name); setOpen(false); }} className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-brand-50"><span className="min-w-0"><span className="block truncate text-sm font-bold text-ink">{item.name}</span><span className="block truncate text-xs text-muted-ink">/translators/{item.slug}</span></span>{item.id === targetId ? <Check className="h-4 w-4 shrink-0 text-brand-600" aria-hidden="true" /> : null}</button>) : <p className="px-3 py-5 text-center text-sm text-muted-ink">{query.trim().length < 2 ? "Type at least two characters to search." : loading ? "Searching active Translators…" : "No active Translators matched that search."}</p>}</div> : null}
+    <div className="relative mt-2"><Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-ink" aria-hidden="true" /><input id={`${listId}-input`} role="combobox" aria-autocomplete="list" aria-expanded={open} aria-controls={`${listId}-list`} autoComplete="off" value={query} onFocus={() => setOpen(true)} onBlur={() => window.setTimeout(() => setOpen(false), 150)} onChange={(event) => { setQuery(event.target.value); onSelect(""); setOpen(true); }} placeholder="Search active Translators…" className={`${fieldClass} mt-0 pl-10 pr-12`} />{searchInProgress ? <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-brand-700">Searching…</span> : null}</div>
+    {open ? <div id={`${listId}-list`} role="listbox" className="absolute z-30 mt-2 max-h-72 w-full overflow-y-auto rounded-2xl border border-border bg-white p-1.5 shadow-[0_20px_55px_-28px_rgba(15,23,42,0.4)]">{visibleOptions.length ? visibleOptions.map((item) => <button key={item.id} type="button" role="option" aria-selected={item.id === targetId} onMouseDown={(event) => event.preventDefault()} onClick={() => { onSelect(item.id); setQuery(item.name); setOpen(false); }} className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-brand-50"><span className="min-w-0"><span className="block truncate text-sm font-bold text-ink">{item.name}</span><span className="block truncate text-xs text-muted-ink">/translators/{item.slug}</span></span>{item.id === targetId ? <Check className="h-4 w-4 shrink-0 text-brand-600" aria-hidden="true" /> : null}</button>) : <p className="px-3 py-5 text-center text-sm text-muted-ink">{normalizedQuery.length < 2 ? "Type at least two characters to search." : searchInProgress ? "Searching active Translators…" : "No active Translators matched that search."}</p>}</div> : null}
     {selected && targetId ? <div className="mt-3 flex items-center gap-3 rounded-xl border border-brand-200 bg-brand-50 px-3.5 py-3"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-500 text-white"><Check className="h-4 w-4" aria-hidden="true" /></span><span className="min-w-0"><span className="block text-xs font-bold uppercase tracking-wide text-brand-800">Selected Translator</span><span className="block truncate text-sm font-bold text-ink">{selected.name} <span className="font-normal text-muted-ink">· /{selected.slug}</span></span></span></div> : <p className="mt-2 text-xs font-semibold text-amber-800">Choose a Translator from the search results to continue.</p>}
   </div>;
 }
@@ -215,8 +216,7 @@ export function PinApprovalPanel({ candidateId, accounts, existing }: { candidat
   const account = accounts.find((item) => item.id === accountId);
   const [boardId, setBoardId] = useState(initialBoardId);
   const [scheduledAt, setScheduledAt] = useState("");
-  const [recommendation, setRecommendation] = useState("");
-  const [recommendationLoading, setRecommendationLoading] = useState(false);
+  const [recommendationResult, setRecommendationResult] = useState<{ key: string; text: string } | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -224,24 +224,26 @@ export function PinApprovalPanel({ candidateId, accounts, existing }: { candidat
   const [reapproving, setReapproving] = useState(false);
   const recoverable = existing?.publicationStatus === "FAILED_TERMINAL" || existing?.publicationStatus === "CANCELLED";
   const showApprovalForm = !existing || (recoverable && reapproving);
+  const recommendationKey = showApprovalForm && accountId ? `${candidateId}:${accountId}` : null;
+  const recommendation = recommendationResult?.key === recommendationKey ? recommendationResult.text : "";
+  const recommendationLoading = Boolean(recommendationKey && recommendationResult?.key !== recommendationKey);
 
   useEffect(() => {
-    if (!accountId || !showApprovalForm) return;
+    if (!accountId || !showApprovalForm || !recommendationKey) return;
     const controller = new AbortController();
-    setRecommendationLoading(true); setRecommendation("");
     fetch(`/api/admin/growth/creative/timing?candidateId=${encodeURIComponent(candidateId)}&accountId=${encodeURIComponent(accountId)}`, { signal: controller.signal })
       .then((response) => response.json().then((payload) => ({ response, payload })))
       .then(({ response, payload }) => {
         if (!response.ok || !payload?.data?.scheduledAt) throw new Error(payload?.error?.message || "Could not load a recommended publishing time.");
         const date = new Date(payload.data.scheduledAt);
         const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
-        setScheduledAt(local); setRecommendation(`${date.toLocaleString()} · ${String(payload.data.mode).replaceAll("_", " ").toLowerCase()} · America/New_York model`); setRecommendationLoading(false);
+        setScheduledAt(local); setRecommendationResult({ key: recommendationKey, text: `${date.toLocaleString()} · ${String(payload.data.mode).replaceAll("_", " ").toLowerCase()} · America/New_York model` });
       }).catch((error) => {
         if (error instanceof DOMException && error.name === "AbortError") return;
-        setRecommendationLoading(false); setRecommendation(""); setMessageKind("error"); setMessage(error instanceof Error ? error.message : "Could not load a recommended publishing time.");
+        setRecommendationResult({ key: recommendationKey, text: "" }); setMessageKind("error"); setMessage(error instanceof Error ? error.message : "Could not load a recommended publishing time.");
       });
     return () => controller.abort();
-  }, [accountId, candidateId, showApprovalForm]);
+  }, [accountId, candidateId, recommendationKey, showApprovalForm]);
 
   return <div className="mt-4 space-y-4">
     {existing ? <div className={`rounded-xl border p-4 ${recoverable ? "border-amber-300 bg-amber-50" : "border-brand-200 bg-brand-50"}`}>
@@ -250,7 +252,7 @@ export function PinApprovalPanel({ candidateId, accounts, existing }: { candidat
       <p className="mt-1 text-xs text-muted-ink">{[existing.account, existing.board, existing.scheduledAt ? new Date(existing.scheduledAt).toLocaleString() : null].filter(Boolean).join(" · ")}</p>
       {existing.lastErrorSummary || existing.lastErrorCode ? <p className="mt-3 rounded-lg border border-red-200 bg-white/70 px-3 py-2 text-xs leading-5 text-red-900"><strong>{existing.lastErrorCode ? `${existing.lastErrorCode.replaceAll("_", " ")}: ` : ""}</strong>{existing.lastErrorSummary || "The publication ended without a retryable result."}</p> : null}
       {existing.publicationId && ["SCHEDULED", "FAILED_RETRYABLE"].includes(existing.publicationStatus || "") ? <button type="button" disabled={busy} onClick={async () => { setBusy(true); setMessage(""); try { await post("/api/admin/growth/creative/cancel", { publicationId: existing.publicationId }); setMessageKind("success"); setMessage("Publication cancelled."); router.refresh(); } catch (error) { setMessageKind("error"); setMessage(error instanceof Error ? error.message : "Cancellation failed."); } finally { setBusy(false); } }} className="mt-3 text-xs font-bold text-red-700 underline">Cancel scheduled publication</button> : null}
-      {recoverable && !reapproving ? <button type="button" onClick={() => { setConfirmed(false); setScheduledAt(""); setRecommendation(""); setMessage(""); setReapproving(true); }} className="mt-3 rounded-full bg-brand-600 px-4 py-2 text-xs font-bold text-white">Approve again</button> : null}
+      {recoverable && !reapproving ? <button type="button" onClick={() => { setConfirmed(false); setScheduledAt(""); setRecommendationResult(null); setMessage(""); setReapproving(true); }} className="mt-3 rounded-full bg-brand-600 px-4 py-2 text-xs font-bold text-white">Approve again</button> : null}
     </div> : null}
 
     {showApprovalForm && !accounts.length ? <p className="rounded-xl bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-900">Connect a Pinterest account with Pins write access and an active board before approval.</p> : null}
