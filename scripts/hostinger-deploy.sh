@@ -198,7 +198,17 @@ validate_staging_layout() {
   ensure_directory_exists "$STAGING_DIR/.next"
   ensure_directory_exists "$STAGING_DIR/node_modules"
   ensure_directory_exists "$STAGING_DIR/public"
+  ensure_directory_exists "$STAGING_DIR/prisma"
+  ensure_directory_exists "$STAGING_DIR/lib"
+  ensure_directory_exists "$STAGING_DIR/workers"
   ensure_file_exists "$STAGING_DIR/server.js"
+  ensure_file_exists "$STAGING_DIR/ecosystem.config.cjs"
+  ensure_file_exists "$STAGING_DIR/tsconfig.json"
+  ensure_file_exists "$STAGING_DIR/workers/editorial-worker.ts"
+  ensure_file_exists "$STAGING_DIR/workers/growth-worker.ts"
+  ensure_file_exists "$STAGING_DIR/node_modules/tsx/dist/cli.mjs"
+  ensure_file_exists "$STAGING_DIR/node_modules/.prisma/client/libquery_engine-debian-openssl-1.1.x.so.node"
+  ensure_file_exists "$STAGING_DIR/node_modules/.prisma/client/libquery_engine-debian-openssl-3.0.x.so.node"
 }
 
 preserve_generated_assets() {

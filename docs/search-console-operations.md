@@ -14,6 +14,15 @@ The three states are intentionally separate:
 
 Moving from the deployed sitemap rule to the proposed rule can remove URLs from the sitemap even when their robots metadata was already `noindex`. That production URL set must be measured before release approval. Do not infer production impact from local database counts, automatically index thin content, or mass-apply `noindex`.
 
+The production report reviewed and approved on 2026-10-13 found:
+
+- 355 active public translator URLs under the deployed baseline;
+- 355 URLs under `newVersionIndexable`;
+- zero deployed-to-new sitemap removals or gains;
+- zero public robots metadata changes.
+
+This approves the proposed technical-completeness rollout for those 355 URLs. It does not approve `strictReviewIndexable`; strict human-review enforcement remains disabled and requires a new report and approval before any future activation.
+
 Run the exact report against a database credential that is independently restricted to production reads:
 
 ```bash
@@ -24,7 +33,7 @@ SEO_IMPACT_BASE_URL=https://saytwist.com \
 npm run --silent seo:report-indexing-impact > indexing-impact.json
 ```
 
-The script also starts a PostgreSQL transaction and sets it to `READ ONLY` before querying. Its JSON contains totals for all three states, exact deployed-to-new losses and gains, additional strict-review losses, stable reason codes, reason aggregates, and explicit sitemap/robots change booleans. Review the complete JSON and record an approval decision before deploying. The release is blocked until then. Do not enable strict enforcement, delete content, edit editorial records, or make a bulk `noindex` change from aggregate counts alone.
+The script also starts a PostgreSQL transaction and sets it to `READ ONLY` before querying. Its JSON contains totals for all three states, exact deployed-to-new losses and gains, additional strict-review losses, stable reason codes, reason aggregates, and explicit sitemap/robots change booleans. Preserve the approved report with the release record. Do not enable strict enforcement, delete content, edit editorial records, or make a bulk `noindex` change from aggregate counts alone.
 
 ## Read-only production verification
 

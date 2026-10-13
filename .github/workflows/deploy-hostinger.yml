@@ -50,9 +50,6 @@ jobs:
       - name: Test
         run: npm run test
 
-      - name: Apply Prisma migrations to production database
-        run: npm run prisma:deploy
-
       - name: Build
         run: npm run build
 
@@ -64,6 +61,9 @@ jobs:
           set -eu
           test -f node_modules/.prisma/client/libquery_engine-debian-openssl-1.1.x.so.node
           test -f node_modules/.prisma/client/libquery_engine-debian-openssl-3.0.x.so.node
+          test -x node_modules/.bin/tsx
+          test -f node_modules/tsx/dist/cli.mjs
+          node node_modules/tsx/dist/cli.mjs --version
 
       - name: Create deploy bundle
         run: |
@@ -72,19 +72,44 @@ jobs:
             .next \
             public \
             prisma \
+            lib \
+            workers \
             node_modules \
             package.json \
             package-lock.json \
+            ecosystem.config.cjs \
             next.config.ts \
             server.js \
-            next-env.d.ts
+            next-env.d.ts \
+            tsconfig.json
+
+      - name: Verify deploy bundle contents
+        run: |
+          set -eu
+          for entry in \
+            .next/BUILD_ID \
+            public/ \
+            prisma/schema.prisma \
+            lib/translator-editorial-jobs.ts \
+            lib/growth/worker.ts \
+            workers/editorial-worker.ts \
+            workers/growth-worker.ts \
+            node_modules/.bin/tsx \
+            node_modules/tsx/dist/cli.mjs \
+            node_modules/.prisma/client/libquery_engine-debian-openssl-1.1.x.so.node \
+            node_modules/.prisma/client/libquery_engine-debian-openssl-3.0.x.so.node \
+            ecosystem.config.cjs \
+            tsconfig.json \
+            server.js; do
+            tar -tzf release.tar.gz "$entry" >/dev/null
+          done
 
       - name: Upload deploy artifact
         uses: actions/upload-artifact@v4
         with:
-          name: hostinger-release
+          name: hostinger-release-${{ github.sha }}
           path: release.tar.gz
-          retention-days: 1
+          retention-days: 14
 
   deploy:
     name: Production Deploy
@@ -97,10 +122,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 20
+
       - name: Download deploy artifact
         uses: actions/download-artifact@v4
         with:
-          name: hostinger-release
+          name: hostinger-release-${{ github.sha }}
           path: .
 
       - name: Validate deploy configuration
@@ -122,6 +152,18 @@ jobs:
             echo "::error::Missing deploy configuration:$missing"
             exit 1
           fi
+
+      - name: Apply approved production migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          set -eu
+          test -n "$DATABASE_URL" || { echo "::error::Missing DATABASE_URL"; exit 1; }
+          migration_dir="$(mktemp -d)"
+          trap 'rm -rf "$migration_dir"' EXIT
+          tar -xzf release.tar.gz -C "$migration_dir"
+          cd "$migration_dir"
+          node node_modules/prisma/build/index.js migrate deploy
 
       - name: Upload application files to Hostinger
         uses: appleboy/scp-action@v1.0.0

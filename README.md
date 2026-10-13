@@ -83,11 +83,13 @@ SayTwist does not use the Google Indexing API or any automatic submission servic
 - Use **URL Inspection** for representative homepage, translator, and Idea URLs. Confirm the live test returns HTTP 200, allows crawling, exposes the production canonical, and does not emit `noindex` before requesting indexing.
 - Run `SEO_VERIFY_DEPLOYED_VERSION=<actual-deployed-release> npm run --silent seo:verify-production` for a read-only live crawlability check. The required version label prevents old production responses from being presented as evidence that this branch is deployed. It never submits or modifies content.
 
-The release remains blocked until the production database impact report is generated through a read-only connection and every URL transition is reviewed. The report distinguishes the existing deployed sitemap rule, this branch's proposed technical-completeness rule, and the disabled future strict human-review rule. Do not deploy a sitemap-removal change from local counts.
+The read-only production impact report was approved on 2026-10-13: all 355 existing translator URLs remain eligible under the proposed rule, with zero sitemap removals and zero robots metadata changes. Strict human-review enforcement remains disabled. Any future eligibility-policy change requires a new production report and approval.
 
 Google decides whether and when an eligible URL is indexed; sitemap presence is not an indexing guarantee.
 
 See `docs/search-console-operations.md` for the eligibility contract, safe production impact report, live verification, sitemap submission, and URL Inspection checklist.
+
+See `docs/production-release-runbook.md` for validation, artifact, migration, deployment, verification, and rollback procedures.
 
 ---
 

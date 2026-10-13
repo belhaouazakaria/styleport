@@ -18,13 +18,13 @@ The redirect uses explicit `statusCode: 301`. The former `public/ads.txt` was re
 
 The Google Indexing API removal does not affect this redirect or Ezoic. Search discovery now uses Search Console and `sitemap.xml`; ads.txt remains a separate advertising authorization concern.
 
-Ezoic's managed endpoint was checked on 2026-10-12. It returned HTTP 200, `text/plain`, `ownerdomain=saytwist.com`, an Ezoic manager declaration, and seller records. It did **not** contain the existing SayTwist AdSense authorization:
+Ezoic's managed endpoint was checked on 2026-10-12. It returned HTTP 200, `text/plain`, `ownerdomain=saytwist.com`, an Ezoic manager declaration, and seller records. The operator confirmed on 2026-10-13 that the existing SayTwist AdSense authorization is now present:
 
 ```text
 google.com, pub-7927856375186557, DIRECT, f08c47fec0942fa0
 ```
 
-This is an account-side blocker. Add or import that authorization in Ezoic Ads.txt Manager if the AdSense account should remain authorized. Do not copy a second seller list into the repository.
+The account-side seller-authorization blocker is resolved. Do not copy a second seller list into the repository; preserve the managed redirect and recheck the live response during deployment validation.
 
 ## Deployment validation
 
@@ -43,7 +43,7 @@ The first command must show a `301` response and this exact `Location`:
 https://srv.adstxtmanager.com/19390/saytwist.com
 ```
 
-The second must follow the redirect and return meaningful authorized seller records. The third must succeed before claiming the existing AdSense account remains represented. At implementation time, the third check fails against the managed endpoint and must be resolved in the Ezoic dashboard before production sign-off.
+The second must follow the redirect and return meaningful authorized seller records. The third must succeed during production smoke testing to confirm the operator-approved account state is still being served.
 
 If a CDN or Hostinger proxy serves `/ads.txt` before requests reach Next.js, configure the same exact redirect at that outer layer or remove the conflicting rule. Do not create a redirect at both layers if it produces a loop. Clear caches, repeat the commands above, and verify an unrelated path does not redirect to AdsTxtManager.
 

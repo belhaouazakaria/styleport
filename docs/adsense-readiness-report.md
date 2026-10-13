@@ -24,7 +24,7 @@ The most credible root-cause hypothesis remains site-wide perceived value rather
 | Google Indexing API was wired to CRUD activation plus manual/bulk admin submissions.             | Verified in data functions, admin routes/UI, credentials, and environment examples.                  | Removed completely. Search Console and the XML sitemap are the only discovery/monitoring mechanisms. Historical log schema and records remain intact.               |
 | Deployed sitemap includes active translators even when page metadata says `noindex`.             | Verified against the pre-feature implementation of `getIndexableTranslatorSlugsForSitemap`.          | The branch proposes one metadata/sitemap contract, but release is blocked until the production URL-level removal impact is reviewed.                                 |
 | Existing mobile ad placement was fixed at the viewport bottom.                                  | Verified in homepage source.                                                                         | Fixed: placement remains available but is now in normal content flow. No ads were added or removed.                                                                 |
-| Ezoic managed ads.txt was not configured.                                                       | `public/ads.txt` directly served one Google line.                                                    | Fixed in app: exact `/ads.txt` HTTP 301 to AdsTxtManager; static conflict removed. Account-side AdSense seller inventory remains unresolved.                        |
+| Ezoic managed ads.txt was not configured.                                                       | `public/ads.txt` directly served one Google line.                                                    | Fixed in app: exact `/ads.txt` HTTP 301 to AdsTxtManager; static conflict removed. The operator confirmed the AdSense seller authorization on 2026-10-13.          |
 
 ## Exact mobile translation behavior
 
@@ -78,7 +78,7 @@ Proposed branch behavior and deployed baseline:
 - Search, category-filter, and page-2+ parameter pages are `noindex,follow` and canonicalize to their stable directory route.
 - Public Ideas require published state and a current published version.
 - Trust pages and the Ideas directory are indexable static routes.
-The strict reviewed-version switch remains deliberately unapplied. Local counts are not production evidence and are intentionally not used for release approval. Production database access was not used during implementation, so the release remains blocked until the report is run with a read-only production credential and its full URL-level output is reviewed.
+The production impact report was reviewed and approved on 2026-10-13. It found 355 deployed-baseline translator URLs, 355 proposed-rule URLs, zero sitemap removals or gains, and zero public robots metadata changes. Strict reviewed-version enforcement remains deliberately disabled and was not approved by this decision.
 
 The live read-only HTTP verification on 2026-10-12 found 363 sitemap URLs (8 static, 355 translators, 0 Ideas), HTTP 200 for robots and sitemap, and no status/canonical/noindex errors among sitemap entries. The `www` host returns the expected 301, the singular legacy `translator.whattypeof.com` host returns the expected 308, and missing translator pages return 404. The plural legacy `translators.whattypeof.com` host did not resolve in DNS; its redirect rule remains preserved in source, but DNS must be restored if that hostname still needs to redirect. These observations describe the currently deployed site, not this undeployed branch.
 
@@ -88,7 +88,7 @@ No translators, Ideas, comments, or other user content were deleted. No bulk `no
 
 1. Complete and human-review the four local/production-priority translator pages with distinct examples and honest limitations.
 2. Export the production translator and Ideas URL inventory. Record exact quality/indexation decisions per URL before changing the sitemap.
-3. Review the Ezoic managed file and add/verify the existing AdSense seller authorization before deployment sign-off.
+3. Recheck the operator-confirmed Ezoic seller authorization during post-deployment smoke testing.
 4. Validate production content-to-ad balance after editorial improvements; keep ads after meaningful content and avoid viewport-obstructing placements.
 5. Review Search Console indexing/coverage, canonical selection, crawl errors, and top landing pages; fix broken/inaccessible public content.
 6. Re-run mobile, accessibility, metadata, sitemap, ads.txt, and trust-page checks in production.
@@ -108,9 +108,9 @@ No translators, Ideas, comments, or other user content were deleted. No bulk `no
 
 ## Remaining risks and blockers
 
-- Production content was not queried or changed. Release approval for the proposed sitemap policy and any future strict-review enforcement remains blocked on the production URL-level impact report.
+- The proposed sitemap policy is approved for the reviewed 355-URL production set. Any future strict-review enforcement remains blocked on a new production URL-level impact report and explicit approval.
 - Local Ideas inventory is unavailable because the local DB lacks the Growth Ideas migration.
-- The managed Ezoic file currently omits `google.com, pub-7927856375186557, DIRECT, f08c47fec0942fa0`.
+- The operator confirmed the managed Ezoic file contains the required seller authorization on 2026-10-13; the live redirected response must still be checked after deployment.
 - Repository-wide baseline QA failures are tracked separately from feature regressions; see the final QA record after the full rerun.
 - A real mobile software keyboard and successful live AI response were unavailable during local browser QA. The in-flow layout, focus, error state, and successful-result component behavior were tested separately.
 
@@ -121,8 +121,8 @@ No translators, Ideas, comments, or other user content were deleted. No bulk `no
 - Desktop rendered check at 1440px: navigation, hero, search, categories, featured discovery, and translator two-column layout.
 - TypeScript: pass after regenerating Next route types.
 - Production build: pass. Existing warnings cover Edge runtime deprecation, dynamic filesystem tracing, and a missing local `GrowthIdea` table during sitemap generation; sitemap gracefully continued.
-- Focused regressions: 24 passed for indexing eligibility and comparisons, sitemap/robots timestamps, translator card/Pinterest flow, and ads.txt.
-- Full Vitest: 363 passed, 142 skipped, 1 failed in the pre-existing Growth Ideas handler payload fixture.
-- Full ESLint: 8 errors and 5 warnings. The error-bearing files and failing Growth Ideas test/handler have byte-identical Git blob hashes to latest `origin/main`; changed-file ESLint passes.
+- Focused release regressions: 36 passed across indexing eligibility/comparisons, sitemap/robots timestamps, translator-card sharing, Pinterest configuration/API/publishing handlers, and ads.txt.
+- Full Vitest: 365 passed and 142 skipped, with no failures. The stale Growth Ideas handler fixture now imports the active version constant instead of hard-coding the superseded v1 identifier.
+- Full ESLint: pass with no errors or warnings. Effect-driven derived state, test mock types, image components, and unused bindings were corrected without disabling rules.
 - Historical production SEO check against the previously deployed site: all 363 live sitemap URLs passed status, canonical, and noindex consistency checks; robots and sitemap returned 200; a deliberately missing translator returned 404; `www` returned 301; and singular `translator.whattypeof.com` returned 308. Plural `translators.whattypeof.com` failed DNS resolution. This is evidence about the old deployed version only, not evidence that this branch is deployed.
 - Visual QA limitation: live translation returned the existing generic API error locally, so successful-result visual state relied on passing component tests rather than a live model response.
