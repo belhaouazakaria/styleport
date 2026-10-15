@@ -308,3 +308,9 @@ Provider usage aggregates metadata across the initial generation and at most one
 The two exact same-origin POST actions may enqueue one strict `CREATIVE_LAB_GENERATE` job or create one bounded DRAFT experiment. They accept no arbitrary copy, HTML, path, renderer code, provider prompt, outcome, approval, schedule, or publication state. The page provides no approval or Pinterest action.
 
 Deterministic and reused assets have no AI charge. Full-image AI generation is wired in production through the configured model and remains capped at one image unit per job. The reserved boundary is capped at one image unit per job. The asset records bounded provider/model/response metadata, `aiImageUnits=1`, and estimated cost only when the provider supplied it. Unknown cost remains `NULL` and appears as cost unknown. Phase 13 still owns a complete spend ledger, aggregation, budget controls, and reports.
+
+## Phase 12 learning administration
+
+The main Growth settings form exposes the evergreen cooldown as a bounded 14–180-day ADMIN setting (45 days by default); changes use the existing strict same-origin settings route and activity audit.
+
+`/admin/growth/learning` shows the latest run freshness/model versions, `REVIVE`/`WAIT`/`SKIP`/`INSUFFICIENT_DATA` recommendations with confidence and reasons, exposure-normalized performance comparisons, versioned opportunity feedback proposals, account-specific learned windows, and experiment findings including explicit inconclusive states. Actions are explicit evaluation, creative preparation, and audited start/pause/resume/request-analysis/finalize experiment transitions. Preparation can incur the normal Creative Lab image cost only after server-side revalidation; none of these actions approves or publishes. Experiment start requires READY materially distinct variants, and finalization requires a retained post-request evaluation. Phase 12 adds no paid provider or complete cost ledger.

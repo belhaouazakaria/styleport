@@ -11,6 +11,7 @@ import {
 import { recordGrowthActivity } from "@/lib/growth/activity";
 import { DEFAULT_OWNED_PINTEREST_DOMAINS, reclassifyPinterestPins } from "@/lib/growth/pinterest/relevance";
 import { prisma } from "@/lib/prisma";
+import { DEFAULT_EVERGREEN_COOLDOWN_DAYS } from "@/lib/growth/learning/constants";
 
 export const defaultGrowthSettings = {
   id: GROWTH_SETTINGS_ID,
@@ -22,6 +23,7 @@ export const defaultGrowthSettings = {
   attributionWindowDays: DEFAULT_ATTRIBUTION_WINDOW_DAYS,
   attributionSessionRetentionDays: DEFAULT_ATTRIBUTION_SESSION_RETENTION_DAYS,
   attributionEventRetentionDays: DEFAULT_ATTRIBUTION_EVENT_RETENTION_DAYS,
+  evergreenCooldownDays: DEFAULT_EVERGREEN_COOLDOWN_DAYS,
   configVersion: 1,
   updatedById: null,
   createdAt: null,
@@ -70,6 +72,7 @@ export async function updateGrowthSettings(input: GrowthSettingsInput, updatedBy
           attributionWindowDays: settings.attributionWindowDays,
           attributionSessionRetentionDays: settings.attributionSessionRetentionDays,
           attributionEventRetentionDays: settings.attributionEventRetentionDays,
+          evergreenCooldownDays: settings.evergreenCooldownDays,
           configVersion: settings.configVersion,
         },
         correlationKey: `growth-settings:${settings.configVersion}`,

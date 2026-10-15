@@ -305,7 +305,7 @@ The ADMIN UI and same-origin routes may enqueue one bounded `CREATIVE_LAB_GENERA
 
 ## D-035 — Phase 11 requires immutable individual approval and reconciliation instead of blind Create Pin retry
 
-**Status:** Accepted and production deployed; successful live publication remains unvalidated
+**Status:** Accepted, production deployed, and live publication validated
 
 Every Pin requires explicit ADMIN approval of the exact candidate revision, asset, copy, destination, account, board and time. The canonical approved snapshot and SHA-256 checksum are immutable; no score, schedule, worker, experiment, connected account or READY state can create approval automatically. A future `pinterest_organic_v1` ref is issued before publication even while attribution collection is disabled.
 
@@ -314,3 +314,17 @@ Every Pin requires explicit ADMIN approval of the exact candidate revision, asse
 Two live Create Pin attempts ended terminally with HTTP 401. Account identity and board reads succeeded, but the OAuth grant omitted `boards:write`, which Pinterest documents among Create Pin scopes. Missing scope is the leading suspected cause, not a proven diagnosis: the deployed adapter discarded provider error detail, so the retained failures cannot establish whether Pinterest rejected the scope set, credential, app access or another authorization condition. Both failed publications and jobs remain immutable history.
 
 OAuth now requests and verifies `boards:write` with every required Create Pin scope. A `FAILED_TERMINAL` or `CANCELLED` publication and its job remain immutable history. Recovery is another explicit per-Pin approval for a future time. Under the candidate approval lock, duplicate requests for an active publication remain idempotent, while recovery supersedes the previous approval status and creates new approval, publication, attribution reference, idempotency key and publish job records. It never resets or reuses a failed job, and ambiguity reconciliation behavior is unchanged. Safe bounded Pinterest error code/message evidence distinguishes invalid credentials, insufficient scope and other authorization rejection without retaining provider bodies, tokens or personal data.
+
+After the operator confirmed Standard Access and a complete grant, a specifically approved real Pin published through Creative Lab, appeared on Pinterest, resolved to the intended destination, and reached `RECONCILED`. This validates the direct-success path: the publish job may atomically persist `PUBLISHED` and then `RECONCILED`; a separate reconciliation job is only for ambiguous outcomes. The earlier HTTP 401 evidence remains unchanged.
+
+## D-036 — Phase 12 learning remains evidence-versioned and advisory
+
+The evergreen cooldown is an audited `GrowthSettings.evergreenCooldownDays` value bounded to 14–180 days and defaulting to 45. Evaluation reads this setting; the learning model never adjusts it autonomously.
+
+**Status:** Accepted and implemented on branch; deployment validation pending
+
+Use `growth_learning_v1`, `evergreen_learning_v1`, `learned_scheduler_v1`, `experiment_learning_v1`, and `opportunity_feedback_v1`. One immutable daily run retains bounded performance findings, opportunity adjustments, recommendations, learned account windows, and experiment evaluations. Phase 7 opportunity scores and Phase 11 approved snapshots are never rewritten.
+
+Revival requires a currently public destination, fresh analytics, at least 14 observed metric days, 500 impressions, 10 outbound clicks, a completed 45-day default cooldown, no equivalent active publication/candidate, no strong fatigue or unresolved account issue, and a supported meaningfully different creative. Sparse or stale evidence yields `INSUFFICIENT_DATA`; cooldowns and collisions yield `WAIT`; unsafe targets yield `SKIP`. Missing or disabled conversion evidence stays null. `learned_scheduler_v1` stays on the America/New_York Phase 11 cold-start baseline until an account/hour has at least four Pins and 1,000 impressions, then permits deterministic bounded exploration/exploitation.
+
+The ADMIN-only same-origin actions enqueue one bounded evaluation or one Creative Lab preparation. Preparation rechecks freshness and server-resolved target/archetype, creates no approval, and cannot publish. There is no recurring enqueue, cron, persistent Growth worker, content mutation, automatic experiment winner application, or autonomous board action.

@@ -312,3 +312,7 @@ Migration `20261007010000_growth_translator_autopilot` is deployed. Live validat
 `PINTEREST_PIN_PUBLISH` and `PINTEREST_PIN_RECONCILE` accept only `publicationId`. An explicit ADMIN action creates the immutable approval, future attribution ref, publication and due job. The bounded one-shot worker revalidates the exact snapshot immediately before one Create Pin attempt. Known 429 responses may retry; any ambiguous post-submission outcome switches permanently to GET-only reconciliation. A stale PUBLISHING lease also creates/converges one reconcile job and terminally closes the publish job so Create Pin cannot repeat.
 
 `GrowthJob.runAfter` carries scheduled time. Operators may eventually invoke `npm run growth:worker` from a conservative host scheduler, but Phase 11 does not install or enable cron, PM2, a polling daemon, `setInterval`, or sleep loops.
+
+## Phase 12 learning job
+
+`EVERGREEN_LEARNING_ANALYSIS` accepts only UTC analysis date and `growth_learning_v1`; a daily/model key converges concurrent ADMIN requests. The bounded worker computes recommendations and retained findings from local evidence only, and disabled Growth prevents execution. The explicit preparation action requires a current `REVIVE` proposal and literal confirmation, rejects evidence older than 48 hours, resolves destination/archetype server-side, and queues the existing Creative Lab job. It never creates approval, publication, board action, recurrence, cron, or a permanent worker.

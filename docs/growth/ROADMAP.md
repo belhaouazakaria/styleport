@@ -191,7 +191,7 @@ Phase 10 added no approval, scheduling, publication, Pinterest write, recurring 
 
 ## Phase 11 — Scheduling and Publishing Engine
 
-**Status:** In progress — production deployed; successful live Pin publishing remains unvalidated
+**Status:** Complete — production deployed and live publication validated
 
 Deliver:
 - exploration/exploitation timing;
@@ -207,11 +207,13 @@ Exit:
 
 Implemented in migration `20261009120000_growth_pin_publishing`, `lib/growth/publishing/*`, the existing Pinterest v5 adapter and bounded worker, ADMIN same-origin approval/rejection/cancellation routes, and the Creative Lab publication controls. Each exact Pin requires individual ADMIN approval of its immutable candidate/asset/account/board/time snapshot. `publication_timing_v1` recommends bounded America/New_York cold-start or deterministic explore/exploit windows. A future `pinterest_organic_v1` attribution ref is issued before publication. Pinterest Create Pin is attempted once; safe 429 responses retry, while ambiguous outcomes transition to bounded read-only reconciliation and never blind retry Create Pin.
 
-Two live production publications ended `FAILED_TERMINAL` after Pinterest returned HTTP 401. Both publication/approval/ref/job chains remain historical evidence. Authenticated account and board reads worked, but the OAuth grant omitted `boards:write`; this is the suspected authorization cause, not a proven diagnosis because the old adapter discarded provider error detail. OAuth now requests `boards:write`, partial grants become `REAUTH_REQUIRED`, and approval plus execution verify every required Create Pin scope. Recovery still requires an ADMIN to choose **Approve again**, receive a fresh timing recommendation, select an eligible account and board, and explicitly confirm the exact Pin. A terminal or cancelled publication is never revived: reapproval supersedes only the previous `APPROVED` marker and creates a new approval, publication, attribution ref, idempotency key and publish job for a future time. Successful live Pin publication and reconciliation remain unvalidated, so Phase 11 is not complete. Growth remains disabled, with no production cron, persistent worker, or Phase 12 behavior enabled. Trial-created Pin reach remains creator-only; Standard access is required before relying on normal public production reach.
+The two earlier HTTP 401 attempts and their immutable publication/approval/ref/job chains remain historical evidence. After the operator confirmed Standard Access and a complete grant, a specifically approved real Pin published through Creative Lab, appeared on Pinterest, reached its intended destination, and finished `RECONCILED`. Direct Create Pin success legitimately advances `PUBLISHED -> RECONCILED` in the same bounded job; a separate reconcile job is required only for ambiguous outcomes. No provider IDs or timestamps are added here because they were not supplied as documentation evidence. Growth remains disabled and no production cron or persistent worker is enabled.
 
 ## Phase 12 — Evergreen and Learning Engine
 
-**Status:** Not started
+The additive migration includes `GrowthSettings.evergreenCooldownDays`, bounded to 14–180 days with a conservative 45-day default and editable only through the existing audited ADMIN settings path.
+
+**Status:** Implemented on branch; deployment and production validation pending
 
 Deliver:
 - evergreen revival;
@@ -223,6 +225,10 @@ Deliver:
 
 Exit:
 - system demonstrates closed-loop adaptation without duplicate flooding.
+
+Migration `20261015120000_growth_evergreen_learning` adds immutable `GrowthLearningRun` evidence, per-destination recommendations, account-specific learned windows, and experiment evaluations. `evergreen_learning_v1` returns only `REVIVE`, `WAIT`, `SKIP`, or `INSUFFICIENT_DATA`; it requires a public destination, fresh analytics, at least 14 observed days, 500 impressions, 10 outbound clicks, a 45-day default cooldown, no active equivalent, no strong fatigue/account issue, and a supported meaningfully different creative. Conversion remains null when attribution is unavailable or no qualified evidence row exists.
+
+`learned_scheduler_v1` extends, but does not replace, `publication_timing_v1`. It retains America/New_York cold start until an account/hour has at least four Pins and 1,000 impressions, then uses deterministic bounded explore/exploit recommendations with collision checks. Approved snapshots are never mutated. Experiment findings require mature variants and remain `INCONCLUSIVE` without a material exposure-normalized difference. `opportunity_feedback_v1` stores bounded adjustments beside the original Phase 7 scores and never rewrites them. `/admin/growth/learning` exposes evidence, explicit evaluate/prepare actions, and audited start/pause/resume/request-analysis/finalize experiment transitions without allocating traffic. Preparation only queues a new Creative Lab candidate, which still requires individual approval. No recurrence, production worker, content write, automatic approval, or Pinterest publication is enabled.
 
 ## Phase 13 — Economics, Admin and Reporting
 

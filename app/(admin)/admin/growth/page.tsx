@@ -33,6 +33,12 @@ export default async function AdminGrowthPage() {
       <main className="space-y-6 p-4 sm:p-6">
         <div className="flex flex-wrap justify-end gap-3">
           <Link
+            href="/admin/growth/learning"
+            className={cn(buttonVariants({ variant: "outline" }))}
+          >
+            Evergreen & learning
+          </Link>
+          <Link
             href="/admin/growth/creative"
             className={cn(buttonVariants({ variant: "outline" }))}
           >
@@ -87,7 +93,8 @@ export default async function AdminGrowthPage() {
           infrastructure are available. Public attribution collection remains
           inactive unless both attribution gates are enabled. SayTwist Ideas and
           Translator Autopilot are available only through explicit bounded jobs
-          with immutable versions and rollback. Pinterest publishing remains inactive.
+          with immutable versions and rollback. Pinterest publishing remains
+          inactive.
         </div>
 
         <section
@@ -172,6 +179,8 @@ export default async function AdminGrowthPage() {
               overview.settings.attributionSessionRetentionDays,
             attributionEventRetentionDays:
               overview.settings.attributionEventRetentionDays,
+            evergreenCooldownDays:
+              overview.settings.evergreenCooldownDays,
           }}
         />
 

@@ -1,6 +1,7 @@
 import { GrowthIntensity, GrowthJobStatus, GrowthJobType } from "@prisma/client";
 import { z } from "zod";
 import { ownedPinterestDomainsSchema } from "@/lib/growth/pinterest/relevance";
+import { DEFAULT_EVERGREEN_COOLDOWN_DAYS } from "@/lib/growth/learning/constants";
 
 export const GROWTH_SETTINGS_ID = "global";
 export const DEFAULT_GROWTH_WORKER_BATCH_SIZE = 5;
@@ -23,6 +24,7 @@ export const growthSettingsSchema = z
     attributionWindowDays: z.number().int().min(1).max(30).default(DEFAULT_ATTRIBUTION_WINDOW_DAYS),
     attributionSessionRetentionDays: z.number().int().min(7).max(90).default(DEFAULT_ATTRIBUTION_SESSION_RETENTION_DAYS),
     attributionEventRetentionDays: z.number().int().min(30).max(365).default(DEFAULT_ATTRIBUTION_EVENT_RETENTION_DAYS),
+    evergreenCooldownDays: z.number().int().min(14).max(180).default(DEFAULT_EVERGREEN_COOLDOWN_DAYS),
   })
   .strict();
 

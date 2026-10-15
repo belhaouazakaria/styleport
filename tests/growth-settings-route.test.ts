@@ -62,6 +62,7 @@ describe("Growth settings API", () => {
     expect(mocks.update).toHaveBeenCalledWith({
       ...payload,
       ownedDomains: ["saytwist.com", "translator.whattypeof.com"],
+      evergreenCooldownDays: 45,
       attributionEnabled: false,
       attributionWindowDays: 7,
       attributionSessionRetentionDays: 30,

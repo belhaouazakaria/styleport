@@ -17,11 +17,11 @@ Do not implement:
 
 Pinterest Trial access is approved and was used for Phase 3 production connection validation.
 
-Production publishing preparation still requires:
+Production publishing preparation required:
 
 - Pinterest developer application;
 - current API documentation verification;
-- preparation for Standard access if required for normal production publishing.
+- Standard Access for normal production behavior. The operator has confirmed this approval.
 
 Planning baseline from current Pinterest documentation:
 
@@ -232,4 +232,8 @@ A known 429 may retry after `Retry-After`; authorization 401/403 is terminal and
 
 Two production Create Pin attempts received HTTP 401 and ended terminally. Account/profile and board reads continued to work, while the granted scope list omitted `boards:write`. Because the old adapter discarded Pinterest's detailed error response, the missing scope is a suspected cause and is not recorded as proven. Both failed publications, immutable approval snapshots, attribution references and jobs are retained; none is reset or reused.
 
-After a complete OAuth grant returns the account to `CONNECTED`, an ADMIN may choose **Approve again**. Creative Lab shows the old status and bounded error, restores account/board/future-time controls, requests a fresh timing recommendation and requires explicit confirmation. Approval and execution both verify `boards:read`, `boards:write`, `pins:read` and `pins:write`. The locked service creates a new approval, publication, attribution reference, idempotency key and publish job and supersedes only the old approval status. Active publication duplicates remain idempotent, and ambiguous-publication reconciliation is unchanged. This recovery path does not establish successful live publishing validation.
+After a complete OAuth grant returns the account to `CONNECTED`, an ADMIN may choose **Approve again**. Creative Lab shows the old status and bounded error, restores account/board/future-time controls, requests a fresh timing recommendation and requires explicit confirmation. Approval and execution both verify `boards:read`, `boards:write`, `pins:read` and `pins:write`. The locked service creates a new approval, publication, attribution reference, idempotency key and publish job and supersedes only the old approval status. Active publication duplicates remain idempotent, and ambiguous-publication reconciliation is unchanged.
+
+The operator later confirmed Standard Access. A specifically approved real Pin then published through Creative Lab, appeared on Pinterest, resolved to the intended destination, and reached `RECONCILED`. This is the expected successful final state even when Create Pin returns directly: the worker records `PUBLISHED` and then `RECONCILED` in the same local persistence transaction. A separate reconcile job is only for an ambiguous Create Pin outcome. The two earlier HTTP 401 chains remain unchanged historical evidence; no external Pin ID or timestamp is documented because none was supplied for this update.
+
+Phase 12 reads only locally persisted publication and analytics evidence. Learned scheduling may recommend an account-specific hour through `learned_scheduler_v1`, but it cannot change an approved snapshot, approve a candidate, create a board, or call Pinterest. Per-Pin approval and the Phase 11 one-attempt/reconciliation contract remain authoritative.
