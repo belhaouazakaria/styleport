@@ -105,7 +105,9 @@ export function evaluateEvergreenTarget(
       recommendation: GrowthEvergreenRecommendation.INSUFFICIENT_DATA,
       confidence: 15,
       evidenceQuality: GrowthLearningEvidenceQuality.PARTIAL,
-      reasonCodes: ["BOUNDED_EVIDENCE_CAP_REACHED"],
+      reasonCodes: evidence.evidenceReasonCodes.length
+        ? evidence.evidenceReasonCodes
+        : ["EVIDENCE_INCOMPLETE"],
       cooldownUntil,
       proposedArchetype: null,
       proposedAngle: null,

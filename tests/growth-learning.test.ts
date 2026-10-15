@@ -44,6 +44,7 @@ const base = {
   unresolvedAccountIssue: false,
   meaningfulAngleAvailable: true,
   evidenceComplete: true,
+  evidenceReasonCodes: [],
   previousArchetypes: [GrowthCreativeArchetype.MINIMAL_STATEMENT],
 };
 
@@ -111,6 +112,22 @@ describe("Phase 12 evergreen recommendations", () => {
         ...base,
         destinationKind: GrowthCreativeDestinationKind.IDEA,
         previousArchetypes: [GrowthCreativeArchetype.MINIMAL_STATEMENT],
+      },
+      now,
+    );
+    expect(result).toMatchObject({
+      recommendation: GrowthEvergreenRecommendation.WAIT,
+      proposedArchetype: null,
+    });
+    expect(result.reasonCodes).toContain("NO_MEANINGFULLY_DIFFERENT_ANGLE");
+  });
+
+  it("does not invent a historical creative archetype for legacy-only evidence", () => {
+    const result = evaluateEvergreenTarget(
+      {
+        ...base,
+        previousArchetypes: [],
+        meaningfulAngleAvailable: false,
       },
       now,
     );
@@ -288,6 +305,43 @@ describe("Phase 12 performance, experiments, and learned scheduling", () => {
       evidenceQuality: GrowthLearningEvidenceQuality.PARTIAL,
     });
     expect(findings[0].reasonCodes).toContain("OUTLIER_CONCENTRATION");
+  });
+
+  it("does not blend unattributed legacy exposure into a managed conversion rate", () => {
+    const finding = comparePerformance(
+      [
+        {
+          dimension: "account",
+          value: "main",
+          impressions: 500,
+          outboundClicks: 20,
+          saves: 10,
+          qualifiedConversions: 2,
+        },
+        {
+          dimension: "account",
+          value: "main",
+          impressions: 500,
+          outboundClicks: 20,
+          saves: 10,
+          qualifiedConversions: null,
+        },
+        {
+          dimension: "account",
+          value: "main",
+          impressions: 500,
+          outboundClicks: 20,
+          saves: 10,
+          qualifiedConversions: null,
+        },
+      ],
+      true,
+    )[0];
+    expect(finding).toMatchObject({
+      conversionRate: null,
+      evidenceQuality: GrowthLearningEvidenceQuality.PARTIAL,
+    });
+    expect(finding.reasonCodes).toContain("CONVERSION_EVIDENCE_INCOMPLETE");
   });
 
   it("keeps immature and tied experiments inconclusive, and identifies only a mature material winner", () => {
@@ -551,7 +605,7 @@ describe("Phase 12 performance, experiments, and learned scheduling", () => {
       }).format(result.scheduledAt),
     );
     expect(result).toMatchObject({
-      modelVersion: "learned_scheduler_v1",
+      modelVersion: "learned_scheduler_v2",
       mode: GrowthPublicationTimingMode.EXPLOIT,
     });
     expect(hour).toBe(18);

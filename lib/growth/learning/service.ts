@@ -31,6 +31,7 @@ import {
   MAX_LEARNING_EXPERIMENTS,
   MAX_LEARNING_FATIGUE_SIGNALS,
   MAX_LEARNING_OPPORTUNITIES,
+  MAX_LEARNING_PIN_EVIDENCE,
   MAX_LEARNING_PUBLICATIONS,
   MAX_LEARNING_TARGETS,
   OPPORTUNITY_FEEDBACK_VERSION,
@@ -42,6 +43,13 @@ import {
 } from "@/lib/growth/learning/contracts";
 import { evaluateEvergreenTarget } from "@/lib/growth/learning/evergreen";
 import { evaluateExperiment } from "@/lib/growth/learning/experiments";
+import {
+  deduplicatePinterestEvidence,
+  matchLegacyPinToTranslator,
+  potentialLegacyTranslatorSlug,
+  selectBoundedPinterestEvidence,
+  selectFinalizedMetricEvidence,
+} from "@/lib/growth/learning/legacy-evidence";
 import {
   comparePerformance,
   type PerformanceObservation,
@@ -111,6 +119,15 @@ export async function persistLearningAnalysis(input: {
   const now = input.now || new Date();
   const { start: evidenceWindowStart, endExclusive: evidenceWindowEnd } =
     learningEvidenceWindow(analysisDate);
+  const finalizedMetricEvidence = (
+    rows: Parameters<typeof selectFinalizedMetricEvidence>[0],
+    publishedAt: Date | null,
+  ) =>
+    selectFinalizedMetricEvidence(rows, {
+      windowStart: evidenceWindowStart,
+      windowEndExclusive: evidenceWindowEnd,
+      publishedAt,
+    });
   const settings = await prisma.growthSettings.findUnique({
     where: { id: "global" },
     select: {
@@ -133,6 +150,8 @@ export async function persistLearningAnalysis(input: {
     opportunityRows,
     activeCandidateRows,
     fatigueSignalRows,
+    legacyPinRowsRaw,
+    recentPublicationRowsRaw,
   ] = await Promise.all([
     prisma.translator.findMany({
       where: { isActive: true, archivedAt: null },
@@ -337,9 +356,62 @@ export async function persistLearningAnalysis(input: {
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: MAX_LEARNING_FATIGUE_SIGNALS + 1,
     }),
+    prisma.growthPinterestPin.findMany({
+      where: {
+        isActive: true,
+        analyticsEligible: true,
+        destinationUrl: { not: null },
+      },
+      select: {
+        id: true,
+        pinterestPinId: true,
+        accountId: true,
+        destinationUrl: true,
+        publishedAt: true,
+        account: {
+          select: { id: true, publicationRole: true, connectionStatus: true },
+        },
+        dailyMetrics: {
+          where: {
+            metricDate: { gte: evidenceWindowStart, lt: evidenceWindowEnd },
+          },
+          orderBy: { metricDate: "asc" },
+          take: LEARNING_WINDOW_DAYS,
+        },
+      },
+      orderBy: { pinterestPinId: "asc" },
+      take: MAX_LEARNING_PIN_EVIDENCE + 1,
+    }),
+    prisma.growthPinPublication.findMany({
+      where: {
+        status: {
+          in: [
+            GrowthPublicationStatus.PUBLISHED,
+            GrowthPublicationStatus.RECONCILED,
+          ],
+        },
+        publishedAt: { gte: evidenceWindowEnd },
+      },
+      select: {
+        id: true,
+        pinterestPinId: true,
+        accountId: true,
+        publishedAt: true,
+        candidate: {
+          select: {
+            destinationKind: true,
+            translatorId: true,
+            ideaId: true,
+          },
+        },
+      },
+      orderBy: [{ publishedAt: "desc" }, { id: "desc" }],
+      take: MAX_LEARNING_PUBLICATIONS + 1,
+    }),
   ]);
 
   const selectionReasonCodes: string[] = [];
+  const legacyEvidenceReasonCodes: string[] = [];
   if (translatorRows.length > MAX_LEARNING_TARGETS)
     selectionReasonCodes.push("TRANSLATOR_CAP_EXHAUSTED");
   if (ideaRows.length > MAX_LEARNING_TARGETS)
@@ -356,6 +428,14 @@ export async function persistLearningAnalysis(input: {
     selectionReasonCodes.push("OPPORTUNITY_CAP_EXHAUSTED");
   if (fatigueSignalRows.length > MAX_LEARNING_FATIGUE_SIGNALS)
     selectionReasonCodes.push("FATIGUE_SIGNAL_CAP_EXHAUSTED");
+  const boundedPinRows = selectBoundedPinterestEvidence(
+    legacyPinRowsRaw,
+    MAX_LEARNING_PIN_EVIDENCE,
+  );
+  if (boundedPinRows.capExhausted)
+    selectionReasonCodes.push("PIN_EVIDENCE_CAP_EXHAUSTED");
+  if (recentPublicationRowsRaw.length > MAX_LEARNING_PUBLICATIONS)
+    selectionReasonCodes.push("RECENT_PUBLICATION_CAP_EXHAUSTED");
   const translators = translatorRows.slice(0, MAX_LEARNING_TARGETS);
   const ideas = ideaRows.slice(0, MAX_LEARNING_TARGETS);
   const publications = publicationRows.slice(0, MAX_LEARNING_PUBLICATIONS);
@@ -373,6 +453,61 @@ export async function persistLearningAnalysis(input: {
     0,
     MAX_LEARNING_FATIGUE_SIGNALS,
   );
+  const selectedPinRows = boundedPinRows.selected;
+  const recentPublicationRows = recentPublicationRowsRaw.slice(
+    0,
+    MAX_LEARNING_PUBLICATIONS,
+  );
+  const recentPublicationByTarget = new Map<
+    string,
+    typeof recentPublicationRows
+  >();
+  for (const publication of recentPublicationRows) {
+    const targetId =
+      publication.candidate.translatorId || publication.candidate.ideaId;
+    if (!targetId) continue;
+    const key = `${publication.candidate.destinationKind}:${targetId}`;
+    recentPublicationByTarget.set(key, [
+      ...(recentPublicationByTarget.get(key) || []),
+      publication,
+    ]);
+  }
+  const matchedPinRows = selectedPinRows.flatMap((pin) => {
+    const match = matchLegacyPinToTranslator(pin.destinationUrl, translators);
+    return match ? [{ ...pin, match }] : [];
+  });
+  const rejectedPinCount = selectedPinRows.length - matchedPinRows.length;
+  if (rejectedPinCount)
+    legacyEvidenceReasonCodes.push("LEGACY_PIN_URL_REJECTED");
+  const managedPinterestIds = [
+    ...publications.flatMap((row) =>
+      row.pinterestPinId ? [row.pinterestPinId] : [],
+    ),
+    ...recentPublicationRows.flatMap((row) =>
+      row.pinterestPinId ? [row.pinterestPinId] : [],
+    ),
+  ];
+  const deduplicatedPinRows = deduplicatePinterestEvidence(
+    managedPinterestIds.map((pinterestPinId) => ({ pinterestPinId })),
+    matchedPinRows,
+  ).legacy;
+  const incompletePinMetrics = deduplicatedPinRows.some(
+    (pin) =>
+      (!pin.publishedAt || pin.publishedAt < evidenceWindowEnd) &&
+      !finalizedMetricEvidence(pin.dailyMetrics, pin.publishedAt)
+        .evidenceComplete,
+  );
+  if (incompletePinMetrics)
+    legacyEvidenceReasonCodes.push("PIN_METRICS_INCOMPLETE");
+  const incompleteManagedMetrics = publications.some(
+    (publication) =>
+      !finalizedMetricEvidence(
+        publication.pinterestPin?.dailyMetrics || [],
+        publication.publishedAt,
+      ).evidenceComplete,
+  );
+  if (incompleteManagedMetrics)
+    legacyEvidenceReasonCodes.push("MANAGED_PIN_METRICS_INCOMPLETE");
   const evidenceComplete = selectionReasonCodes.length === 0;
 
   const attributionAvailable =
@@ -410,6 +545,7 @@ export async function persistLearningAnalysis(input: {
   const analyticsFresh = accounts.length > 0 && activeAccountsHealthy;
   const observations: PerformanceObservation[] = [];
   const publicationByTarget = new Map<string, typeof publications>();
+  const legacyByTarget = new Map<string, typeof deduplicatedPinRows>();
   for (const publication of publications) {
     const targetId =
       publication.candidate.translatorId || publication.candidate.ideaId;
@@ -423,7 +559,10 @@ export async function persistLearningAnalysis(input: {
       accountEvidence.get(publication.account.id)?.available,
     );
     const metrics = accountFresh
-      ? publication.pinterestPin?.dailyMetrics || []
+      ? finalizedMetricEvidence(
+          publication.pinterestPin?.dailyMetrics || [],
+          publication.publishedAt,
+        ).ready
       : [];
     const impressions = sum(metrics, (row) => row.impressions);
     const outboundClicks = sum(metrics, (row) => row.outboundClicks);
@@ -482,11 +621,64 @@ export async function persistLearningAnalysis(input: {
         qualifiedConversions: conversions,
       });
   }
+  for (const pin of deduplicatedPinRows) {
+    const key = `${GrowthCreativeDestinationKind.TRANSLATOR}:${pin.match.translatorId}`;
+    legacyByTarget.set(key, [...(legacyByTarget.get(key) || []), pin]);
+    if (pin.publishedAt && pin.publishedAt >= evidenceWindowEnd) continue;
+    if (!accountEvidence.get(pin.accountId)?.available) continue;
+    const metricEvidence = finalizedMetricEvidence(
+      pin.dailyMetrics,
+      pin.publishedAt,
+    );
+    const metrics = metricEvidence.ready;
+    if (!metrics.length) continue;
+    const impressions = sum(metrics, (row) => row.impressions);
+    const outboundClicks = sum(metrics, (row) => row.outboundClicks);
+    const saves = sum(metrics, (row) => row.saves);
+    const dimensions: Array<[string, string | null]> = [
+      ["account", pin.accountId],
+      ["role", pin.account.publicationRole],
+      ["destinationKind", GrowthCreativeDestinationKind.TRANSLATOR],
+    ];
+    if (pin.publishedAt) {
+      const localParts = new Intl.DateTimeFormat("en-US", {
+        timeZone: LEARNING_TIME_ZONE,
+        weekday: "short",
+        hour: "2-digit",
+        hourCycle: "h23",
+      }).formatToParts(pin.publishedAt);
+      dimensions.push(
+        [
+          "weekday",
+          localParts.find((part) => part.type === "weekday")?.value || null,
+        ],
+        [
+          "localHour",
+          localParts.find((part) => part.type === "hour")?.value || null,
+        ],
+      );
+    }
+    for (const [dimension, value] of dimensions)
+      if (value)
+        observations.push({
+          dimension,
+          value,
+          impressions,
+          outboundClicks,
+          saves,
+          qualifiedConversions: null,
+        });
+  }
   const performanceFindings = comparePerformance(observations, {
     attributionAvailable,
-    evidenceComplete: evidenceComplete && analyticsFresh,
+    evidenceComplete:
+      evidenceComplete &&
+      analyticsFresh &&
+      !incompletePinMetrics &&
+      !incompleteManagedMetrics,
     incompletenessReasonCodes: [
       ...selectionReasonCodes,
+      ...legacyEvidenceReasonCodes,
       ...(!analyticsFresh ? ["ACCOUNT_ANALYTICS_UNAVAILABLE"] : []),
     ],
   });
@@ -504,23 +696,48 @@ export async function persistLearningAnalysis(input: {
     })),
   ];
   const recommendations = targetRows.map((target) => {
-    const history =
-      publicationByTarget.get(`${target.destinationKind}:${target.id}`) || [];
+    const targetKey = `${target.destinationKind}:${target.id}`;
+    const history = publicationByTarget.get(targetKey) || [];
+    const legacyHistory = legacyByTarget.get(targetKey) || [];
+    const recentHistory = recentPublicationByTarget.get(targetKey) || [];
+    const legacyEvidenceHistory = legacyHistory.filter(
+      (row) => !row.publishedAt || row.publishedAt < evidenceWindowEnd,
+    );
     const freshHistory = history.filter(
       (row) => accountEvidence.get(row.accountId)?.available,
     );
-    const metrics = freshHistory.flatMap(
-      (row) => row.pinterestPin?.dailyMetrics || [],
+    const freshLegacyHistory = legacyEvidenceHistory.filter(
+      (row) => accountEvidence.get(row.accountId)?.available,
     );
+    const managedMetricEvidence = freshHistory.map((row) =>
+      finalizedMetricEvidence(
+        row.pinterestPin?.dailyMetrics || [],
+        row.publishedAt,
+      ),
+    );
+    const legacyMetricEvidence = freshLegacyHistory.map((row) =>
+      finalizedMetricEvidence(row.dailyMetrics, row.publishedAt),
+    );
+    const metrics = [
+      ...managedMetricEvidence.flatMap((row) => row.ready),
+      ...legacyMetricEvidence.flatMap((row) => row.ready),
+    ];
     const lastPublishedAt =
-      history
-        .map((row) => row.publishedAt)
+      [
+        ...history.map((row) => row.publishedAt),
+        ...legacyHistory.map((row) => row.publishedAt),
+        ...recentHistory.map((row) => row.publishedAt),
+      ]
         .filter((value): value is Date => Boolean(value))
         .sort((a, b) => b.getTime() - a.getTime())[0] || null;
-    const recentActive = history.filter(
-      (row) =>
-        row.publishedAt &&
-        now.getTime() - row.publishedAt.getTime() <
+    const recentActive = [
+      ...history.map((row) => row.publishedAt),
+      ...legacyHistory.map((row) => row.publishedAt),
+      ...recentHistory.map((row) => row.publishedAt),
+    ].filter(
+      (publishedAt) =>
+        publishedAt &&
+        now.getTime() - publishedAt.getTime() <
           settings.evergreenCooldownDays * 86_400_000,
     ).length;
     const activeCandidateCount = activeCandidates.filter(
@@ -530,18 +747,40 @@ export async function persistLearningAnalysis(input: {
           candidate.ideaId === target.id),
     ).length;
     const historyPinIds = new Set(
-      history.map((row) => row.pinterestPin?.id).filter(Boolean),
+      [
+        ...history.map((row) => row.pinterestPin?.id),
+        ...legacyHistory.map((row) => row.id),
+      ].filter(Boolean),
     );
     const conversionRows = freshHistory.flatMap(
       (row) => row.attributionRef?.dailyAggregates || [],
     );
+    const conversionEvidenceComplete =
+      freshLegacyHistory.length === 0 &&
+      freshHistory.length > 0 &&
+      freshHistory.every(
+        (row) => (row.attributionRef?.dailyAggregates.length || 0) > 0,
+      );
     const qualifiedConversions =
-      attributionAvailable && conversionRows.length
+      attributionAvailable && conversionEvidenceComplete
         ? sum(conversionRows, (row) => row.qualifiedConversions)
         : null;
-    const targetAnalyticsFresh = history.length
-      ? history.every((row) => accountEvidence.get(row.accountId)?.available)
+    const allAccountIds = [
+      ...history.map((row) => row.accountId),
+      ...legacyHistory.map((row) => row.accountId),
+    ];
+    const targetAnalyticsFresh = allAccountIds.length
+      ? allAccountIds.every((id) => accountEvidence.get(id)?.available)
       : analyticsFresh;
+    const targetMetricsComplete = [
+      ...managedMetricEvidence,
+      ...legacyMetricEvidence,
+    ].every((row) => row.evidenceComplete);
+    const targetEvidenceReasonCodes = [
+      ...selectionReasonCodes,
+      ...managedMetricEvidence.flatMap((row) => row.reasonCodes),
+      ...legacyMetricEvidence.flatMap((row) => row.reasonCodes),
+    ];
     const evidence: EvergreenTargetEvidence = {
       destinationKind: target.destinationKind,
       targetId: target.id,
@@ -557,18 +796,27 @@ export async function persistLearningAnalysis(input: {
       qualifiedConversions,
       attributionAvailable,
       lastPublishedAt,
-      publicationCount: history.length,
+      publicationCount: history.length + legacyEvidenceHistory.length,
       activeEquivalentCount: recentActive,
       activeCandidateCount,
       strongFatigue: fatigueSignals.some(
         (signal) => signal.pinId && historyPinIds.has(signal.pinId),
       ),
       analyticsFresh: targetAnalyticsFresh,
-      unresolvedAccountIssue: history.length
-        ? history.some((row) => row.account.connectionStatus !== "CONNECTED")
-        : !activeAccountsHealthy,
-      meaningfulAngleAvailable: true,
-      evidenceComplete: evidenceComplete && targetAnalyticsFresh,
+      unresolvedAccountIssue:
+        history.length || legacyHistory.length
+          ? history.some(
+              (row) => row.account.connectionStatus !== "CONNECTED",
+            ) ||
+            legacyHistory.some(
+              (row) => row.account.connectionStatus !== "CONNECTED",
+            )
+          : !activeAccountsHealthy,
+      meaningfulAngleAvailable:
+        legacyEvidenceHistory.length === 0 || history.length > 0,
+      evidenceComplete:
+        evidenceComplete && targetAnalyticsFresh && targetMetricsComplete,
+      evidenceReasonCodes: [...new Set(targetEvidenceReasonCodes)],
       previousArchetypes: [
         ...new Set(history.map((row) => row.candidate.archetype)),
       ],
@@ -613,17 +861,70 @@ export async function persistLearningAnalysis(input: {
         saves: 0,
         qualifiedConversions: null,
       };
-      const metrics = publication.pinterestPin?.dailyMetrics || [];
+      const metrics = finalizedMetricEvidence(
+        publication.pinterestPin?.dailyMetrics || [],
+        publication.publishedAt,
+      ).ready;
       bucket.samplePins += 1;
       bucket.impressions += sum(metrics, (row) => row.impressions);
       bucket.outboundClicks += sum(metrics, (row) => row.outboundClicks);
       bucket.saves += sum(metrics, (row) => row.saves);
       buckets.set(hour, bucket);
     }
+    const accountLegacyPins = deduplicatedPinRows.filter(
+      (pin) =>
+        accountFresh &&
+        pin.accountId === account.id &&
+        pin.publishedAt &&
+        pin.publishedAt < evidenceWindowEnd,
+    );
+    for (const pin of accountLegacyPins) {
+      const metricEvidence = finalizedMetricEvidence(
+        pin.dailyMetrics,
+        pin.publishedAt,
+      );
+      if (!metricEvidence.ready.length) continue;
+      const hour = Number(
+        new Intl.DateTimeFormat("en-US", {
+          timeZone: LEARNING_TIME_ZONE,
+          hour: "2-digit",
+          hourCycle: "h23",
+        }).format(pin.publishedAt!),
+      );
+      const bucket = buckets.get(hour) || {
+        localHour: hour,
+        samplePins: 0,
+        impressions: 0,
+        outboundClicks: 0,
+        saves: 0,
+        qualifiedConversions: null,
+      };
+      bucket.samplePins += 1;
+      bucket.impressions += sum(metricEvidence.ready, (row) => row.impressions);
+      bucket.outboundClicks += sum(
+        metricEvidence.ready,
+        (row) => row.outboundClicks,
+      );
+      bucket.saves += sum(metricEvidence.ready, (row) => row.saves);
+      buckets.set(hour, bucket);
+    }
+    const accountMetricsComplete =
+      accountPublications.every(
+        (publication) =>
+          finalizedMetricEvidence(
+            publication.pinterestPin?.dailyMetrics || [],
+            publication.publishedAt,
+          ).evidenceComplete,
+      ) &&
+      accountLegacyPins.every(
+        (pin) =>
+          finalizedMetricEvidence(pin.dailyMetrics, pin.publishedAt)
+            .evidenceComplete,
+      );
     return evaluateLearnedWindows(
       [...buckets.values()],
       attributionAvailable,
-      accountFresh && evidenceComplete,
+      accountFresh && evidenceComplete && accountMetricsComplete,
     ).map((window) => ({ accountId: account.id, window }));
   });
 
@@ -664,7 +965,13 @@ export async function persistLearningAnalysis(input: {
           row.conversionEvidenceComplete = false;
           continue;
         }
-        const metrics = publication.pinterestPin?.dailyMetrics || [];
+        const metricEvidence = finalizedMetricEvidence(
+          publication.pinterestPin?.dailyMetrics || [],
+          publication.publishedAt,
+        );
+        if (!metricEvidence.evidenceComplete)
+          experimentEvidenceComplete = false;
+        const metrics = metricEvidence.ready;
         const publicationImpressions = sum(
           metrics,
           (metric) => metric.impressions,
@@ -742,7 +1049,10 @@ export async function persistLearningAnalysis(input: {
       impressions: 0,
       outboundClicks: 0,
     };
-    const metrics = publication.pinterestPin?.dailyMetrics || [];
+    const metrics = finalizedMetricEvidence(
+      publication.pinterestPin?.dailyMetrics || [],
+      publication.publishedAt,
+    ).ready;
     current.publications += 1;
     current.impressions += sum(metrics, (row) => row.impressions);
     current.outboundClicks += sum(metrics, (row) => row.outboundClicks);
@@ -756,6 +1066,8 @@ export async function persistLearningAnalysis(input: {
     const qualified = Boolean(
       evidenceComplete &&
       analyticsFresh &&
+      !incompletePinMetrics &&
+      !incompleteManagedMetrics &&
       evidence &&
       evidence.publications >= 2 &&
       evidence.impressions >= 1_000,
@@ -788,17 +1100,22 @@ export async function persistLearningAnalysis(input: {
       feedbackModelVersion: OPPORTUNITY_FEEDBACK_VERSION,
     };
   });
+  const historicalLegacyCount = deduplicatedPinRows.filter(
+    (pin) => !pin.publishedAt || pin.publishedAt < evidenceWindowEnd,
+  ).length;
+  const historicalEvidenceCount = publications.length + historicalLegacyCount;
   const overallQuality = analyticsFresh
-    ? publications.length
-      ? evidenceComplete
+    ? historicalEvidenceCount
+      ? evidenceComplete && !incompletePinMetrics && !incompleteManagedMetrics
         ? GrowthLearningEvidenceQuality.KNOWN
         : GrowthLearningEvidenceQuality.PARTIAL
       : GrowthLearningEvidenceQuality.INSUFFICIENT_DATA
     : GrowthLearningEvidenceQuality.STALE;
   const reasonCodes = [
     ...selectionReasonCodes,
+    ...legacyEvidenceReasonCodes,
     !analyticsFresh ? "ANALYTICS_STALE" : null,
-    !publications.length ? "NO_HISTORICAL_PUBLICATIONS" : null,
+    !historicalEvidenceCount ? "NO_HISTORICAL_PIN_EVIDENCE" : null,
     !attributionAvailable ? "ATTRIBUTION_NOT_COLLECTING" : null,
   ].filter((value): value is string => Boolean(value));
 
@@ -824,7 +1141,7 @@ export async function persistLearningAnalysis(input: {
           performanceFindings: performanceFindings as Prisma.InputJsonValue,
           opportunityAdjustments:
             opportunityAdjustments as Prisma.InputJsonValue,
-          summary: `Evaluated ${targetRows.length} public destinations and ${publications.length} historical publications; produced ${recommendations.length} advisory recommendations.`,
+          summary: `Evaluated ${targetRows.length} public destinations using ${publications.length} managed publications and ${historicalLegacyCount} deduplicated legacy Pins; produced ${recommendations.length} advisory recommendations.`,
           jobId: input.jobId || null,
         },
       });
@@ -862,6 +1179,39 @@ export async function persistLearningAnalysis(input: {
               activeCandidateCount: row.evidence.activeCandidateCount,
               analyticsFresh: row.evidence.analyticsFresh,
               evidenceComplete: row.evidence.evidenceComplete,
+              evidenceReasonCodes: row.evidence.evidenceReasonCodes,
+              evidenceSources: {
+                managed: (
+                  publicationByTarget.get(
+                    `${row.target.destinationKind}:${row.target.id}`,
+                  ) || []
+                ).map((publication) => ({
+                  source: "GROWTH_MANAGED_PUBLICATION",
+                  pinterestPinId: publication.pinterestPinId,
+                  publicationId: publication.id,
+                  publishedAt: publication.publishedAt?.toISOString() || null,
+                })),
+                legacy: (
+                  legacyByTarget.get(
+                    `${row.target.destinationKind}:${row.target.id}`,
+                  ) || []
+                ).map((pin) => ({
+                  source: "LEGACY_PIN",
+                  pinterestPinId: pin.pinterestPinId,
+                  pinRecordId: pin.id,
+                  sourceHost: pin.match.sourceHost,
+                  publishedAt: pin.publishedAt?.toISOString() || null,
+                  metricStatus:
+                    pin.publishedAt && pin.publishedAt >= evidenceWindowEnd
+                      ? "COOLDOWN_ONLY"
+                      : finalizedMetricEvidence(
+                            pin.dailyMetrics,
+                            pin.publishedAt,
+                          ).evidenceComplete
+                        ? "COMPLETE"
+                        : "INCOMPLETE",
+                })),
+              },
               accountFreshness: accounts.map((account) => ({
                 id: account.id,
                 connectionStatus: account.connectionStatus,
@@ -924,6 +1274,7 @@ export async function persistLearningAnalysis(input: {
           summary: {
             targetsConsidered: targetRows.length,
             publicationsConsidered: publications.length,
+            legacyPinsConsidered: historicalLegacyCount,
             recommendationsProduced: recommendations.length,
             modelVersion: LEARNING_MODEL_VERSION,
           },
@@ -1076,7 +1427,7 @@ async function assertEvergreenRecommendationCurrent(
   const [
     settings,
     target,
-    latestPublication,
+    publicationHistory,
     activeCandidateCount,
     strongFatigue,
     accounts,
@@ -1088,7 +1439,7 @@ async function assertEvergreenRecommendationCurrent(
     recommendation.destinationKind === GrowthCreativeDestinationKind.TRANSLATOR
       ? tx.translator.findFirst({
           where: { id: targetId, isActive: true, archivedAt: null },
-          select: { updatedAt: true },
+          select: { updatedAt: true, slug: true },
         })
       : tx.growthIdea.findFirst({
           where: {
@@ -1100,7 +1451,7 @@ async function assertEvergreenRecommendationCurrent(
           },
           select: { updatedAt: true },
         }),
-    tx.growthPinPublication.findFirst({
+    tx.growthPinPublication.findMany({
       where: {
         status: {
           in: [
@@ -1114,8 +1465,9 @@ async function assertEvergreenRecommendationCurrent(
             ? { translatorId: targetId }
             : { ideaId: targetId },
       },
-      select: { publishedAt: true },
+      select: { id: true, pinterestPinId: true, publishedAt: true },
       orderBy: [{ publishedAt: "desc" }, { id: "desc" }],
+      take: MAX_LEARNING_PUBLICATIONS + 1,
     }),
     tx.growthPinCandidate.count({
       where: {
@@ -1178,16 +1530,125 @@ async function assertEvergreenRecommendationCurrent(
     throw new Error(
       "The target changed after analysis; run learning analysis again.",
     );
-  const expectedLatest = evidence.lastPublishedAt || null;
+  if (publicationHistory.length > MAX_LEARNING_PUBLICATIONS)
+    throw new Error(
+      "Publication history is ambiguous; run learning analysis again.",
+    );
+  let currentLatest = publicationHistory[0]?.publishedAt || null;
+  const evidenceSources = (
+    recommendation.evidence as {
+      evidenceSources?: {
+        managed?: Array<{
+          publicationId?: string;
+          pinterestPinId?: string | null;
+        }>;
+        legacy?: Array<{
+          pinterestPinId?: string;
+          sourceHost?: string;
+        }>;
+      };
+    }
+  ).evidenceSources;
   if (
-    (latestPublication?.publishedAt?.toISOString() || null) !== expectedLatest
-  )
+    recommendation.learningRun.learningModelVersion === "growth_learning_v2"
+  ) {
+    if (!evidenceSources)
+      throw new Error(
+        "Pin provenance is unavailable; run learning analysis again.",
+      );
+    const storedManaged = (evidenceSources.managed || [])
+      .map((source) => source.publicationId || "")
+      .sort();
+    const currentManaged = publicationHistory.map((row) => row.id).sort();
+    if (JSON.stringify(storedManaged) !== JSON.stringify(currentManaged))
+      throw new Error(
+        "Managed publication provenance changed after analysis; run learning analysis again.",
+      );
+    if (
+      recommendation.destinationKind !==
+      GrowthCreativeDestinationKind.TRANSLATOR
+    ) {
+      if (evidenceSources?.legacy?.length)
+        throw new Error(
+          "Legacy Pin provenance is invalid for this target; run learning analysis again.",
+        );
+    } else {
+      if (!("slug" in target))
+        throw new Error(
+          "Legacy Pin provenance is unavailable; run learning analysis again.",
+        );
+      const pinRows = await tx.growthPinterestPin.findMany({
+        where: {
+          isActive: true,
+          analyticsEligible: true,
+          destinationUrl: { not: null },
+        },
+        select: {
+          id: true,
+          pinterestPinId: true,
+          destinationUrl: true,
+          publishedAt: true,
+        },
+        orderBy: { pinterestPinId: "asc" },
+        take: MAX_LEARNING_PIN_EVIDENCE + 1,
+      });
+      if (pinRows.length > MAX_LEARNING_PIN_EVIDENCE)
+        throw new Error(
+          "Legacy Pin evidence is ambiguous; run learning analysis again.",
+        );
+      const activeTarget = [{ id: targetId, slug: target.slug }];
+      const managedPinterestIds = new Set(
+        publicationHistory.flatMap((publication) =>
+          publication.pinterestPinId ? [publication.pinterestPinId] : [],
+        ),
+      );
+      const legacyPins = pinRows.flatMap((pin) => {
+        const match = matchLegacyPinToTranslator(
+          pin.destinationUrl,
+          activeTarget,
+        );
+        if (
+          !match &&
+          potentialLegacyTranslatorSlug(pin.destinationUrl) ===
+            target.slug.toLowerCase()
+        )
+          throw new Error(
+            "Legacy Pin destination is ambiguous; run learning analysis again.",
+          );
+        return match && !managedPinterestIds.has(pin.pinterestPinId)
+          ? [{ ...pin, match }]
+          : [];
+      });
+      const storedLegacy = (evidenceSources.legacy || [])
+        .map(
+          (source) =>
+            `${source.pinterestPinId || ""}:${source.sourceHost || ""}`,
+        )
+        .sort();
+      const currentLegacy = legacyPins
+        .map((pin) => `${pin.pinterestPinId}:${pin.match.sourceHost}`)
+        .sort();
+      if (JSON.stringify(storedLegacy) !== JSON.stringify(currentLegacy))
+        throw new Error(
+          "Combined Pin provenance changed after analysis; run learning analysis again.",
+        );
+      currentLatest =
+        [
+          ...publicationHistory.map((row) => row.publishedAt),
+          ...legacyPins.map((pin) => pin.publishedAt),
+        ]
+          .filter((value): value is Date => Boolean(value))
+          .sort((a, b) => b.getTime() - a.getTime())[0] || null;
+    }
+  }
+  const expectedLatest = evidence.lastPublishedAt || null;
+  if ((currentLatest?.toISOString() || null) !== expectedLatest)
     throw new Error(
       "Publication history changed after analysis; run learning analysis again.",
     );
   if (
-    latestPublication?.publishedAt &&
-    now.getTime() - latestPublication.publishedAt.getTime() <
+    currentLatest &&
+    now.getTime() - currentLatest.getTime() <
       settings.evergreenCooldownDays * 86_400_000
   )
     throw new Error("The target is inside the current evergreen cooldown.");
@@ -1223,12 +1684,18 @@ async function assertEvergreenRecommendationCurrent(
     !evidence.accountFreshness ||
     JSON.stringify(
       currentAccountFreshness.map((a) => [
-        a.id, a.connectionStatus, a.analyticsStatus, a.lastSuccessfulSyncAt,
+        a.id,
+        a.connectionStatus,
+        a.analyticsStatus,
+        a.lastSuccessfulSyncAt,
       ]),
     ) !==
       JSON.stringify(
         evidence.accountFreshness.map((a) => [
-          a.id, a.connectionStatus, a.analyticsStatus, a.lastSuccessfulSyncAt,
+          a.id,
+          a.connectionStatus,
+          a.analyticsStatus,
+          a.lastSuccessfulSyncAt,
         ]),
       )
   )

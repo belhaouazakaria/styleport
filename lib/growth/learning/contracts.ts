@@ -60,5 +60,6 @@ export type EvergreenTargetEvidence = {
   unresolvedAccountIssue: boolean;
   meaningfulAngleAvailable: boolean;
   evidenceComplete: boolean;
+  evidenceReasonCodes: string[];
   previousArchetypes: GrowthCreativeArchetype[];
 };

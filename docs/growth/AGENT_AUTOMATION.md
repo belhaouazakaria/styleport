@@ -83,14 +83,14 @@ A normal daily run follows this sequence:
    - unapproved Pins remain drafts, expire, or are regenerated according to settings.
 
 10. **Post-publish monitoring**
-   - record publication ID/state;
-   - sync metrics;
-   - detect API/policy errors;
-   - attach outcomes to the originating decision.
+    - record publication ID/state;
+    - sync metrics;
+    - detect API/policy errors;
+    - attach outcomes to the originating decision.
 
 11. **Report**
-   - produce concise executive daily digest;
-   - include performance, actions, spend, warnings and next-plan summary.
+    - produce concise executive daily digest;
+    - include performance, actions, spend, warnings and next-plan summary.
 
 ## 3. "Autopilot" definition
 
@@ -111,6 +111,7 @@ Full SayTwist-side autopilot means the agent can autonomously:
 Pinterest publication itself is subject to a per-Pin approval gate because current Pinterest developer guidelines require the end user to choose each Pin that will be published by an app.
 
 If Pinterest explicitly approves a future workflow allowing more autonomous publication for this app, this behavior may be feature-flagged only after:
+
 - policy verification;
 - documentation update;
 - security review;
@@ -208,10 +209,12 @@ Revival means a new authentic creative/angle, not reposting the same Pin repeate
 Do not hard-code generic "best Pinterest time" advice as the long-term scheduler.
 
 Cold-start:
+
 - use configurable exploration windows;
 - distribute tests across weekdays/time slots.
 
 Learning dimensions:
+
 - account;
 - weekday;
 - hour/time window;
@@ -221,6 +224,7 @@ Learning dimensions:
 - destination type.
 
 As data grows, use exploration/exploitation:
+
 - reserve some inventory for learning;
 - place proven combinations in stronger windows;
 - avoid declaring a permanent best time from small samples.
@@ -252,6 +256,7 @@ Hard spend limits, if explicitly configured by the user, are enforced mechanical
 Growth failures must be isolated from core SayTwist.
 
 Use:
+
 - separate queues/jobs;
 - retries with bounded backoff;
 - idempotency;
@@ -270,7 +275,6 @@ Phase 2 implements only the internal `FOUNDATION_NOOP` handler as a wiring test.
 Phase 3 adds `PINTEREST_ACCOUNT_SYNC` and `PINTEREST_BOARD_SYNC`. Admin sync creates minute-bucket idempotent jobs; the bounded worker executes them and exits. Invalid or expired credentials terminate that job and require reconnect; 429 and 5xx remain bounded retryable failures.
 
 Phase 4 adds only `PINTEREST_PIN_INVENTORY_SYNC`, `PINTEREST_ACCOUNT_ANALYTICS_SYNC`, and `PINTEREST_PIN_ANALYTICS_SYNC`. An ADMIN same-origin request always queues account analytics. It queues/resumes inventory when no complete inventory exists, the inventory is at least 24 hours old, or state is partial; otherwise it reclassifies stored destinations and queues eligible Pin analytics directly. Inventory completion enqueues bounded Pin detail batches. New Pin roots and continuations carry `relevancePrepared=true`; they select from current persisted eligibility without scanning all Pins again. A pre-upgrade Pin job with no marker performs preparation once before processing and marks its continuation. Settings changes update persisted eligibility, so an already marked continuation still sees the current policy. Top-Pin priority cannot bypass eligibility. Continuations persist through `GrowthJob`, and each worker invocation still exits. Growth remains disabled without operator action. No publication, attribution, content generation, opportunity decision, scheduling, cron, or PM2 process exists.
-
 
 ## Phase 6 account strategy review
 
@@ -306,7 +310,6 @@ Stale lease recovery coordinates execution jobs with their durable decisions. Wh
 
 Migration `20261007010000_growth_translator_autopilot` is deployed. Live validation used the real Phase 7 `AMPLIFY_WINNER -> roleplay` opportunity (score 94, confidence 100%, evidence `KNOWN`, 35 distinct destinations, multiple mapped Translators) and returned `WAIT_FOR_MORE_DATA` / `WAITING_DATA` with `MULTIPLE_TARGETS_AMBIGUOUS`, null `translatorId`, and null `executionJobId`. The opportunity moved to `DEFERRED`, no execute job was created, and the active queue ended at 0 rows. Growth was disabled again and attribution remained disabled. No Translator mutation or rollback was forced; the implementation remains covered by the 22/22 real PostgreSQL suite.
 
-
 ## Phase 11 publishing jobs
 
 `PINTEREST_PIN_PUBLISH` and `PINTEREST_PIN_RECONCILE` accept only `publicationId`. An explicit ADMIN action creates the immutable approval, future attribution ref, publication and due job. The bounded one-shot worker revalidates the exact snapshot immediately before one Create Pin attempt. Known 429 responses may retry; any ambiguous post-submission outcome switches permanently to GET-only reconciliation. A stale PUBLISHING lease also creates/converges one reconcile job and terminally closes the publish job so Create Pin cannot repeat.
@@ -315,4 +318,4 @@ Migration `20261007010000_growth_translator_autopilot` is deployed. Live validat
 
 ## Phase 12 learning job
 
-`EVERGREEN_LEARNING_ANALYSIS` accepts only UTC analysis date and `growth_learning_v1`; a daily/model key converges concurrent ADMIN requests. The bounded worker computes recommendations and retained findings from local evidence only, and disabled Growth prevents execution. The explicit preparation action requires a current `REVIVE` proposal and literal confirmation, rejects evidence older than 48 hours, resolves destination/archetype server-side, and queues the existing Creative Lab job. It never creates approval, publication, board action, recurrence, cron, or a permanent worker.
+`EVERGREEN_LEARNING_ANALYSIS` accepts only a UTC analysis date and the application-controlled current version (`growth_learning_v2`; v1 remains immutable history); a daily/model key converges concurrent ADMIN requests while permitting same-day version coexistence. The bounded worker computes recommendations and retained findings from local evidence only. Its v2 adapter reads legacy Pins without mutating them, caps before aggregation, accepts only exact active Translator URL matches, deduplicates Pinterest IDs, and counts only `READY` metrics. Disabled Growth prevents execution. The explicit preparation action requires a current `REVIVE` proposal and literal confirmation, rejects evidence older than 48 hours, resolves destination/archetype server-side, and queues the existing Creative Lab job. It never creates approval, publication, board action, recurrence, cron, or a permanent worker.

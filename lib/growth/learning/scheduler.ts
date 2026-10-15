@@ -5,6 +5,7 @@ import {
 import { createHash } from "node:crypto";
 
 import {
+  LEARNED_SCHEDULER_VERSION,
   LEARNING_TIME_ZONE,
   MIN_SCHEDULE_IMPRESSIONS,
   MIN_SCHEDULE_PINS,
@@ -88,7 +89,7 @@ export function chooseLearnedWindow(input: {
     return {
       localHour: null,
       mode: GrowthPublicationTimingMode.COLD_START,
-      schedulerVersion: "learned_scheduler_v1",
+      schedulerVersion: LEARNED_SCHEDULER_VERSION,
       reasonCodes: ["USE_PUBLICATION_TIMING_V1_COLD_START"],
     };
   const seed = Number.parseInt(
@@ -103,7 +104,7 @@ export function chooseLearnedWindow(input: {
     mode: explore
       ? GrowthPublicationTimingMode.EXPLORE
       : GrowthPublicationTimingMode.EXPLOIT,
-    schedulerVersion: "learned_scheduler_v1",
+    schedulerVersion: LEARNED_SCHEDULER_VERSION,
     reasonCodes: [
       explore ? "BOUNDED_EXPLORATION" : "ACCOUNT_SPECIFIC_EXPLOITATION",
     ],

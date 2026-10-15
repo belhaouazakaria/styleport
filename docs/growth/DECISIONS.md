@@ -233,7 +233,6 @@ Account health uses persisted connection/scopes/credential state, sync and analy
 
 Persist one canonical `GrowthAccountStrategyReview` per review month/model version with strict bounded evidence. A manual ADMIN same-origin action may enqueue one bounded local `ACCOUNT_STRATEGY_REVIEW` using a period/version idempotency key. Completion UPSERTs the review and writes compact `GrowthActivity`. Growth remains disabled by default. V1 never selects `RECOMMEND_NEW_ACCOUNT` because sustained cluster, concept-depth and comparative expansion evidence belongs to Phase 7. No AI, Pinterest API call, account/role/board/Pin mutation, automatic recurrence, cron, or PM2 Growth worker is allowed in Phase 6.
 
-
 ## D-029 — Phase 7 uses deterministic, bounded local opportunity intelligence
 
 **Status:** Accepted; superseded in production by D-031 after the retained v1 audit run
@@ -244,13 +243,11 @@ Persist one immutable analysis run per UTC date/model, stable lexical clusters, 
 
 The manual ADMIN same-origin action only enqueues the daily idempotent job `opportunity-intelligence:opportunity_intelligence_v1:YYYY-MM-DD`. No recurring enqueue, Pinterest or Translator mutation, Ideas creation, creative generation, publishing, scheduling, cron, or PM2 Growth worker is part of Phase 7. Growth and attribution collection remain disabled pending later rollout decisions. Phase 8 was subsequently defined by D-032.
 
-
 ## D-030 — Phase 7 separates Pin signals from cluster opportunities
 
 **Status:** Accepted, implemented, production deployed, and live validated
 
 Persist deterministic Pin observations separately from advisory cluster opportunities. One sustained Pin may produce a winner signal, including a viral outlier, but winner/rising expansion requires at least two meaningful contributors and rejects top-Pin outbound concentration above 80%. Inventory gaps retain multi-Pin/content-depth requirements. Rising combines absolute recent volume, reach or outbound movement, and non-contradictory CTR/save-rate evidence. Fatigue requires previously meaningful performance, complete recent/prior observations, concurrent reach and outbound decline, and quality evidence; improving CTR makes it cautious and prevents cluster opportunity qualification. Stale evidence suppresses rising/fatigue opportunities. No signal directly authorizes content or publication work.
-
 
 ## D-031 — Retain Phase 7 clustering v1 and correct with versioned v2
 
@@ -302,7 +299,6 @@ Experiments are DRAFT definitions only: two to four unique bounded variants, one
 
 The ADMIN UI and same-origin routes may enqueue one bounded `CREATIVE_LAB_GENERATE` job or create a DRAFT experiment. The final persistence transaction authoritatively revalidates Growth enabled state, target fingerprint and eligibility, complete Idea block schema, optional connected account, DRAFT experiment, variant/dimension, and cluster compatibility before either exact reuse or mutation. Phase 10 is production deployed and live visually approved. Approval, scheduling and publishing begin only in Phase 11; attribution collection, recurrence, cron and persistent Growth workers remain disabled.
 
-
 ## D-035 — Phase 11 requires immutable individual approval and reconciliation instead of blind Create Pin retry
 
 **Status:** Accepted, production deployed, and live publication validated
@@ -321,10 +317,20 @@ After the operator confirmed Standard Access and a complete grant, a specificall
 
 The evergreen cooldown is an audited `GrowthSettings.evergreenCooldownDays` value bounded to 14–180 days and defaulting to 45. Evaluation reads this setting; the learning model never adjusts it autonomously.
 
-**Status:** Accepted and implemented on branch; deployment validation pending
+**Status:** Accepted, production deployed, and validated October 15, 2026
 
 Use `growth_learning_v1`, `evergreen_learning_v1`, `learned_scheduler_v1`, `experiment_learning_v1`, and `opportunity_feedback_v1`. One immutable daily run retains bounded performance findings, opportunity adjustments, recommendations, learned account windows, and experiment evaluations. Phase 7 opportunity scores and Phase 11 approved snapshots are never rewritten.
 
 Revival requires a currently public destination, fresh analytics, at least 14 observed metric days, 500 impressions, 10 outbound clicks, a completed 45-day default cooldown, no equivalent active publication/candidate, no strong fatigue or unresolved account issue, and a supported meaningfully different creative. Sparse or stale evidence yields `INSUFFICIENT_DATA`; cooldowns and collisions yield `WAIT`; unsafe targets yield `SKIP`. Missing or disabled conversion evidence stays null. `learned_scheduler_v1` stays on the America/New_York Phase 11 cold-start baseline until an account/hour has at least four Pins and 1,000 impressions, then permits deterministic bounded exploration/exploitation.
 
 The ADMIN-only same-origin actions enqueue one bounded evaluation or one Creative Lab preparation. Preparation rechecks freshness and server-resolved target/archetype, creates no approval, and cannot publish. There is no recurring enqueue, cron, persistent Growth worker, content mutation, automatic experiment winner application, or autonomous board action.
+
+## D-037 — Phase 12.1 treats legacy Pins as evidence, not fabricated managed history
+
+**Status:** Accepted and implemented on branch; deployment validation pending
+
+Use `growth_learning_v2`, `evergreen_learning_v2`, and `learned_scheduler_v2` for the legacy-evidence correction. Keep the October 15 `growth_learning_v1` run and all 355 recommendations immutable; the existing `(analysisDate, learningModelVersion)` identity intentionally permits v1 and v2 on the same UTC day.
+
+Resolve only active non-archived Translators from exact HTTPS canonical SayTwist or approved legacy `/translators/:slug` URLs. Deduplicate with managed publications using stable Pinterest Pin IDs and prefer managed provenance. Aggregate only `READY` metric rows in the existing 90 complete-UTC-day window; expose `PROCESSING`, missing, stale, unavailable, and cap-exhausted evidence rather than converting it to zero or `KNOWN`. Legacy Pins may inform performance and learned timing only from genuine stored fields. They never enter controlled experiments without a genuine relationship and never acquire invented publication, approval, candidate, attribution, conversion, archetype, or experiment records.
+
+Production discovery found 222 eligible Pins with preliminary active-Translator SQL slug matches, including 221 unmanaged Pins; 16 provisionally met the base thresholds, with 21,119 `READY` and 685 `PROCESSING` daily rows. The preliminary join does not prove strict URL acceptance. The read-only `growth:verify-legacy-evidence` report must verify scheme, host, port, credentials, fragment, exact path, canonical encoding, casing, and active target before v2 approval. Those findings justify the correction but do not authorize production execution. Growth and attribution remain default-off, preparation keeps the paid-AI confirmation, and every Pin still requires immutable individual approval.

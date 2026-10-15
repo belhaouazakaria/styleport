@@ -11,7 +11,7 @@ SayTwist is a production-grade multi-translator discovery platform with:
 
 This repository is **feature-complete** and this hardening pass is focused on **deployment and operational readiness**.
 
-The Growth roadmap now includes Phase 12 Evergreen & Learning on `phase/12-evergreen-learning`: immutable evidence-led revival recommendations, learned account timing, experiment findings, and non-mutating opportunity feedback. Phase 11 live publishing is validated under operator-confirmed Pinterest Standard Access; the two earlier HTTP 401 chains remain historical evidence. Phase 12 is not deployed or production validated, Growth stays disabled, and individual Pin approval remains mandatory. See [`docs/growth/README.md`](docs/growth/README.md).
+Phase 12 Evergreen & Learning v1 was deployed and production-validated on October 15, 2026; its immutable run produced 355 `INSUFFICIENT_DATA` recommendations. Phase 12.1 legacy-evidence integration remains an undeployed branch correction. Growth and attribution stay disabled, the two earlier HTTP 401 chains remain historical evidence, and individual Pin approval remains mandatory. See [`docs/growth/README.md`](docs/growth/README.md).
 
 ## Production Architecture (Hostinger target)
 
