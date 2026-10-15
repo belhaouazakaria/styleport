@@ -317,7 +317,7 @@ After the operator confirmed Standard Access and a complete grant, a specificall
 
 The evergreen cooldown is an audited `GrowthSettings.evergreenCooldownDays` value bounded to 14–180 days and defaulting to 45. Evaluation reads this setting; the learning model never adjusts it autonomously.
 
-**Status:** Accepted and implemented on branch; deployment validation pending
+**Status:** Accepted, production deployed, and validated October 15, 2026
 
 Use `growth_learning_v1`, `evergreen_learning_v1`, `learned_scheduler_v1`, `experiment_learning_v1`, and `opportunity_feedback_v1`. One immutable daily run retains bounded performance findings, opportunity adjustments, recommendations, learned account windows, and experiment evaluations. Phase 7 opportunity scores and Phase 11 approved snapshots are never rewritten.
 
@@ -333,4 +333,4 @@ Use `growth_learning_v2`, `evergreen_learning_v2`, and `learned_scheduler_v2` fo
 
 Resolve only active non-archived Translators from exact HTTPS canonical SayTwist or approved legacy `/translators/:slug` URLs. Deduplicate with managed publications using stable Pinterest Pin IDs and prefer managed provenance. Aggregate only `READY` metric rows in the existing 90 complete-UTC-day window; expose `PROCESSING`, missing, stale, unavailable, and cap-exhausted evidence rather than converting it to zero or `KNOWN`. Legacy Pins may inform performance and learned timing only from genuine stored fields. They never enter controlled experiments without a genuine relationship and never acquire invented publication, approval, candidate, attribution, conversion, archetype, or experiment records.
 
-Production discovery found 222 eligible Pins whose URLs matched active Translators, including 221 unmanaged Pins; 16 provisionally met the base thresholds, with 21,119 `READY` and 685 `PROCESSING` daily rows. Those findings justify the correction but do not authorize production execution. Growth and attribution remain default-off, preparation keeps the paid-AI confirmation, and every Pin still requires immutable individual approval.
+Production discovery found 222 eligible Pins with preliminary active-Translator SQL slug matches, including 221 unmanaged Pins; 16 provisionally met the base thresholds, with 21,119 `READY` and 685 `PROCESSING` daily rows. The preliminary join does not prove strict URL acceptance. The read-only `growth:verify-legacy-evidence` report must verify scheme, host, port, credentials, fragment, exact path, canonical encoding, casing, and active target before v2 approval. Those findings justify the correction but do not authorize production execution. Growth and attribution remain default-off, preparation keeps the paid-AI confirmation, and every Pin still requires immutable individual approval.

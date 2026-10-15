@@ -265,6 +265,33 @@ suite("Phase 12 PostgreSQL learning invariants", () => {
     ]);
   });
 
+  it("preserves managed-only v1 preparation compatibility", async () => {
+    const now = new Date("2026-10-15T12:00:00Z");
+    const { admin } = await fixture(now);
+    const analysis = await persistLearningAnalysis({ analysisDate: now, now });
+    const recommendation = analysis.run.recommendations.find(
+      (row) => row.recommendation === "REVIVE",
+    )!;
+    await prisma.growthLearningRun.update({
+      where: { id: analysis.run.id },
+      data: {
+        learningModelVersion: "growth_learning_v1",
+        evergreenModelVersion: "evergreen_learning_v1",
+        schedulerModelVersion: "learned_scheduler_v1",
+      },
+    });
+    await expect(
+      prepareEvergreenRecommendation(
+        {
+          recommendationId: recommendation.id,
+          confirmation: true,
+          paidAiConfirmation: "QUEUE PAID AI CREATIVE",
+        },
+        admin.id,
+      ),
+    ).resolves.toMatchObject({ created: true });
+  });
+
   it("aggregates mixed legacy and managed Pins once with retained provenance", async () => {
     const now = new Date("2026-10-15T12:00:00Z");
     const { translator } = await fixture(now);
@@ -312,6 +339,150 @@ suite("Phase 12 PostgreSQL learning invariants", () => {
     ]);
     expect(await prisma.growthPinPublication.count()).toBe(1);
     expect(await prisma.growthPinApproval.count()).toBe(1);
+  });
+
+  it("prepares a legitimate mixed-history REVIVE and blocks a newly published legacy Pin", async () => {
+    const now = new Date("2026-10-15T12:00:00Z");
+    const { translator, admin } = await fixture(now);
+    const account = await prisma.growthPinterestAccount.findFirstOrThrow();
+    const legacy = await prisma.growthPinterestPin.create({
+      data: {
+        pinterestPinId: "legacy-preparation-pin",
+        accountId: account.id,
+        destinationUrl:
+          "https://translator.whattypeof.com/translators/warm-phase12",
+        publishedAt: new Date("2026-06-01T13:00:00Z"),
+        isActive: true,
+        analyticsEligible: true,
+        lastSeenAt: now,
+        lastSyncedAt: now,
+      },
+    });
+    await prisma.growthPinterestPinMetricDaily.createMany({
+      data: Array.from({ length: 90 }, (_, index) => ({
+        pinId: legacy.id,
+        metricDate: new Date(Date.UTC(2026, 6, 17 + index)),
+        impressions: 100n,
+        outboundClicks: 2n,
+        saves: 1n,
+        dataStatus: "READY",
+        fetchedAt: now,
+      })),
+    });
+    const first = await persistLearningAnalysis({ analysisDate: now, now });
+    const validRecommendation = first.run.recommendations.find(
+      (row) => row.translatorId === translator.id,
+    )!;
+    expect(validRecommendation.recommendation).toBe("REVIVE");
+    await expect(
+      prepareEvergreenRecommendation(
+        {
+          recommendationId: validRecommendation.id,
+          confirmation: true,
+          paidAiConfirmation: "QUEUE PAID AI CREATIVE",
+        },
+        admin.id,
+      ),
+    ).resolves.toMatchObject({ created: true });
+
+    await clean();
+    const secondFixture = await fixture(now);
+    const second = await persistLearningAnalysis({ analysisDate: now, now });
+    const staleRecommendation = second.run.recommendations.find(
+      (row) => row.translatorId === secondFixture.translator.id,
+    )!;
+    await prisma.growthPinterestPin.create({
+      data: {
+        pinterestPinId: "new-legacy-after-analysis",
+        accountId: (await prisma.growthPinterestAccount.findFirstOrThrow()).id,
+        destinationUrl:
+          "https://translator.whattypeof.com/translators/warm-phase12",
+        publishedAt: new Date("2026-10-15T06:00:00Z"),
+        isActive: true,
+        analyticsEligible: true,
+        lastSeenAt: now,
+        lastSyncedAt: now,
+      },
+    });
+    await expect(
+      prepareEvergreenRecommendation(
+        {
+          recommendationId: staleRecommendation.id,
+          confirmation: true,
+          paidAiConfirmation: "QUEUE PAID AI CREATIVE",
+        },
+        secondFixture.admin.id,
+      ),
+    ).rejects.toThrow("Combined Pin provenance changed after analysis");
+    expect(
+      await prisma.growthJob.count({
+        where: { type: "EVERGREEN_CREATIVE_PREPARE" },
+      }),
+    ).toBe(0);
+  });
+
+  it("fails preparation closed when a new eligible Pin ambiguously resembles the target", async () => {
+    const now = new Date("2026-10-15T12:00:00Z");
+    const { translator, admin } = await fixture(now);
+    const analysis = await persistLearningAnalysis({ analysisDate: now, now });
+    const recommendation = analysis.run.recommendations.find(
+      (row) => row.translatorId === translator.id,
+    )!;
+    await prisma.growthPinterestPin.create({
+      data: {
+        pinterestPinId: "ambiguous-legacy-after-analysis",
+        accountId: (await prisma.growthPinterestAccount.findFirstOrThrow()).id,
+        destinationUrl: "https://unapproved.example/translators/warm-phase12",
+        publishedAt: new Date("2026-06-01T13:00:00Z"),
+        isActive: true,
+        analyticsEligible: true,
+        lastSeenAt: now,
+        lastSyncedAt: now,
+      },
+    });
+    await expect(
+      prepareEvergreenRecommendation(
+        {
+          recommendationId: recommendation.id,
+          confirmation: true,
+          paidAiConfirmation: "QUEUE PAID AI CREATIVE",
+        },
+        admin.id,
+      ),
+    ).rejects.toThrow("Legacy Pin destination is ambiguous");
+  });
+
+  it("marks the whole run and comparisons partial for managed PROCESSING metrics", async () => {
+    const now = new Date("2026-10-15T12:00:00Z");
+    await fixture(now);
+    await prisma.growthPinterestPinMetricDaily.updateMany({
+      where: { metricDate: new Date("2026-10-14T00:00:00Z") },
+      data: { dataStatus: "PROCESSING" },
+    });
+    const result = await persistLearningAnalysis({ analysisDate: now, now });
+    expect(result.run.evidenceQuality).toBe("PARTIAL");
+    expect(result.run.reasonCodes).toContain("MANAGED_PIN_METRICS_INCOMPLETE");
+    expect(
+      (
+        result.run.performanceFindings as Array<{ evidenceQuality: string }>
+      ).every((finding) => finding.evidenceQuality === "PARTIAL"),
+    ).toBe(true);
+  });
+
+  it("marks the whole run and comparisons partial for a missing managed day", async () => {
+    const now = new Date("2026-10-15T12:00:00Z");
+    await fixture(now);
+    await prisma.growthPinterestPinMetricDaily.deleteMany({
+      where: { metricDate: new Date("2026-10-14T00:00:00Z") },
+    });
+    const result = await persistLearningAnalysis({ analysisDate: now, now });
+    expect(result.run.evidenceQuality).toBe("PARTIAL");
+    expect(result.run.reasonCodes).toContain("MANAGED_PIN_METRICS_INCOMPLETE");
+    expect(
+      (
+        result.run.performanceFindings as Array<{ evidenceQuality: string }>
+      ).every((finding) => finding.evidenceQuality === "PARTIAL"),
+    ).toBe(true);
   });
 
   it("does not count PROCESSING metrics and respects a recent legacy cooldown", async () => {
