@@ -68,6 +68,8 @@ export function comparePerformance(
   }
   return [...grouped.values()]
     .map((row) => {
+      const conversionEvidenceComplete =
+        !attributionAvailable || row.conversionSamples === row.samples;
       const concentrated =
         row.samples >= 3 &&
         row.impressions > 0 &&
@@ -79,21 +81,28 @@ export function comparePerformance(
         : concentrated
           ? GrowthLearningEvidenceQuality.PARTIAL
           : GrowthLearningEvidenceQuality.INSUFFICIENT_DATA;
-      const evidenceQuality = options.evidenceComplete
-        ? baseEvidenceQuality
-        : GrowthLearningEvidenceQuality.PARTIAL;
-      const reasonCodes = options.evidenceComplete
-        ? sufficient
-          ? ["EXPOSURE_NORMALIZED"]
-          : concentrated
-            ? ["OUTLIER_CONCENTRATION"]
-            : ["SAMPLE_BELOW_MINIMUM"]
-        : [
-            ...(options.incompletenessReasonCodes || [
-              "EVIDENCE_SELECTION_INCOMPLETE",
-            ]),
-            ...(concentrated ? ["OUTLIER_CONCENTRATION"] : []),
-          ];
+      const evidenceQuality =
+        options.evidenceComplete && conversionEvidenceComplete
+          ? baseEvidenceQuality
+          : GrowthLearningEvidenceQuality.PARTIAL;
+      const reasonCodes =
+        options.evidenceComplete && conversionEvidenceComplete
+          ? sufficient
+            ? ["EXPOSURE_NORMALIZED"]
+            : concentrated
+              ? ["OUTLIER_CONCENTRATION"]
+              : ["SAMPLE_BELOW_MINIMUM"]
+          : [
+              ...(!options.evidenceComplete
+                ? options.incompletenessReasonCodes || [
+                    "EVIDENCE_SELECTION_INCOMPLETE",
+                  ]
+                : []),
+              ...(!conversionEvidenceComplete
+                ? ["CONVERSION_EVIDENCE_INCOMPLETE"]
+                : []),
+              ...(concentrated ? ["OUTLIER_CONCENTRATION"] : []),
+            ];
       return {
         ...row,
         outboundRate: row.impressions
@@ -104,17 +113,19 @@ export function comparePerformance(
           : null,
         conversionRate:
           attributionAvailable &&
+          conversionEvidenceComplete &&
           row.conversionSamples > 0 &&
           row.qualifiedConversions != null &&
           row.outboundClicks
             ? Number((row.qualifiedConversions / row.outboundClicks).toFixed(6))
             : null,
         evidenceQuality,
-        confidence: options.evidenceComplete
-          ? sufficient
-            ? Math.min(90, 50 + row.samples * 5)
-            : Math.min(40, row.samples * 10)
-          : Math.min(30, row.samples * 5),
+        confidence:
+          options.evidenceComplete && conversionEvidenceComplete
+            ? sufficient
+              ? Math.min(90, 50 + row.samples * 5)
+              : Math.min(40, row.samples * 10)
+            : Math.min(30, row.samples * 5),
         reasonCodes,
       };
     })

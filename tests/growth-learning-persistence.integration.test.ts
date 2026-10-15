@@ -122,7 +122,7 @@ async function fixture(now: Date) {
     },
   });
   await prisma.growthPinterestPinMetricDaily.createMany({
-    data: Array.from({ length: 30 }, (_, index) => ({
+    data: Array.from({ length: 86 }, (_, index) => ({
       pinId: pin.id,
       metricDate: new Date(Date.UTC(2026, 6, 21 + index)),
       impressions: BigInt(200),
@@ -226,6 +226,159 @@ afterAll(async () => {
 });
 
 suite("Phase 12 PostgreSQL learning invariants", () => {
+  it("keeps an immutable same-day v1 run beside the idempotent v2 run", async () => {
+    const now = new Date("2026-10-15T12:00:00Z");
+    await fixture(now);
+    await prisma.growthLearningRun.create({
+      data: {
+        analysisDate: new Date("2026-10-15T00:00:00Z"),
+        evidenceWindowStart: new Date("2026-07-17T00:00:00Z"),
+        evidenceWindowEnd: new Date("2026-10-15T00:00:00Z"),
+        learningModelVersion: "growth_learning_v1",
+        evergreenModelVersion: "evergreen_learning_v1",
+        schedulerModelVersion: "learned_scheduler_v1",
+        experimentModelVersion: "experiment_learning_v1",
+        opportunityFeedbackVersion: "opportunity_feedback_v1",
+        evidenceQuality: "INSUFFICIENT_DATA",
+        attributionAvailability: "NOT_COLLECTING",
+        targetsConsidered: 355,
+        recommendationsProduced: 355,
+        reasonCodes: ["NO_HISTORICAL_PUBLICATIONS"],
+        performanceFindings: [],
+        opportunityAdjustments: [],
+        summary: "Immutable October 15 v1 production result.",
+      },
+    });
+    const first = await persistLearningAnalysis({ analysisDate: now, now });
+    const second = await persistLearningAnalysis({ analysisDate: now, now });
+    expect(first.run.learningModelVersion).toBe("growth_learning_v2");
+    expect(second.reused).toBe(true);
+    expect(
+      await prisma.growthLearningRun.findMany({
+        where: { analysisDate: new Date("2026-10-15T00:00:00Z") },
+        orderBy: { learningModelVersion: "asc" },
+        select: { learningModelVersion: true },
+      }),
+    ).toEqual([
+      { learningModelVersion: "growth_learning_v1" },
+      { learningModelVersion: "growth_learning_v2" },
+    ]);
+  });
+
+  it("aggregates mixed legacy and managed Pins once with retained provenance", async () => {
+    const now = new Date("2026-10-15T12:00:00Z");
+    const { translator } = await fixture(now);
+    const account = await prisma.growthPinterestAccount.findFirstOrThrow();
+    const legacy = await prisma.growthPinterestPin.create({
+      data: {
+        pinterestPinId: "legacy-phase12-pin",
+        accountId: account.id,
+        destinationUrl:
+          "https://translator.whattypeof.com/translators/warm-phase12",
+        publishedAt: new Date("2026-06-01T13:00:00Z"),
+        isActive: true,
+        analyticsEligible: true,
+        lastSeenAt: now,
+        lastSyncedAt: now,
+      },
+    });
+    await prisma.growthPinterestPinMetricDaily.createMany({
+      data: Array.from({ length: 90 }, (_, index) => ({
+        pinId: legacy.id,
+        metricDate: new Date(Date.UTC(2026, 6, 17 + index)),
+        impressions: 100n,
+        outboundClicks: 2n,
+        saves: 1n,
+        dataStatus: "READY",
+        fetchedAt: now,
+      })),
+    });
+    const result = await persistLearningAnalysis({ analysisDate: now, now });
+    const recommendation = result.run.recommendations.find(
+      (row) => row.translatorId === translator.id,
+    )!;
+    expect(recommendation).toMatchObject({ recommendation: "REVIVE" });
+    const evidence = recommendation.evidence as {
+      impressions: number;
+      evidenceSources: { managed: unknown[]; legacy: unknown[] };
+    };
+    expect(evidence.impressions).toBe(26_200);
+    expect(evidence.evidenceSources.managed).toHaveLength(1);
+    expect(evidence.evidenceSources.legacy).toEqual([
+      expect.objectContaining({
+        source: "LEGACY_PIN",
+        pinterestPinId: "legacy-phase12-pin",
+      }),
+    ]);
+    expect(await prisma.growthPinPublication.count()).toBe(1);
+    expect(await prisma.growthPinApproval.count()).toBe(1);
+  });
+
+  it("does not count PROCESSING metrics and respects a recent legacy cooldown", async () => {
+    const now = new Date("2026-10-15T12:00:00Z");
+    const { translator } = await fixture(now);
+    const account = await prisma.growthPinterestAccount.findFirstOrThrow();
+    const legacy = await prisma.growthPinterestPin.create({
+      data: {
+        pinterestPinId: "legacy-processing-pin",
+        accountId: account.id,
+        destinationUrl: "https://saytwist.com/translators/warm-phase12",
+        publishedAt: new Date("2026-06-01T13:00:00Z"),
+        isActive: true,
+        analyticsEligible: true,
+        lastSeenAt: now,
+        lastSyncedAt: now,
+      },
+    });
+    await prisma.growthPinterestPinMetricDaily.create({
+      data: {
+        pinId: legacy.id,
+        metricDate: new Date("2026-10-01T00:00:00Z"),
+        impressions: 1_000_000n,
+        outboundClicks: 1_000_000n,
+        saves: 1_000_000n,
+        dataStatus: "PROCESSING",
+        fetchedAt: now,
+      },
+    });
+    const result = await persistLearningAnalysis({ analysisDate: now, now });
+    const recommendation = result.run.recommendations.find(
+      (row) => row.translatorId === translator.id,
+    )!;
+    expect(recommendation).toMatchObject({
+      recommendation: "INSUFFICIENT_DATA",
+      evidenceQuality: "PARTIAL",
+    });
+    expect(recommendation.reasonCodes).toContain("PIN_METRICS_INCOMPLETE");
+    expect(
+      (recommendation.evidence as { impressions: number }).impressions,
+    ).toBe(17_200);
+  });
+
+  it("uses a legacy Pin newer than the evidence window for cooldown only", async () => {
+    const now = new Date("2026-10-15T12:00:00Z");
+    const { translator } = await fixture(now);
+    const account = await prisma.growthPinterestAccount.findFirstOrThrow();
+    await prisma.growthPinterestPin.create({
+      data: {
+        pinterestPinId: "legacy-recent-pin",
+        accountId: account.id,
+        destinationUrl: "https://saytwist.com/translators/warm-phase12",
+        publishedAt: new Date("2026-10-15T06:00:00Z"),
+        isActive: true,
+        analyticsEligible: true,
+        lastSeenAt: now,
+        lastSyncedAt: now,
+      },
+    });
+    const result = await persistLearningAnalysis({ analysisDate: now, now });
+    const recommendation = result.run.recommendations.find(
+      (row) => row.translatorId === translator.id,
+    )!;
+    expect(recommendation.recommendation).toBe("WAIT");
+    expect(recommendation.reasonCodes).toContain("COOLDOWN_ACTIVE");
+  });
+
   it("persists one immutable recommendation run and converges concurrent repeats", async () => {
     const now = new Date("2026-10-15T12:00:00Z");
     const { translator } = await fixture(now);
