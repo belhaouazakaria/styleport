@@ -9,10 +9,21 @@ export type PerformanceObservation = {
   qualifiedConversions: number | null;
 };
 
+export type PerformanceComparisonOptions = {
+  attributionAvailable: boolean;
+  evidenceComplete: boolean;
+  incompletenessReasonCodes?: string[];
+};
+
 export function comparePerformance(
   observations: PerformanceObservation[],
-  attributionAvailable: boolean,
+  input: boolean | PerformanceComparisonOptions,
 ) {
+  const options: PerformanceComparisonOptions =
+    typeof input === "boolean"
+      ? { attributionAvailable: input, evidenceComplete: true }
+      : input;
+  const attributionAvailable = options.attributionAvailable;
   const grouped = new Map<
     string,
     {
@@ -27,7 +38,7 @@ export function comparePerformance(
       maximumImpressions: number;
     }
   >();
-  for (const row of observations.slice(0, 2_000)) {
+  for (const row of observations) {
     const key = `${row.dimension}:${row.value}`;
     const current = grouped.get(key) || {
       dimension: row.dimension,
@@ -63,6 +74,26 @@ export function comparePerformance(
         row.maximumImpressions / row.impressions > 0.8;
       const sufficient =
         row.samples >= 3 && row.impressions >= 500 && !concentrated;
+      const baseEvidenceQuality = sufficient
+        ? GrowthLearningEvidenceQuality.KNOWN
+        : concentrated
+          ? GrowthLearningEvidenceQuality.PARTIAL
+          : GrowthLearningEvidenceQuality.INSUFFICIENT_DATA;
+      const evidenceQuality = options.evidenceComplete
+        ? baseEvidenceQuality
+        : GrowthLearningEvidenceQuality.PARTIAL;
+      const reasonCodes = options.evidenceComplete
+        ? sufficient
+          ? ["EXPOSURE_NORMALIZED"]
+          : concentrated
+            ? ["OUTLIER_CONCENTRATION"]
+            : ["SAMPLE_BELOW_MINIMUM"]
+        : [
+            ...(options.incompletenessReasonCodes || [
+              "EVIDENCE_SELECTION_INCOMPLETE",
+            ]),
+            ...(concentrated ? ["OUTLIER_CONCENTRATION"] : []),
+          ];
       return {
         ...row,
         outboundRate: row.impressions
@@ -78,25 +109,20 @@ export function comparePerformance(
           row.outboundClicks
             ? Number((row.qualifiedConversions / row.outboundClicks).toFixed(6))
             : null,
-        evidenceQuality: sufficient
-          ? GrowthLearningEvidenceQuality.KNOWN
-          : concentrated
-            ? GrowthLearningEvidenceQuality.PARTIAL
-            : GrowthLearningEvidenceQuality.INSUFFICIENT_DATA,
-        confidence: sufficient
-          ? Math.min(90, 50 + row.samples * 5)
-          : Math.min(40, row.samples * 10),
-        reasonCodes: sufficient
-          ? ["EXPOSURE_NORMALIZED"]
-          : concentrated
-            ? ["OUTLIER_CONCENTRATION"]
-            : ["SAMPLE_BELOW_MINIMUM"],
+        evidenceQuality,
+        confidence: options.evidenceComplete
+          ? sufficient
+            ? Math.min(90, 50 + row.samples * 5)
+            : Math.min(40, row.samples * 10)
+          : Math.min(30, row.samples * 5),
+        reasonCodes,
       };
     })
     .sort(
       (a, b) =>
         a.dimension.localeCompare(b.dimension) ||
-        b.outboundClicks - a.outboundClicks ||
+        b.confidence - a.confidence ||
+        (b.outboundRate || 0) - (a.outboundRate || 0) ||
         a.value.localeCompare(b.value),
     );
 }

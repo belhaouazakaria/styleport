@@ -167,6 +167,7 @@ enum GrowthJobType {
   PINTEREST_PIN_PUBLISH
   PINTEREST_PIN_RECONCILE
   EVERGREEN_LEARNING_ANALYSIS
+  EVERGREEN_CREATIVE_PREPARE
 }
 
 enum GrowthEvergreenRecommendation {
@@ -185,6 +186,7 @@ enum GrowthLearningEvidenceQuality {
 
 enum GrowthEvergreenRecommendationStatus {
   PROPOSED
+  PREPARING
   PREPARED
   DISMISSED
 }
@@ -931,29 +933,31 @@ model GrowthSettings {
 }
 
 model GrowthJob {
-  id                    String                 @id @default(cuid())
+  id                    String                               @id @default(cuid())
   type                  GrowthJobType
-  status                GrowthJobStatus        @default(PENDING)
+  status                GrowthJobStatus                      @default(PENDING)
   payload               Json?
-  idempotencyKey        String                 @unique
-  runAfter              DateTime               @default(now())
-  attemptCount          Int                    @default(0)
-  maxAttempts           Int                    @default(3)
+  idempotencyKey        String                               @unique
+  runAfter              DateTime                             @default(now())
+  attemptCount          Int                                  @default(0)
+  maxAttempts           Int                                  @default(3)
   workerId              String?
   claimedAt             DateTime?
   leaseUntil            DateTime?
   heartbeatAt           DateTime?
   lastError             String?
-  createdAt             DateTime               @default(now())
-  updatedAt             DateTime               @updatedAt
+  createdAt             DateTime                             @default(now())
+  updatedAt             DateTime                             @updatedAt
   completedAt           DateTime?
   growthDecisions       GrowthDecision[]
   growthContentVersions GrowthContentVersion[]
   growthIdeaVersions    GrowthIdeaVersion[]
   growthPinCandidate    GrowthPinCandidate?
-  publishedPin          GrowthPinPublication?  @relation("GrowthPinPublicationPublishJob")
-  reconciledPin         GrowthPinPublication?  @relation("GrowthPinPublicationReconcileJob")
+  publishedPin          GrowthPinPublication?                @relation("GrowthPinPublicationPublishJob")
+  reconciledPin         GrowthPinPublication?                @relation("GrowthPinPublicationReconcileJob")
   growthLearningRun     GrowthLearningRun?
+  evergreenPreparation  GrowthEvergreenRecommendationRecord? @relation("EvergreenPreparationJob")
+  evergreenCreative     GrowthEvergreenRecommendationRecord? @relation("EvergreenCreativeJob")
 
   @@index([status, runAfter])
   @@index([leaseUntil])
@@ -1808,14 +1812,17 @@ model GrowthEvergreenRecommendationRecord {
   cooldownUntil        DateTime?
   evidenceFreshThrough DateTime?
   preparedCandidateId  String?                             @unique
+  preparationJobId     String?                             @unique
+  creativeJobId        String?                             @unique
   createdAt            DateTime                            @default(now())
   updatedAt            DateTime                            @updatedAt
   learningRun          GrowthLearningRun                   @relation(fields: [learningRunId], references: [id], onDelete: Cascade)
-  translator           Translator?                         @relation(fields: [translatorId], references: [id], onDelete: SetNull)
-  idea                 GrowthIdea?                         @relation(fields: [ideaId], references: [id], onDelete: SetNull)
-  preparedCandidate    GrowthPinCandidate?                 @relation("PreparedEvergreenCandidate", fields: [preparedCandidateId], references: [id], onDelete: SetNull)
+  translator           Translator?                         @relation(fields: [translatorId], references: [id], onDelete: Restrict)
+  idea                 GrowthIdea?                         @relation(fields: [ideaId], references: [id], onDelete: Restrict)
+  preparedCandidate    GrowthPinCandidate?                 @relation("PreparedEvergreenCandidate", fields: [preparedCandidateId], references: [id], onDelete: Restrict)
+  preparationJob       GrowthJob?                          @relation("EvergreenPreparationJob", fields: [preparationJobId], references: [id], onDelete: Restrict)
+  creativeJob          GrowthJob?                          @relation("EvergreenCreativeJob", fields: [creativeJobId], references: [id], onDelete: Restrict)
 
-  @@unique([learningRunId, destinationKind, translatorId, ideaId])
   @@index([recommendation, status, confidence, createdAt])
   @@index([translatorId, createdAt])
   @@index([ideaId, createdAt])

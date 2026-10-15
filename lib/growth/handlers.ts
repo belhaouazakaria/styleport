@@ -37,9 +37,18 @@ import {
 import { creativeGenerationJobPayloadSchema } from "@/lib/growth/creative/contracts";
 import { generateCreativeCandidate } from "@/lib/growth/creative/candidates";
 import { publicationJobPayloadSchema } from "@/lib/growth/publishing/contracts";
-import { publishApprovedPin, reconcilePinterestPublication } from "@/lib/growth/publishing/service";
-import { learningJobPayloadSchema } from "@/lib/growth/learning/contracts";
-import { persistLearningAnalysis } from "@/lib/growth/learning/service";
+import {
+  publishApprovedPin,
+  reconcilePinterestPublication,
+} from "@/lib/growth/publishing/service";
+import {
+  evergreenPreparationJobPayloadSchema,
+  learningJobPayloadSchema,
+} from "@/lib/growth/learning/contracts";
+import {
+  executeEvergreenPreparation,
+  persistLearningAnalysis,
+} from "@/lib/growth/learning/service";
 
 export interface GrowthJobHandlerContext {
   job: GrowthJob;
@@ -51,12 +60,44 @@ export type GrowthJobHandler = (
 
 const handlers = new Map<GrowthJobType, GrowthJobHandler>([
   [
+    GrowthJobType.EVERGREEN_CREATIVE_PREPARE,
+    async ({ job }) => {
+      const parsed = evergreenPreparationJobPayloadSchema.safeParse(
+        job.payload || {},
+      );
+      if (!parsed.success)
+        throw new NonRetryableGrowthJobError(
+          "Invalid evergreen preparation payload.",
+        );
+      const result = await executeEvergreenPreparation(
+        parsed.data.recommendationId,
+      );
+      return {
+        recommendationId: parsed.data.recommendationId,
+        creativeJobId: result.job.id,
+        reused: !result.created,
+      };
+    },
+  ],
+  [
     GrowthJobType.EVERGREEN_LEARNING_ANALYSIS,
     async ({ job }) => {
       const parsed = learningJobPayloadSchema.safeParse(job.payload || {});
-      if (!parsed.success) throw new NonRetryableGrowthJobError("Invalid Evergreen Learning payload.");
-      const result = await persistLearningAnalysis({ analysisDate: new Date(`${parsed.data.analysisDate}T00:00:00.000Z`), jobId: job.id });
-      return { learningRunId: result.run.id, modelVersion: result.run.learningModelVersion, evidenceQuality: result.run.evidenceQuality, recommendations: result.run.recommendations.length, reused: result.reused };
+      if (!parsed.success)
+        throw new NonRetryableGrowthJobError(
+          "Invalid Evergreen Learning payload.",
+        );
+      const result = await persistLearningAnalysis({
+        analysisDate: new Date(`${parsed.data.analysisDate}T00:00:00.000Z`),
+        jobId: job.id,
+      });
+      return {
+        learningRunId: result.run.id,
+        modelVersion: result.run.learningModelVersion,
+        evidenceQuality: result.run.evidenceQuality,
+        recommendations: result.run.recommendations.length,
+        reused: result.reused,
+      };
     },
   ],
   [
@@ -191,9 +232,16 @@ const handlers = new Map<GrowthJobType, GrowthJobHandler>([
   [
     GrowthJobType.TRANSLATOR_AUTOPILOT_DECIDE,
     async ({ job }) => {
-      const parsed = translatorDecisionJobPayloadSchema.safeParse(job.payload || {});
-      if (!parsed.success) throw new NonRetryableGrowthJobError("Invalid Translator Autopilot decision payload.");
-      const result = await decideTranslatorOpportunity(parsed.data.opportunityId);
+      const parsed = translatorDecisionJobPayloadSchema.safeParse(
+        job.payload || {},
+      );
+      if (!parsed.success)
+        throw new NonRetryableGrowthJobError(
+          "Invalid Translator Autopilot decision payload.",
+        );
+      const result = await decideTranslatorOpportunity(
+        parsed.data.opportunityId,
+      );
       return {
         decisionId: result.decision.id,
         decisionType: result.decision.type,
@@ -206,13 +254,23 @@ const handlers = new Map<GrowthJobType, GrowthJobHandler>([
   [
     GrowthJobType.TRANSLATOR_AUTOPILOT_EXECUTE,
     async ({ job }) => {
-      const parsed = translatorExecutionJobPayloadSchema.safeParse(job.payload || {});
-      if (!parsed.success) throw new NonRetryableGrowthJobError("Invalid Translator Autopilot execution payload.");
-      const result = await executeTranslatorDecision(parsed.data.decisionId, { jobId: job.id });
+      const parsed = translatorExecutionJobPayloadSchema.safeParse(
+        job.payload || {},
+      );
+      if (!parsed.success)
+        throw new NonRetryableGrowthJobError(
+          "Invalid Translator Autopilot execution payload.",
+        );
+      const result = await executeTranslatorDecision(parsed.data.decisionId, {
+        jobId: job.id,
+      });
       return {
         decisionId: result.decision.id,
         status: result.decision.status,
-        translatorId: "translatorId" in result ? result.translatorId : result.decision.translatorId,
+        translatorId:
+          "translatorId" in result
+            ? result.translatorId
+            : result.decision.translatorId,
         reused: result.reused,
       };
     },
@@ -221,7 +279,10 @@ const handlers = new Map<GrowthJobType, GrowthJobHandler>([
     GrowthJobType.IDEA_AUTOPILOT_DECIDE,
     async ({ job }) => {
       const parsed = ideaDecisionJobPayloadSchema.safeParse(job.payload || {});
-      if (!parsed.success) throw new NonRetryableGrowthJobError("Invalid Idea Autopilot decision payload.");
+      if (!parsed.success)
+        throw new NonRetryableGrowthJobError(
+          "Invalid Idea Autopilot decision payload.",
+        );
       const result = await decideIdeaOpportunity(parsed.data.opportunityId);
       return {
         decisionId: result.decision.id,
@@ -236,8 +297,13 @@ const handlers = new Map<GrowthJobType, GrowthJobHandler>([
     GrowthJobType.IDEA_AUTOPILOT_EXECUTE,
     async ({ job }) => {
       const parsed = ideaExecutionJobPayloadSchema.safeParse(job.payload || {});
-      if (!parsed.success) throw new NonRetryableGrowthJobError("Invalid Idea Autopilot execution payload.");
-      const result = await executeIdeaDecision(parsed.data.decisionId, { jobId: job.id });
+      if (!parsed.success)
+        throw new NonRetryableGrowthJobError(
+          "Invalid Idea Autopilot execution payload.",
+        );
+      const result = await executeIdeaDecision(parsed.data.decisionId, {
+        jobId: job.id,
+      });
       return {
         decisionId: result.decision.id,
         status: result.decision.status,
@@ -249,8 +315,13 @@ const handlers = new Map<GrowthJobType, GrowthJobHandler>([
   [
     GrowthJobType.CREATIVE_LAB_GENERATE,
     async ({ job }) => {
-      const parsed = creativeGenerationJobPayloadSchema.safeParse(job.payload || {});
-      if (!parsed.success) throw new NonRetryableGrowthJobError("Invalid Creative Lab generation payload.");
+      const parsed = creativeGenerationJobPayloadSchema.safeParse(
+        job.payload || {},
+      );
+      if (!parsed.success)
+        throw new NonRetryableGrowthJobError(
+          "Invalid Creative Lab generation payload.",
+        );
       const result = await generateCreativeCandidate(parsed.data, job.id);
       return {
         candidateId: result.candidate.id,
@@ -265,18 +336,35 @@ const handlers = new Map<GrowthJobType, GrowthJobHandler>([
     GrowthJobType.PINTEREST_PIN_PUBLISH,
     async ({ job }) => {
       const parsed = publicationJobPayloadSchema.safeParse(job.payload || {});
-      if (!parsed.success) throw new NonRetryableGrowthJobError("Invalid Pinterest publication payload.");
+      if (!parsed.success)
+        throw new NonRetryableGrowthJobError(
+          "Invalid Pinterest publication payload.",
+        );
       const result = await publishApprovedPin(parsed.data.publicationId);
-      return { publicationId: result.publication.id, status: result.publication.status, reused: result.reused };
+      return {
+        publicationId: result.publication.id,
+        status: result.publication.status,
+        reused: result.reused,
+      };
     },
   ],
   [
     GrowthJobType.PINTEREST_PIN_RECONCILE,
     async ({ job }) => {
       const parsed = publicationJobPayloadSchema.safeParse(job.payload || {});
-      if (!parsed.success) throw new NonRetryableGrowthJobError("Invalid Pinterest reconciliation payload.");
-      const result = await reconcilePinterestPublication(parsed.data.publicationId, job.attemptCount);
-      return { publicationId: result.publication.id, status: result.publication.status, reused: result.reused };
+      if (!parsed.success)
+        throw new NonRetryableGrowthJobError(
+          "Invalid Pinterest reconciliation payload.",
+        );
+      const result = await reconcilePinterestPublication(
+        parsed.data.publicationId,
+        job.attemptCount,
+      );
+      return {
+        publicationId: result.publication.id,
+        status: result.publication.status,
+        reused: result.reused,
+      };
     },
   ],
 ]);

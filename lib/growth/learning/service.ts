@@ -4,6 +4,7 @@ import {
   GrowthEvergreenRecommendation,
   GrowthEvergreenRecommendationStatus,
   GrowthExperimentStatus,
+  GrowthJobStatus,
   GrowthJobType,
   GrowthLearningEvidenceQuality,
   GrowthPublicationStatus,
@@ -12,7 +13,11 @@ import {
 
 import { recordGrowthActivity } from "@/lib/growth/activity";
 import { enqueueCreativeGeneration } from "@/lib/growth/creative/candidates";
-import { experimentVariantsSchema } from "@/lib/growth/creative/contracts";
+import {
+  experimentGuardrailsSchema,
+  experimentVariantsSchema,
+} from "@/lib/growth/creative/contracts";
+import { isAttributionEnvironmentEnabled } from "@/lib/growth/attribution/config";
 import {
   EVERGREEN_MODEL_VERSION,
   EXPERIMENT_LEARNING_VERSION,
@@ -20,6 +25,12 @@ import {
   LEARNING_MODEL_VERSION,
   LEARNING_TIME_ZONE,
   LEARNING_WINDOW_DAYS,
+  ANALYTICS_FRESHNESS_HOURS,
+  MAX_LEARNING_ACCOUNTS,
+  MAX_LEARNING_ACTIVE_CANDIDATES,
+  MAX_LEARNING_EXPERIMENTS,
+  MAX_LEARNING_FATIGUE_SIGNALS,
+  MAX_LEARNING_OPPORTUNITIES,
   MAX_LEARNING_PUBLICATIONS,
   MAX_LEARNING_TARGETS,
   OPPORTUNITY_FEEDBACK_VERSION,
@@ -43,6 +54,13 @@ function utcDay(value = new Date()) {
   return new Date(
     Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()),
   );
+}
+export function learningEvidenceWindow(analysisDate: Date) {
+  const endExclusive = utcDay(analysisDate);
+  return {
+    start: new Date(endExclusive.getTime() - LEARNING_WINDOW_DAYS * 86_400_000),
+    endExclusive,
+  };
 }
 function dateKey(value: Date) {
   return value.toISOString().slice(0, 10);
@@ -91,10 +109,8 @@ export async function persistLearningAnalysis(input: {
   });
   if (existing) return { run: existing, reused: true };
   const now = input.now || new Date();
-  const evidenceWindowEnd = new Date(analysisDate.getTime() - 86_400_000);
-  const evidenceWindowStart = new Date(
-    evidenceWindowEnd.getTime() - (LEARNING_WINDOW_DAYS - 1) * 86_400_000,
-  );
+  const { start: evidenceWindowStart, endExclusive: evidenceWindowEnd } =
+    learningEvidenceWindow(analysisDate);
   const settings = await prisma.growthSettings.findUnique({
     where: { id: "global" },
     select: {
@@ -109,20 +125,20 @@ export async function persistLearningAnalysis(input: {
     );
 
   const [
-    translators,
-    ideas,
-    publications,
-    accounts,
-    experiments,
-    recentOpportunities,
-    activeCandidates,
-    fatigueSignals,
+    translatorRows,
+    ideaRows,
+    publicationRows,
+    accountRows,
+    experimentRowsRaw,
+    opportunityRows,
+    activeCandidateRows,
+    fatigueSignalRows,
   ] = await Promise.all([
     prisma.translator.findMany({
       where: { isActive: true, archivedAt: null },
       select: { id: true, slug: true, updatedAt: true },
       orderBy: { id: "asc" },
-      take: MAX_LEARNING_TARGETS,
+      take: MAX_LEARNING_TARGETS + 1,
     }),
     prisma.growthIdea.findMany({
       where: {
@@ -133,7 +149,7 @@ export async function persistLearningAnalysis(input: {
       },
       select: { id: true, slug: true, updatedAt: true },
       orderBy: { id: "asc" },
-      take: MAX_LEARNING_TARGETS,
+      take: MAX_LEARNING_TARGETS + 1,
     }),
     prisma.growthPinPublication.findMany({
       where: {
@@ -143,7 +159,7 @@ export async function persistLearningAnalysis(input: {
             GrowthPublicationStatus.RECONCILED,
           ],
         },
-        publishedAt: { gte: evidenceWindowStart, lte: evidenceWindowEnd },
+        publishedAt: { lt: evidenceWindowEnd },
       },
       include: {
         candidate: {
@@ -171,7 +187,7 @@ export async function persistLearningAnalysis(input: {
               where: {
                 metricDate: {
                   gte: evidenceWindowStart,
-                  lte: evidenceWindowEnd,
+                  lt: evidenceWindowEnd,
                 },
               },
               orderBy: { metricDate: "asc" },
@@ -185,7 +201,7 @@ export async function persistLearningAnalysis(input: {
               where: {
                 metricDate: {
                   gte: evidenceWindowStart,
-                  lte: evidenceWindowEnd,
+                  lt: evidenceWindowEnd,
                 },
               },
               select: { qualifiedConversions: true },
@@ -194,7 +210,7 @@ export async function persistLearningAnalysis(input: {
         },
       },
       orderBy: [{ publishedAt: "desc" }, { id: "desc" }],
-      take: MAX_LEARNING_PUBLICATIONS,
+      take: MAX_LEARNING_PUBLICATIONS + 1,
     }),
     prisma.growthPinterestAccount.findMany({
       where: { activeRole: { not: null } },
@@ -205,7 +221,8 @@ export async function persistLearningAnalysis(input: {
           select: { lastSuccessfulSyncAt: true, status: true },
         },
       },
-      take: 20,
+      orderBy: { id: "asc" },
+      take: MAX_LEARNING_ACCOUNTS + 1,
     }),
     prisma.growthExperiment.findMany({
       where: {
@@ -220,6 +237,8 @@ export async function persistLearningAnalysis(input: {
         id: true,
         status: true,
         variants: true,
+        primaryKpi: true,
+        guardrails: true,
         candidates: {
           select: {
             experimentVariantKey: true,
@@ -234,24 +253,41 @@ export async function persistLearningAnalysis(input: {
               },
               select: {
                 publishedAt: true,
+                accountId: true,
                 pinterestPin: {
                   include: {
                     dailyMetrics: {
                       where: {
                         metricDate: {
                           gte: evidenceWindowStart,
-                          lte: evidenceWindowEnd,
+                          lt: evidenceWindowEnd,
                         },
                       },
                     },
                   },
                 },
+                attributionRef: {
+                  include: {
+                    dailyAggregates: {
+                      where: {
+                        metricDate: {
+                          gte: evidenceWindowStart,
+                          lt: evidenceWindowEnd,
+                        },
+                      },
+                      select: { qualifiedConversions: true },
+                    },
+                  },
+                },
               },
+              orderBy: [{ publishedAt: "desc" }, { id: "desc" }],
+              take: MAX_LEARNING_PUBLICATIONS + 1,
             },
           },
         },
       },
-      take: 25,
+      orderBy: { id: "asc" },
+      take: MAX_LEARNING_EXPERIMENTS + 1,
     }),
     prisma.growthOpportunity.findMany({
       where: { createdAt: { gte: evidenceWindowStart } },
@@ -263,7 +299,7 @@ export async function persistLearningAnalysis(input: {
         clusterId: true,
       },
       orderBy: [{ score: "desc" }, { id: "asc" }],
-      take: 100,
+      take: MAX_LEARNING_OPPORTUNITIES + 1,
     }),
     prisma.growthPinCandidate.findMany({
       where: {
@@ -288,7 +324,7 @@ export async function persistLearningAnalysis(input: {
       },
       select: { destinationKind: true, translatorId: true, ideaId: true },
       orderBy: { createdAt: "desc" },
-      take: MAX_LEARNING_TARGETS,
+      take: MAX_LEARNING_ACTIVE_CANDIDATES + 1,
     }),
     prisma.growthPinSignal.findMany({
       where: {
@@ -298,22 +334,80 @@ export async function persistLearningAnalysis(input: {
         pinId: { not: null },
       },
       select: { pinId: true },
-      take: MAX_LEARNING_PUBLICATIONS,
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: MAX_LEARNING_FATIGUE_SIGNALS + 1,
     }),
   ]);
 
-  const attributionAvailable = Boolean(settings.attributionEnabled);
+  const selectionReasonCodes: string[] = [];
+  if (translatorRows.length > MAX_LEARNING_TARGETS)
+    selectionReasonCodes.push("TRANSLATOR_CAP_EXHAUSTED");
+  if (ideaRows.length > MAX_LEARNING_TARGETS)
+    selectionReasonCodes.push("IDEA_CAP_EXHAUSTED");
+  if (publicationRows.length > MAX_LEARNING_PUBLICATIONS)
+    selectionReasonCodes.push("PUBLICATION_CAP_EXHAUSTED");
+  if (activeCandidateRows.length > MAX_LEARNING_ACTIVE_CANDIDATES)
+    selectionReasonCodes.push("ACTIVE_CANDIDATE_CAP_EXHAUSTED");
+  if (accountRows.length > MAX_LEARNING_ACCOUNTS)
+    selectionReasonCodes.push("ACCOUNT_CAP_EXHAUSTED");
+  if (experimentRowsRaw.length > MAX_LEARNING_EXPERIMENTS)
+    selectionReasonCodes.push("EXPERIMENT_CAP_EXHAUSTED");
+  if (opportunityRows.length > MAX_LEARNING_OPPORTUNITIES)
+    selectionReasonCodes.push("OPPORTUNITY_CAP_EXHAUSTED");
+  if (fatigueSignalRows.length > MAX_LEARNING_FATIGUE_SIGNALS)
+    selectionReasonCodes.push("FATIGUE_SIGNAL_CAP_EXHAUSTED");
+  const translators = translatorRows.slice(0, MAX_LEARNING_TARGETS);
+  const ideas = ideaRows.slice(0, MAX_LEARNING_TARGETS);
+  const publications = publicationRows.slice(0, MAX_LEARNING_PUBLICATIONS);
+  const activeCandidates = activeCandidateRows.slice(
+    0,
+    MAX_LEARNING_ACTIVE_CANDIDATES,
+  );
+  const accounts = accountRows.slice(0, MAX_LEARNING_ACCOUNTS);
+  const experiments = experimentRowsRaw.slice(0, MAX_LEARNING_EXPERIMENTS);
+  const recentOpportunities = opportunityRows.slice(
+    0,
+    MAX_LEARNING_OPPORTUNITIES,
+  );
+  const fatigueSignals = fatigueSignalRows.slice(
+    0,
+    MAX_LEARNING_FATIGUE_SIGNALS,
+  );
+  const evidenceComplete = selectionReasonCodes.length === 0;
+
+  const attributionAvailable =
+    isAttributionEnvironmentEnabled() && Boolean(settings.attributionEnabled);
+  const freshnessCutoff = new Date(
+    now.getTime() - ANALYTICS_FRESHNESS_HOURS * 60 * 60_000,
+  );
+  const accountEvidence = new Map(
+    accounts.map((account) => {
+      const state = account.analyticsState;
+      const available = Boolean(
+        account.connectionStatus === "CONNECTED" &&
+        state?.status === "FRESH" &&
+        state.lastSuccessfulSyncAt &&
+        state.lastSuccessfulSyncAt >= freshnessCutoff,
+      );
+      return [
+        account.id,
+        { available, freshThrough: state?.lastSuccessfulSyncAt || null },
+      ] as const;
+    }),
+  );
   const activeAccountsHealthy = accounts.every(
-    (account) => account.connectionStatus === "CONNECTED",
+    (account) => accountEvidence.get(account.id)?.available,
   );
   const freshThrough =
     accounts
-      .map((account) => account.analyticsState?.lastSuccessfulSyncAt)
+      .map((account) =>
+        accountEvidence.get(account.id)?.available
+          ? account.analyticsState?.lastSuccessfulSyncAt
+          : null,
+      )
       .filter((value): value is Date => Boolean(value))
       .sort((a, b) => a.getTime() - b.getTime())[0] || null;
-  const analyticsFresh = Boolean(
-    freshThrough && now.getTime() - freshThrough.getTime() <= 36 * 60 * 60_000,
-  );
+  const analyticsFresh = accounts.length > 0 && activeAccountsHealthy;
   const observations: PerformanceObservation[] = [];
   const publicationByTarget = new Map<string, typeof publications>();
   for (const publication of publications) {
@@ -325,16 +419,22 @@ export async function persistLearningAnalysis(input: {
       ...(publicationByTarget.get(key) || []),
       publication,
     ]);
-    const metrics = publication.pinterestPin?.dailyMetrics || [];
+    const accountFresh = Boolean(
+      accountEvidence.get(publication.account.id)?.available,
+    );
+    const metrics = accountFresh
+      ? publication.pinterestPin?.dailyMetrics || []
+      : [];
     const impressions = sum(metrics, (row) => row.impressions);
     const outboundClicks = sum(metrics, (row) => row.outboundClicks);
     const saves = sum(metrics, (row) => row.saves);
-    const conversions = publication.attributionRef?.dailyAggregates.length
-      ? sum(
-          publication.attributionRef.dailyAggregates,
-          (row) => row.qualifiedConversions,
-        )
-      : null;
+    const conversions =
+      accountFresh && publication.attributionRef?.dailyAggregates.length
+        ? sum(
+            publication.attributionRef.dailyAggregates,
+            (row) => row.qualifiedConversions,
+          )
+        : null;
     const localParts = publication.publishedAt
       ? new Intl.DateTimeFormat("en-US", {
           timeZone: LEARNING_TIME_ZONE,
@@ -371,6 +471,7 @@ export async function persistLearningAnalysis(input: {
       ["localHour", localHour],
       ["publicationAge", ageBucket],
     ];
+    if (!accountFresh || !metrics.length) continue;
     for (const [dimension, value] of dimensions)
       observations.push({
         dimension,
@@ -381,10 +482,14 @@ export async function persistLearningAnalysis(input: {
         qualifiedConversions: conversions,
       });
   }
-  const performanceFindings = comparePerformance(
-    observations,
+  const performanceFindings = comparePerformance(observations, {
     attributionAvailable,
-  );
+    evidenceComplete: evidenceComplete && analyticsFresh,
+    incompletenessReasonCodes: [
+      ...selectionReasonCodes,
+      ...(!analyticsFresh ? ["ACCOUNT_ANALYTICS_UNAVAILABLE"] : []),
+    ],
+  });
 
   const targetRows = [
     ...translators.map((row) => ({
@@ -401,7 +506,10 @@ export async function persistLearningAnalysis(input: {
   const recommendations = targetRows.map((target) => {
     const history =
       publicationByTarget.get(`${target.destinationKind}:${target.id}`) || [];
-    const metrics = history.flatMap(
+    const freshHistory = history.filter(
+      (row) => accountEvidence.get(row.accountId)?.available,
+    );
+    const metrics = freshHistory.flatMap(
       (row) => row.pinterestPin?.dailyMetrics || [],
     );
     const lastPublishedAt =
@@ -412,7 +520,8 @@ export async function persistLearningAnalysis(input: {
     const recentActive = history.filter(
       (row) =>
         row.publishedAt &&
-        now.getTime() - row.publishedAt.getTime() < 45 * 86_400_000,
+        now.getTime() - row.publishedAt.getTime() <
+          settings.evergreenCooldownDays * 86_400_000,
     ).length;
     const activeCandidateCount = activeCandidates.filter(
       (candidate) =>
@@ -423,7 +532,7 @@ export async function persistLearningAnalysis(input: {
     const historyPinIds = new Set(
       history.map((row) => row.pinterestPin?.id).filter(Boolean),
     );
-    const conversionRows = history.flatMap(
+    const conversionRows = freshHistory.flatMap(
       (row) => row.attributionRef?.dailyAggregates || [],
     );
     const qualifiedConversions =
@@ -431,8 +540,7 @@ export async function persistLearningAnalysis(input: {
         ? sum(conversionRows, (row) => row.qualifiedConversions)
         : null;
     const targetAnalyticsFresh = history.length
-      ? history.every((row) => row.account.connectionStatus === "CONNECTED") &&
-        analyticsFresh
+      ? history.every((row) => accountEvidence.get(row.accountId)?.available)
       : analyticsFresh;
     const evidence: EvergreenTargetEvidence = {
       destinationKind: target.destinationKind,
@@ -460,9 +568,7 @@ export async function persistLearningAnalysis(input: {
         ? history.some((row) => row.account.connectionStatus !== "CONNECTED")
         : !activeAccountsHealthy,
       meaningfulAngleAvailable: true,
-      evidenceComplete:
-        publications.length < MAX_LEARNING_PUBLICATIONS &&
-        activeCandidates.length < MAX_LEARNING_PUBLICATIONS,
+      evidenceComplete: evidenceComplete && targetAnalyticsFresh,
       previousArchetypes: [
         ...new Set(history.map((row) => row.candidate.archetype)),
       ],
@@ -476,8 +582,9 @@ export async function persistLearningAnalysis(input: {
   });
 
   const scheduleRows = accounts.flatMap((account) => {
+    const accountFresh = Boolean(accountEvidence.get(account.id)?.available);
     const accountPublications = publications.filter(
-      (row) => row.accountId === account.id && row.publishedAt,
+      (row) => accountFresh && row.accountId === account.id && row.publishedAt,
     );
     const buckets = new Map<
       number,
@@ -516,68 +623,110 @@ export async function persistLearningAnalysis(input: {
     return evaluateLearnedWindows(
       [...buckets.values()],
       attributionAvailable,
+      accountFresh && evidenceComplete,
     ).map((window) => ({ accountId: account.id, window }));
   });
 
   const experimentRows = experiments.map((experiment) => {
-    const variants = experiment.candidates.reduce<
-      Map<
-        string,
+    let experimentEvidenceComplete = evidenceComplete && analyticsFresh;
+    const configuredVariants = experimentVariantsSchema.parse(
+      experiment.variants,
+    );
+    const variants = new Map(
+      configuredVariants.map((variant) => [
+        variant.key,
         {
-          key: string;
-          publications: number;
-          ageDays: number;
-          impressions: number;
-          outboundClicks: number;
-          topPublicationImpressionPercent: number;
-          maximumPublicationImpressions: number;
+          key: variant.key,
+          publications: 0,
+          ageDays: 0,
+          impressions: 0,
+          outboundClicks: 0,
+          saves: 0,
+          qualifiedConversions: attributionAvailable ? 0 : null,
+          topPublicationImpressionPercent: 0,
+          maximumPublicationImpressions: 0,
+          latestPublishedAt: null as Date | null,
+          conversionEvidenceComplete: attributionAvailable,
+        },
+      ]),
+    );
+    for (const candidate of experiment.candidates) {
+      if (!candidate.experimentVariantKey) continue;
+      const row = variants.get(candidate.experimentVariantKey);
+      if (!row) continue;
+      if (candidate.publications.length > MAX_LEARNING_PUBLICATIONS)
+        experimentEvidenceComplete = false;
+      for (const publication of candidate.publications.slice(
+        0,
+        MAX_LEARNING_PUBLICATIONS,
+      )) {
+        if (!accountEvidence.get(publication.accountId)?.available) {
+          row.conversionEvidenceComplete = false;
+          continue;
         }
-      >
-    >((map, candidate) => {
-      if (!candidate.experimentVariantKey) return map;
-      const metrics = candidate.publications.flatMap(
-        (publication) => publication.pinterestPin?.dailyMetrics || [],
-      );
-      const oldest = candidate.publications
-        .map((publication) => publication.publishedAt)
-        .filter((value): value is Date => Boolean(value))
-        .sort((a, b) => a.getTime() - b.getTime())[0];
-      const row = map.get(candidate.experimentVariantKey) || {
-        key: candidate.experimentVariantKey,
-        publications: 0,
-        ageDays: 0,
-        impressions: 0,
-        outboundClicks: 0,
-        topPublicationImpressionPercent: 0,
-        maximumPublicationImpressions: 0,
-      };
-      row.publications += candidate.publications.length;
-      row.ageDays = oldest
-        ? Math.floor((now.getTime() - oldest.getTime()) / 86_400_000)
-        : 0;
-      row.impressions += sum(metrics, (metric) => metric.impressions);
-      row.outboundClicks += sum(metrics, (metric) => metric.outboundClicks);
-      for (const publication of candidate.publications) {
+        const metrics = publication.pinterestPin?.dailyMetrics || [];
+        const publicationImpressions = sum(
+          metrics,
+          (metric) => metric.impressions,
+        );
+        row.publications += 1;
+        row.impressions += publicationImpressions;
+        row.outboundClicks += sum(metrics, (metric) => metric.outboundClicks);
+        row.saves += sum(metrics, (metric) => metric.saves);
         row.maximumPublicationImpressions = Math.max(
           row.maximumPublicationImpressions,
-          sum(
-            publication.pinterestPin?.dailyMetrics || [],
-            (metric) => metric.impressions,
-          ),
+          publicationImpressions,
         );
+        if (
+          publication.publishedAt &&
+          (!row.latestPublishedAt ||
+            publication.publishedAt > row.latestPublishedAt)
+        )
+          row.latestPublishedAt = publication.publishedAt;
+        const conversionRows =
+          publication.attributionRef?.dailyAggregates || [];
+        if (attributionAvailable && conversionRows.length)
+          row.qualifiedConversions =
+            (row.qualifiedConversions || 0) +
+            sum(conversionRows, (metric) => metric.qualifiedConversions);
+        else if (attributionAvailable) row.conversionEvidenceComplete = false;
       }
-      row.topPublicationImpressionPercent = row.impressions
+    }
+    const variantEvidence = [...variants.values()].map((row) => ({
+      key: row.key,
+      publications: row.publications,
+      ageDays: row.latestPublishedAt
+        ? Math.floor(
+            (now.getTime() - row.latestPublishedAt.getTime()) / 86_400_000,
+          )
+        : 0,
+      impressions: row.impressions,
+      outboundClicks: row.outboundClicks,
+      saves: row.saves,
+      qualifiedConversions: row.conversionEvidenceComplete
+        ? row.qualifiedConversions
+        : null,
+      topPublicationImpressionPercent: row.impressions
         ? Math.round(
             (row.maximumPublicationImpressions / row.impressions) * 100,
           )
-        : 0;
-      map.set(row.key, row);
-      return map;
-    }, new Map());
+        : 0,
+    }));
+    const guardrails = experimentGuardrailsSchema.parse(experiment.guardrails);
     return {
       experimentId: experiment.id,
-      variants: [...variants.values()],
-      result: evaluateExperiment([...variants.values()]),
+      variants: variantEvidence,
+      result: evaluateExperiment(variantEvidence, {
+        primaryKpi: experiment.primaryKpi as
+          | "OUTBOUND_CLICKS"
+          | "OUTBOUND_CTR"
+          | "SAVES"
+          | "QUALIFIED_CONVERSIONS",
+        minimumImpressions: guardrails.minimumImpressions,
+        minimumOutboundClicks: guardrails.minimumOutboundClicks,
+        attributionAvailable,
+        evidenceComplete: experimentEvidenceComplete,
+      }),
     };
   });
 
@@ -586,6 +735,7 @@ export async function persistLearningAnalysis(input: {
     { publications: number; impressions: number; outboundClicks: number }
   >();
   for (const publication of publications) {
+    if (!accountEvidence.get(publication.accountId)?.available) continue;
     if (!publication.candidate.clusterId) continue;
     const current = clusterEvidence.get(publication.candidate.clusterId) || {
       publications: 0,
@@ -604,7 +754,11 @@ export async function persistLearningAnalysis(input: {
       ? clusterEvidence.get(opportunity.clusterId)
       : null;
     const qualified = Boolean(
-      evidence && evidence.publications >= 2 && evidence.impressions >= 1_000,
+      evidenceComplete &&
+      analyticsFresh &&
+      evidence &&
+      evidence.publications >= 2 &&
+      evidence.impressions >= 1_000,
     );
     const clusterAlreadyAdjusted = Boolean(
       opportunity.clusterId && adjustedClusters.has(opportunity.clusterId),
@@ -636,10 +790,13 @@ export async function persistLearningAnalysis(input: {
   });
   const overallQuality = analyticsFresh
     ? publications.length
-      ? GrowthLearningEvidenceQuality.KNOWN
+      ? evidenceComplete
+        ? GrowthLearningEvidenceQuality.KNOWN
+        : GrowthLearningEvidenceQuality.PARTIAL
       : GrowthLearningEvidenceQuality.INSUFFICIENT_DATA
     : GrowthLearningEvidenceQuality.STALE;
   const reasonCodes = [
+    ...selectionReasonCodes,
     !analyticsFresh ? "ANALYTICS_STALE" : null,
     !publications.length ? "NO_HISTORICAL_PUBLICATIONS" : null,
     !attributionAvailable ? "ATTRIBUTION_NOT_COLLECTING" : null,
@@ -691,16 +848,28 @@ export async function persistLearningAnalysis(input: {
             reasonCodes: row.result.reasonCodes,
             evidence: {
               destinationPath: row.evidence.destinationPath,
+              contentUpdatedAt: row.evidence.contentUpdatedAt.toISOString(),
               observedMetricDays: row.evidence.observedMetricDays,
               impressions: row.evidence.impressions,
               outboundClicks: row.evidence.outboundClicks,
               saves: row.evidence.saves,
               qualifiedConversions: row.evidence.qualifiedConversions,
               attributionAvailable: row.evidence.attributionAvailable,
+              lastPublishedAt:
+                row.evidence.lastPublishedAt?.toISOString() || null,
               publicationCount: row.evidence.publicationCount,
               activeEquivalentCount: row.evidence.activeEquivalentCount,
               activeCandidateCount: row.evidence.activeCandidateCount,
               analyticsFresh: row.evidence.analyticsFresh,
+              evidenceComplete: row.evidence.evidenceComplete,
+              accountFreshness: accounts.map((account) => ({
+                id: account.id,
+                connectionStatus: account.connectionStatus,
+                analyticsStatus: account.analyticsState?.status || null,
+                lastSuccessfulSyncAt:
+                  account.analyticsState?.lastSuccessfulSyncAt?.toISOString() ||
+                  null,
+              })),
             } as Prisma.InputJsonValue,
             proposedArchetype: row.result.proposedArchetype,
             proposedAngle: row.result.proposedAngle,
@@ -806,20 +975,87 @@ export async function prepareEvergreenRecommendation(
   actorUserId: string,
 ) {
   const parsed = prepareEvergreenRecommendationSchema.parse(input);
-  const recommendation =
-    await prisma.growthEvergreenRecommendationRecord.findUnique({
-      where: { id: parsed.recommendationId },
-      include: { learningRun: true },
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw(
+      Prisma.sql`SELECT "id" FROM "GrowthEvergreenRecommendationRecord" WHERE "id" = ${parsed.recommendationId} FOR UPDATE`,
+    );
+    const recommendation =
+      await tx.growthEvergreenRecommendationRecord.findUnique({
+        where: { id: parsed.recommendationId },
+        include: { learningRun: true, preparationJob: true },
+      });
+    if (recommendation?.preparationJob)
+      return { job: recommendation.preparationJob, created: false };
+    await assertEvergreenRecommendationCurrent(tx, recommendation, new Date());
+    if (
+      recommendation!.proposedArchetype === "BEFORE_AFTER" &&
+      parsed.paidAiConfirmation !== "QUEUE PAID AI CREATIVE"
+    )
+      throw new Error(
+        "Paid AI preparation requires the exact confirmation: QUEUE PAID AI CREATIVE.",
+      );
+    const job = await tx.growthJob.create({
+      data: {
+        type: GrowthJobType.EVERGREEN_CREATIVE_PREPARE,
+        idempotencyKey: `evergreen-prepare:${recommendation!.id}`,
+        payload: { recommendationId: recommendation!.id },
+        maxAttempts: 3,
+      },
     });
+    await tx.growthEvergreenRecommendationRecord.update({
+      where: { id: recommendation!.id },
+      data: {
+        status: GrowthEvergreenRecommendationStatus.PREPARING,
+        preparationJobId: job.id,
+      },
+    });
+    await recordGrowthActivity(
+      {
+        actorKind: GrowthActivityActorKind.USER,
+        actorUserId,
+        entityType: "GrowthEvergreenRecommendation",
+        entityId: recommendation!.id,
+        action: "EVERGREEN_CREATIVE_PREPARATION_REQUESTED",
+        fromState: GrowthEvergreenRecommendationStatus.PROPOSED,
+        toState: GrowthEvergreenRecommendationStatus.PREPARING,
+        summary: {
+          jobId: job.id,
+          targetKind: recommendation!.destinationKind,
+          modelVersion: recommendation!.learningRun.evergreenModelVersion,
+          paidAiConfirmed: recommendation!.proposedArchetype === "BEFORE_AFTER",
+        },
+        correlationKey: job.idempotencyKey,
+      },
+      tx,
+    );
+    return { job, created: true };
+  });
+}
+
+type PreparationRecommendation =
+  Prisma.GrowthEvergreenRecommendationRecordGetPayload<{
+    include: { learningRun: true };
+  }>;
+
+async function assertEvergreenRecommendationCurrent(
+  tx: Prisma.TransactionClient,
+  recommendation: PreparationRecommendation | null,
+  now: Date,
+) {
   if (
     !recommendation ||
     recommendation.recommendation !== GrowthEvergreenRecommendation.REVIVE ||
-    recommendation.status !== GrowthEvergreenRecommendationStatus.PROPOSED ||
+    !(
+      [
+        GrowthEvergreenRecommendationStatus.PROPOSED,
+        GrowthEvergreenRecommendationStatus.PREPARING,
+      ] as GrowthEvergreenRecommendationStatus[]
+    ).includes(recommendation.status) ||
     !recommendation.proposedArchetype
   )
     throw new Error("Only a current REVIVE proposal can be prepared.");
   if (
-    Date.now() - recommendation.learningRun.completedAt.getTime() >
+    now.getTime() - recommendation.learningRun.completedAt.getTime() >
     48 * 60 * 60_000
   )
     throw new Error(
@@ -827,42 +1063,253 @@ export async function prepareEvergreenRecommendation(
     );
   const targetId = recommendation.translatorId || recommendation.ideaId;
   if (!targetId) throw new Error("The recommendation target is unavailable.");
-  const result = await enqueueCreativeGeneration({
-    targetKind: recommendation.destinationKind,
-    targetId,
-    archetype: recommendation.proposedArchetype,
-    creativeModelVersion: "creative_lab_v1",
-    ...(recommendation.proposedArchetype === "BEFORE_AFTER"
-      ? { useAiExample: true }
-      : {}),
-  });
-  await prisma.$transaction(async (tx) => {
-    await tx.growthEvergreenRecommendationRecord.updateMany({
+  const evidence = recommendation.evidence as {
+    contentUpdatedAt?: string;
+    lastPublishedAt?: string | null;
+    accountFreshness?: Array<{
+      id: string;
+      connectionStatus: string;
+      analyticsStatus: string | null;
+      lastSuccessfulSyncAt: string | null;
+    }>;
+  };
+  const [
+    settings,
+    target,
+    latestPublication,
+    activeCandidateCount,
+    strongFatigue,
+    accounts,
+  ] = await Promise.all([
+    tx.growthSettings.findUnique({
+      where: { id: "global" },
+      select: { enabled: true, evergreenCooldownDays: true },
+    }),
+    recommendation.destinationKind === GrowthCreativeDestinationKind.TRANSLATOR
+      ? tx.translator.findFirst({
+          where: { id: targetId, isActive: true, archivedAt: null },
+          select: { updatedAt: true },
+        })
+      : tx.growthIdea.findFirst({
+          where: {
+            id: targetId,
+            status: "PUBLISHED",
+            archivedAt: null,
+            currentVersion: { is: { publishedAt: { not: null } } },
+            category: { isActive: true, archivedAt: null },
+          },
+          select: { updatedAt: true },
+        }),
+    tx.growthPinPublication.findFirst({
       where: {
-        id: recommendation.id,
-        status: GrowthEvergreenRecommendationStatus.PROPOSED,
-      },
-      data: { status: GrowthEvergreenRecommendationStatus.PREPARED },
-    });
-    await recordGrowthActivity(
-      {
-        actorKind: GrowthActivityActorKind.USER,
-        actorUserId,
-        entityType: "GrowthEvergreenRecommendation",
-        entityId: recommendation.id,
-        action: "EVERGREEN_CREATIVE_PREPARATION_REQUESTED",
-        fromState: GrowthEvergreenRecommendationStatus.PROPOSED,
-        toState: GrowthEvergreenRecommendationStatus.PREPARED,
-        summary: {
-          jobId: result.job.id,
-          targetKind: recommendation.destinationKind,
-          modelVersion: recommendation.learningRun.evergreenModelVersion,
+        status: {
+          in: [
+            GrowthPublicationStatus.PUBLISHED,
+            GrowthPublicationStatus.RECONCILED,
+          ],
         },
-        correlationKey: result.job.idempotencyKey,
+        candidate:
+          recommendation.destinationKind ===
+          GrowthCreativeDestinationKind.TRANSLATOR
+            ? { translatorId: targetId }
+            : { ideaId: targetId },
       },
-      tx,
+      select: { publishedAt: true },
+      orderBy: [{ publishedAt: "desc" }, { id: "desc" }],
+    }),
+    tx.growthPinCandidate.count({
+      where: {
+        ...(recommendation.destinationKind ===
+        GrowthCreativeDestinationKind.TRANSLATOR
+          ? { translatorId: targetId }
+          : { ideaId: targetId }),
+        status: { in: ["DRAFT", "RENDERING", "READY"] },
+        publications: {
+          none: {
+            status: {
+              in: [
+                GrowthPublicationStatus.PUBLISHED,
+                GrowthPublicationStatus.RECONCILED,
+                GrowthPublicationStatus.CANCELLED,
+                GrowthPublicationStatus.FAILED_TERMINAL,
+              ],
+            },
+          },
+        },
+      },
+    }),
+    tx.growthPinSignal.count({
+      where: {
+        type: "FATIGUE",
+        strength: "STRONG",
+        pin: {
+          publication: {
+            candidate:
+              recommendation.destinationKind ===
+              GrowthCreativeDestinationKind.TRANSLATOR
+                ? { translatorId: targetId }
+                : { ideaId: targetId },
+          },
+        },
+      },
+    }),
+    tx.growthPinterestAccount.findMany({
+      where: { activeRole: { not: null } },
+      select: {
+        id: true,
+        connectionStatus: true,
+        analyticsState: {
+          select: { status: true, lastSuccessfulSyncAt: true },
+        },
+      },
+      orderBy: { id: "asc" },
+    }),
+  ]);
+  if (!settings?.enabled)
+    throw new Error("Growth was disabled after analysis.");
+  if (!target)
+    throw new Error(
+      "The recommendation target is no longer public and eligible.",
     );
+  if (
+    !evidence.contentUpdatedAt ||
+    target.updatedAt.toISOString() !== evidence.contentUpdatedAt
+  )
+    throw new Error(
+      "The target changed after analysis; run learning analysis again.",
+    );
+  const expectedLatest = evidence.lastPublishedAt || null;
+  if (
+    (latestPublication?.publishedAt?.toISOString() || null) !== expectedLatest
+  )
+    throw new Error(
+      "Publication history changed after analysis; run learning analysis again.",
+    );
+  if (
+    latestPublication?.publishedAt &&
+    now.getTime() - latestPublication.publishedAt.getTime() <
+      settings.evergreenCooldownDays * 86_400_000
+  )
+    throw new Error("The target is inside the current evergreen cooldown.");
+  if (activeCandidateCount)
+    throw new Error(
+      "An active creative candidate already exists for this target.",
+    );
+  if (strongFatigue)
+    throw new Error("Strong fatigue now blocks evergreen preparation.");
+  const freshnessCutoff =
+    now.getTime() - ANALYTICS_FRESHNESS_HOURS * 60 * 60_000;
+  if (
+    !accounts.length ||
+    accounts.some(
+      (account) =>
+        account.connectionStatus !== "CONNECTED" ||
+        account.analyticsState?.status !== "FRESH" ||
+        !account.analyticsState.lastSuccessfulSyncAt ||
+        account.analyticsState.lastSuccessfulSyncAt.getTime() < freshnessCutoff,
+    )
+  )
+    throw new Error(
+      "Pinterest account health or analytics freshness changed after analysis.",
+    );
+  const currentAccountFreshness = accounts.map((account) => ({
+    id: account.id,
+    connectionStatus: account.connectionStatus,
+    analyticsStatus: account.analyticsState?.status || null,
+    lastSuccessfulSyncAt:
+      account.analyticsState?.lastSuccessfulSyncAt?.toISOString() || null,
+  }));
+  if (
+    !evidence.accountFreshness ||
+    JSON.stringify(
+      currentAccountFreshness.map((a) => [
+        a.id, a.connectionStatus, a.analyticsStatus, a.lastSuccessfulSyncAt,
+      ]),
+    ) !==
+      JSON.stringify(
+        evidence.accountFreshness.map((a) => [
+          a.id, a.connectionStatus, a.analyticsStatus, a.lastSuccessfulSyncAt,
+        ]),
+      )
+  )
+    throw new Error(
+      "Pinterest analytics changed after analysis; run learning analysis again.",
+    );
+  return recommendation;
+}
+
+export async function executeEvergreenPreparation(recommendationId: string) {
+  const prepared = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw(
+      Prisma.sql`SELECT "id" FROM "GrowthEvergreenRecommendationRecord" WHERE "id" = ${recommendationId} FOR UPDATE`,
+    );
+    const row = await tx.growthEvergreenRecommendationRecord.findUnique({
+      where: { id: recommendationId },
+      include: { learningRun: true, creativeJob: true },
+    });
+    if (row?.creativeJob)
+      return { recommendation: row, existingJob: row.creativeJob };
+    return {
+      recommendation: await assertEvergreenRecommendationCurrent(
+        tx,
+        row,
+        new Date(),
+      ),
+      existingJob: null,
+    };
   });
+  if (prepared.existingJob)
+    return { job: prepared.existingJob, created: false };
+  const recommendation = prepared.recommendation;
+  const targetId = recommendation.translatorId || recommendation.ideaId;
+  if (!targetId) throw new Error("The recommendation target is unavailable.");
+  const result = await enqueueCreativeGeneration(
+    {
+      targetKind: recommendation.destinationKind,
+      targetId,
+      archetype: recommendation.proposedArchetype,
+      creativeModelVersion: "creative_lab_v1",
+      ...(recommendation.proposedArchetype === "BEFORE_AFTER"
+        ? { useAiExample: true }
+        : {}),
+    },
+    {
+      runAfter: new Date(Date.now() + 10 * 60_000),
+      idempotencyScope: recommendationId,
+      evergreenRecommendationId: recommendationId,
+    },
+  );
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw(
+        Prisma.sql`SELECT "id" FROM "GrowthEvergreenRecommendationRecord" WHERE "id" = ${recommendationId} FOR UPDATE`,
+      );
+      const current = await tx.growthEvergreenRecommendationRecord.findUnique({
+        where: { id: recommendationId },
+        include: { learningRun: true },
+      });
+      await assertEvergreenRecommendationCurrent(tx, current, new Date());
+      const payload = {
+        ...(result.job.payload as Prisma.JsonObject),
+        evergreenRecommendationId: recommendationId,
+      };
+      await tx.growthJob.update({
+        where: { id: result.job.id },
+        data: { payload, runAfter: new Date() },
+      });
+      await tx.growthEvergreenRecommendationRecord.update({
+        where: { id: recommendationId },
+        data: { creativeJobId: result.job.id },
+      });
+    });
+  } catch (error) {
+    if (result.created)
+      await prisma.growthJob.updateMany({
+        where: { id: result.job.id, status: GrowthJobStatus.PENDING },
+        data: { status: GrowthJobStatus.CANCELLED, completedAt: new Date() },
+      });
+    throw error;
+  }
   return result;
 }
 

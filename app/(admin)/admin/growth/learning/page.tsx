@@ -273,7 +273,21 @@ export default async function GrowthLearningPage() {
                       </div>
                       {item.recommendation === "REVIVE" &&
                       item.status === "PROPOSED" ? (
-                        <PrepareEvergreenButton recommendationId={item.id} />
+                        <div className="max-w-xs text-right">
+                          {item.proposedArchetype === "BEFORE_AFTER" ? (
+                            <p className="text-muted-ink mb-2 text-xs">
+                              This queues paid AI creative generation and may
+                              incur provider cost. A second confirmation is
+                              required.
+                            </p>
+                          ) : null}
+                          <PrepareEvergreenButton
+                            recommendationId={item.id}
+                            requiresPaidAi={
+                              item.proposedArchetype === "BEFORE_AFTER"
+                            }
+                          />
+                        </div>
                       ) : (
                         <span className="bg-muted-surface h-fit rounded-full px-3 py-1 text-xs font-bold">
                           {humanize(item.status)}

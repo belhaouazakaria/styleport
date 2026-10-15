@@ -22,6 +22,7 @@ export type LearnedWindow = {
 export function evaluateLearnedWindows(
   windows: LearnedWindow[],
   attributionAvailable: boolean,
+  evidenceAvailable = true,
 ) {
   return windows.map((window) => {
     const sufficient =
@@ -33,15 +34,21 @@ export function evaluateLearnedWindows(
       mode: sufficient
         ? GrowthPublicationTimingMode.EXPLOIT
         : GrowthPublicationTimingMode.COLD_START,
-      evidenceQuality: sufficient
-        ? GrowthLearningEvidenceQuality.KNOWN
-        : GrowthLearningEvidenceQuality.INSUFFICIENT_DATA,
-      confidence: sufficient
-        ? Math.min(90, 45 + window.samplePins * 5)
-        : Math.min(35, window.samplePins * 8),
-      reasonCodes: sufficient
-        ? ["ACCOUNT_SPECIFIC_WINDOW", "EXPOSURE_NORMALIZED"]
-        : ["COLD_START_INSUFFICIENT_EVIDENCE"],
+      evidenceQuality: !evidenceAvailable
+        ? GrowthLearningEvidenceQuality.STALE
+        : sufficient
+          ? GrowthLearningEvidenceQuality.KNOWN
+          : GrowthLearningEvidenceQuality.INSUFFICIENT_DATA,
+      confidence: !evidenceAvailable
+        ? 0
+        : sufficient
+          ? Math.min(90, 45 + window.samplePins * 5)
+          : Math.min(35, window.samplePins * 8),
+      reasonCodes: !evidenceAvailable
+        ? ["ACCOUNT_ANALYTICS_UNAVAILABLE"]
+        : sufficient
+          ? ["ACCOUNT_SPECIFIC_WINDOW", "EXPOSURE_NORMALIZED"]
+          : ["COLD_START_INSUFFICIENT_EVIDENCE"],
       outboundRate: window.impressions
         ? Number((window.outboundClicks / window.impressions).toFixed(6))
         : null,

@@ -1,6 +1,10 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
-import { persistLearningAnalysis } from "@/lib/growth/learning/service";
+import {
+  executeEvergreenPreparation,
+  persistLearningAnalysis,
+  prepareEvergreenRecommendation,
+} from "@/lib/growth/learning/service";
 import { encryptPinterestCredentials } from "@/lib/growth/pinterest/credentials";
 
 const enabled = process.env.RUN_GROWTH_LEARNING_DB_TESTS === "1";
@@ -212,7 +216,7 @@ async function fixture(now: Date) {
       reconciledAt: new Date("2026-07-20T13:01:00Z"),
     },
   });
-  return { translator };
+  return { translator, admin };
 }
 
 beforeEach(clean);
@@ -251,5 +255,89 @@ suite("Phase 12 PostgreSQL learning invariants", () => {
       persistLearningAnalysis({ analysisDate: now, now }),
     ).rejects.toThrow("Growth is disabled");
     expect(await prisma.growthLearningRun.count()).toBe(0);
+  });
+
+  it("treats missing account analytics and the disabled server attribution gate as unavailable", async () => {
+    const now = new Date("2026-10-15T12:00:00Z");
+    await fixture(now);
+    await prisma.growthPinterestAnalyticsState.deleteMany();
+    await prisma.growthSettings.update({
+      where: { id: "global" },
+      data: { attributionEnabled: true },
+    });
+    const result = await persistLearningAnalysis({ analysisDate: now, now });
+    expect(result.run).toMatchObject({
+      evidenceQuality: "STALE",
+      attributionAvailability: "NOT_COLLECTING",
+    });
+    expect(result.run.reasonCodes).toContain("ANALYTICS_STALE");
+    expect(result.run.performanceFindings).toEqual([]);
+    expect(result.run.scheduleWindows).toEqual([]);
+    expect(result.run.recommendations[0]).toMatchObject({
+      recommendation: "INSUFFICIENT_DATA",
+      evidenceQuality: "STALE",
+    });
+  });
+
+  it("atomically converges concurrent preparation requests without publishing", async () => {
+    const now = new Date("2026-10-15T12:00:00Z");
+    const { admin } = await fixture(now);
+    const analysis = await persistLearningAnalysis({ analysisDate: now, now });
+    const recommendation = analysis.run.recommendations.find(
+      (row) => row.recommendation === "REVIVE",
+    );
+    expect(recommendation).toBeTruthy();
+    const request = {
+      recommendationId: recommendation!.id,
+      confirmation: true as const,
+      paidAiConfirmation: "QUEUE PAID AI CREATIVE" as const,
+    };
+    const results = await Promise.all([
+      prepareEvergreenRecommendation(request, admin.id),
+      prepareEvergreenRecommendation(request, admin.id),
+    ]);
+    expect(new Set(results.map((result) => result.job.id)).size).toBe(1);
+    expect(results.filter((result) => result.created)).toHaveLength(1);
+    expect(
+      await prisma.growthEvergreenRecommendationRecord.findUniqueOrThrow({
+        where: { id: recommendation!.id },
+      }),
+    ).toMatchObject({ status: "PREPARING" });
+    expect(
+      await prisma.growthJob.count({
+        where: { type: "EVERGREEN_CREATIVE_PREPARE" },
+      }),
+    ).toBe(1);
+    expect(await prisma.growthPinPublication.count()).toBe(1);
+    expect(await prisma.growthPinApproval.count()).toBe(1);
+  });
+
+  it("rechecks the kill switch before enqueueing creative generation", async () => {
+    const now = new Date("2026-10-15T12:00:00Z");
+    const { admin } = await fixture(now);
+    const analysis = await persistLearningAnalysis({ analysisDate: now, now });
+    const recommendation = analysis.run.recommendations.find(
+      (row) => row.recommendation === "REVIVE",
+    )!;
+    await prepareEvergreenRecommendation(
+      {
+        recommendationId: recommendation.id,
+        confirmation: true,
+        paidAiConfirmation: "QUEUE PAID AI CREATIVE",
+      },
+      admin.id,
+    );
+    await prisma.growthSettings.update({
+      where: { id: "global" },
+      data: { enabled: false },
+    });
+    await expect(
+      executeEvergreenPreparation(recommendation.id),
+    ).rejects.toThrow("Growth was disabled");
+    expect(
+      await prisma.growthJob.count({
+        where: { type: "CREATIVE_LAB_GENERATE" },
+      }),
+    ).toBe(0);
   });
 });

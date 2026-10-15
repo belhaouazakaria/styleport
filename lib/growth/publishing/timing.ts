@@ -138,11 +138,13 @@ export function planPublicationTiming(input: {
     ) &&
     collisionMoves < 8
   ) {
-    const index = CONTROLLED_LOCAL_HOURS.indexOf(
-      selectedHour as (typeof CONTROLLED_LOCAL_HOURS)[number],
-    );
-    selectedHour =
-      CONTROLLED_LOCAL_HOURS[(index + 1) % CONTROLLED_LOCAL_HOURS.length];
+    if (!input.learned) {
+      const index = CONTROLLED_LOCAL_HOURS.indexOf(
+        selectedHour as (typeof CONTROLLED_LOCAL_HOURS)[number],
+      );
+      selectedHour =
+        CONTROLLED_LOCAL_HOURS[(index + 1) % CONTROLLED_LOCAL_HOURS.length];
+    }
     scheduledAt = nextSlot(selectedHour, new Date(scheduledAt.getTime() + 1));
     collisionMoves += 1;
   }

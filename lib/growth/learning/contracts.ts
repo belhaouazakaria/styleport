@@ -17,7 +17,12 @@ export const prepareEvergreenRecommendationSchema = z
   .object({
     recommendationId: z.string().trim().min(1).max(191),
     confirmation: z.literal(true),
+    paidAiConfirmation: z.literal("QUEUE PAID AI CREATIVE").optional(),
   })
+  .strict();
+
+export const evergreenPreparationJobPayloadSchema = z
+  .object({ recommendationId: z.string().trim().min(1).max(191) })
   .strict();
 
 export const learningExperimentActionSchema = z

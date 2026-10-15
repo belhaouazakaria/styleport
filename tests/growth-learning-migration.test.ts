@@ -24,9 +24,20 @@ describe("Phase 12 additive migration", () => {
       "GrowthEvergreenRecommendationRecord_target_check",
     );
     expect(migration).toContain('ADD COLUMN "evergreenCooldownDays"');
+    expect(migration).toContain("GrowthSettings_evergreenCooldownDays_check");
     expect(migration).toContain(
-      "GrowthSettings_evergreenCooldownDays_check",
+      '"GrowthEvergreenRecommendationRecord_run_translator_key"',
     );
+    expect(migration).toContain('WHERE "translatorId" IS NOT NULL');
+    expect(migration).toContain(
+      '"GrowthEvergreenRecommendationRecord_run_idea_key"',
+    );
+    expect(migration).toContain('WHERE "ideaId" IS NOT NULL');
+    expect(migration).not.toContain(
+      'ON "GrowthEvergreenRecommendationRecord"("learningRunId", "destinationKind", "translatorId", "ideaId")',
+    );
+    expect(migration).toMatch(/translatorId_fkey[\s\S]*ON DELETE RESTRICT/);
+    expect(migration).toMatch(/ideaId_fkey[\s\S]*ON DELETE RESTRICT/);
     expect(migration).not.toMatch(/DROP TABLE|DROP COLUMN|migrate reset/i);
   });
 });

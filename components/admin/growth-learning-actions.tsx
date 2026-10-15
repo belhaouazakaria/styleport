@@ -54,10 +54,13 @@ export function LearningAnalyzeButton() {
 
 export function PrepareEvergreenButton({
   recommendationId,
+  requiresPaidAi,
 }: {
   recommendationId: string;
+  requiresPaidAi: boolean;
 }) {
   const [busy, setBusy] = useState(false);
+  const [paidAiArmed, setPaidAiArmed] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
   return (
@@ -65,11 +68,18 @@ export function PrepareEvergreenButton({
       variant="outline"
       disabled={busy}
       onClick={async () => {
+        if (requiresPaidAi && !paidAiArmed) {
+          setPaidAiArmed(true);
+          return;
+        }
         setBusy(true);
         try {
           await mutate("/api/admin/growth/learning/prepare", {
             recommendationId,
             confirmation: true,
+            ...(requiresPaidAi
+              ? { paidAiConfirmation: "QUEUE PAID AI CREATIVE" }
+              : {}),
           });
           toast({
             title: "Creative preparation queued",
@@ -89,7 +99,13 @@ export function PrepareEvergreenButton({
         }
       }}
     >
-      {busy ? "Preparing…" : "Prepare new creative"}
+      {busy
+        ? "Preparing…"
+        : paidAiArmed
+          ? "Confirm paid AI generation"
+          : requiresPaidAi
+            ? "Prepare with paid AI"
+            : "Prepare new creative"}
     </Button>
   );
 }
