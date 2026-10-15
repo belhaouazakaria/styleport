@@ -41,7 +41,8 @@
     "featured:recalculate": "tsx scripts/recalculate-featured-translators.ts",
     "seo:report-indexing-impact": "tsx scripts/report-indexing-impact.ts",
     "seo:verify-production": "tsx scripts/verify-production-seo.ts",
-    "test:growth-publishing-db": "sh scripts/test-growth-publishing-db.sh"
+    "test:growth-publishing-db": "sh scripts/test-growth-publishing-db.sh",
+    "test:growth-learning-db": "sh scripts/test-growth-learning-db.sh"
   },
   "postinstall": "node node_modules/prisma/build/index.js generate",
   "dependencies": {

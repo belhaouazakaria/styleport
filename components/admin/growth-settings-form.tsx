@@ -16,6 +16,7 @@ interface GrowthSettingsFormProps {
     attributionWindowDays: number;
     attributionSessionRetentionDays: number;
     attributionEventRetentionDays: number;
+    evergreenCooldownDays: number;
   };
 }
 
@@ -55,6 +56,7 @@ export function GrowthSettingsForm({ initial }: GrowthSettingsFormProps) {
         attributionWindowDays: result.settings.attributionWindowDays,
         attributionSessionRetentionDays: result.settings.attributionSessionRetentionDays,
         attributionEventRetentionDays: result.settings.attributionEventRetentionDays,
+        evergreenCooldownDays: result.settings.evergreenCooldownDays,
       });
       setOwnedDomainsText(result.settings.ownedDomains.join("\n"));
       toast({ title: "Growth settings saved" });
@@ -128,6 +130,26 @@ export function GrowthSettingsForm({ initial }: GrowthSettingsFormProps) {
         />
         <span className="block font-normal leading-5 text-muted-ink">
           Pins linking to these domains receive detailed per-Pin analytics. Other Pins remain inventoried but are not individually backfilled. Enter one hostname per line, without a scheme or path.
+        </span>
+      </label>
+      <label className="mt-4 block space-y-2 text-sm font-semibold text-ink">
+        <span>Evergreen promotion cooldown (days)</span>
+        <input
+          type="number"
+          min={14}
+          max={180}
+          value={settings.evergreenCooldownDays}
+          onChange={(event) =>
+            setSettings((current) => ({
+              ...current,
+              evergreenCooldownDays: Number(event.target.value),
+            }))
+          }
+          className="min-h-11 w-full rounded-xl border border-border bg-white px-3 text-sm"
+        />
+        <span className="block font-normal leading-5 text-muted-ink">
+          Phase 12 defaults to 45 days and accepts a bounded 14–180 day
+          interval.
         </span>
       </label>
       <div className="mt-6 rounded-xl border border-border bg-muted/20 p-4">

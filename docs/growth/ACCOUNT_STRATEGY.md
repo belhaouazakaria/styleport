@@ -195,3 +195,7 @@ A monthly `GrowthAccountStrategyReview` is unique by review month and model vers
 ## 10. Phase 7 opportunity evidence boundary
 
 Phase 7 now supplies durable cluster, content-depth, velocity, gap, fatigue and concentration evidence through the corrected `opportunity_intelligence_v2`. It does not change `account_strategy_v1` or automatically turn an opportunity into an account recommendation. Account strategy remains its own monthly advisory decision; future strategy versions may consume sustained cross-run cluster evidence through an explicit decision. Full account inventory remains broader than the active owned-domain Pins eligible for detailed opportunity analytics.
+
+## 11. Phase 12 account-specific learning boundary
+
+Learned timing is scoped to one connected account and never becomes a universal best time. Account connection problems block revival for affected historical evidence. Phase 12 does not change publication roles, recommend account creation, mutate boards, or rewrite `account_strategy_v1`; it stores timing windows and performance comparisons in a separate versioned daily run.

@@ -38,6 +38,8 @@ import { creativeGenerationJobPayloadSchema } from "@/lib/growth/creative/contra
 import { generateCreativeCandidate } from "@/lib/growth/creative/candidates";
 import { publicationJobPayloadSchema } from "@/lib/growth/publishing/contracts";
 import { publishApprovedPin, reconcilePinterestPublication } from "@/lib/growth/publishing/service";
+import { learningJobPayloadSchema } from "@/lib/growth/learning/contracts";
+import { persistLearningAnalysis } from "@/lib/growth/learning/service";
 
 export interface GrowthJobHandlerContext {
   job: GrowthJob;
@@ -48,6 +50,15 @@ export type GrowthJobHandler = (
 ) => Promise<Record<string, unknown>>;
 
 const handlers = new Map<GrowthJobType, GrowthJobHandler>([
+  [
+    GrowthJobType.EVERGREEN_LEARNING_ANALYSIS,
+    async ({ job }) => {
+      const parsed = learningJobPayloadSchema.safeParse(job.payload || {});
+      if (!parsed.success) throw new NonRetryableGrowthJobError("Invalid Evergreen Learning payload.");
+      const result = await persistLearningAnalysis({ analysisDate: new Date(`${parsed.data.analysisDate}T00:00:00.000Z`), jobId: job.id });
+      return { learningRunId: result.run.id, modelVersion: result.run.learningModelVersion, evidenceQuality: result.run.evidenceQuality, recommendations: result.run.recommendations.length, reused: result.reused };
+    },
+  ],
   [
     GrowthJobType.FOUNDATION_NOOP,
     async ({ job }) => ({ handled: true, type: job.type }),

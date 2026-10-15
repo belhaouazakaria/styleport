@@ -1,0 +1,15 @@
+export const LEARNING_MODEL_VERSION = "growth_learning_v1";
+export const EVERGREEN_MODEL_VERSION = "evergreen_learning_v1";
+export const LEARNED_SCHEDULER_VERSION = "learned_scheduler_v1";
+export const EXPERIMENT_LEARNING_VERSION = "experiment_learning_v1";
+export const OPPORTUNITY_FEEDBACK_VERSION = "opportunity_feedback_v1";
+export const LEARNING_TIME_ZONE = "America/New_York";
+export const LEARNING_WINDOW_DAYS = 90;
+export const DEFAULT_EVERGREEN_COOLDOWN_DAYS = 45;
+export const MIN_EVERGREEN_OBSERVED_DAYS = 14;
+export const MIN_EVERGREEN_IMPRESSIONS = 500;
+export const MIN_EVERGREEN_OUTBOUND_CLICKS = 10;
+export const MIN_SCHEDULE_PINS = 4;
+export const MIN_SCHEDULE_IMPRESSIONS = 1_000;
+export const MAX_LEARNING_TARGETS = 500;
+export const MAX_LEARNING_PUBLICATIONS = 500;

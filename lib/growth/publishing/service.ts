@@ -18,6 +18,7 @@ import { NonRetryableGrowthJobError, RetryableGrowthJobError } from "@/lib/growt
 import { createPinterestPin, getPinterestPinsPage, PinterestAuthorizationError, PinterestCreateAmbiguousError, PinterestRateLimitError } from "@/lib/growth/pinterest/api";
 import { hasPinterestScopes, PINTEREST_CREATE_PIN_SCOPES, requirePinterestConfiguration } from "@/lib/growth/pinterest/config";
 import { isOwnedPinterestDestination } from "@/lib/growth/pinterest/relevance";
+import { chooseLearnedWindow } from "@/lib/growth/learning/scheduler";
 import { prisma } from "@/lib/prisma";
 import { approvePinSchema, PIN_APPROVAL_POLICY_VERSION, PUBLICATION_TIMING_VERSION, rejectPinSchema, type ApprovedPinSnapshot } from "@/lib/growth/publishing/contracts";
 import { buildPublicCreativeAssetUrl, pinApprovalSnapshotChecksum, pinterestPublicationUrlsMatch } from "@/lib/growth/publishing/snapshot";
@@ -29,11 +30,14 @@ function rateFields(rateLimit: { limit: string | null; remaining: string | null;
 }
 
 export async function recommendPublicationTiming(accountId: string, stableKey: string, now = new Date()) {
-  const [pins, collisions] = await Promise.all([
+  const [pins, collisions, learningRun] = await Promise.all([
     prisma.growthPinterestPin.findMany({ where: { accountId, publishedAt: { gte: new Date(now.getTime() - 90 * 86_400_000) } }, select: { publishedAt: true, summaryImpressions: true, summaryOutboundClicks: true, summarySaves: true }, orderBy: { publishedAt: "desc" }, take: 500 }),
     prisma.growthPinPublication.findMany({ where: { accountId, status: { notIn: [GrowthPublicationStatus.CANCELLED, GrowthPublicationStatus.FAILED_TERMINAL] }, scheduledAt: { gte: new Date(now.getTime() - 90 * 60_000) } }, select: { scheduledAt: true }, orderBy: { scheduledAt: "asc" }, take: 100 }),
+    prisma.growthLearningRun.findFirst({ where: { completedAt: { gte: new Date(now.getTime() - 48 * 60 * 60_000) }, scheduleWindows: { some: { accountId, evidenceQuality: "KNOWN" } } }, orderBy: [{ analysisDate: "desc" }, { completedAt: "desc" }], select: { id: true, scheduleWindows: { where: { accountId }, select: { localHour: true, samplePins: true, impressions: true, outboundClicks: true, saves: true, qualifiedConversions: true, evidenceQuality: true, confidence: true } } } }),
   ]);
-  return planPublicationTiming({ stableKey, now, history: pins.map((pin) => ({ publishedAt: pin.publishedAt, impressions: pin.summaryImpressions, outboundClicks: pin.summaryOutboundClicks, saves: pin.summarySaves })), collisions });
+  const learnedChoice = learningRun ? chooseLearnedWindow({ stableKey, windows: learningRun.scheduleWindows.map((window) => ({ ...window, impressions: Number(window.impressions), outboundClicks: Number(window.outboundClicks), saves: Number(window.saves), timeZone: "America/New_York", mode: GrowthPublicationTimingMode.EXPLOIT, reasonCodes: [], outboundRate: window.impressions > BigInt(0) ? Number(window.outboundClicks) / Number(window.impressions) : null, conversionRate: null })) }) : null;
+  const learned = learningRun && learnedChoice?.localHour != null ? { localHour: learnedChoice.localHour, mode: learnedChoice.mode, confidence: learningRun.scheduleWindows.find((window) => window.localHour === learnedChoice.localHour)?.confidence || 0, runId: learningRun.id } : null;
+  return planPublicationTiming({ stableKey, now, history: pins.map((pin) => ({ publishedAt: pin.publishedAt, impressions: pin.summaryImpressions, outboundClicks: pin.summaryOutboundClicks, saves: pin.summarySaves })), collisions, learned });
 }
 
 async function readApprovalCandidate(tx: Prisma.TransactionClient, candidateId: string) {
@@ -76,7 +80,7 @@ export async function approvePinCandidate(raw: unknown, adminUserId: string, now
     const snapshotChecksum = pinApprovalSnapshotChecksum(snapshot);
     if (existing) await tx.growthPinApproval.update({ where: { id: existing.id }, data: { status: GrowthPinApprovalStatus.SUPERSEDED } });
     const approval = await tx.growthPinApproval.create({ data: { id: approvalId, candidateId: candidate.id, candidateRevision: candidate.revision, status: GrowthPinApprovalStatus.APPROVED, approvedById: adminUserId, reviewedAt: now, accountId: account.id, boardId: board.id, scheduledAt: requestedAt, snapshotChecksum, snapshot: snapshot as unknown as Prisma.InputJsonValue, approvalPolicyVersion: PIN_APPROVAL_POLICY_VERSION } });
-    const publication = await tx.growthPinPublication.create({ data: { id: publicationId, candidateId: candidate.id, approvalId: approval.id, accountId: account.id, boardId: board.id, attributionRefId: attribution.id, idempotencyKey: `pinterest-publish:${publicationId}`, scheduledAt: requestedAt, timingModelVersion: PUBLICATION_TIMING_VERSION, timingMode, timingEvidence: { ...recommendation.evidence, recommendedAt: recommendation.scheduledAt.toISOString(), adminScheduledAt: requestedAt.toISOString() } } });
+    const publication = await tx.growthPinPublication.create({ data: { id: publicationId, candidateId: candidate.id, approvalId: approval.id, accountId: account.id, boardId: board.id, attributionRefId: attribution.id, idempotencyKey: `pinterest-publish:${publicationId}`, scheduledAt: requestedAt, timingModelVersion: recommendation.modelVersion || PUBLICATION_TIMING_VERSION, timingMode, timingEvidence: { ...recommendation.evidence, recommendedAt: recommendation.scheduledAt.toISOString(), adminScheduledAt: requestedAt.toISOString() } } });
     const job = await tx.growthJob.create({ data: { type: GrowthJobType.PINTEREST_PIN_PUBLISH, idempotencyKey: `pinterest-publish:${publicationId}`, payload: { publicationId }, runAfter: requestedAt, maxAttempts: 3 } });
     await tx.growthPinPublication.update({ where: { id: publication.id }, data: { publishJobId: job.id } });
     await recordGrowthActivity({ actorKind: GrowthActivityActorKind.USER, actorUserId: adminUserId, entityType: "GrowthPinApproval", entityId: approval.id, action: "PIN_APPROVED", toState: GrowthPinApprovalStatus.APPROVED, summary: { candidateId: candidate.id, accountId: account.id, boardId: board.id, scheduledAt: requestedAt.toISOString(), snapshotChecksum, timingMode }, correlationKey: publication.idempotencyKey }, tx);

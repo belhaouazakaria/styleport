@@ -166,6 +166,27 @@ enum GrowthJobType {
   CREATIVE_LAB_GENERATE
   PINTEREST_PIN_PUBLISH
   PINTEREST_PIN_RECONCILE
+  EVERGREEN_LEARNING_ANALYSIS
+}
+
+enum GrowthEvergreenRecommendation {
+  REVIVE
+  WAIT
+  SKIP
+  INSUFFICIENT_DATA
+}
+
+enum GrowthLearningEvidenceQuality {
+  KNOWN
+  PARTIAL
+  INSUFFICIENT_DATA
+  STALE
+}
+
+enum GrowthEvergreenRecommendationStatus {
+  PROPOSED
+  PREPARED
+  DISMISSED
 }
 
 enum GrowthPinApprovalStatus {
@@ -504,9 +525,9 @@ model VerificationToken {
 }
 
 model Translator {
-  id                           String                            @id @default(cuid())
+  id                           String                                @id @default(cuid())
   name                         String
-  slug                         String                            @unique
+  slug                         String                                @unique
   title                        String
   subtitle                     String
   shortDescription             String
@@ -519,27 +540,27 @@ model Translator {
   modelOverride                String?
   seoTitle                     String?
   seoDescription               String?
-  showModeSelector             Boolean                           @default(false)
-  showSwap                     Boolean                           @default(false)
-  showExamples                 Boolean                           @default(false)
-  isActive                     Boolean                           @default(true)
-  isFeatured                   Boolean                           @default(false)
+  showModeSelector             Boolean                               @default(false)
+  showSwap                     Boolean                               @default(false)
+  showExamples                 Boolean                               @default(false)
+  isActive                     Boolean                               @default(true)
+  isFeatured                   Boolean                               @default(false)
   featuredRank                 Int?
-  featuredSource               FeaturedSource                    @default(MANUAL)
+  featuredSource               FeaturedSource                        @default(MANUAL)
   shareImagePath               String?
   shareImageHash               String?
   shareImageUpdatedAt          DateTime?
-  sortOrder                    Int                               @default(0)
+  sortOrder                    Int                                   @default(0)
   archivedAt                   DateTime?
   primaryCategoryId            String?
-  createdAt                    DateTime                          @default(now())
-  updatedAt                    DateTime                          @updatedAt
+  createdAt                    DateTime                              @default(now())
+  updatedAt                    DateTime                              @updatedAt
   modes                        TranslationMode[]
   examples                     TranslatorExample[]
   logs                         TranslationLog[]
   categories                   TranslatorCategory[]
-  primaryCategory              Category?                         @relation("PrimaryTranslatorCategory", fields: [primaryCategoryId], references: [id], onDelete: SetNull)
-  fulfilledRequests            TranslatorRequest[]               @relation("RequestCreatedTranslator")
+  primaryCategory              Category?                             @relation("PrimaryTranslatorCategory", fields: [primaryCategoryId], references: [id], onDelete: SetNull)
+  fulfilledRequests            TranslatorRequest[]                   @relation("RequestCreatedTranslator")
   comments                     TranslatorComment[]
   indexingLogs                 IndexingLog[]
   editorialContent             TranslatorEditorialContent?
@@ -548,7 +569,7 @@ model Translator {
   editorialFaqs                TranslatorEditorialFaq[]
   editorialJobItems            TranslatorEditorialJobItem[]
   editorialDrafts              TranslatorEditorialDraft[]
-  growthAttributionSessions    GrowthAttributionSession[]        @relation("GrowthAttributionQualifiedTranslator")
+  growthAttributionSessions    GrowthAttributionSession[]            @relation("GrowthAttributionQualifiedTranslator")
   growthAttributionEvents      GrowthAttributionEvent[]
   growthOpportunityMemberships GrowthContentClusterMembership[]
   growthAttributionAggregates  GrowthAttributionDailyAggregate[]
@@ -556,6 +577,7 @@ model Translator {
   growthContentVersions        GrowthContentVersion[]
   growthIdeaReferences         GrowthIdeaTranslatorReference[]
   growthPinCandidates          GrowthPinCandidate[]
+  evergreenRecommendations     GrowthEvergreenRecommendationRecord[]
 
   @@index([isActive, isFeatured, sortOrder])
   @@index([isFeatured, featuredRank])
@@ -898,6 +920,7 @@ model GrowthSettings {
   attributionWindowDays           Int             @default(7)
   attributionSessionRetentionDays Int             @default(30)
   attributionEventRetentionDays   Int             @default(90)
+  evergreenCooldownDays           Int             @default(45)
   configVersion                   Int             @default(1)
   updatedById                     String?
   createdAt                       DateTime        @default(now())
@@ -930,6 +953,7 @@ model GrowthJob {
   growthPinCandidate    GrowthPinCandidate?
   publishedPin          GrowthPinPublication?  @relation("GrowthPinPublicationPublishJob")
   reconciledPin         GrowthPinPublication?  @relation("GrowthPinPublicationReconcileJob")
+  growthLearningRun     GrowthLearningRun?
 
   @@index([status, runAfter])
   @@index([leaseUntil])
@@ -1002,6 +1026,7 @@ model GrowthPinterestAccount {
   analyticsState          GrowthPinterestAnalyticsState?
   pinApprovals            GrowthPinApproval[]
   pinPublications         GrowthPinPublication[]
+  learnedScheduleWindows  GrowthLearnedScheduleWindow[]
 
   @@index([connectionStatus, publicationRole])
   @@index([apiEnvironment, connectionStatus])
@@ -1375,24 +1400,25 @@ model GrowthIdeaCategory {
 }
 
 model GrowthIdea {
-  id                  String                @id @default(cuid())
-  slug                String                @unique
-  categoryId          String
-  status              GrowthIdeaStatus      @default(DRAFT)
-  currentVersionId    String?               @unique
-  clusterId           String?
-  seoTitle            String
-  seoDescription      String
-  publishedAt         DateTime?
-  archivedAt          DateTime?
-  createdAt           DateTime              @default(now())
-  updatedAt           DateTime              @updatedAt
-  category            GrowthIdeaCategory    @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  cluster             GrowthContentCluster? @relation(fields: [clusterId], references: [id], onDelete: SetNull)
-  currentVersion      GrowthIdeaVersion?    @relation("CurrentGrowthIdeaVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
-  versions            GrowthIdeaVersion[]   @relation("GrowthIdeaVersions")
-  decisions           GrowthDecision[]
-  growthPinCandidates GrowthPinCandidate[]
+  id                       String                                @id @default(cuid())
+  slug                     String                                @unique
+  categoryId               String
+  status                   GrowthIdeaStatus                      @default(DRAFT)
+  currentVersionId         String?                               @unique
+  clusterId                String?
+  seoTitle                 String
+  seoDescription           String
+  publishedAt              DateTime?
+  archivedAt               DateTime?
+  createdAt                DateTime                              @default(now())
+  updatedAt                DateTime                              @updatedAt
+  category                 GrowthIdeaCategory                    @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  cluster                  GrowthContentCluster?                 @relation(fields: [clusterId], references: [id], onDelete: SetNull)
+  currentVersion           GrowthIdeaVersion?                    @relation("CurrentGrowthIdeaVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
+  versions                 GrowthIdeaVersion[]                   @relation("GrowthIdeaVersions")
+  decisions                GrowthDecision[]
+  growthPinCandidates      GrowthPinCandidate[]
+  evergreenRecommendations GrowthEvergreenRecommendationRecord[]
 
   @@index([status, publishedAt])
   @@index([categoryId, status, publishedAt])
@@ -1489,74 +1515,76 @@ model GrowthAsset {
 }
 
 model GrowthExperiment {
-  id                      String                    @id @default(cuid())
+  id                      String                               @id @default(cuid())
   clusterId               String?
-  hypothesis              String                    @db.VarChar(500)
+  hypothesis              String                               @db.VarChar(500)
   dimension               GrowthExperimentDimension
   variants                Json
-  primaryKpi              String                    @db.VarChar(80)
+  primaryKpi              String                               @db.VarChar(80)
   guardrails              Json
-  attributionModelVersion String                    @db.VarChar(80)
-  scoringModelVersion     String                    @db.VarChar(80)
-  experimentModelVersion  String                    @db.VarChar(80)
-  status                  GrowthExperimentStatus    @default(DRAFT)
+  attributionModelVersion String                               @db.VarChar(80)
+  scoringModelVersion     String                               @db.VarChar(80)
+  experimentModelVersion  String                               @db.VarChar(80)
+  status                  GrowthExperimentStatus               @default(DRAFT)
   startedAt               DateTime?
   endedAt                 DateTime?
   result                  Json?
-  createdAt               DateTime                  @default(now())
-  updatedAt               DateTime                  @updatedAt
-  cluster                 GrowthContentCluster?     @relation(fields: [clusterId], references: [id], onDelete: SetNull)
+  createdAt               DateTime                             @default(now())
+  updatedAt               DateTime                             @updatedAt
+  cluster                 GrowthContentCluster?                @relation(fields: [clusterId], references: [id], onDelete: SetNull)
   candidates              GrowthPinCandidate[]
+  learningEvaluations     GrowthExperimentLearningEvaluation[]
 
   @@index([status, createdAt])
   @@index([clusterId, createdAt])
 }
 
 model GrowthPinCandidate {
-  id                     String                                 @id @default(cuid())
-  candidateKey           String                                 @db.VarChar(191)
-  revision               Int
-  accountId              String?
-  boardId                String?
-  clusterId              String?
-  decisionId             String?
-  experimentId           String?
-  experimentVariantKey   String?                                @db.VarChar(64)
-  generationJobId        String?                                @unique
-  destinationKind        GrowthCreativeDestinationKind
-  translatorId           String?
-  ideaId                 String?
-  title                  String                                 @db.VarChar(100)
-  description            String                                 @db.VarChar(500)
-  destinationPath        String                                 @db.VarChar(512)
-  pinRef                 String?                                @db.VarChar(191)
-  assetId                String
-  rendererKey            String                                 @db.VarChar(64)
-  rendererVersion        String                                 @db.VarChar(64)
-  templateId             String                                 @db.VarChar(96)
-  archetype              GrowthCreativeArchetype
-  headlinePattern        String                                 @db.VarChar(96)
-  ctaPattern             String                                 @db.VarChar(96)
-  visualTreatment        String                                 @db.VarChar(96)
-  topic                  String                                 @db.VarChar(160)
-  contentHash            String                                 @db.VarChar(64)
-  similarityModelVersion String                                 @db.VarChar(64)
-  similarityResult       GrowthCreativeSimilarityClassification
-  similarityFlags        Json
-  recommendedAt          DateTime                               @default(now())
-  status                 GrowthPinCandidateStatus               @default(DRAFT)
-  createdAt              DateTime                               @default(now())
-  account                GrowthPinterestAccount?                @relation(fields: [accountId], references: [id], onDelete: SetNull)
-  board                  GrowthPinterestBoard?                  @relation(fields: [boardId], references: [id], onDelete: SetNull)
-  cluster                GrowthContentCluster?                  @relation(fields: [clusterId], references: [id], onDelete: SetNull)
-  decision               GrowthDecision?                        @relation(fields: [decisionId], references: [id], onDelete: SetNull)
-  experiment             GrowthExperiment?                      @relation(fields: [experimentId], references: [id], onDelete: SetNull)
-  generationJob          GrowthJob?                             @relation(fields: [generationJobId], references: [id], onDelete: SetNull)
-  translator             Translator?                            @relation(fields: [translatorId], references: [id], onDelete: Restrict)
-  idea                   GrowthIdea?                            @relation(fields: [ideaId], references: [id], onDelete: Restrict)
-  asset                  GrowthAsset                            @relation(fields: [assetId], references: [id], onDelete: Restrict)
-  approvals              GrowthPinApproval[]
-  publications           GrowthPinPublication[]
+  id                         String                                 @id @default(cuid())
+  candidateKey               String                                 @db.VarChar(191)
+  revision                   Int
+  accountId                  String?
+  boardId                    String?
+  clusterId                  String?
+  decisionId                 String?
+  experimentId               String?
+  experimentVariantKey       String?                                @db.VarChar(64)
+  generationJobId            String?                                @unique
+  destinationKind            GrowthCreativeDestinationKind
+  translatorId               String?
+  ideaId                     String?
+  title                      String                                 @db.VarChar(100)
+  description                String                                 @db.VarChar(500)
+  destinationPath            String                                 @db.VarChar(512)
+  pinRef                     String?                                @db.VarChar(191)
+  assetId                    String
+  rendererKey                String                                 @db.VarChar(64)
+  rendererVersion            String                                 @db.VarChar(64)
+  templateId                 String                                 @db.VarChar(96)
+  archetype                  GrowthCreativeArchetype
+  headlinePattern            String                                 @db.VarChar(96)
+  ctaPattern                 String                                 @db.VarChar(96)
+  visualTreatment            String                                 @db.VarChar(96)
+  topic                      String                                 @db.VarChar(160)
+  contentHash                String                                 @db.VarChar(64)
+  similarityModelVersion     String                                 @db.VarChar(64)
+  similarityResult           GrowthCreativeSimilarityClassification
+  similarityFlags            Json
+  recommendedAt              DateTime                               @default(now())
+  status                     GrowthPinCandidateStatus               @default(DRAFT)
+  createdAt                  DateTime                               @default(now())
+  account                    GrowthPinterestAccount?                @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  board                      GrowthPinterestBoard?                  @relation(fields: [boardId], references: [id], onDelete: SetNull)
+  cluster                    GrowthContentCluster?                  @relation(fields: [clusterId], references: [id], onDelete: SetNull)
+  decision                   GrowthDecision?                        @relation(fields: [decisionId], references: [id], onDelete: SetNull)
+  experiment                 GrowthExperiment?                      @relation(fields: [experimentId], references: [id], onDelete: SetNull)
+  generationJob              GrowthJob?                             @relation(fields: [generationJobId], references: [id], onDelete: SetNull)
+  translator                 Translator?                            @relation(fields: [translatorId], references: [id], onDelete: Restrict)
+  idea                       GrowthIdea?                            @relation(fields: [ideaId], references: [id], onDelete: Restrict)
+  asset                      GrowthAsset                            @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  approvals                  GrowthPinApproval[]
+  publications               GrowthPinPublication[]
+  preparedFromRecommendation GrowthEvergreenRecommendationRecord?   @relation("PreparedEvergreenCandidate")
 
   @@unique([candidateKey, revision])
   @@index([status, recommendedAt])
@@ -1731,6 +1759,107 @@ model GrowthPinterestPinMetricDaily {
   @@index([metricDate])
   @@index([pinId, outboundClicks])
   @@index([outboundClicks, metricDate])
+}
+
+model GrowthLearningRun {
+  id                         String                                @id @default(cuid())
+  analysisDate               DateTime
+  evidenceWindowStart        DateTime
+  evidenceWindowEnd          DateTime
+  learningModelVersion       String                                @db.VarChar(64)
+  evergreenModelVersion      String                                @db.VarChar(64)
+  schedulerModelVersion      String                                @db.VarChar(64)
+  experimentModelVersion     String                                @db.VarChar(64)
+  opportunityFeedbackVersion String                                @db.VarChar(64)
+  evidenceQuality            GrowthLearningEvidenceQuality
+  attributionAvailability    String                                @db.VarChar(32)
+  targetsConsidered          Int
+  recommendationsProduced    Int
+  reasonCodes                String[]
+  performanceFindings        Json
+  opportunityAdjustments     Json
+  summary                    String                                @db.VarChar(1000)
+  jobId                      String?                               @unique
+  createdAt                  DateTime                              @default(now())
+  completedAt                DateTime                              @default(now())
+  job                        GrowthJob?                            @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  recommendations            GrowthEvergreenRecommendationRecord[]
+  scheduleWindows            GrowthLearnedScheduleWindow[]
+  experimentEvaluations      GrowthExperimentLearningEvaluation[]
+
+  @@unique([analysisDate, learningModelVersion])
+  @@index([completedAt])
+}
+
+model GrowthEvergreenRecommendationRecord {
+  id                   String                              @id @default(cuid())
+  learningRunId        String
+  destinationKind      GrowthCreativeDestinationKind
+  translatorId         String?
+  ideaId               String?
+  recommendation       GrowthEvergreenRecommendation
+  status               GrowthEvergreenRecommendationStatus @default(PROPOSED)
+  confidence           Int
+  evidenceQuality      GrowthLearningEvidenceQuality
+  reasonCodes          String[]
+  evidence             Json
+  proposedArchetype    GrowthCreativeArchetype?
+  proposedAngle        String?                             @db.VarChar(160)
+  cooldownUntil        DateTime?
+  evidenceFreshThrough DateTime?
+  preparedCandidateId  String?                             @unique
+  createdAt            DateTime                            @default(now())
+  updatedAt            DateTime                            @updatedAt
+  learningRun          GrowthLearningRun                   @relation(fields: [learningRunId], references: [id], onDelete: Cascade)
+  translator           Translator?                         @relation(fields: [translatorId], references: [id], onDelete: SetNull)
+  idea                 GrowthIdea?                         @relation(fields: [ideaId], references: [id], onDelete: SetNull)
+  preparedCandidate    GrowthPinCandidate?                 @relation("PreparedEvergreenCandidate", fields: [preparedCandidateId], references: [id], onDelete: SetNull)
+
+  @@unique([learningRunId, destinationKind, translatorId, ideaId])
+  @@index([recommendation, status, confidence, createdAt])
+  @@index([translatorId, createdAt])
+  @@index([ideaId, createdAt])
+}
+
+model GrowthLearnedScheduleWindow {
+  id                   String                        @id @default(cuid())
+  learningRunId        String
+  accountId            String
+  localHour            Int
+  timeZone             String                        @db.VarChar(64)
+  mode                 GrowthPublicationTimingMode
+  confidence           Int
+  samplePins           Int
+  impressions          BigInt
+  outboundClicks       BigInt
+  saves                BigInt
+  qualifiedConversions Int?
+  evidenceQuality      GrowthLearningEvidenceQuality
+  reasonCodes          String[]
+  evidence             Json
+  createdAt            DateTime                      @default(now())
+  learningRun          GrowthLearningRun             @relation(fields: [learningRunId], references: [id], onDelete: Cascade)
+  account              GrowthPinterestAccount        @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  @@unique([learningRunId, accountId, localHour])
+  @@index([accountId, evidenceQuality, confidence])
+}
+
+model GrowthExperimentLearningEvaluation {
+  id              String                        @id @default(cuid())
+  learningRunId   String
+  experimentId    String
+  outcome         GrowthExperimentStatus
+  confidence      Int
+  evidenceQuality GrowthLearningEvidenceQuality
+  reasonCodes     String[]
+  evidence        Json
+  createdAt       DateTime                      @default(now())
+  learningRun     GrowthLearningRun             @relation(fields: [learningRunId], references: [id], onDelete: Cascade)
+  experiment      GrowthExperiment              @relation(fields: [experimentId], references: [id], onDelete: Restrict)
+
+  @@unique([learningRunId, experimentId])
+  @@index([experimentId, createdAt])
 }
 
 model GrowthPinterestAnalyticsState {
