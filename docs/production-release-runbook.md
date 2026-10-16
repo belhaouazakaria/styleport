@@ -38,7 +38,7 @@ The sitemap is rendered dynamically in production. CI deliberately uses a non-pr
 
 Phase 12.2 introduces the reviewed migration `20261016120000_growth_analytics_gap_recovery`. It is additive: it adds one job enum value, recovery tables and indexes, and permits null Pin metric counts for provider-incomplete observations. It does not drop, rename or rewrite existing rows, and it does not modify immutable Phase 12 learning runs. The deployed Phase 12.1 application continues to write non-null metric counts and is compatible with the migrated schema while Growth remains disabled and recovery has not run.
 
-Production PostgreSQL remains private at `127.0.0.1:5433`. The deployment workflow never receives database credentials and `scripts/hostinger-deploy.sh` never runs `prisma migrate deploy`. Its existing zero-pending safety gate remains mandatory: any pending or failed migration stops deployment before application files are replaced.
+Production PostgreSQL remains private at `127.0.0.1:5433`. The deployment workflow never receives database credentials and `scripts/hostinger-deploy.sh` never runs `prisma migrate deploy`. Its existing zero-pending safety gate remains mandatory: any pending or failed migration stops deployment before application files are replaced. Because the GitHub production environment has no required reviewers, the workflow's production deployment job runs **only** on an explicit `workflow_dispatch` from `main`, with an operator-supplied `expected_release_sha` that must match the exact GitHub commit SHA. A push to `main` runs the CI/build/artifact job but skips the deployment job.
 
 Migration is a separate operator action using `scripts/hostinger-prepare-migration.sh`. The script is not called by either GitHub Actions workflow. It requires all of the following before it can run:
 
@@ -98,7 +98,7 @@ At deployment time, the script checks the configured CLI is an executable absolu
 
 1. Review the final branch diff and QA record.
 2. Merge the approved pull request into `main` without squashing away the release evidence unless repository policy requires it.
-3. Wait for the standalone CI workflow and deploy workflow CI Gate to pass for the exact merge SHA. Do not approve the `production` deployment environment yet.
+3. Wait for the standalone CI workflow and the push-triggered deploy workflow CI Gate to pass for the exact merge SHA; confirm the `Production Deploy` job was **skipped**, not executed. Do not manually dispatch deployment yet.
 4. Verify the uploaded artifact is `hostinger-release-<merge-sha>`, its bundle-content check passed, and its embedded `.release-sha` equals the merge SHA.
 5. Download that artifact on an operator workstation, copy the archive and reviewed `scripts/hostinger-prepare-migration.sh` to a SHA-specific private VPS staging directory, and extract the archive there. Do not extract it over the live application.
 
@@ -137,7 +137,7 @@ At deployment time, the script checks the configured CLI is an executable absolu
    ```
 
 8. Save the emitted `.deploy-backups/pre-migration-...record`, backup path, old-application health evidence, and current Prisma status in the release record. If the script fails, do not approve deployment. Investigate or use the documented database rollback process; do not rerun with a broader allow-list.
-9. Approve the GitHub `production` environment only after migration preparation succeeds. The workflow uploads the already-validated artifact and invokes the authenticated deployment script.
+9. Only after migration preparation succeeds, manually trigger the `Deploy to Hostinger` workflow on `main`, supplying the exact approved merge SHA as `expected_release_sha`: `gh workflow run deploy-hostinger.yml --ref main -f expected_release_sha=<full-reviewed-merge-sha>`. Verify `main` still points to that SHA first. The manually dispatched workflow reruns CI/build, verifies the supplied SHA, and only then invokes the production deployment job. The GitHub production environment currently has no required-reviewer gate; the explicit manual dispatch and no-pending-migrations script check are the mandatory release gates.
 10. The deployment script validates the archive SHA and staged layout, verifies the existing PM2 process and daemon, takes and verifies another PostgreSQL 18 backup, and requires migration status to be current. It never executes a migration.
 11. The script preserves `public/generated` and does not touch `storage/`, `.env`, or non-web PM2 processes. It saves the previous runtime paths, publishes the staged release, and restarts only the existing `saytwist` npm-start process without `--update-env`.
 12. Require an increased PM2 restart count, changed application PID, unchanged daemon PID, the verified runtime identity, and passing local health/readiness on port 3001. Restart/readiness failure restores the previous application paths.
