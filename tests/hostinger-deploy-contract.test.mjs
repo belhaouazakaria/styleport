@@ -8,6 +8,7 @@ import { validatePm2CliPath, validatePm2ProcessList } from "../scripts/pm2-proce
 
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
 const deployScript = path.join(repositoryRoot, "scripts/hostinger-deploy.sh");
+const migrationScript = path.join(repositoryRoot, "scripts/hostinger-prepare-migration.sh");
 const npmPath = "/home/saytwist/.nvm/versions/node/v24.20.0/bin/npm";
 const appPath = "/home/saytwist/htdocs/saytwist.com";
 const pm2Home = "/home/saytwist/.pm2";
@@ -47,6 +48,18 @@ function runSourcedBash(body, env = {}) {
       cwd: repositoryRoot,
       encoding: "utf8",
       env: { ...process.env, DEPLOY_SCRIPT: deployScript, ...env },
+    },
+  );
+}
+
+function runSourcedMigrationBash(body, env = {}) {
+  return spawnSync(
+    "bash",
+    ["-c", `set -Eeuo pipefail\nexport HOSTINGER_MIGRATION_SOURCE_ONLY=1\nsource "$MIGRATION_SCRIPT"\n${body}`],
+    {
+      cwd: repositoryRoot,
+      encoding: "utf8",
+      env: { ...process.env, MIGRATION_SCRIPT: migrationScript, ...env },
     },
   );
 }
@@ -162,6 +175,50 @@ describe("Hostinger PostgreSQL backup-tool contract", () => {
     const result = validateBackupTools(tools.dump, tools.restore);
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain("must be PostgreSQL major 18");
+  });
+});
+
+describe("Hostinger production migration contract", () => {
+  it("keeps deployment read-only with respect to migrations and rejects pending state", () => {
+    const script = readFileSync(deployScript, "utf8");
+    expect(script).not.toMatch(/run_prisma\s+migrate\s+deploy/);
+    expect(script).toContain("validate_no_pending_migrations");
+    const result = runSourcedBash(
+      "run_prisma() { return 1; }\nvalidate_no_pending_migrations",
+    );
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("separate operator-approved backup");
+  });
+
+  it("requires the exact reviewed migration, release SHA, approval, and verified backup", () => {
+    const script = readFileSync(migrationScript, "utf8");
+    expect(script).toContain("20261016120000_growth_analytics_gap_recovery");
+    expect(script).toContain('APPLY $APPROVED_MIGRATION');
+    expect(script).toContain("validate_exact_pending_migration");
+    expect(script).toContain("create_verified_backup");
+    expect(script).toContain('"$PG_RESTORE_BIN" --list');
+    expect(script).toContain("check_runtime");
+    expect(script).toContain("migrate deploy --schema prisma/schema.prisma");
+    expect(script.match(/check_runtime/g)?.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("keeps migration preparation out of the automatic deployment script", () => {
+    const deploy = readFileSync(deployScript, "utf8");
+    expect(deploy).not.toContain("hostinger-prepare-migration.sh");
+    expect(deploy).not.toContain("HOSTINGER_MIGRATION_APPROVAL");
+  });
+
+  it("refuses to use the live application directory as migration staging", () => {
+    const result = runSourcedMigrationBash(
+      'APP_PATH="/home/saytwist/htdocs/saytwist.com"\nMIGRATION_ROOT="$APP_PATH"\nvalidate_inputs',
+    );
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("outside the live application directory");
+  });
+
+  it("validates both deployment scripts as Bash", () => {
+    expect(() => execFileSync("bash", ["-n", deployScript])).not.toThrow();
+    expect(() => execFileSync("bash", ["-n", migrationScript])).not.toThrow();
   });
 });
 

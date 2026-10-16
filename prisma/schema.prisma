@@ -184,6 +184,7 @@ enum GrowthPinterestAnalyticsRecoveryStatus {
   COMPLETED
   COMPLETED_WITH_GAPS
   FAILED
+  CANCELLED
 }
 
 enum GrowthPinterestAnalyticsRecoveryTaskStatus {

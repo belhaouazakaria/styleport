@@ -4,6 +4,7 @@ import {
   GrowthJobStatus,
   GrowthJobType,
   GrowthOpportunityStatus,
+  GrowthPinterestAnalyticsRecoveryStatus,
   GrowthPublicationStatus,
   Prisma,
   type GrowthJob,
@@ -64,14 +65,7 @@ async function synchronizeExhaustedAnalyticsRecovery(
   now: Date,
 ) {
   if (job.type !== GrowthJobType.PINTEREST_ANALYTICS_GAP_RECOVERY) return;
-  const recoveryId =
-    job.payload &&
-    typeof job.payload === "object" &&
-    !Array.isArray(job.payload) &&
-    "recoveryId" in job.payload &&
-    typeof job.payload.recoveryId === "string"
-      ? job.payload.recoveryId
-      : null;
+  const recoveryId = analyticsRecoveryId(job.payload);
   if (!recoveryId) return;
   const updated = await tx.growthPinterestAnalyticsRecovery.updateMany({
     where: {
@@ -89,6 +83,87 @@ async function synchronizeExhaustedAnalyticsRecovery(
         action: "PINTEREST_ANALYTICS_RECOVERY_FAILED",
         toState: "FAILED",
         summary: { jobType: job.type },
+        correlationKey: `pinterest-recovery:${recoveryId}`,
+      },
+      tx,
+    );
+  }
+}
+
+function analyticsRecoveryId(payload: Prisma.JsonValue | null) {
+  return payload &&
+    typeof payload === "object" &&
+    !Array.isArray(payload) &&
+    "recoveryId" in payload &&
+    typeof payload.recoveryId === "string"
+    ? payload.recoveryId
+    : null;
+}
+
+async function synchronizeCancelledAnalyticsRecovery(
+  tx: Prisma.TransactionClient,
+  job: Pick<GrowthJob, "id" | "type" | "payload">,
+  actorUserId: string,
+  now: Date,
+) {
+  if (job.type !== GrowthJobType.PINTEREST_ANALYTICS_GAP_RECOVERY) return;
+  const recoveryId = analyticsRecoveryId(job.payload);
+  if (!recoveryId) return;
+  const siblings = await tx.growthJob.findMany({
+    where: {
+      id: { not: job.id },
+      type: GrowthJobType.PINTEREST_ANALYTICS_GAP_RECOVERY,
+      status: { in: [GrowthJobStatus.PENDING, GrowthJobStatus.FAILED_RETRYABLE] },
+      payload: { path: ["recoveryId"], equals: recoveryId },
+    },
+    select: { id: true, status: true, idempotencyKey: true },
+  });
+  for (const sibling of siblings) {
+    const cancelled = await tx.growthJob.updateMany({
+      where: { id: sibling.id, status: sibling.status },
+      data: { status: GrowthJobStatus.CANCELLED, completedAt: now },
+    });
+    if (cancelled.count === 1) {
+      await recordGrowthActivity(
+        {
+          actorKind: GrowthActivityActorKind.USER,
+          actorUserId,
+          entityType: "GrowthJob",
+          entityId: sibling.id,
+          action: "JOB_CANCELLED_WITH_RECOVERY",
+          fromState: sibling.status,
+          toState: GrowthJobStatus.CANCELLED,
+          correlationKey: sibling.idempotencyKey,
+        },
+        tx,
+      );
+    }
+  }
+  const updated = await tx.growthPinterestAnalyticsRecovery.updateMany({
+    where: {
+      id: recoveryId,
+      status: {
+        in: [
+          GrowthPinterestAnalyticsRecoveryStatus.QUEUED,
+          GrowthPinterestAnalyticsRecoveryStatus.RUNNING,
+        ],
+      },
+    },
+    data: {
+      status: GrowthPinterestAnalyticsRecoveryStatus.CANCELLED,
+      completedAt: now,
+    },
+  });
+  if (updated.count === 1) {
+    await recordGrowthActivity(
+      {
+        actorKind: GrowthActivityActorKind.USER,
+        actorUserId,
+        entityType: "GrowthPinterestAnalyticsRecovery",
+        entityId: recoveryId,
+        action: "PINTEREST_ANALYTICS_RECOVERY_CANCELLED",
+        toState: GrowthPinterestAnalyticsRecoveryStatus.CANCELLED,
+        summary: { cancelledJobId: job.id, siblingJobs: siblings.length },
         correlationKey: `pinterest-recovery:${recoveryId}`,
       },
       tx,
@@ -399,10 +474,11 @@ export async function cancelGrowthJob(jobId: string, actorUserId: string) {
   if (job.status !== GrowthJobStatus.PENDING && job.status !== GrowthJobStatus.FAILED_RETRYABLE) {
     throw new Error("Only pending or retryable Growth jobs can be cancelled.");
   }
+  const cancelledAt = new Date();
   await prisma.$transaction(async (tx) => {
     const updated = await tx.growthJob.updateMany({
       where: { id: job.id, status: job.status },
-      data: { status: GrowthJobStatus.CANCELLED, completedAt: new Date() },
+      data: { status: GrowthJobStatus.CANCELLED, completedAt: cancelledAt },
     });
     if (updated.count !== 1) throw new Error("Growth job state changed before it could be cancelled.");
     await recordGrowthActivity({
@@ -415,6 +491,12 @@ export async function cancelGrowthJob(jobId: string, actorUserId: string) {
       toState: GrowthJobStatus.CANCELLED,
       correlationKey: job.idempotencyKey,
     }, tx);
+    await synchronizeCancelledAnalyticsRecovery(
+      tx,
+      job,
+      actorUserId,
+      cancelledAt,
+    );
   });
   return { ...job, status: GrowthJobStatus.CANCELLED };
 }

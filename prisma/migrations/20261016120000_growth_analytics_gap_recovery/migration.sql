@@ -15,7 +15,8 @@ CREATE TYPE "GrowthPinterestAnalyticsRecoveryStatus" AS ENUM (
   'RUNNING',
   'COMPLETED',
   'COMPLETED_WITH_GAPS',
-  'FAILED'
+  'FAILED',
+  'CANCELLED'
 );
 
 CREATE TYPE "GrowthPinterestAnalyticsRecoveryTaskStatus" AS ENUM (

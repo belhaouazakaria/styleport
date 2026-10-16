@@ -5,10 +5,14 @@ import {
   GrowthJobType,
   GrowthPinterestAnalyticsRecoveryStatus,
   GrowthPinterestAnalyticsRecoveryTaskStatus,
+  Prisma,
 } from "@prisma/client";
 
 import { recordGrowthActivity } from "@/lib/growth/activity";
-import { NonRetryableGrowthJobError } from "@/lib/growth/errors";
+import {
+  NonRetryableGrowthJobError,
+  RetryableGrowthJobError,
+} from "@/lib/growth/errors";
 import { enqueueGrowthJob } from "@/lib/growth/jobs";
 import {
   analyticsDateRange,
@@ -16,7 +20,6 @@ import {
   utcDateOnly,
 } from "@/lib/growth/pinterest/analytics-contract";
 import {
-  lowPinterestRateLimit,
   pinterestRateLimitData,
   upsertPinterestPinMetricRows,
 } from "@/lib/growth/pinterest/analytics";
@@ -30,7 +33,9 @@ export const PINTEREST_RECOVERY_MAX_PINS = 500;
 export const PINTEREST_RECOVERY_MAX_TASKS = 2_000;
 export const PINTEREST_RECOVERY_REQUESTS_PER_EXECUTION = 8;
 export const PINTEREST_RECOVERY_RATE_LIMIT_RESERVE = 5;
+export const PINTEREST_RECOVERY_RATE_LIMIT_MAX_AGE_MS = 15 * 60_000;
 const DAY_MS = 86_400_000;
+const MAX_RATE_LIMIT_WINDOW_MS = DAY_MS;
 
 export type PinterestGapMetric = {
   metricDate: Date;
@@ -102,7 +107,7 @@ export function detectPinterestAnalyticsGaps(params: {
               pin.publishedAt.getUTCFullYear(),
               pin.publishedAt.getUTCMonth(),
               pin.publishedAt.getUTCDate(),
-            ),
+            ) + DAY_MS,
           ),
         )
       : start;
@@ -197,12 +202,62 @@ function numericRateLimit(value: string | null | undefined) {
   return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : null;
 }
 
-export async function previewPinterestAnalyticsRecovery(params: {
-  accountId: string;
-  startDate?: string;
-  endDate?: string;
-  now?: Date;
-}) {
+type RecoveryRateLimitState = {
+  lastRateLimitRemaining: string | null;
+  lastRateLimitReset: string | null;
+  rateLimitObservedAt: Date | null;
+};
+
+function rateLimitResetDate(value: string | null) {
+  if (!value || !/^\d+$/.test(value)) return null;
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) return null;
+  const milliseconds = parsed > 10_000_000_000 ? parsed : parsed * 1000;
+  const reset = new Date(milliseconds);
+  return Number.isFinite(reset.getTime()) ? reset : null;
+}
+
+export function assessPinterestRecoveryRateLimit(
+  state: RecoveryRateLimitState | null,
+  now = new Date(),
+):
+  | { status: "AVAILABLE"; remaining: number; resetAt: Date }
+  | { status: "WAIT"; remaining: number; resetAt: Date }
+  | { status: "UNRELIABLE"; reason: string } {
+  if (!state?.rateLimitObservedAt)
+    return { status: "UNRELIABLE", reason: "RATE_LIMIT_METADATA_MISSING" };
+  const age = now.getTime() - state.rateLimitObservedAt.getTime();
+  if (age < 0 || age > PINTEREST_RECOVERY_RATE_LIMIT_MAX_AGE_MS)
+    return { status: "UNRELIABLE", reason: "RATE_LIMIT_METADATA_STALE" };
+  const remaining = numericRateLimit(state.lastRateLimitRemaining);
+  const resetAt = rateLimitResetDate(state.lastRateLimitReset);
+  if (
+    remaining === null ||
+    !resetAt ||
+    resetAt <= now ||
+    resetAt.getTime() - now.getTime() > MAX_RATE_LIMIT_WINDOW_MS
+  ) {
+    return { status: "UNRELIABLE", reason: "RATE_LIMIT_METADATA_INVALID" };
+  }
+  return remaining <= PINTEREST_RECOVERY_RATE_LIMIT_RESERVE
+    ? { status: "WAIT", remaining, resetAt }
+    : { status: "AVAILABLE", remaining, resetAt };
+}
+
+type RecoveryPreviewClient = Pick<
+  Prisma.TransactionClient,
+  "growthPinterestPin" | "growthPinterestAnalyticsState"
+>;
+
+async function buildPinterestAnalyticsRecoveryPreview(
+  client: RecoveryPreviewClient,
+  params: {
+    accountId: string;
+    startDate?: string;
+    endDate?: string;
+    now?: Date;
+  },
+) {
   const defaults = defaultPinterestRecoveryRange(params.now);
   const range = pinterestRecoveryDateRange({
     startDate: params.startDate || defaults.startDate,
@@ -210,7 +265,7 @@ export async function previewPinterestAnalyticsRecovery(params: {
     now: params.now,
   });
   const [pinRows, state] = await Promise.all([
-    prisma.growthPinterestPin.findMany({
+    client.growthPinterestPin.findMany({
       where: {
         accountId: params.accountId,
         isActive: true,
@@ -230,7 +285,7 @@ export async function previewPinterestAnalyticsRecovery(params: {
       orderBy: { pinterestPinId: "asc" },
       take: PINTEREST_RECOVERY_MAX_PINS + 1,
     }),
-    prisma.growthPinterestAnalyticsState.findUnique({
+    client.growthPinterestAnalyticsState.findUnique({
       where: { accountId: params.accountId },
       select: {
         lastRateLimitLimit: true,
@@ -297,6 +352,15 @@ export async function previewPinterestAnalyticsRecovery(params: {
   };
 }
 
+export async function previewPinterestAnalyticsRecovery(params: {
+  accountId: string;
+  startDate?: string;
+  endDate?: string;
+  now?: Date;
+}) {
+  return buildPinterestAnalyticsRecoveryPreview(prisma, params);
+}
+
 export async function enqueuePinterestAnalyticsRecovery(params: {
   accountId: string;
   adminUserId: string;
@@ -305,19 +369,20 @@ export async function enqueuePinterestAnalyticsRecovery(params: {
   previewToken: string;
   now?: Date;
 }) {
-  const preview = await previewPinterestAnalyticsRecovery(params);
-  if (preview.previewToken !== params.previewToken) {
-    throw new Error("Pinterest analytics gaps changed after preview; review a new dry run.");
-  }
-  if (preview.capExhausted) {
-    throw new Error("Pinterest analytics recovery evidence exceeded its safety cap.");
-  }
-  if (!preview.tasks.length) {
-    throw new Error("No recoverable Pinterest analytics gaps remain.");
-  }
-
   const selected = await prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${params.accountId})) IS NULL AS "locked"`;
+    const preview = await buildPinterestAnalyticsRecoveryPreview(tx, params);
+    if (preview.previewToken !== params.previewToken) {
+      throw new Error(
+        "Pinterest analytics gaps changed after preview; review a new dry run.",
+      );
+    }
+    if (preview.capExhausted) {
+      throw new Error("Pinterest analytics recovery evidence exceeded its safety cap.");
+    }
+    if (!preview.tasks.length) {
+      throw new Error("No recoverable Pinterest analytics gaps remain.");
+    }
     const active = await tx.growthPinterestAnalyticsRecovery.findFirst({
       where: {
         accountId: params.accountId,
@@ -334,7 +399,7 @@ export async function enqueuePinterestAnalyticsRecovery(params: {
       if (active.previewToken !== preview.previewToken) {
         throw new Error("Another Pinterest analytics recovery is already active.");
       }
-      return { recovery: active, created: false as const };
+      return { recovery: active, created: false as const, preview };
     }
     const recovery = await tx.growthPinterestAnalyticsRecovery.create({
       data: {
@@ -380,7 +445,7 @@ export async function enqueuePinterestAnalyticsRecovery(params: {
       },
       tx,
     );
-    return { recovery, created: true as const };
+    return { recovery, created: true as const, preview };
   });
 
   const queued = await enqueueGrowthJob({
@@ -393,7 +458,7 @@ export async function enqueuePinterestAnalyticsRecovery(params: {
     where: { id: selected.recovery.id },
     data: { jobId: queued.job.id },
   });
-  return { ...selected, job: queued.job, preview };
+  return { ...selected, job: queued.job };
 }
 
 function rangeDate(value: string) {
@@ -415,14 +480,48 @@ function responseRows(
   return data.all?.daily_metrics || [];
 }
 
-function continuationRunAfter(metadata: PinterestRateLimitMetadata) {
-  if (!lowPinterestRateLimit(metadata)) return new Date();
-  const reset = Number(metadata.reset);
-  if (Number.isFinite(reset)) {
-    const milliseconds = reset > 10_000_000_000 ? reset : reset * 1000;
-    if (milliseconds > Date.now()) return new Date(milliseconds + 1_000);
+function isTerminalRecoveryStatus(
+  status: GrowthPinterestAnalyticsRecoveryStatus,
+) {
+  return (
+    status !== GrowthPinterestAnalyticsRecoveryStatus.QUEUED &&
+    status !== GrowthPinterestAnalyticsRecoveryStatus.RUNNING
+  );
+}
+
+async function enqueueRecoveryContinuation(params: {
+  recoveryId: string;
+  batch: number;
+  runAfter: Date;
+}) {
+  return enqueueGrowthJob({
+    type: GrowthJobType.PINTEREST_ANALYTICS_GAP_RECOVERY,
+    idempotencyKey: `pinterest:analytics-recovery:${params.recoveryId}:${params.batch + 1}`,
+    payload: { recoveryId: params.recoveryId, batch: params.batch + 1 },
+    runAfter: params.runAfter,
+    maxAttempts: 5,
+  });
+}
+
+async function recoveryRequestGate(accountId: string, recoveryId: string) {
+  const [current, state] = await Promise.all([
+    prisma.growthPinterestAnalyticsRecovery.findUnique({
+      where: { id: recoveryId },
+      select: { status: true },
+    }),
+    prisma.growthPinterestAnalyticsState.findUnique({
+      where: { accountId },
+      select: {
+        lastRateLimitRemaining: true,
+        lastRateLimitReset: true,
+        rateLimitObservedAt: true,
+      },
+    }),
+  ]);
+  if (!current || isTerminalRecoveryStatus(current.status)) {
+    return { status: "TERMINAL" as const };
   }
-  return new Date(Date.now() + 60_000);
+  return assessPinterestRecoveryRateLimit(state);
 }
 
 export async function recoverPinterestAnalyticsGaps(params: {
@@ -438,11 +537,7 @@ export async function recoverPinterestAnalyticsGaps(params: {
       "Pinterest analytics recovery does not exist.",
     );
   }
-  if (
-    recovery.status === GrowthPinterestAnalyticsRecoveryStatus.COMPLETED ||
-    recovery.status ===
-      GrowthPinterestAnalyticsRecoveryStatus.COMPLETED_WITH_GAPS
-  ) {
+  if (isTerminalRecoveryStatus(recovery.status)) {
     return { recoveryId: recovery.id, complete: true, reused: true };
   }
   pinterestRecoveryDateRange({
@@ -471,13 +566,23 @@ export async function recoverPinterestAnalyticsGaps(params: {
     ),
   });
   let requests = 0;
-  let lastRateLimit: PinterestRateLimitMetadata = {
-    limit: null,
-    remaining: null,
-    reset: null,
-  };
+  let blockedUntil: Date | null = null;
 
   for (const task of tasks) {
+    const gate = await recoveryRequestGate(recovery.accountId, recovery.id);
+    if (gate.status === "TERMINAL") {
+      return { recoveryId: recovery.id, complete: true, reused: true, requests };
+    }
+    if (gate.status === "UNRELIABLE") {
+      throw new RetryableGrowthJobError(
+        `Pinterest analytics recovery requires fresh, reliable rate-limit metadata (${gate.reason}). Run the normal analytics sync before retrying recovery.`,
+        PINTEREST_RECOVERY_RATE_LIMIT_MAX_AGE_MS,
+      );
+    }
+    if (gate.status === "WAIT") {
+      blockedUntil = new Date(gate.resetAt.getTime() + 1_000);
+      break;
+    }
     const pin = task.pinId
       ? await prisma.growthPinterestPin.findFirst({
           where: {
@@ -512,7 +617,7 @@ export async function recoverPinterestAnalyticsGaps(params: {
       endDate,
       fetchImpl: params.fetchImpl,
     });
-    lastRateLimit = response.rateLimit;
+    const lastRateLimit: PinterestRateLimitMetadata = response.rateLimit;
     const rows = responseRows(response.data);
     if (rows.some((row) => row.date < startDate || row.date > endDate)) {
       throw new Error(
@@ -531,7 +636,17 @@ export async function recoverPinterestAnalyticsGaps(params: {
         .map((row) => row.date),
     );
     const fetchedAt = new Date();
-    await prisma.$transaction(async (tx) => {
+    const persisted = await prisma.$transaction(async (tx) => {
+      const current = await tx.growthPinterestAnalyticsRecovery.findUnique({
+        where: { id: recovery.id },
+        select: { status: true },
+      });
+      if (
+        !current ||
+        current.status !== GrowthPinterestAnalyticsRecoveryStatus.RUNNING
+      ) {
+        return false;
+      }
       await upsertPinterestPinMetricRows(tx, pin.id, rows, fetchedAt);
       await tx.growthPinterestAnalyticsRecoveryTask.update({
         where: { id: task.id },
@@ -550,9 +665,12 @@ export async function recoverPinterestAnalyticsGaps(params: {
         where: { accountId: recovery.accountId },
         data: pinterestRateLimitData(lastRateLimit, fetchedAt),
       });
+      return true;
     });
+    if (!persisted) {
+      return { recoveryId: recovery.id, complete: true, reused: true, requests };
+    }
     requests += 1;
-    if (lowPinterestRateLimit(lastRateLimit)) break;
   }
 
   const pending = await prisma.growthPinterestAnalyticsRecoveryTask.count({
@@ -562,12 +680,10 @@ export async function recoverPinterestAnalyticsGaps(params: {
     },
   });
   if (pending > 0) {
-    await enqueueGrowthJob({
-      type: GrowthJobType.PINTEREST_ANALYTICS_GAP_RECOVERY,
-      idempotencyKey: `pinterest:analytics-recovery:${recovery.id}:${params.batch + 1}`,
-      payload: { recoveryId: recovery.id, batch: params.batch + 1 },
-      runAfter: continuationRunAfter(lastRateLimit),
-      maxAttempts: 5,
+    await enqueueRecoveryContinuation({
+      recoveryId: recovery.id,
+      batch: params.batch,
+      runAfter: blockedUntil || new Date(),
     });
     return {
       recoveryId: recovery.id,
@@ -587,11 +703,15 @@ export async function recoverPinterestAnalyticsGaps(params: {
   const status = unresolved
     ? GrowthPinterestAnalyticsRecoveryStatus.COMPLETED_WITH_GAPS
     : GrowthPinterestAnalyticsRecoveryStatus.COMPLETED;
-  await prisma.$transaction(async (tx) => {
-    await tx.growthPinterestAnalyticsRecovery.update({
-      where: { id: recovery.id },
+  const completed = await prisma.$transaction(async (tx) => {
+    const updated = await tx.growthPinterestAnalyticsRecovery.updateMany({
+      where: {
+        id: recovery.id,
+        status: GrowthPinterestAnalyticsRecoveryStatus.RUNNING,
+      },
       data: { status, completedAt },
     });
+    if (updated.count !== 1) return false;
     await recordGrowthActivity(
       {
         actorKind: GrowthActivityActorKind.WORKER,
@@ -605,7 +725,11 @@ export async function recoverPinterestAnalyticsGaps(params: {
       },
       tx,
     );
+    return true;
   });
+  if (!completed) {
+    return { recoveryId: recovery.id, complete: true, reused: true, requests };
+  }
   return {
     recoveryId: recovery.id,
     complete: true,

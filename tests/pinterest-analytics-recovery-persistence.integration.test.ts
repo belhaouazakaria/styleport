@@ -25,7 +25,11 @@ import {
 import { encryptPinterestCredentials } from "@/lib/growth/pinterest/credentials";
 import { prisma } from "@/lib/prisma";
 import { runGrowthWorker } from "@/lib/growth/worker";
-import { failGrowthJob } from "@/lib/growth/jobs";
+import {
+  cancelGrowthJob,
+  failGrowthJob,
+  recoverStaleGrowthJobs,
+} from "@/lib/growth/jobs";
 
 const enabled = process.env.RUN_GROWTH_ANALYTICS_RECOVERY_DB_TESTS === "1";
 const databaseDescribe = enabled ? describe.sequential : describe.skip;
@@ -51,6 +55,7 @@ if (enabled) {
 
 async function clean() {
   await prisma.growthActivity.deleteMany();
+  await prisma.growthLearningRun.deleteMany();
   await prisma.growthJob.deleteMany();
   await prisma.growthPinterestAnalyticsRecoveryTask.deleteMany();
   await prisma.growthPinterestAnalyticsRecovery.deleteMany();
@@ -105,6 +110,8 @@ async function fixture(pinCount = 1) {
       lastError: "preserve-health-state",
       lastRateLimitLimit: "60",
       lastRateLimitRemaining: "58",
+      lastRateLimitReset: String(Math.floor((Date.now() + 3_600_000) / 1000)),
+      rateLimitObservedAt: new Date(),
     },
   });
   const pins = await Promise.all(
@@ -148,7 +155,16 @@ function response(
         })),
       },
     }),
-    { status: 200, headers: { "x-ratelimit-remaining": remaining } },
+    {
+      status: 200,
+      headers: {
+        "x-ratelimit-limit": "60",
+        "x-ratelimit-remaining": remaining,
+        "x-ratelimit-reset": String(
+          Math.floor((Date.now() + 3_600_000) / 1000),
+        ),
+      },
+    },
   );
 }
 
@@ -237,6 +253,26 @@ databaseDescribe("Pinterest Phase 12.2 recovery persistence", () => {
 
   it("preserves provider statuses and account health for incomplete responses", async () => {
     const { admin, account, pins } = await fixture();
+    const learningRun = await prisma.growthLearningRun.create({
+      data: {
+        analysisDate: new Date("2026-10-15T00:00:00Z"),
+        evidenceWindowStart: new Date("2026-07-17T00:00:00Z"),
+        evidenceWindowEnd: new Date("2026-10-15T00:00:00Z"),
+        learningModelVersion: "growth_learning_v2",
+        evergreenModelVersion: "evergreen_learning_v2",
+        schedulerModelVersion: "learned_scheduler_v2",
+        experimentModelVersion: "experiment_evaluation_v1",
+        opportunityFeedbackVersion: "opportunity_feedback_v1",
+        evidenceQuality: "PARTIAL",
+        attributionAvailability: "UNAVAILABLE",
+        targetsConsidered: 355,
+        recommendationsProduced: 355,
+        reasonCodes: ["LEGACY_EVIDENCE_PARTIAL"],
+        performanceFindings: { immutable: true },
+        opportunityAdjustments: [],
+        summary: "Immutable Phase 12.1 production evidence fixture.",
+      },
+    });
     await prisma.growthPinterestPinMetricDaily.create({
       data: {
         pinId: pins[0].id,
@@ -294,6 +330,11 @@ databaseDescribe("Pinterest Phase 12.2 recovery persistence", () => {
     expect(after.status).toBe(before.status);
     expect(after.lastSuccessfulSyncAt).toEqual(before.lastSuccessfulSyncAt);
     expect(after.lastError).toBe(before.lastError);
+    expect(
+      await prisma.growthLearningRun.findUniqueOrThrow({
+        where: { id: learningRun.id },
+      }),
+    ).toEqual(learningRun);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(String(fetchMock.mock.calls[0][0])).toContain("/pins/10000/analytics");
   });
@@ -334,6 +375,16 @@ databaseDescribe("Pinterest Phase 12.2 recovery persistence", () => {
     });
     expect(continuation.runAfter.getTime()).toBeGreaterThan(Date.now());
 
+    await prisma.growthPinterestAnalyticsState.update({
+      where: { accountId: account.id },
+      data: {
+        lastRateLimitRemaining: "60",
+        lastRateLimitReset: String(
+          Math.floor((Date.now() + 3_600_000) / 1000),
+        ),
+        rateLimitObservedAt: new Date(),
+      },
+    });
     const secondFetch = vi
       .fn()
       .mockImplementation(() =>
@@ -354,6 +405,169 @@ databaseDescribe("Pinterest Phase 12.2 recovery persistence", () => {
         where: { id: queued.recovery.id },
       }),
     ).toMatchObject({ requestsCompleted: 9, status: "COMPLETED" });
+  });
+
+  it("does not make the first GET when the latest quota is at the reserve", async () => {
+    const { admin, account } = await fixture();
+    const preview = await previewPinterestAnalyticsRecovery({
+      accountId: account.id,
+      startDate: "2026-10-04",
+      endDate: "2026-10-04",
+      now: new Date("2026-10-16T12:00:00Z"),
+    });
+    const queued = await enqueuePinterestAnalyticsRecovery({
+      accountId: account.id,
+      adminUserId: admin.id,
+      startDate: preview.startDate,
+      endDate: preview.endDate,
+      previewToken: preview.previewToken,
+      now: new Date("2026-10-16T12:00:00Z"),
+    });
+    const resetAt = new Date(Date.now() + 3_600_000);
+    await prisma.growthPinterestAnalyticsState.update({
+      where: { accountId: account.id },
+      data: {
+        lastRateLimitRemaining: "5",
+        lastRateLimitReset: String(Math.floor(resetAt.getTime() / 1000)),
+        rateLimitObservedAt: new Date(),
+      },
+    });
+    const fetchMock = vi.fn();
+    await expect(
+      recoverPinterestAnalyticsGaps({
+        recoveryId: queued.recovery.id,
+        batch: 0,
+        fetchImpl: fetchMock,
+      }),
+    ).resolves.toMatchObject({ complete: false, requests: 0, pendingTasks: 1 });
+    expect(fetchMock).not.toHaveBeenCalled();
+    const continuation = await prisma.growthJob.findFirstOrThrow({
+      where: { id: { not: queued.job.id } },
+    });
+    expect(continuation.runAfter.getTime()).toBeGreaterThanOrEqual(
+      resetAt.getTime(),
+    );
+  });
+
+  it("revalidates preview evidence after acquiring the account lock", async () => {
+    const { admin, account, pins } = await fixture();
+    const preview = await previewPinterestAnalyticsRecovery({
+      accountId: account.id,
+      startDate: "2026-10-04",
+      endDate: "2026-10-04",
+      now: new Date("2026-10-16T12:00:00Z"),
+    });
+    let releaseLock!: () => void;
+    let lockAcquired!: () => void;
+    const acquired = new Promise<void>((resolve) => {
+      lockAcquired = resolve;
+    });
+    const release = new Promise<void>((resolve) => {
+      releaseLock = resolve;
+    });
+    const lock = prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${account.id})) IS NULL AS "locked"`;
+      lockAcquired();
+      await release;
+    });
+    await acquired;
+    const enqueue = enqueuePinterestAnalyticsRecovery({
+      accountId: account.id,
+      adminUserId: admin.id,
+      startDate: preview.startDate,
+      endDate: preview.endDate,
+      previewToken: preview.previewToken,
+      now: new Date("2026-10-16T12:00:00Z"),
+    });
+    await prisma.growthPinterestPinMetricDaily.create({
+      data: {
+        pinId: pins[0].id,
+        metricDate: new Date("2026-10-04T00:00:00Z"),
+        impressions: 1,
+        saves: 0,
+        pinClicks: 0,
+        outboundClicks: 0,
+        dataStatus: "READY",
+        fetchedAt: new Date(),
+      },
+    });
+    releaseLock();
+    await lock;
+    await expect(enqueue).rejects.toThrow("changed after preview");
+    expect(await prisma.growthPinterestAnalyticsRecovery.count()).toBe(0);
+  });
+
+  it("cancels a continuation, preserves tasks, and permits a new approval", async () => {
+    const { admin, account } = await fixture(2);
+    const preview = await previewPinterestAnalyticsRecovery({
+      accountId: account.id,
+      startDate: "2026-10-04",
+      endDate: "2026-10-04",
+      now: new Date("2026-10-16T12:00:00Z"),
+    });
+    const queued = await enqueuePinterestAnalyticsRecovery({
+      accountId: account.id,
+      adminUserId: admin.id,
+      startDate: preview.startDate,
+      endDate: preview.endDate,
+      previewToken: preview.previewToken,
+      now: new Date("2026-10-16T12:00:00Z"),
+    });
+    await recoverPinterestAnalyticsGaps({
+      recoveryId: queued.recovery.id,
+      batch: 0,
+      fetchImpl: vi
+        .fn()
+        .mockResolvedValue(
+          response([{ date: "2026-10-04", data_status: "READY" }], "5"),
+        ),
+    });
+    const continuation = await prisma.growthJob.findFirstOrThrow({
+      where: { id: { not: queued.job.id } },
+    });
+    await cancelGrowthJob(continuation.id, admin.id);
+    expect(
+      await prisma.growthPinterestAnalyticsRecovery.findUniqueOrThrow({
+        where: { id: queued.recovery.id },
+      }),
+    ).toMatchObject({ status: "CANCELLED" });
+    expect(
+      await prisma.growthPinterestAnalyticsRecoveryTask.count({
+        where: { recoveryId: queued.recovery.id },
+      }),
+    ).toBe(2);
+    expect(
+      await prisma.growthJob.count({
+        where: {
+          type: "PINTEREST_ANALYTICS_GAP_RECOVERY",
+          status: { not: "CANCELLED" },
+        },
+      }),
+    ).toBe(0);
+    expect(
+      await prisma.growthActivity.count({
+        where: {
+          entityId: queued.recovery.id,
+          action: "PINTEREST_ANALYTICS_RECOVERY_CANCELLED",
+        },
+      }),
+    ).toBe(1);
+
+    const nextPreview = await previewPinterestAnalyticsRecovery({
+      accountId: account.id,
+      startDate: "2026-10-04",
+      endDate: "2026-10-04",
+      now: new Date("2026-10-16T12:00:00Z"),
+    });
+    const next = await enqueuePinterestAnalyticsRecovery({
+      accountId: account.id,
+      adminUserId: admin.id,
+      startDate: nextPreview.startDate,
+      endDate: nextPreview.endDate,
+      previewToken: nextPreview.previewToken,
+      now: new Date("2026-10-16T12:00:00Z"),
+    });
+    expect(next.recovery.id).not.toBe(queued.recovery.id);
   });
 
   it("leaves a task pending after a retryable provider failure", async () => {
@@ -384,6 +598,73 @@ databaseDescribe("Pinterest Phase 12.2 recovery persistence", () => {
         where: { recoveryId: queued.recovery.id, status: "PENDING" },
       }),
     ).toBe(1);
+  });
+
+  it("resumes an interrupted recovery and keeps the retry idempotent", async () => {
+    const { admin, account, pins } = await fixture();
+    const preview = await previewPinterestAnalyticsRecovery({
+      accountId: account.id,
+      startDate: "2026-10-04",
+      endDate: "2026-10-04",
+      now: new Date("2026-10-16T12:00:00Z"),
+    });
+    const queued = await enqueuePinterestAnalyticsRecovery({
+      accountId: account.id,
+      adminUserId: admin.id,
+      startDate: preview.startDate,
+      endDate: preview.endDate,
+      previewToken: preview.previewToken,
+      now: new Date("2026-10-16T12:00:00Z"),
+    });
+    await prisma.growthPinterestAnalyticsRecovery.update({
+      where: { id: queued.recovery.id },
+      data: { status: "RUNNING", startedAt: new Date(Date.now() - 120_000) },
+    });
+    await prisma.growthJob.update({
+      where: { id: queued.job.id },
+      data: {
+        status: GrowthJobStatus.RUNNING,
+        workerId: "interrupted-worker",
+        attemptCount: 1,
+        claimedAt: new Date(Date.now() - 120_000),
+        leaseUntil: new Date(Date.now() - 60_000),
+        heartbeatAt: new Date(Date.now() - 120_000),
+      },
+    });
+    await expect(recoverStaleGrowthJobs(new Date())).resolves.toBe(1);
+    expect(
+      await prisma.growthJob.findUniqueOrThrow({ where: { id: queued.job.id } }),
+    ).toMatchObject({ status: GrowthJobStatus.PENDING, attemptCount: 1 });
+
+    await prisma.growthSettings.update({
+      where: { id: "global" },
+      data: { enabled: true, workerBatchSize: 1 },
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        response([{ date: "2026-10-04", data_status: "READY" }]),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(
+      runGrowthWorker({ workerId: "replacement-worker", batchSize: 1 }),
+    ).resolves.toMatchObject({ claimed: 1, succeeded: 1 });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(
+      await prisma.growthPinterestPinMetricDaily.count({
+        where: { pinId: pins[0].id, metricDate: new Date("2026-10-04T00:00:00Z") },
+      }),
+    ).toBe(1);
+
+    const redundantFetch = vi.fn();
+    await expect(
+      recoverPinterestAnalyticsGaps({
+        recoveryId: queued.recovery.id,
+        batch: 0,
+        fetchImpl: redundantFetch,
+      }),
+    ).resolves.toMatchObject({ complete: true, reused: true });
+    expect(redundantFetch).not.toHaveBeenCalled();
   });
 
   it("releases the active recovery gate when the job exhausts retries", async () => {

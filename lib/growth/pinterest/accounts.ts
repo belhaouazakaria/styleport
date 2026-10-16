@@ -111,6 +111,10 @@ export async function disconnectPinterestAccount(accountId: string, adminUserId:
       disconnectedAt: new Date(),
       lastConnectionError: null,
     } });
+    const activeRecoveries = await tx.growthPinterestAnalyticsRecovery.findMany({
+      where: { accountId, status: { in: ["QUEUED", "RUNNING"] } },
+      select: { id: true, status: true },
+    });
     await tx.$executeRaw`
       UPDATE "GrowthJob"
       SET "status" = 'CANCELLED'::"GrowthJobStatus", "completedAt" = CURRENT_TIMESTAMP, "updatedAt" = CURRENT_TIMESTAMP
@@ -123,15 +127,37 @@ export async function disconnectPinterestAccount(accountId: string, adminUserId:
         'PINTEREST_ANALYTICS_GAP_RECOVERY'::"GrowthJobType"
       )
         AND "status" IN ('PENDING'::"GrowthJobStatus", 'FAILED_RETRYABLE'::"GrowthJobStatus")
-        AND "payload"->>'accountId' = ${accountId}
+        AND (
+          "payload"->>'accountId' = ${accountId}
+          OR (
+            "type" = 'PINTEREST_ANALYTICS_GAP_RECOVERY'::"GrowthJobType"
+            AND "payload"->>'recoveryId' IN (
+              SELECT "id"
+              FROM "GrowthPinterestAnalyticsRecovery"
+              WHERE "accountId" = ${accountId}
+            )
+          )
+        )
     `;
     await tx.growthPinterestAnalyticsRecovery.updateMany({
       where: {
         accountId,
         status: { in: ["QUEUED", "RUNNING"] },
       },
-      data: { status: "FAILED", completedAt: new Date() },
+      data: { status: "CANCELLED", completedAt: new Date() },
     });
+    for (const recovery of activeRecoveries) {
+      await recordGrowthActivity({
+        actorKind: GrowthActivityActorKind.USER,
+        actorUserId: adminUserId,
+        entityType: "GrowthPinterestAnalyticsRecovery",
+        entityId: recovery.id,
+        action: "PINTEREST_ANALYTICS_RECOVERY_CANCELLED_ON_DISCONNECT",
+        fromState: recovery.status,
+        toState: "CANCELLED",
+        correlationKey: `pinterest-recovery:${recovery.id}`,
+      }, tx);
+    }
     await recordGrowthActivity({
       actorKind: GrowthActivityActorKind.USER, actorUserId: adminUserId,
       entityType: "GrowthPinterestAccount", entityId: account.id, action: "PINTEREST_ACCOUNT_DISCONNECTED",

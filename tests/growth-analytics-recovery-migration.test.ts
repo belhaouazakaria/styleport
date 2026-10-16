@@ -15,8 +15,21 @@ describe("Growth Phase 12.2 recovery migration", () => {
     expect(sql).toContain('CREATE TABLE "GrowthPinterestAnalyticsRecovery"');
     expect(sql).toContain('CREATE TABLE "GrowthPinterestAnalyticsRecoveryTask"');
     expect(sql).toContain("requestBudget_check");
+    expect(sql).toContain("'CANCELLED'");
     expect(sql).toContain('ALTER COLUMN "impressions" DROP NOT NULL');
     expect(sql).not.toMatch(/DROP\s+(TABLE|COLUMN|TYPE)/i);
+    expect(sql).not.toMatch(/ALTER\s+COLUMN\s+.+TYPE|RENAME\s+(TABLE|COLUMN)/i);
     expect(sql).not.toMatch(/DELETE\s+FROM|UPDATE\s+"GrowthLearningRun"/i);
+  });
+
+  it("is backward-compatible with the deployed Phase 12.1 write contract", () => {
+    const sql = readFileSync(migrationPath, "utf8");
+    expect(sql).toContain('ALTER TYPE "GrowthJobType" ADD VALUE');
+    expect(sql).toContain('CREATE TABLE "GrowthPinterestAnalyticsRecovery"');
+    expect(sql).toContain('CREATE TABLE "GrowthPinterestAnalyticsRecoveryTask"');
+    expect(sql).not.toMatch(/ALTER\s+TABLE\s+"GrowthPinterestPin"/i);
+    expect(sql).not.toMatch(/ALTER\s+TABLE\s+"GrowthPinterestAccount"/i);
+    expect(sql).not.toMatch(/ALTER\s+TABLE\s+"GrowthLearningRun"/i);
+    expect(sql).not.toMatch(/ALTER\s+COLUMN\s+"(?:impressions|saves|pinClicks|outboundClicks)"\s+SET\s+NOT\s+NULL/i);
   });
 });

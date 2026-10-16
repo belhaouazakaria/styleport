@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  assessPinterestRecoveryRateLimit,
   defaultPinterestRecoveryRange,
   detectPinterestAnalyticsGaps,
   pinterestRecoveryDateRange,
@@ -108,5 +109,74 @@ describe("Pinterest analytics gap recovery planning", () => {
         missingDates: ["2026-10-05"],
       }),
     ]);
+  });
+
+  it("starts on the first complete UTC day strictly after publication", () => {
+    for (const publishedAt of [
+      new Date("2026-10-03T00:00:00.000Z"),
+      new Date("2026-10-03T23:59:59.999Z"),
+    ]) {
+      const result = detectPinterestAnalyticsGaps({
+        startDate: "2026-10-01",
+        endDate: "2026-10-05",
+        pins: [pin("boundary", [], publishedAt)],
+      });
+      expect(result.tasks).toEqual([
+        expect.objectContaining({
+          startDate: "2026-10-04",
+          endDate: "2026-10-05",
+          missingDates: ["2026-10-04", "2026-10-05"],
+        }),
+      ]);
+      expect(result.dates.map((row) => row.date)).toEqual([
+        "2026-10-04",
+        "2026-10-05",
+      ]);
+    }
+  });
+
+  it("requires fresh reliable quota metadata and preserves the five-request reserve", () => {
+    const now = new Date("2026-10-16T12:00:00.000Z");
+    const reset = String(Math.floor((now.getTime() + 3_600_000) / 1000));
+    expect(
+      assessPinterestRecoveryRateLimit(
+        {
+          lastRateLimitRemaining: "6",
+          lastRateLimitReset: reset,
+          rateLimitObservedAt: new Date(now.getTime() - 60_000),
+        },
+        now,
+      ),
+    ).toMatchObject({ status: "AVAILABLE", remaining: 6 });
+    expect(
+      assessPinterestRecoveryRateLimit(
+        {
+          lastRateLimitRemaining: "5",
+          lastRateLimitReset: reset,
+          rateLimitObservedAt: now,
+        },
+        now,
+      ),
+    ).toMatchObject({ status: "WAIT", remaining: 5 });
+    expect(
+      assessPinterestRecoveryRateLimit(
+        {
+          lastRateLimitRemaining: "60",
+          lastRateLimitReset: reset,
+          rateLimitObservedAt: new Date(now.getTime() - 16 * 60_000),
+        },
+        now,
+      ),
+    ).toEqual({ status: "UNRELIABLE", reason: "RATE_LIMIT_METADATA_STALE" });
+    expect(
+      assessPinterestRecoveryRateLimit(
+        {
+          lastRateLimitRemaining: "unknown",
+          lastRateLimitReset: null,
+          rateLimitObservedAt: now,
+        },
+        now,
+      ),
+    ).toEqual({ status: "UNRELIABLE", reason: "RATE_LIMIT_METADATA_INVALID" });
   });
 });
