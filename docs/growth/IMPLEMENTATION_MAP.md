@@ -1,6 +1,6 @@
 # Implementation map — Growth architecture and implementation audit
 
-This is the file-level design contract and implementation audit through Phase 12.1. The verified production database baseline is PostgreSQL 18 self-hosted on the VPS.
+This is the file-level design contract and implementation audit through Phase 12.2. The verified production database baseline is PostgreSQL 18 self-hosted on the VPS.
 
 ## Runtime and conventions
 
@@ -165,7 +165,7 @@ Phase 11 is production deployed and live publication validated. The two earlier 
 
 ## Phase 12 implemented evergreen and learning engine
 
-Phase 12 v1 and migration `20261015120000_growth_evergreen_learning` were deployed and production-validated on October 15, 2026. The retained v1 run produced 355 `INSUFFICIENT_DATA` recommendations. Phase 12.1 remains undeployed.
+Phase 12 v1 and migration `20261015120000_growth_evergreen_learning` were deployed and production-validated on October 15, 2026. The retained v1 run produced 355 `INSUFFICIENT_DATA` recommendations. Phase 12.1 v2 subsequently ran successfully and retained `PARTIAL` evidence because of historical Pinterest gaps; Phase 12.2 remains undeployed.
 
 The migration adds `GrowthSettings.evergreenCooldownDays` with a database constraint of 14–180 and a default of 45; the existing ADMIN settings contract, same-origin route, and activity audit own configuration changes.
 
@@ -174,3 +174,5 @@ Migration `20261015120000_growth_evergreen_learning` adds immutable daily runs, 
 The engine reads at most 500 eligible public Translators plus 500 eligible public Ideas, 500 historical publications, 90 complete evidence days, 20 accounts, 25 experiments, and 100 opportunities. It retains normalized comparisons across account, role, destination type, content intent, topic, archetype, template, headline, CTA, weekday, local hour, and publication age. Disabled/missing attribution remains null. `evergreen_learning_v1` requires 14 metric days, 500 impressions, 10 outbound clicks, a 45-day cooldown, and a distinct supported creative. `learned_scheduler_v1` requires four Pins and 1,000 impressions per account/hour before bounded deterministic explore/exploit; otherwise Phase 11 cold start remains. Opportunity feedback is stored beside, never over, Phase 7 scores, and only one opportunity per cluster can receive a positive adjustment in a run. Growth remains disabled and no recurrence, cron, PM2 process, production action, content mutation, automatic approval, or board automation is introduced.
 
 Phase 12.1 adds `lib/growth/learning/legacy-evidence.ts` and versions the affected models to `growth_learning_v2`, `evergreen_learning_v2`, and `learned_scheduler_v2`. At most 500 active analytics-eligible inventory Pins are selected in stable Pinterest-ID order. Exact approved-host Translator matching, managed-ID precedence, `READY`-only metrics, per-source provenance, incomplete-state reporting, and genuine stored publication-time use extend evergreen/performance/schedule evidence without schema changes. Experiment evaluation still uses genuine experiment candidate/publication relationships only. The production discovery baseline is 222 eligible Pins with preliminary SQL slug matches, 221 unmanaged Pins, 16 provisional threshold matches, 21,119 `READY` rows, 685 `PROCESSING` rows, and 355 immutable October 15 v1 `INSUFFICIENT_DATA` recommendations. `scripts/report-legacy-learning-evidence.ts` performs the required read-only strict URL verification; preliminary slug matches are not treated as strict acceptance.
+
+Phase 12.1 v2 subsequently ran successfully in production but remained `PARTIAL` because older gaps were outside the seven-day refresh. Phase 12.2 adds migration `20261016120000_growth_analytics_gap_recovery`, `lib/growth/pinterest/analytics-recovery.ts`, the ADMIN recovery route/UI, durable recovery/task evidence, and `PINTEREST_ANALYTICS_GAP_RECOVERY`. Preview is read-only; queueing requires the unchanged preview token and exact confirmation. The worker performs only existing Pin analytics GETs, at most eight per execution, and persists continuation progress separately from normal inventory/account sync. No learning model version changes and no historical learning run changes.

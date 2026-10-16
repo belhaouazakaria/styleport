@@ -119,11 +119,19 @@ export async function disconnectPinterestAccount(accountId: string, adminUserId:
         'PINTEREST_BOARD_SYNC'::"GrowthJobType",
         'PINTEREST_PIN_INVENTORY_SYNC'::"GrowthJobType",
         'PINTEREST_ACCOUNT_ANALYTICS_SYNC'::"GrowthJobType",
-        'PINTEREST_PIN_ANALYTICS_SYNC'::"GrowthJobType"
+        'PINTEREST_PIN_ANALYTICS_SYNC'::"GrowthJobType",
+        'PINTEREST_ANALYTICS_GAP_RECOVERY'::"GrowthJobType"
       )
         AND "status" IN ('PENDING'::"GrowthJobStatus", 'FAILED_RETRYABLE'::"GrowthJobStatus")
         AND "payload"->>'accountId' = ${accountId}
     `;
+    await tx.growthPinterestAnalyticsRecovery.updateMany({
+      where: {
+        accountId,
+        status: { in: ["QUEUED", "RUNNING"] },
+      },
+      data: { status: "FAILED", completedAt: new Date() },
+    });
     await recordGrowthActivity({
       actorKind: GrowthActivityActorKind.USER, actorUserId: adminUserId,
       entityType: "GrowthPinterestAccount", entityId: account.id, action: "PINTEREST_ACCOUNT_DISCONNECTED",

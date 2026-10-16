@@ -236,7 +236,7 @@ The two earlier HTTP 401 attempts and their immutable publication/approval/ref/j
 
 The additive migration includes `GrowthSettings.evergreenCooldownDays`, bounded to 14–180 days with a conservative 45-day default and editable only through the existing audited ADMIN settings path.
 
-**Status:** Complete — v1 production deployed and validated October 15, 2026; Phase 12.1 pending
+**Status:** Phase 12 v1 and Phase 12.1 v2 production-validated; Phase 12.2 recovery pending deployment
 
 Deliver:
 
@@ -255,7 +255,7 @@ Migration `20261015120000_growth_evergreen_learning` adds immutable `GrowthLearn
 
 `learned_scheduler_v1` extends, but does not replace, `publication_timing_v1`. It retains America/New_York cold start until an account/hour has at least four Pins and 1,000 impressions, then uses deterministic bounded explore/exploit recommendations with collision checks. Approved snapshots are never mutated. Experiment findings require mature variants and remain `INCONCLUSIVE` without a material exposure-normalized difference. `opportunity_feedback_v1` stores bounded adjustments beside the original Phase 7 scores and never rewrites them. `/admin/growth/learning` exposes evidence, explicit evaluate/prepare actions, and audited start/pause/resume/request-analysis/finalize experiment transitions without allocating traffic. Preparation only queues a new Creative Lab candidate, which still requires individual approval. No recurrence, production worker, content write, automatic approval, or Pinterest publication is enabled.
 
-Phase 12 v1 was deployed and production-validated on October 15, 2026; its immutable run produced 355 `INSUFFICIENT_DATA` recommendations. Phase 12.1 is the undeployed legacy-evidence correction. `growth_learning_v2` / `evergreen_learning_v2` / `learned_scheduler_v2` add bounded, deduplicated, provenance-retaining reads of existing eligible Pinterest Pins without adding a migration or manufacturing managed history. Production discovery recorded 222 eligible Pins with preliminary active-Translator SQL slug matches, 221 legacy Pins, 16 provisional threshold matches, 21,119 `READY` rows, and 685 `PROCESSING` rows. The strict read-only URL verification report remains required; v2 has not been deployed or run against production, and Growth and attribution remain disabled.
+Phase 12 v1 was deployed and production-validated on October 15, 2026; its immutable run produced 355 `INSUFFICIENT_DATA` recommendations. Phase 12.1 v2 then ran successfully with bounded, deduplicated legacy evidence but remained `PARTIAL` because older observations were missing or `PROCESSING`. Phase 12.2 adds an undeployed explicit recovery workflow for those gaps. It changes no learning model version, creates no recurring work, performs no Pinterest write, and leaves Growth and attribution disabled.
 
 ## Phase 13 — Economics, Admin and Reporting
 

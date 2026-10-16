@@ -58,6 +58,44 @@ async function synchronizeExhaustedPublication(tx: Prisma.TransactionClient, job
   }
 }
 
+async function synchronizeExhaustedAnalyticsRecovery(
+  tx: Prisma.TransactionClient,
+  job: Pick<GrowthJob, "type" | "payload">,
+  now: Date,
+) {
+  if (job.type !== GrowthJobType.PINTEREST_ANALYTICS_GAP_RECOVERY) return;
+  const recoveryId =
+    job.payload &&
+    typeof job.payload === "object" &&
+    !Array.isArray(job.payload) &&
+    "recoveryId" in job.payload &&
+    typeof job.payload.recoveryId === "string"
+      ? job.payload.recoveryId
+      : null;
+  if (!recoveryId) return;
+  const updated = await tx.growthPinterestAnalyticsRecovery.updateMany({
+    where: {
+      id: recoveryId,
+      status: { in: ["QUEUED", "RUNNING"] },
+    },
+    data: { status: "FAILED", completedAt: now },
+  });
+  if (updated.count === 1) {
+    await recordGrowthActivity(
+      {
+        actorKind: GrowthActivityActorKind.SYSTEM,
+        entityType: "GrowthPinterestAnalyticsRecovery",
+        entityId: recoveryId,
+        action: "PINTEREST_ANALYTICS_RECOVERY_FAILED",
+        toState: "FAILED",
+        summary: { jobType: job.type },
+        correlationKey: `pinterest-recovery:${recoveryId}`,
+      },
+      tx,
+    );
+  }
+}
+
 export async function enqueueGrowthJob(input: EnqueueGrowthJobInput) {
   const idempotencyKey = input.idempotencyKey.trim();
   if (!idempotencyKey || idempotencyKey.length > 191) {
@@ -141,7 +179,7 @@ export async function recoverStaleGrowthJobs(now = new Date(), limit = 25) {
       status: { in: [GrowthJobStatus.CLAIMED, GrowthJobStatus.RUNNING] },
       leaseUntil: { lt: now },
     },
-    select: { id: true, type: true, status: true, attemptCount: true, maxAttempts: true, idempotencyKey: true },
+    select: { id: true, type: true, status: true, attemptCount: true, maxAttempts: true, idempotencyKey: true, payload: true },
     take: Math.min(100, Math.max(1, limit)),
   });
 
@@ -183,7 +221,10 @@ export async function recoverStaleGrowthJobs(now = new Date(), limit = 25) {
       });
       if (updated.count === 1) {
         recovered += 1;
-        if (!retryable) await synchronizeExhaustedPublication(tx, job as GrowthJob, now);
+        if (!retryable) {
+          await synchronizeExhaustedPublication(tx, job as GrowthJob, now);
+          await synchronizeExhaustedAnalyticsRecovery(tx, job as GrowthJob, now);
+        }
         if (job.type === GrowthJobType.TRANSLATOR_AUTOPILOT_EXECUTE || job.type === GrowthJobType.IDEA_AUTOPILOT_EXECUTE) {
           const decision = await tx.growthDecision.findFirst({
             where: { executionJobId: job.id, status: GrowthDecisionStatus.EXECUTING },
@@ -443,7 +484,10 @@ export async function failGrowthJob(job: GrowthJob, workerId: string, error: unk
       },
     });
     if (updated.count !== 1) throw new Error("Growth job failure could not be persisted because its claim is no longer active.");
-    if (!retryable) await synchronizeExhaustedPublication(tx, job, now);
+    if (!retryable) {
+      await synchronizeExhaustedPublication(tx, job, now);
+      await synchronizeExhaustedAnalyticsRecovery(tx, job, now);
+    }
     await recordGrowthActivity({
       actorKind: GrowthActivityActorKind.WORKER,
       entityType: "GrowthJob",

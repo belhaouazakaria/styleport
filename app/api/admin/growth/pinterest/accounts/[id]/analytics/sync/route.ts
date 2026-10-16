@@ -1,5 +1,6 @@
 import { apiError, apiOk } from "@/lib/api-response";
 import { enqueuePinterestAnalyticsSync } from "@/lib/growth/pinterest/analytics";
+import { previewPinterestAnalyticsRecovery } from "@/lib/growth/pinterest/analytics-recovery";
 import { pinterestAccountIdSchema } from "@/lib/growth/pinterest/contracts";
 import { isSameOriginMutation } from "@/lib/growth/request-security";
 import { adminRouteGuard } from "@/lib/permissions";
@@ -15,10 +16,22 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   if (!account || account.connectionStatus === "DISCONNECTED" || account.connectionStatus === "REAUTH_REQUIRED") {
     return apiError(409, "CONFLICT", "Reconnect this Pinterest account before syncing analytics.");
   }
+  const recoveryPreview = await previewPinterestAnalyticsRecovery({
+    accountId: account.id,
+  });
   const result = await enqueuePinterestAnalyticsSync(account.id);
   return apiOk({
     created: result.account.created || Boolean(result.inventory?.created) || Boolean(result.pin?.created),
     inventorySkipped: result.inventorySkipped,
     range: result.range,
+    recoveryRecommendation: {
+      recommended: recoveryPreview.estimatedApiRequests > 0,
+      affectedPinCount: recoveryPreview.affectedPinCount,
+      missingObservationCount: recoveryPreview.missingObservationCount,
+      processingObservationCount:
+        recoveryPreview.processingObservationCount,
+      estimatedApiRequests: recoveryPreview.estimatedApiRequests,
+      capExhausted: recoveryPreview.capExhausted,
+    },
   });
 }

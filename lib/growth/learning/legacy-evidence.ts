@@ -26,9 +26,9 @@ export type LegacyPinMatchFailure =
 export type DailyMetricEvidence = {
   metricDate: Date;
   dataStatus: string;
-  impressions: bigint | number;
-  outboundClicks: bigint | number;
-  saves: bigint | number;
+  impressions: bigint | number | null;
+  outboundClicks: bigint | number | null;
+  saves: bigint | number | null;
 };
 
 export function validateLegacyPinDestination(
@@ -145,8 +145,26 @@ export function selectFinalizedMetricEvidence(
           row.metricDate < expected.windowEndExclusive,
       )
     : rows;
-  const ready = eligibleRows.filter((row) => row.dataStatus === "READY");
-  const incomplete = eligibleRows.filter((row) => row.dataStatus !== "READY");
+  const completeMetrics = (
+    row: DailyMetricEvidence,
+  ): row is DailyMetricEvidence & {
+    impressions: bigint | number;
+    outboundClicks: bigint | number;
+    saves: bigint | number;
+  } =>
+    row.impressions !== null &&
+    row.outboundClicks !== null &&
+    row.saves !== null;
+  const ready = eligibleRows.filter(
+    (row): row is DailyMetricEvidence & {
+      impressions: bigint | number;
+      outboundClicks: bigint | number;
+      saves: bigint | number;
+    } => row.dataStatus === "READY" && completeMetrics(row),
+  );
+  const incomplete = eligibleRows.filter(
+    (row) => row.dataStatus !== "READY" || !completeMetrics(row),
+  );
   const expectedDays =
     expected && expectedStart
       ? Math.max(
