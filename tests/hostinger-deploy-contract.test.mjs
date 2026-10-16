@@ -179,6 +179,20 @@ describe("Hostinger PostgreSQL backup-tool contract", () => {
 });
 
 describe("Hostinger production migration contract", () => {
+  it("requires manual dispatch from main with the exact approved merge SHA for production deploy", () => {
+    const workflow = readFileSync(
+      path.join(repositoryRoot, ".github/workflows/deploy-hostinger.yml"),
+      "utf8",
+    );
+    expect(workflow).toContain("  workflow_dispatch:");
+    expect(workflow).toContain("      expected_release_sha:");
+    expect(workflow).toContain("if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'");
+    expect(workflow).toContain('EXPECTED_RELEASE_SHA: ${{ inputs.expected_release_sha }}');
+    expect(workflow).toContain('[ "$EXPECTED_RELEASE_SHA" != "$GITHUB_SHA" ]');
+    expect(workflow).toContain("  push:");
+    expect(workflow).toContain("name: hostinger-release-${{ github.sha }}");
+  });
+
   it("keeps deployment read-only with respect to migrations and rejects pending state", () => {
     const script = readFileSync(deployScript, "utf8");
     expect(script).not.toMatch(/run_prisma\s+migrate\s+deploy/);
