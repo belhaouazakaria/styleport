@@ -2,6 +2,11 @@ name: Deploy to Hostinger
 
 on:
   workflow_dispatch:
+    inputs:
+      expected_release_sha:
+        description: Exact approved 40-character merge commit SHA
+        required: true
+        type: string
   push:
     branches:
       - main
@@ -26,6 +31,16 @@ jobs:
       BREVO_API_KEY: test_brevo_key
 
     steps:
+      - name: Verify approved manual release SHA
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          EXPECTED_RELEASE_SHA: ${{ inputs.expected_release_sha }}
+        run: |
+          if ! [[ "$EXPECTED_RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] || [ "$EXPECTED_RELEASE_SHA" != "$GITHUB_SHA" ]; then
+            echo "::error::Manual production deployment requires the exact approved HEAD SHA."
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@v5
 
@@ -126,6 +141,7 @@ jobs:
           retention-days: 14
 
   deploy:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     name: Production Deploy
     runs-on: ubuntu-latest
     timeout-minutes: 35
