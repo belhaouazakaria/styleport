@@ -156,6 +156,7 @@ enum GrowthJobType {
   PINTEREST_PIN_INVENTORY_SYNC
   PINTEREST_ACCOUNT_ANALYTICS_SYNC
   PINTEREST_PIN_ANALYTICS_SYNC
+  PINTEREST_ANALYTICS_GAP_RECOVERY
   ATTRIBUTION_RETENTION_CLEANUP
   ACCOUNT_STRATEGY_REVIEW
   OPPORTUNITY_INTELLIGENCE_ANALYSIS
@@ -175,6 +176,20 @@ enum GrowthEvergreenRecommendation {
   WAIT
   SKIP
   INSUFFICIENT_DATA
+}
+
+enum GrowthPinterestAnalyticsRecoveryStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  COMPLETED_WITH_GAPS
+  FAILED
+  CANCELLED
+}
+
+enum GrowthPinterestAnalyticsRecoveryTaskStatus {
+  PENDING
+  COMPLETED
 }
 
 enum GrowthLearningEvidenceQuality {
@@ -1031,6 +1046,7 @@ model GrowthPinterestAccount {
   pinApprovals            GrowthPinApproval[]
   pinPublications         GrowthPinPublication[]
   learnedScheduleWindows  GrowthLearnedScheduleWindow[]
+  analyticsRecoveries     GrowthPinterestAnalyticsRecovery[]
 
   @@index([connectionStatus, publicationRole])
   @@index([apiEnvironment, connectionStatus])
@@ -1095,6 +1111,7 @@ model GrowthPinterestPin {
   opportunityMemberships GrowthContentClusterMembership[]
   opportunitySignals     GrowthPinSignal[]
   publication            GrowthPinPublication?
+  analyticsRecoveryTasks GrowthPinterestAnalyticsRecoveryTask[]
 
   @@index([accountId, isActive])
   @@index([accountId, isActive, analyticsEligible, lastAnalyticsSyncAt])
@@ -1749,10 +1766,10 @@ model GrowthPinterestPinMetricDaily {
   id             String             @id @default(cuid())
   pinId          String
   metricDate     DateTime
-  impressions    BigInt             @default(0)
-  saves          BigInt             @default(0)
-  pinClicks      BigInt             @default(0)
-  outboundClicks BigInt             @default(0)
+  impressions    BigInt?
+  saves          BigInt?
+  pinClicks      BigInt?
+  outboundClicks BigInt?
   dataStatus     String
   fetchedAt      DateTime
   createdAt      DateTime           @default(now())
@@ -1763,6 +1780,55 @@ model GrowthPinterestPinMetricDaily {
   @@index([metricDate])
   @@index([pinId, outboundClicks])
   @@index([outboundClicks, metricDate])
+}
+
+model GrowthPinterestAnalyticsRecovery {
+  id                    String                                   @id @default(cuid())
+  accountId             String
+  requestedByUserId     String
+  startDate             DateTime
+  endDate               DateTime
+  previewToken          String
+  status                GrowthPinterestAnalyticsRecoveryStatus  @default(QUEUED)
+  affectedPinCount      Int
+  missingObservationCount Int
+  processingObservationCount Int
+  estimatedRequestCount Int
+  requestBudget         Int                                      @default(8)
+  requestsCompleted     Int                                      @default(0)
+  jobId                 String?
+  startedAt             DateTime?
+  completedAt           DateTime?
+  createdAt             DateTime                                 @default(now())
+  updatedAt             DateTime                                 @updatedAt
+  account               GrowthPinterestAccount                   @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  tasks                 GrowthPinterestAnalyticsRecoveryTask[]
+
+  @@index([status, createdAt])
+  @@index([accountId, createdAt])
+}
+
+model GrowthPinterestAnalyticsRecoveryTask {
+  id                  String                                       @id @default(cuid())
+  recoveryId          String
+  pinId               String?
+  pinterestPinId      String
+  startDate           DateTime
+  endDate             DateTime
+  missingDates        String[]
+  processingDates     String[]
+  status              GrowthPinterestAnalyticsRecoveryTaskStatus @default(PENDING)
+  responseRowCount    Int?
+  unresolvedDateCount Int?
+  completedAt         DateTime?
+  createdAt           DateTime                                    @default(now())
+  updatedAt           DateTime                                    @updatedAt
+  recovery            GrowthPinterestAnalyticsRecovery            @relation(fields: [recoveryId], references: [id], onDelete: Cascade)
+  pin                 GrowthPinterestPin?                          @relation(fields: [pinId], references: [id], onDelete: SetNull)
+
+  @@unique([recoveryId, pinterestPinId, startDate, endDate])
+  @@index([recoveryId, status, pinterestPinId, startDate])
+  @@index([pinId])
 }
 
 model GrowthLearningRun {

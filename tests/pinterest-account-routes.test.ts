@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ guard: vi.fn(), session: vi.fn(), disconnect: vi.fn(), findAccount: vi.fn(), enqueue: vi.fn(), enqueueAnalytics: vi.fn() }));
+const mocks = vi.hoisted(() => ({ guard: vi.fn(), session: vi.fn(), disconnect: vi.fn(), findAccount: vi.fn(), enqueue: vi.fn(), enqueueAnalytics: vi.fn(), previewRecovery: vi.fn(), enqueueRecovery: vi.fn(), settings: vi.fn(), activity: vi.fn() }));
 vi.mock("@/lib/permissions", () => ({ adminRouteGuard: mocks.guard, getSessionOrNull: mocks.session }));
 vi.mock("@/lib/growth/pinterest/accounts", () => ({
   disconnectPinterestAccount: mocks.disconnect,
@@ -10,10 +10,18 @@ vi.mock("@/lib/growth/pinterest/accounts", () => ({
 vi.mock("@/lib/prisma", () => ({ prisma: { growthPinterestAccount: { findUnique: mocks.findAccount } } }));
 vi.mock("@/lib/growth/pinterest/jobs", () => ({ enqueuePinterestSyncJobs: mocks.enqueue }));
 vi.mock("@/lib/growth/pinterest/analytics", () => ({ enqueuePinterestAnalyticsSync: mocks.enqueueAnalytics }));
+vi.mock("@/lib/growth/pinterest/analytics-recovery", () => ({
+  previewPinterestAnalyticsRecovery: mocks.previewRecovery,
+  enqueuePinterestAnalyticsRecovery: mocks.enqueueRecovery,
+  assertRecoveryPreviewToken: (value: string) => value,
+}));
+vi.mock("@/lib/growth/settings", () => ({ getGrowthSettings: mocks.settings }));
+vi.mock("@/lib/growth/activity", () => ({ recordGrowthActivity: mocks.activity }));
 
 import { DELETE } from "@/app/api/admin/growth/pinterest/accounts/[id]/route";
 import { POST as sync } from "@/app/api/admin/growth/pinterest/accounts/[id]/sync/route";
 import { POST as syncAnalytics } from "@/app/api/admin/growth/pinterest/accounts/[id]/analytics/sync/route";
+import { POST as recoverAnalytics } from "@/app/api/admin/growth/pinterest/accounts/[id]/analytics/recovery/route";
 
 describe("Pinterest disconnect route", () => {
   beforeEach(() => {
@@ -25,6 +33,9 @@ describe("Pinterest disconnect route", () => {
     mocks.findAccount.mockResolvedValue({ id: "account-1", connectionStatus: "CONNECTED" });
     mocks.enqueue.mockResolvedValue({ account: { created: true }, boards: { created: true } });
     mocks.enqueueAnalytics.mockResolvedValue({ account: { created: true }, inventory: { created: true }, range: { startDate: "2026-07-08", endDate: "2026-10-05" } });
+    mocks.previewRecovery.mockResolvedValue({ startDate: "2026-07-18", endDate: "2026-10-15", affectedPinCount: 1, missingObservationCount: 1, processingObservationCount: 0, estimatedApiRequests: 1, capExhausted: false, previewToken: "a".repeat(64) });
+    mocks.enqueueRecovery.mockResolvedValue({ recovery: { id: "recovery", status: "QUEUED" }, created: true, job: { id: "job" } });
+    mocks.settings.mockResolvedValue({ enabled: false });
   });
   afterEach(() => vi.unstubAllEnvs());
 
@@ -69,5 +80,30 @@ describe("Pinterest disconnect route", () => {
     }), context);
     expect(accepted.status).toBe(200);
     expect(mocks.enqueueAnalytics).toHaveBeenCalledWith("account-1");
+    expect(mocks.previewRecovery).toHaveBeenCalledWith({ accountId: "account-1" });
+  });
+
+  it("requires a same-origin dry run and exact confirmation before recovery", async () => {
+    const context = { params: Promise.resolve({ id: "account-1" }) };
+    const preview = await recoverAnalytics(new Request("https://saytwist.com/api/admin/growth/pinterest/accounts/account-1/analytics/recovery", {
+      method: "POST", headers: { origin: "https://saytwist.com", "sec-fetch-site": "same-origin", "content-type": "application/json" },
+      body: JSON.stringify({ mode: "PREVIEW" }),
+    }), context);
+    expect(preview.status).toBe(200);
+    expect(mocks.previewRecovery).toHaveBeenCalled();
+
+    const rejected = await recoverAnalytics(new Request("https://saytwist.com/api/admin/growth/pinterest/accounts/account-1/analytics/recovery", {
+      method: "POST", headers: { origin: "https://saytwist.com", "sec-fetch-site": "same-origin", "content-type": "application/json" },
+      body: JSON.stringify({ mode: "QUEUE", startDate: "2026-10-04", endDate: "2026-10-08", previewToken: "a".repeat(64), confirmation: "yes" }),
+    }), context);
+    expect(rejected.status).toBe(400);
+    expect(mocks.enqueueRecovery).not.toHaveBeenCalled();
+
+    const queued = await recoverAnalytics(new Request("https://saytwist.com/api/admin/growth/pinterest/accounts/account-1/analytics/recovery", {
+      method: "POST", headers: { origin: "https://saytwist.com", "sec-fetch-site": "same-origin", "content-type": "application/json" },
+      body: JSON.stringify({ mode: "QUEUE", startDate: "2026-10-04", endDate: "2026-10-08", previewToken: "a".repeat(64), confirmation: "RECOVER PINTEREST ANALYTICS" }),
+    }), context);
+    expect(queued.status).toBe(200);
+    expect(mocks.enqueueRecovery).toHaveBeenCalledWith(expect.objectContaining({ accountId: "account-1", adminUserId: "admin-1" }));
   });
 });

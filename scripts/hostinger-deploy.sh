@@ -239,6 +239,9 @@ extract_archive() {
 
 validate_staging_layout() {
   step "validate-staging"
+  ensure_file_exists "$STAGING_DIR/.release-sha"
+  [[ "$(tr -d '[:space:]' < "$STAGING_DIR/.release-sha")" == "$RELEASE_SHA" ]] \
+    || fail "Release archive identity does not match HOSTINGER_RELEASE_SHA."
   ensure_file_exists "$STAGING_DIR/.next/BUILD_ID"
   ensure_directory_exists "$STAGING_DIR/public"
   ensure_directory_exists "$STAGING_DIR/prisma/migrations"
@@ -320,18 +323,12 @@ run_prisma() {
   )
 }
 
-validate_and_apply_migrations() {
-  step "migration-status-before"
+validate_no_pending_migrations() {
+  step "migration-status"
   if ! run_prisma migrate status; then
-    fail "Migration status is not up to date. This release expects no pending migrations, so deployment stopped before changing application files."
+    fail "Migration status is not up to date. Production migrations require a separate operator-approved backup and pre-migration procedure, so deployment stopped before changing application files."
   fi
-
-  step "migration-deploy"
-  run_prisma migrate deploy
-
-  step "migration-status-after"
-  run_prisma migrate status
-  log "Migration state remains current; no new migration was expected for this release."
+  log "Migration state is current. This deployment script never executes production migrations."
 }
 
 preserve_generated_assets() {
@@ -491,7 +488,7 @@ main() {
   validate_pm2_process
   validate_environment
   create_database_backup
-  validate_and_apply_migrations
+  validate_no_pending_migrations
   preserve_generated_assets
   backup_current_release
   publish_release

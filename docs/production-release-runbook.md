@@ -1,6 +1,6 @@
 # Production release and rollback runbook
 
-Updated: 2026-10-13
+Updated: 2026-10-16
 
 This runbook applies to the Hostinger production workflow. It does not authorize a merge or deployment by itself.
 
@@ -36,45 +36,36 @@ The sitemap is rendered dynamically in production. CI deliberately uses a non-pr
 
 ## Migration safety
 
-This feature branch introduces no Prisma migration relative to `origin/main`. `prisma migrate deploy` must therefore be a no-op for an up-to-date production database. Production PostgreSQL remains bound privately at `127.0.0.1:5433`; neither its port nor its credentials are exposed to a GitHub-hosted runner.
+Phase 12.2 introduces the reviewed migration `20261016120000_growth_analytics_gap_recovery`. It is additive: it adds one job enum value, recovery tables and indexes, and permits null Pin metric counts for provider-incomplete observations. It does not drop, rename or rewrite existing rows, and it does not modify immutable Phase 12 learning runs. The deployed Phase 12.1 application continues to write non-null metric counts and is compatible with the migrated schema while Growth remains disabled and recovery has not run.
 
-After production-environment approval, the authenticated SSH script performs these operations on the VPS, using `/home/saytwist/.nvm/versions/node/v24.20.0/bin/node` and the existing application `.env` (or the already-running PM2 process environment when that file is not present) without printing `DATABASE_URL`:
+Production PostgreSQL remains private at `127.0.0.1:5433`. The deployment workflow never receives database credentials and `scripts/hostinger-deploy.sh` never runs `prisma migrate deploy`. Its existing zero-pending safety gate remains mandatory: any pending or failed migration stops deployment before application files are replaced. Because the GitHub production environment has no required reviewers, the workflow's production deployment job runs **only** on an explicit `workflow_dispatch` from `main`, with an operator-supplied `expected_release_sha` that must match the exact GitHub commit SHA. A push to `main` runs the CI/build/artifact job but skips the deployment job.
 
-```bash
-# Internally, the script parses DATABASE_URL into PGHOST/PGPORT/PGUSER/
-# PGPASSWORD/PGDATABASE and passes them only through the pg_dump environment.
-/usr/lib/postgresql/18/bin/pg_dump \
-  --format=custom \
-  --file "$APP_PATH/.deploy-backups/saytwist-<release>.dump"
-/usr/lib/postgresql/18/bin/pg_restore \
-  --list "$APP_PATH/.deploy-backups/saytwist-<release>.dump" >/dev/null
+Migration is a separate operator action using `scripts/hostinger-prepare-migration.sh`. The script is not called by either GitHub Actions workflow. It requires all of the following before it can run:
 
-cd "$STAGING_DIR"
-/home/saytwist/.nvm/versions/node/v24.20.0/bin/node \
-  --env-file="$APP_PATH/.env" \
-  node_modules/prisma/build/index.js migrate status
-/home/saytwist/.nvm/versions/node/v24.20.0/bin/node \
-  --env-file="$APP_PATH/.env" \
-  node_modules/prisma/build/index.js migrate deploy
-/home/saytwist/.nvm/versions/node/v24.20.0/bin/node \
-  --env-file="$APP_PATH/.env" \
-  node_modules/prisma/build/index.js migrate status
-```
+- the exact CI-built release artifact and its embedded `.release-sha`;
+- the full reviewed merge SHA;
+- exact typed approval `APPLY 20261016120000_growth_analytics_gap_recovery`;
+- exactly that migration, and no other migration, pending in `_prisma_migrations`;
+- healthy `/api/healthz` and `/api/readyz` responses from the currently deployed application;
+- PostgreSQL 18 `pg_dump` and `pg_restore` at the verified absolute paths;
+- a non-empty custom-format backup that passes `pg_restore --list`.
+
+It takes the shared `.deploy-lock`, applies only the allow-listed migration, verifies Prisma status, and checks the old application again. It records the reviewed SHA, migration and backup path without recording credentials. It never restarts PM2, publishes application files, restores a database, or invokes `migrate reset`.
 
 Production PostgreSQL is server version `18.6`. The default `pg_dump` is version `16.15` and is incompatible, so it must never be used. Before acquiring the deployment lock or creating a backup, the script requires executable PostgreSQL 18 binaries at `/usr/lib/postgresql/18/bin/pg_dump` and `/usr/lib/postgresql/18/bin/pg_restore`, parses both reported versions, and rejects every major version other than 18. There is no PATH fallback to PostgreSQL 16 or 17 tooling.
 
-The first status command must report that the schema is already current. Any connection error, failed migration, drift, or pending migration stops this release before application files are replaced. The backup must be non-empty and readable by the PostgreSQL 18 `pg_restore --list` before `migrate deploy` is invoked.
+The migration preparation backup must be non-empty and readable before the manual migration. The later deployment takes and verifies a second backup, then requires `prisma migrate status` to be current. Connection errors, drift, failed migrations, or any remaining pending migration stop deployment before application files are replaced.
 
 For this and future releases:
 
 1. Confirm sufficient disk space for both a custom-format database backup and one previous application release before approval.
 2. Record the current application SHA, PM2 process state, and database health in the release record.
 3. Never use `prisma migrate reset` in production.
-4. Apply migrations only through the authenticated VPS script, after validation/build and production-environment approval. Never copy the private database URL to Actions.
-5. A future release with intended pending migrations must replace this release's explicit zero-pending gate with an exact reviewed migration allow-list; an unexpected migration must always stop deployment.
+4. Apply this migration only through the separately invoked authenticated VPS preparation script after CI and explicit operator approval. Never copy the private database URL to Actions.
+5. Keep the deployment script's zero-pending gate. Future migrations require their own reviewed allow-list and operator procedure; never broaden this release's allow-list.
 6. Treat destructive SQL, table rewrites, required-column additions without safe defaults, and irreversible data transformations as separate reviewed maintenance work.
 
-Prisma does not provide automatic down migrations. If a future migration causes a production problem, stop incompatible application and worker processes, then either apply a reviewed forward corrective migration or restore the verified pre-deployment database backup. Do not improvise a reverse migration against live data.
+Prisma does not provide automatic down migrations. The preferred rollback is to leave this additive schema in place and roll back only application files; the preparation script proves the old application stays healthy before deployment. Keep Growth disabled and do not run recovery during the rollback observation window. If database restoration becomes unavoidable, stop the web process and all database-using workers, verify the recorded backup with PostgreSQL 18 `pg_restore --list`, restore it first into a separate private validation database, validate it, and obtain a second explicit operator approval before a controlled database swap. Never run `migrate reset`, `--clean` against the live database, or an improvised reverse migration.
 
 ## Verified production runtime and PM2 prerequisite
 
@@ -107,23 +98,58 @@ At deployment time, the script checks the configured CLI is an executable absolu
 
 1. Review the final branch diff and QA record.
 2. Merge the approved pull request into `main` without squashing away the release evidence unless repository policy requires it.
-3. Wait for the standalone CI workflow and the deploy workflow's CI Gate to pass for the exact merge SHA.
-4. Verify the uploaded artifact is named for that SHA and that its bundle-content check passed.
-5. Record the current production application SHA, health status on port 3001, PM2 `saytwist` PID and restart count, PM2 daemon PID, migration state, disk space, and intentionally active worker configuration. Confirm the configured `HOSTINGER_PM2_CLI` passes the prerequisite above.
-6. Approve the GitHub `production` environment. The workflow then uploads the already-validated artifact and invokes the authenticated VPS script.
-7. The VPS script validates the archive and staged layout, connects to the existing PM2 daemon, and verifies the single `saytwist` process still runs `/home/saytwist/.nvm/versions/node/v24.20.0/bin/npm start` from `/home/saytwist/htdocs/saytwist.com` with `NODE_ENV=production` and `PORT=3001`. It then takes and verifies the PostgreSQL backup, confirms migration status is already current, and runs the expected no-op `migrate deploy`.
-8. The script preserves `public/generated` and does not touch `storage/`, `.env`, or non-web PM2 processes. It moves the current runtime paths into `.deploy-releases/<release>`, publishes all staged paths, and asks the existing daemon to restart only `saytwist`. It deliberately omits `--update-env`, so the registered npm command, runtime paths, port, and environment are preserved.
-9. The script requires an increased PM2 restart count, a changed application PID, the unchanged daemon PID, the complete runtime identity above, and successful local `/api/healthz` and `/api/readyz` responses on validated port 3001. A restart or readiness failure restores the previous application paths and restarts the same registered process; it cannot report success while the old application PID remains active.
-10. Verify public `/api/healthz`, `/api/readyz`, `/robots.txt`, `/sitemap.xml`, representative translator canonicals/robots metadata, `/ads.txt`, admin authentication, and generated asset routes.
-11. Confirm the sitemap still contains the approved 355 translator URLs and no sitemap URL emits `noindex`.
-12. Run a non-publishing Pinterest configuration/admin smoke check. Do not create a Pin merely to validate deployment.
+3. Wait for the standalone CI workflow and the push-triggered deploy workflow CI Gate to pass for the exact merge SHA; confirm the `Production Deploy` job was **skipped**, not executed. Do not manually dispatch deployment yet.
+4. Verify the uploaded artifact is `hostinger-release-<merge-sha>`, its bundle-content check passed, and its embedded `.release-sha` equals the merge SHA.
+5. Download that artifact on an operator workstation, copy the archive and reviewed `scripts/hostinger-prepare-migration.sh` to a SHA-specific private VPS staging directory, and extract the archive there. Do not extract it over the live application.
+
+   ```bash
+   release_sha=<full-reviewed-merge-sha>
+   workflow_run_id=<successful-deploy-workflow-run-id>
+   local_stage="$(mktemp -d)"
+   gh run download "$workflow_run_id" \
+     --name "hostinger-release-$release_sha" \
+     --dir "$local_stage"
+   ssh -p <ssh-port> saytwist@<host> \
+     "mkdir -p -m 700 /home/saytwist/migration-staging/$release_sha"
+   scp -P <ssh-port> \
+     "$local_stage/release.tar.gz" \
+     scripts/hostinger-prepare-migration.sh \
+     "saytwist@<host>:/home/saytwist/migration-staging/$release_sha/"
+   ssh -p <ssh-port> saytwist@<host> \
+     "tar -xzf /home/saytwist/migration-staging/$release_sha/release.tar.gz -C /home/saytwist/migration-staging/$release_sha"
+   ```
+6. Record the current production SHA, PM2 application PID/restart count, PM2 daemon PID, health/readiness, disk space, migration state, Growth/attribution disabled state, and intentionally active workers.
+7. On the VPS as `saytwist`, invoke the migration preparation explicitly:
+
+   ```bash
+   RELEASE_SHA=<full-reviewed-merge-sha>
+   MIGRATION_ROOT=/home/saytwist/migration-staging/$RELEASE_SHA
+   test -f "$MIGRATION_ROOT/.release-sha"
+   test "$(tr -d '[:space:]' < "$MIGRATION_ROOT/.release-sha")" = "$RELEASE_SHA"
+
+   HOSTINGER_APP_PATH=/home/saytwist/htdocs/saytwist.com \
+   HOSTINGER_NODE_BIN=/home/saytwist/.nvm/versions/node/v24.20.0/bin/node \
+   HOSTINGER_ENV_FILE=/home/saytwist/htdocs/saytwist.com/.env \
+   HOSTINGER_MIGRATION_ROOT="$MIGRATION_ROOT" \
+   HOSTINGER_RELEASE_SHA="$RELEASE_SHA" \
+   HOSTINGER_MIGRATION_APPROVAL="APPLY 20261016120000_growth_analytics_gap_recovery" \
+   bash "$MIGRATION_ROOT/hostinger-prepare-migration.sh"
+   ```
+
+8. Save the emitted `.deploy-backups/pre-migration-...record`, backup path, old-application health evidence, and current Prisma status in the release record. If the script fails, do not approve deployment. Investigate or use the documented database rollback process; do not rerun with a broader allow-list.
+9. Only after migration preparation succeeds, manually trigger the `Deploy to Hostinger` workflow on `main`, supplying the exact approved merge SHA as `expected_release_sha`: `gh workflow run deploy-hostinger.yml --ref main -f expected_release_sha=<full-reviewed-merge-sha>`. Verify `main` still points to that SHA first. The manually dispatched workflow reruns CI/build, verifies the supplied SHA, and only then invokes the production deployment job. The GitHub production environment currently has no required-reviewer gate; the explicit manual dispatch and no-pending-migrations script check are the mandatory release gates.
+10. The deployment script validates the archive SHA and staged layout, verifies the existing PM2 process and daemon, takes and verifies another PostgreSQL 18 backup, and requires migration status to be current. It never executes a migration.
+11. The script preserves `public/generated` and does not touch `storage/`, `.env`, or non-web PM2 processes. It saves the previous runtime paths, publishes the staged release, and restarts only the existing `saytwist` npm-start process without `--update-env`.
+12. Require an increased PM2 restart count, changed application PID, unchanged daemon PID, the verified runtime identity, and passing local health/readiness on port 3001. Restart/readiness failure restores the previous application paths.
+13. Verify public health/readiness, robots, sitemap, representative canonical/noindex behavior, ads.txt, admin authentication, and generated assets. Confirm the approved 355 translator URLs remain present.
+14. Keep Growth and attribution disabled. Run only non-publishing Pinterest/admin smoke checks. Do not queue analytics recovery during the application rollback observation window.
 
 ## Application rollback
 
 1. Stop or pause the rollout if health, readiness, sitemap, authentication, asset, or worker checks fail. The deployment script automatically restores the immediately previous application paths when restart or local health validation fails.
 2. Run `PM2_HOME=/home/saytwist/.pm2 /home/saytwist/.npm/_npx/5f7878ce38f1eb13/node_modules/pm2/bin/pm2 describe saytwist`. Confirm it reports the production npm binary, `args: start`, application working directory, `PORT=3001`, and `NODE_ENV=production`. Restart only with `PM2_HOME=/home/saytwist/.pm2 /home/saytwist/.npm/_npx/5f7878ce38f1eb13/node_modules/pm2/bin/pm2 restart saytwist`; do not use `--update-env`, delete/recreate the process, restart an editorial worker, or start a persistent Growth worker.
 3. If manual application rollback is required, select `.deploy-releases/<failed-release>` or the last known-good SHA-addressed artifact, restore only the runtime paths listed in the deploy script, and restart `saytwist`.
-4. Record whether a migration was applied. For this release, none is expected because the pre-migration status gate refuses pending migrations.
+4. Record that `20261016120000_growth_analytics_gap_recovery` was applied separately and which verified pre-migration backup belongs to it. Do not attempt to reverse it during ordinary application rollback; it is compatible with the prior application while recovery has not run.
 5. Re-run local and public health/readiness checks, followed by the SEO, ads.txt, authentication, generated-asset, and non-publishing Pinterest smoke checks.
 6. If database state is incompatible, keep the web application and database-using workers stopped. Apply a reviewed forward correction or restore the verified custom-format backup with the appropriate PostgreSQL restore procedure. Database restore is deliberately never automatic.
 

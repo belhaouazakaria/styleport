@@ -2,6 +2,11 @@ name: Deploy to Hostinger
 
 on:
   workflow_dispatch:
+    inputs:
+      expected_release_sha:
+        description: Exact approved 40-character merge commit SHA
+        required: true
+        type: string
   push:
     branches:
       - main
@@ -26,6 +31,16 @@ jobs:
       BREVO_API_KEY: test_brevo_key
 
     steps:
+      - name: Verify approved manual release SHA
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          EXPECTED_RELEASE_SHA: ${{ inputs.expected_release_sha }}
+        run: |
+          if ! [[ "$EXPECTED_RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] || [ "$EXPECTED_RELEASE_SHA" != "$GITHUB_SHA" ]; then
+            echo "::error::Manual production deployment requires the exact approved HEAD SHA."
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@v5
 
@@ -58,6 +73,7 @@ jobs:
       - name: Validate deployment shell
         run: |
           bash -n scripts/hostinger-deploy.sh
+          bash -n scripts/hostinger-prepare-migration.sh
           node --check scripts/pm2-process-contract.mjs
 
       - name: Build
@@ -78,7 +94,9 @@ jobs:
       - name: Create deploy bundle
         run: |
           set -eu
+          printf '%s\n' "${GITHUB_SHA}" > .release-sha
           tar -czf release.tar.gz \
+            .release-sha \
             .next \
             public \
             prisma \
@@ -97,6 +115,7 @@ jobs:
         run: |
           set -eu
           for entry in \
+            .release-sha \
             .next/BUILD_ID \
             public/ \
             prisma/schema.prisma \
@@ -122,6 +141,7 @@ jobs:
           retention-days: 14
 
   deploy:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     name: Production Deploy
     runs-on: ubuntu-latest
     timeout-minutes: 35

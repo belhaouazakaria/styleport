@@ -42,12 +42,12 @@ function continuationKey(parts: string[]) {
   return `pinterest:analytics:continue:${digest}`;
 }
 
-function lowRateLimit(metadata: PinterestRateLimitMetadata) {
+export function lowPinterestRateLimit(metadata: PinterestRateLimitMetadata) {
   const remaining = Number(metadata.remaining);
   return Number.isFinite(remaining) && remaining <= 5;
 }
 
-function rateLimitData(metadata: PinterestRateLimitMetadata, now = new Date()) {
+export function pinterestRateLimitData(metadata: PinterestRateLimitMetadata, now = new Date()) {
   return {
     lastRateLimitLimit: metadata.limit?.slice(0, 191) || null,
     lastRateLimitRemaining: metadata.remaining?.slice(0, 191) || null,
@@ -63,6 +63,41 @@ function blockDailyMetrics(data: Record<string, { daily_metrics: Array<{ date: s
 function assertRowsInRange(rows: Array<{ date: string }>, startDate: string, endDate: string) {
   if (rows.some((row) => row.date < startDate || row.date > endDate)) {
     throw new Error("Pinterest returned a daily metric outside the requested date range.");
+  }
+}
+
+export async function upsertPinterestPinMetricRows(
+  tx: Prisma.TransactionClient,
+  pinId: string,
+  rows: ReturnType<typeof blockDailyMetrics>,
+  fetchedAt: Date,
+) {
+  for (const row of rows) {
+    metricCount(row.metrics, "IMPRESSION");
+    const value = (name: "IMPRESSION" | "SAVE" | "PIN_CLICK" | "OUTBOUND_CLICK") =>
+      Object.prototype.hasOwnProperty.call(row.metrics, name)
+        ? metricCount(row.metrics, name)
+        : null;
+    const values = {
+      impressions: value("IMPRESSION"),
+      saves: value("SAVE"),
+      pinClicks: value("PIN_CLICK"),
+      outboundClicks: value("OUTBOUND_CLICK"),
+      dataStatus: row.data_status,
+      fetchedAt,
+    };
+    if (
+      row.data_status === "READY" &&
+      Object.values(values).some((metric) => metric === null)
+    ) {
+      throw new Error("Pinterest returned READY Pin analytics without every requested metric.");
+    }
+    const metricDate = new Date(`${row.date}T00:00:00.000Z`);
+    await tx.growthPinterestPinMetricDaily.upsert({
+      where: { pinId_metricDate: { pinId, metricDate } },
+      create: { pinId, metricDate, ...values },
+      update: values,
+    });
   }
 }
 
@@ -240,7 +275,7 @@ export async function syncPinterestPinInventory(params: {
               inventoryPinCount: 0, inventorySeenBookmarks: [], lastInventorySyncAt: completedAt,
               lastSuccessfulSyncAt: completedAt,
               backfillPinsTotal: progress.total, backfillPinsProcessed: progress.processed,
-              ...rateLimitData(lastRateLimit, completedAt),
+              ...pinterestRateLimitData(lastRateLimit, completedAt),
             },
           });
           return count;
@@ -263,10 +298,10 @@ export async function syncPinterestPinInventory(params: {
         data: {
           inventoryBookmark: bookmark, inventoryStartedAt: startedAt, inventoryPageCount: pageCount,
           inventoryPinCount: pinCount, inventorySeenBookmarks: [...seen],
-          ...rateLimitData(lastRateLimit),
+          ...pinterestRateLimitData(lastRateLimit),
         },
       });
-      if (lowRateLimit(lastRateLimit)) break;
+      if (lowPinterestRateLimit(lastRateLimit)) break;
     }
     await enqueueGrowthJob({
       type: GrowthJobType.PINTEREST_PIN_INVENTORY_SYNC,
@@ -305,7 +340,7 @@ export async function syncPinterestAccountAnalytics(params: {
 
     let topCount = 0;
     let finalRateLimit = accountResponse.rateLimit;
-    if (!lowRateLimit(accountResponse.rateLimit)) {
+    if (!lowPinterestRateLimit(accountResponse.rateLimit)) {
       const topResponse = await getPinterestTopPinsAnalytics(params);
       finalRateLimit = topResponse.rateLimit;
       topCount = topResponse.data.pins.length;
@@ -334,7 +369,7 @@ export async function syncPinterestAccountAnalytics(params: {
     }
     await prisma.growthPinterestAnalyticsState.update({
       where: { accountId: params.accountId },
-      data: { lastAccountAnalyticsSyncAt: fetchedAt, lastSuccessfulSyncAt: fetchedAt, lastError: null, ...rateLimitData(finalRateLimit, fetchedAt) },
+      data: { lastAccountAnalyticsSyncAt: fetchedAt, lastSuccessfulSyncAt: fetchedAt, lastError: null, ...pinterestRateLimitData(finalRateLimit, fetchedAt) },
     });
     await recordGrowthActivity({
       actorKind: GrowthActivityActorKind.WORKER, entityType: "GrowthPinterestAccount", entityId: params.accountId,
@@ -377,17 +412,7 @@ export async function syncPinterestPinAnalytics(params: {
       assertRowsInRange(rows, params.startDate, params.endDate);
       const fetchedAt = new Date();
       await prisma.$transaction(async (tx) => {
-        for (const row of rows) {
-          const values = {
-            impressions: metricCount(row.metrics, "IMPRESSION"), saves: metricCount(row.metrics, "SAVE"),
-            pinClicks: metricCount(row.metrics, "PIN_CLICK"), outboundClicks: metricCount(row.metrics, "OUTBOUND_CLICK"),
-            dataStatus: row.data_status, fetchedAt,
-          };
-          await tx.growthPinterestPinMetricDaily.upsert({
-            where: { pinId_metricDate: { pinId: pin.id, metricDate: new Date(`${row.date}T00:00:00.000Z`) } },
-            create: { pinId: pin.id, metricDate: new Date(`${row.date}T00:00:00.000Z`), ...values }, update: values,
-          });
-        }
+        await upsertPinterestPinMetricRows(tx, pin.id, rows, fetchedAt);
         const firstDetailedSync = await tx.growthPinterestPin.updateMany({
           where: { id: pin.id, lastAnalyticsSyncAt: null },
           data: { lastAnalyticsSyncAt: fetchedAt },
@@ -400,12 +425,12 @@ export async function syncPinterestPinAnalytics(params: {
           data: {
             ...(firstDetailedSync.count === 1 ? { backfillPinsProcessed: { increment: 1 } } : {}),
             lastPinAnalyticsSyncAt: fetchedAt, lastSuccessfulSyncAt: fetchedAt,
-            ...rateLimitData(lastRateLimit, fetchedAt),
+            ...pinterestRateLimitData(lastRateLimit, fetchedAt),
           },
         });
       });
       processed += 1;
-      if (lowRateLimit(lastRateLimit)) break;
+      if (lowPinterestRateLimit(lastRateLimit)) break;
     }
     const remaining = await prisma.growthPinterestPin.count({
       where: { accountId: params.accountId, isActive: true, analyticsEligible: true, ...analyticsDue },

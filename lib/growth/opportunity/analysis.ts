@@ -93,6 +93,11 @@ export async function evaluateOpportunityIntelligence(input?: {
         where: {
           pinId: { in: pins.map((p) => p.id) },
           metricDate: { gte: start, lte: end },
+          dataStatus: "READY",
+          impressions: { not: null },
+          saves: { not: null },
+          pinClicks: { not: null },
+          outboundClicks: { not: null },
         },
         select: {
           pinId: true,
@@ -140,6 +145,22 @@ export async function evaluateOpportunityIntelligence(input?: {
       }),
     ]);
   const translatorMap = new Map(translators.map((t) => [t.slug, t]));
+  const finalizedMetricRows = metricRows.flatMap((row) =>
+    row.impressions !== null &&
+    row.saves !== null &&
+    row.pinClicks !== null &&
+    row.outboundClicks !== null
+      ? [
+          {
+            ...row,
+            impressions: row.impressions,
+            saves: row.saves,
+            pinClicks: row.pinClicks,
+            outboundClicks: row.outboundClicks,
+          },
+        ]
+      : [],
+  );
   const prepared = pins.map((p) => ({
     ...p,
     role: p.account.activeRole,
@@ -174,7 +195,7 @@ export async function evaluateOpportunityIntelligence(input?: {
   const pinMetricMap = new Map(
     prepared.map((pin) => [
       pin.id,
-      aggregateClusterMetrics(metricRows, [pin.id], end),
+      aggregateClusterMetrics(finalizedMetricRows, [pin.id], end),
     ]),
   );
   if (
@@ -214,7 +235,7 @@ export async function evaluateOpportunityIntelligence(input?: {
   const provider = input?.trendProvider || new NullTrendProvider();
   for (const cluster of clusters) {
     const metrics = aggregateClusterMetrics(
-      metricRows,
+      finalizedMetricRows,
       cluster.pins.map((p) => p.id),
       end,
     );

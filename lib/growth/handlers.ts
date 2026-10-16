@@ -8,6 +8,7 @@ import {
   syncPinterestPinAnalytics,
   syncPinterestPinInventory,
 } from "@/lib/growth/pinterest/analytics";
+import { recoverPinterestAnalyticsGaps } from "@/lib/growth/pinterest/analytics-recovery";
 import {
   syncPinterestAccount,
   syncPinterestBoards,
@@ -140,6 +141,23 @@ const handlers = new Map<GrowthJobType, GrowthJobHandler>([
         ...payload,
         batch: payload.batch || 0,
       });
+    },
+  ],
+  [
+    GrowthJobType.PINTEREST_ANALYTICS_GAP_RECOVERY,
+    async ({ job }) => {
+      const parsed = z
+        .object({
+          recoveryId: z.string().min(1),
+          batch: z.number().int().min(0).max(10_000),
+        })
+        .strict()
+        .safeParse(job.payload || {});
+      if (!parsed.success)
+        throw new NonRetryableGrowthJobError(
+          "Invalid Pinterest analytics recovery payload.",
+        );
+      return recoverPinterestAnalyticsGaps(parsed.data);
     },
   ],
   [

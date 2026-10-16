@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { AdminTopbar } from "@/components/admin/admin-topbar";
 import { GrowthAnalyticsSyncButton } from "@/components/admin/growth-analytics-sync-button";
+import { GrowthAnalyticsRecovery } from "@/components/admin/growth-analytics-recovery";
 import { KpiCard } from "@/components/admin/kpi-card";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { requireAdminRoute } from "@/lib/auth";
@@ -60,6 +61,7 @@ export default async function GrowthAnalyticsPage({ searchParams }: { searchPara
         <p className="rounded-2xl border border-brand-200 bg-brand-50 p-4 text-sm leading-6 text-brand-950">
           Account totals cover the connected Pinterest account. Detailed Pin analytics below is limited to Pins linking to configured owned domains.
         </p>
+        <GrowthAnalyticsRecovery accountId={report.selected.id} />
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5" aria-label="Pinterest totals">
           <KpiCard label="Impressions" value={display(totals.impressions)} />
           <KpiCard label="Saves" value={display(totals.saves)} />
