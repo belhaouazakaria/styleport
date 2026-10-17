@@ -1,0 +1,48 @@
+name: SayTwist Production Release Bridge
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  authorize-and-dispatch:
+    name: Verify owner approval and dispatch exact SHA
+    if: >-
+      github.event.issue.pull_request == null &&
+      github.event.sender.login == 'belhaouazakaria' &&
+      github.event.comment.user.login == 'belhaouazakaria' &&
+      startsWith(github.event.comment.body, 'APPROVE SAYTWIST PRODUCTION DEPLOY ')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: saytwist-production-release-bridge
+      cancel-in-progress: false
+    steps:
+      - name: Checkout trusted main branch commit
+        uses: actions/checkout@v5
+
+      - name: Validate repository, author, issue, exact SHA and approval
+        env:
+          RELEASE_EVENT_PATH: ${{ github.event_path }}
+          RELEASE_SHA: ${{ github.sha }}
+          RELEASE_REF: ${{ github.ref }}
+          RELEASE_REPOSITORY: ${{ github.repository }}
+        run: node scripts/authorize-production-release.mjs
+
+      - name: Dispatch existing guarded Hostinger deployment workflow
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          CURRENT_MAIN_SHA="$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '.commit.sha')"
+          if [ "$CURRENT_MAIN_SHA" != "$GITHUB_SHA" ]; then
+            echo "::error::Main has advanced since the release request; create a fresh approval."
+            exit 1
+          fi
+          gh workflow run deploy-hostinger.yml --ref main -f expected_release_sha="$GITHUB_SHA"
+          echo "Guarded deployment requested for $GITHUB_SHA."
