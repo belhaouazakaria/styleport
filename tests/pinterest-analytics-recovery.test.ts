@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   assessPinterestRecoveryRateLimit,
   canProbePinterestRecoveryQuota,
-  isPinterestRecoveryResetImminent,
   defaultPinterestRecoveryRange,
   detectPinterestAnalyticsGaps,
   pinterestRecoveryDateRange,
@@ -256,12 +255,19 @@ describe("Pinterest analytics gap recovery planning", () => {
     expect(canProbePinterestRecoveryQuota("RATE_LIMIT_METADATA_MISSING", 0)).toBe(false);
   });
 
-  it("defers Pin requests when a provider reset is five seconds away", () => {
-    const now = new Date("2026-10-17T14:00:00.000Z");
-    expect(isPinterestRecoveryResetImminent(new Date(now.getTime() + 4_000), now)).toBe(true);
-    expect(isPinterestRecoveryResetImminent(new Date(now.getTime() + 5_000), now)).toBe(true);
-    expect(isPinterestRecoveryResetImminent(new Date(now.getTime() + 5_001), now)).toBe(false);
-    expect(isPinterestRecoveryResetImminent(new Date(now.getTime() + 35_000), now)).toBe(false);
+  it("accepts Pinterest's documented remaining=99, reset=1 quota while current", () => {
+    const observedAt = new Date("2026-10-17T14:00:00.000Z");
+    const state = {
+      lastRateLimitRemaining: "99",
+      lastRateLimitReset: "1",
+      rateLimitObservedAt: observedAt,
+    };
+    expect(assessPinterestRecoveryRateLimit(state, new Date(observedAt.getTime() + 500)))
+      .toMatchObject({ status: "AVAILABLE", remaining: 99 });
+    expect(assessPinterestRecoveryRateLimit(state, new Date(observedAt.getTime() + 1_001)))
+      .toEqual({ status: "UNRELIABLE", reason: "RATE_LIMIT_RESET_EXPIRED" });
+    expect(assessPinterestRecoveryRateLimit({ ...state, lastRateLimitRemaining: "5" }, observedAt))
+      .toMatchObject({ status: "WAIT", remaining: 5 });
   });
 
   it("rejects missing observation metadata", () => {
