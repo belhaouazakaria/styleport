@@ -11,7 +11,7 @@ const contentSecurityPolicy = [
   "font-src 'self' data:",
   "style-src 'self' 'unsafe-inline'",
   `script-src 'self' 'unsafe-inline' ${isProduction ? "" : "'unsafe-eval'"} https://pagead2.googlesyndication.com https://www.googletagmanager.com https://www.google.com https://www.gstatic.com`,
-  "connect-src 'self' https://api.openai.com https://api.brevo.com https://*.sentry.io",
+  "connect-src 'self' https://api.openai.com https://api.brevo.com https://*.sentry.io https://www.google-analytics.com https://*.google-analytics.com https://www.googletagmanager.com",
   "frame-src 'self' https://googleads.g.doubleclick.net https://tpc.googlesyndication.com",
 ].join("; ");
 
