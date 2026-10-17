@@ -13,7 +13,7 @@ Before merging:
 3. Confirm the production SEO impact approval is attached to the release record. The approved 2026-10-13 report retained all 355 translator URLs, removed none from the sitemap, and changed no robots metadata.
 4. Confirm strict human-review indexing enforcement is still disabled.
 5. Confirm the Ezoic managed response contains the operator-approved AdSense seller authorization.
-6. Confirm the GitHub `production` environment has required reviewers so a push to `main` cannot migrate or deploy without approval.
+6. Check whether the GitHub `production` environment has required reviewers. When it does not, the exact-SHA manual dispatch gate remains mandatory; an ordinary push to `main` must never deploy. The owner-approval issue-comment bridge below can invoke the same guarded manual dispatch without adding secrets.
 7. Configure `HOSTINGER_PM2_CLI=/home/saytwist/.npm/_npx/5f7878ce38f1eb13/node_modules/pm2/bin/pm2` for the verified PM2 7.0.4 CLI that connects to `/home/saytwist/.pm2`. The deploy script never searches for, downloads, or installs PM2.
 
 The deploy workflow must finish its pinned Node `20.20.2` / npm `10.8.2` clean install, lint, typecheck, tests, build, production-dependency pruning, Prisma-engine checks, and bundle validation before the production-environment job can start. A GitHub-hosted runner never receives authority to migrate the VPS-local database.
@@ -39,6 +39,35 @@ The sitemap is rendered dynamically in production. CI deliberately uses a non-pr
 Phase 12.2 introduces the reviewed migration `20261016120000_growth_analytics_gap_recovery`. It is additive: it adds one job enum value, recovery tables and indexes, and permits null Pin metric counts for provider-incomplete observations. It does not drop, rename or rewrite existing rows, and it does not modify immutable Phase 12 learning runs. The deployed Phase 12.1 application continues to write non-null metric counts and is compatible with the migrated schema while Growth remains disabled and recovery has not run.
 
 Production PostgreSQL remains private at `127.0.0.1:5433`. The deployment workflow never receives database credentials and `scripts/hostinger-deploy.sh` never runs `prisma migrate deploy`. Its existing zero-pending safety gate remains mandatory: any pending or failed migration stops deployment before application files are replaced. Because the GitHub production environment has no required reviewers, the workflow's production deployment job runs **only** on an explicit `workflow_dispatch` from `main`, with an operator-supplied `expected_release_sha` that must match the exact GitHub commit SHA. A push to `main` runs the CI/build/artifact job but skips the deployment job.
+
+## Agent-operated, exact-SHA production release bridge
+
+The original `.github/workflows/deploy-hostinger.yml` workflow stays **manual dispatch only** for production and retains its exact `expected_release_sha` check, full CI/build, verified release archive, protected PG18 backup, zero-pending-migrations check, pinned PM2 process, readiness and rollback behavior. `push` to `main` still produces an artifact and skips deployment.
+
+To allow the connected GitHub assistant to request an **individually authorized code-only release**, `.github/workflows/production-release-bridge.yml` listens for an issue comment **created** on the default branch. It checks the authenticated owner `belhaouazakaria` is the request issue creator, the commenter, and the event sender; other GitHub identities cannot request a deployment. The issue must be open (not a PR), and its exact title/body must be:
+
+```text
+Title: SayTwist production release <exact-current-main-SHA>
+
+RELEASE_SHA=<exact-current-main-SHA>
+RELEASE_TARGET=saytwist.com
+```
+
+A **new explicit approval comment** by the same owner must be exactly:
+
+```text
+APPROVE SAYTWIST PRODUCTION DEPLOY <exact-current-main-SHA>
+```
+
+The bridge checks issue/comment identities and message contents against the event's main SHA in `scripts/authorize-production-release.mjs`, re-reads the **current** `main` HEAD immediately before dispatch, then uses the job-limited `GITHUB_TOKEN` (only `contents:read` and `actions:write`) to run:
+
+```bash
+gh workflow run deploy-hostinger.yml --ref main -f expected_release_sha="<exact-current-main-SHA>"
+```
+
+GitHub explicitly allows `workflow_dispatch` emitted by a `GITHUB_TOKEN` workflow to start another workflow. The bridge does **not** hold Hostinger secrets, call SSH, run migrations, publish Pinterest content, enable Growth, or deploy anything itself. The existing production job remains the sole executor of a validated code release.
+
+The assistant must obtain per-release user authorization (including the exact release scope) before posting the approval comment. Creating a draft issue is **not** approval. Do not create an approval for a commit with unreviewed migrations; separately prepare and approve any schema migration first. Audit trail: the owner-authored issue, approval comment, bridge run and guarded deploy run. Re-check `main` and the release SHA on each request. When an issue/comment check fails or the branch has moved, **do not** bypass the check.
 
 Migration is a separate operator action using `scripts/hostinger-prepare-migration.sh`. The script is not called by either GitHub Actions workflow. It requires all of the following before it can run:
 
