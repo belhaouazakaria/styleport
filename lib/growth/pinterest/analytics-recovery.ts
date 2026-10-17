@@ -25,6 +25,7 @@ import {
 } from "@/lib/growth/pinterest/analytics";
 import {
   getPinterestPinAnalytics,
+  getPinterestUserAccount,
   type PinterestRateLimitMetadata,
 } from "@/lib/growth/pinterest/api";
 import { prisma } from "@/lib/prisma";
@@ -34,6 +35,22 @@ export const PINTEREST_RECOVERY_MAX_TASKS = 2_000;
 export const PINTEREST_RECOVERY_REQUESTS_PER_EXECUTION = 8;
 export const PINTEREST_RECOVERY_RATE_LIMIT_RESERVE = 5;
 export const PINTEREST_RECOVERY_RATE_LIMIT_MAX_AGE_MS = 15 * 60_000;
+const PINTEREST_RECOVERY_MAX_QUOTA_PROBES_PER_EXECUTION = 1;
+const PINTEREST_RECOVERY_MIN_RESET_WINDOW_MS = 5_000;
+const PINTEREST_RECOVERY_RETRY_PROBE_DELAY_MS = 10_000;
+
+export function canProbePinterestRecoveryQuota(reason: string, probesUsed: number) {
+  return (
+    probesUsed < PINTEREST_RECOVERY_MAX_QUOTA_PROBES_PER_EXECUTION &&
+    (reason === "RATE_LIMIT_RESET_EXPIRED" ||
+      reason === "RATE_LIMIT_METADATA_STALE")
+  );
+}
+
+export function isPinterestRecoveryResetImminent(resetAt: Date, now = new Date()) {
+  return resetAt.getTime() - now.getTime() <= PINTEREST_RECOVERY_MIN_RESET_WINDOW_MS;
+}
+
 const DAY_MS = 86_400_000;
 const MAX_RATE_LIMIT_WINDOW_MS = DAY_MS;
 
@@ -573,20 +590,65 @@ export async function recoverPinterestAnalyticsGaps(params: {
   });
   let requests = 0;
   let blockedUntil: Date | null = null;
+  let quotaProbes = 0;
 
   for (const task of tasks) {
-    const gate = await recoveryRequestGate(recovery.accountId, recovery.id);
+    let gate = await recoveryRequestGate(recovery.accountId, recovery.id);
+    if (gate.status === "TERMINAL") {
+      return { recoveryId: recovery.id, complete: true, reused: true, requests };
+    }
+    if (
+      gate.status === "UNRELIABLE" &&
+      (gate.reason === "RATE_LIMIT_RESET_EXPIRED" ||
+        gate.reason === "RATE_LIMIT_METADATA_STALE")
+    ) {
+      if (!canProbePinterestRecoveryQuota(gate.reason, quotaProbes)) {
+        blockedUntil = new Date(Date.now() + PINTEREST_RECOVERY_RETRY_PROBE_DELAY_MS);
+        break;
+      }
+      quotaProbes += 1;
+      const probe = await getPinterestUserAccount(
+        recovery.accountId,
+        params.fetchImpl,
+      );
+      const observedAt = new Date();
+      const rateData = pinterestRateLimitData(probe.rateLimit, observedAt);
+      const verified = assessPinterestRecoveryRateLimit(rateData, observedAt);
+      if (verified.status === "UNRELIABLE") {
+        throw new RetryableGrowthJobError(
+          `Pinterest read-only quota probe returned unreliable metadata (${verified.reason}).`,
+          PINTEREST_RECOVERY_RATE_LIMIT_MAX_AGE_MS,
+        );
+      }
+      await prisma.growthPinterestAnalyticsState.updateMany({
+        where: { accountId: recovery.accountId },
+        data: rateData,
+      });
+      gate = await recoveryRequestGate(recovery.accountId, recovery.id);
+    }
     if (gate.status === "TERMINAL") {
       return { recoveryId: recovery.id, complete: true, reused: true, requests };
     }
     if (gate.status === "UNRELIABLE") {
+      if (
+        quotaProbes > 0 &&
+        (gate.reason === "RATE_LIMIT_RESET_EXPIRED" ||
+          gate.reason === "RATE_LIMIT_METADATA_STALE")
+      ) {
+        blockedUntil = new Date(Date.now() + PINTEREST_RECOVERY_RETRY_PROBE_DELAY_MS);
+        break;
+      }
       throw new RetryableGrowthJobError(
-        `Pinterest analytics recovery requires fresh, reliable rate-limit metadata (${gate.reason}). Run the normal analytics sync before retrying recovery.`,
+        `Pinterest analytics recovery requires reliable rate-limit metadata (${gate.reason}).`,
         PINTEREST_RECOVERY_RATE_LIMIT_MAX_AGE_MS,
       );
     }
     if (gate.status === "WAIT") {
       blockedUntil = new Date(gate.resetAt.getTime() + 1_000);
+      break;
+    }
+    if (isPinterestRecoveryResetImminent(gate.resetAt)) {
+      blockedUntil = new Date(Math.max(gate.resetAt.getTime() + 1_000, Date.now() + 1_000));
       break;
     }
     const pin = task.pinId

@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   assessPinterestRecoveryRateLimit,
+  canProbePinterestRecoveryQuota,
+  isPinterestRecoveryResetImminent,
   defaultPinterestRecoveryRange,
   detectPinterestAnalyticsGaps,
   pinterestRecoveryDateRange,
@@ -244,6 +246,23 @@ describe("Pinterest analytics gap recovery planning", () => {
       });
     },
   );
+
+  it("permits only one read-only quota probe for expired or stale windows", () => {
+    expect(canProbePinterestRecoveryQuota("RATE_LIMIT_RESET_EXPIRED", 0)).toBe(true);
+    expect(canProbePinterestRecoveryQuota("RATE_LIMIT_METADATA_STALE", 0)).toBe(true);
+    expect(canProbePinterestRecoveryQuota("RATE_LIMIT_RESET_EXPIRED", 1)).toBe(false);
+    expect(canProbePinterestRecoveryQuota("RATE_LIMIT_METADATA_STALE", 1)).toBe(false);
+    expect(canProbePinterestRecoveryQuota("RATE_LIMIT_METADATA_INVALID", 0)).toBe(false);
+    expect(canProbePinterestRecoveryQuota("RATE_LIMIT_METADATA_MISSING", 0)).toBe(false);
+  });
+
+  it("defers Pin requests when a provider reset is five seconds away", () => {
+    const now = new Date("2026-10-17T14:00:00.000Z");
+    expect(isPinterestRecoveryResetImminent(new Date(now.getTime() + 4_000), now)).toBe(true);
+    expect(isPinterestRecoveryResetImminent(new Date(now.getTime() + 5_000), now)).toBe(true);
+    expect(isPinterestRecoveryResetImminent(new Date(now.getTime() + 5_001), now)).toBe(false);
+    expect(isPinterestRecoveryResetImminent(new Date(now.getTime() + 35_000), now)).toBe(false);
+  });
 
   it("rejects missing observation metadata", () => {
     expect(assessPinterestRecoveryRateLimit(null)).toEqual({
