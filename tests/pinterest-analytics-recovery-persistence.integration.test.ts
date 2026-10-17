@@ -446,6 +446,173 @@ databaseDescribe("Pinterest Phase 12.2 recovery persistence", () => {
     );
   });
 
+  it("refreshes an expired quota with one read-only account GET before any Pin GET", async () => {
+    const { admin, account } = await fixture();
+    const preview = await previewPinterestAnalyticsRecovery({
+      accountId: account.id,
+      startDate: "2026-10-04",
+      endDate: "2026-10-04",
+      now: new Date("2026-10-16T12:00:00Z"),
+    });
+    const queued = await enqueuePinterestAnalyticsRecovery({
+      accountId: account.id,
+      adminUserId: admin.id,
+      startDate: preview.startDate,
+      endDate: preview.endDate,
+      previewToken: preview.previewToken,
+      now: new Date("2026-10-16T12:00:00Z"),
+    });
+    await prisma.growthPinterestAnalyticsState.update({
+      where: { accountId: account.id },
+      data: {
+        lastRateLimitRemaining: "99",
+        lastRateLimitReset: "4",
+        rateLimitObservedAt: new Date(Date.now() - 10_000),
+      },
+    });
+    const fetchMock = vi.fn(async (url: string) => {
+      if (String(url).endsWith("/user_account")) {
+        return new Response(
+          JSON.stringify({ id: account.pinterestAccountId, username: account.username }),
+          {
+            status: 200,
+            headers: {
+              "x-ratelimit-limit": "100",
+              "x-ratelimit-remaining": "98",
+              "x-ratelimit-reset": "60",
+            },
+          },
+        );
+      }
+      if (String(url).includes("/pins/10000/analytics")) {
+        return response([{ date: "2026-10-04", data_status: "READY" }], "97");
+      }
+      throw new Error("Unexpected Pinterest API endpoint.");
+    });
+    await expect(
+      recoverPinterestAnalyticsGaps({
+        recoveryId: queued.recovery.id,
+        batch: 0,
+        fetchImpl: fetchMock,
+      }),
+    ).resolves.toMatchObject({ complete: true, requests: 1, status: "COMPLETED" });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(String(fetchMock.mock.calls[0][0])).toContain("/user_account");
+    expect(String(fetchMock.mock.calls[1][0])).toContain("/pins/10000/analytics");
+    expect(await prisma.growthPinterestAnalyticsRecovery.findUniqueOrThrow({
+      where: { id: queued.recovery.id },
+    })).toMatchObject({ requestsCompleted: 1, status: "COMPLETED" });
+  });
+
+  it("defers a recovery without spending Pin requests when a refreshed quota resets imminently", async () => {
+    const { admin, account } = await fixture();
+    const preview = await previewPinterestAnalyticsRecovery({
+      accountId: account.id,
+      startDate: "2026-10-04",
+      endDate: "2026-10-04",
+      now: new Date("2026-10-16T12:00:00Z"),
+    });
+    const queued = await enqueuePinterestAnalyticsRecovery({
+      accountId: account.id,
+      adminUserId: admin.id,
+      startDate: preview.startDate,
+      endDate: preview.endDate,
+      previewToken: preview.previewToken,
+      now: new Date("2026-10-16T12:00:00Z"),
+    });
+    await prisma.growthPinterestAnalyticsState.update({
+      where: { accountId: account.id },
+      data: {
+        lastRateLimitRemaining: "99",
+        lastRateLimitReset: "4",
+        rateLimitObservedAt: new Date(Date.now() - 10_000),
+      },
+    });
+    const fetchMock = vi.fn(async (url: string) => {
+      if (!String(url).endsWith("/user_account")) throw new Error("Pin GET is not allowed");
+      return new Response(
+        JSON.stringify({ id: account.pinterestAccountId, username: account.username }),
+        {
+          status: 200,
+          headers: {
+            "x-ratelimit-limit": "100",
+            "x-ratelimit-remaining": "98",
+            "x-ratelimit-reset": "4",
+          },
+        },
+      );
+    });
+    await expect(
+      recoverPinterestAnalyticsGaps({
+        recoveryId: queued.recovery.id,
+        batch: 0,
+        fetchImpl: fetchMock,
+      }),
+    ).resolves.toMatchObject({ complete: false, requests: 0, pendingTasks: 1 });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const continuation = await prisma.growthJob.findFirstOrThrow({
+      where: { id: { not: queued.job.id } },
+    });
+    expect(continuation.runAfter.getTime()).toBeGreaterThan(Date.now());
+    expect(await prisma.growthPinterestAnalyticsRecovery.findUniqueOrThrow({
+      where: { id: queued.recovery.id },
+    })).toMatchObject({ requestsCompleted: 0, status: "RUNNING" });
+  });
+
+  it("fails closed when a quota refresh has malformed reset metadata", async () => {
+    const { admin, account } = await fixture();
+    const preview = await previewPinterestAnalyticsRecovery({
+      accountId: account.id,
+      startDate: "2026-10-04",
+      endDate: "2026-10-04",
+      now: new Date("2026-10-16T12:00:00Z"),
+    });
+    const queued = await enqueuePinterestAnalyticsRecovery({
+      accountId: account.id,
+      adminUserId: admin.id,
+      startDate: preview.startDate,
+      endDate: preview.endDate,
+      previewToken: preview.previewToken,
+      now: new Date("2026-10-16T12:00:00Z"),
+    });
+    await prisma.growthPinterestAnalyticsState.update({
+      where: { accountId: account.id },
+      data: {
+        lastRateLimitRemaining: "99",
+        lastRateLimitReset: "4",
+        rateLimitObservedAt: new Date(Date.now() - 10_000),
+      },
+    });
+    const fetchMock = vi.fn(async (url: string) => {
+      if (!String(url).endsWith("/user_account")) throw new Error("Pin GET is not allowed");
+      return new Response(
+        JSON.stringify({ id: account.pinterestAccountId, username: account.username }),
+        {
+          status: 200,
+          headers: {
+            "x-ratelimit-limit": "100",
+            "x-ratelimit-remaining": "98",
+            "x-ratelimit-reset": "invalid",
+          },
+        },
+      );
+    });
+    await expect(
+      recoverPinterestAnalyticsGaps({
+        recoveryId: queued.recovery.id,
+        batch: 0,
+        fetchImpl: fetchMock,
+      }),
+    ).rejects.toThrow("unreliable metadata");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(await prisma.growthPinterestAnalyticsRecoveryTask.count({
+      where: { recoveryId: queued.recovery.id, status: "PENDING" },
+    })).toBe(1);
+    expect(await prisma.growthPinterestAnalyticsRecovery.findUniqueOrThrow({
+      where: { id: queued.recovery.id },
+    })).toMatchObject({ requestsCompleted: 0 });
+  });
+
   it("revalidates preview evidence after acquiring the account lock", async () => {
     const { admin, account, pins } = await fixture();
     const preview = await previewPinterestAnalyticsRecovery({
