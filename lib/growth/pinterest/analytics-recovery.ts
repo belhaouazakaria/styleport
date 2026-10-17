@@ -36,7 +36,6 @@ export const PINTEREST_RECOVERY_REQUESTS_PER_EXECUTION = 8;
 export const PINTEREST_RECOVERY_RATE_LIMIT_RESERVE = 5;
 export const PINTEREST_RECOVERY_RATE_LIMIT_MAX_AGE_MS = 15 * 60_000;
 const PINTEREST_RECOVERY_MAX_QUOTA_PROBES_PER_EXECUTION = 1;
-const PINTEREST_RECOVERY_MIN_RESET_WINDOW_MS = 5_000;
 const PINTEREST_RECOVERY_RETRY_PROBE_DELAY_MS = 10_000;
 
 export function canProbePinterestRecoveryQuota(reason: string, probesUsed: number) {
@@ -45,10 +44,6 @@ export function canProbePinterestRecoveryQuota(reason: string, probesUsed: numbe
     (reason === "RATE_LIMIT_RESET_EXPIRED" ||
       reason === "RATE_LIMIT_METADATA_STALE")
   );
-}
-
-export function isPinterestRecoveryResetImminent(resetAt: Date, now = new Date()) {
-  return resetAt.getTime() - now.getTime() <= PINTEREST_RECOVERY_MIN_RESET_WINDOW_MS;
 }
 
 const DAY_MS = 86_400_000;
@@ -645,10 +640,6 @@ export async function recoverPinterestAnalyticsGaps(params: {
     }
     if (gate.status === "WAIT") {
       blockedUntil = new Date(gate.resetAt.getTime() + 1_000);
-      break;
-    }
-    if (isPinterestRecoveryResetImminent(gate.resetAt)) {
-      blockedUntil = new Date(Math.max(gate.resetAt.getTime() + 1_000, Date.now() + 1_000));
       break;
     }
     const pin = task.pinId
