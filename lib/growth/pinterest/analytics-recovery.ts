@@ -198,8 +198,9 @@ function planToken(params: {
 }
 
 function numericRateLimit(value: string | null | undefined) {
+  if (!value || !/^\d+$/.test(value)) return null;
   const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : null;
+  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
 }
 
 type RecoveryRateLimitState = {
@@ -208,12 +209,17 @@ type RecoveryRateLimitState = {
   rateLimitObservedAt: Date | null;
 };
 
-function rateLimitResetDate(value: string | null) {
+function rateLimitResetDate(value: string | null, observedAt: Date) {
   if (!value || !/^\d+$/.test(value)) return null;
-  const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed) || parsed <= 0) return null;
-  const milliseconds = parsed > 10_000_000_000 ? parsed : parsed * 1000;
-  const reset = new Date(milliseconds);
+  const secondsUntilReset = Number(value);
+  if (
+    !Number.isSafeInteger(secondsUntilReset) ||
+    secondsUntilReset < 0 ||
+    secondsUntilReset * 1000 > MAX_RATE_LIMIT_WINDOW_MS
+  ) {
+    return null;
+  }
+  const reset = new Date(observedAt.getTime() + secondsUntilReset * 1000);
   return Number.isFinite(reset.getTime()) ? reset : null;
 }
 
@@ -230,15 +236,15 @@ export function assessPinterestRecoveryRateLimit(
   if (age < 0 || age > PINTEREST_RECOVERY_RATE_LIMIT_MAX_AGE_MS)
     return { status: "UNRELIABLE", reason: "RATE_LIMIT_METADATA_STALE" };
   const remaining = numericRateLimit(state.lastRateLimitRemaining);
-  const resetAt = rateLimitResetDate(state.lastRateLimitReset);
-  if (
-    remaining === null ||
-    !resetAt ||
-    resetAt <= now ||
-    resetAt.getTime() - now.getTime() > MAX_RATE_LIMIT_WINDOW_MS
-  ) {
+  const resetAt = rateLimitResetDate(
+    state.lastRateLimitReset,
+    state.rateLimitObservedAt,
+  );
+  if (remaining === null || !resetAt) {
     return { status: "UNRELIABLE", reason: "RATE_LIMIT_METADATA_INVALID" };
   }
+  if (resetAt <= now)
+    return { status: "UNRELIABLE", reason: "RATE_LIMIT_RESET_EXPIRED" };
   return remaining <= PINTEREST_RECOVERY_RATE_LIMIT_RESERVE
     ? { status: "WAIT", remaining, resetAt }
     : { status: "AVAILABLE", remaining, resetAt };
