@@ -110,7 +110,7 @@ async function fixture(pinCount = 1) {
       lastError: "preserve-health-state",
       lastRateLimitLimit: "60",
       lastRateLimitRemaining: "58",
-      lastRateLimitReset: String(Math.floor((Date.now() + 3_600_000) / 1000)),
+      lastRateLimitReset: "3600",
       rateLimitObservedAt: new Date(),
     },
   });
@@ -160,9 +160,7 @@ function response(
       headers: {
         "x-ratelimit-limit": "60",
         "x-ratelimit-remaining": remaining,
-        "x-ratelimit-reset": String(
-          Math.floor((Date.now() + 3_600_000) / 1000),
-        ),
+        "x-ratelimit-reset": "3600",
       },
     },
   );
@@ -379,9 +377,7 @@ databaseDescribe("Pinterest Phase 12.2 recovery persistence", () => {
       where: { accountId: account.id },
       data: {
         lastRateLimitRemaining: "60",
-        lastRateLimitReset: String(
-          Math.floor((Date.now() + 3_600_000) / 1000),
-        ),
+        lastRateLimitReset: "3600",
         rateLimitObservedAt: new Date(),
       },
     });
@@ -423,13 +419,14 @@ databaseDescribe("Pinterest Phase 12.2 recovery persistence", () => {
       previewToken: preview.previewToken,
       now: new Date("2026-10-16T12:00:00Z"),
     });
-    const resetAt = new Date(Date.now() + 3_600_000);
+    const observedAt = new Date();
+    const resetAt = new Date(observedAt.getTime() + 35_000);
     await prisma.growthPinterestAnalyticsState.update({
       where: { accountId: account.id },
       data: {
         lastRateLimitRemaining: "5",
-        lastRateLimitReset: String(Math.floor(resetAt.getTime() / 1000)),
-        rateLimitObservedAt: new Date(),
+        lastRateLimitReset: "35",
+        rateLimitObservedAt: observedAt,
       },
     });
     const fetchMock = vi.fn();

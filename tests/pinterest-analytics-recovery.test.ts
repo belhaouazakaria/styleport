@@ -135,48 +135,120 @@ describe("Pinterest analytics gap recovery planning", () => {
     }
   });
 
-  it("requires fresh reliable quota metadata and preserves the five-request reserve", () => {
+  it("anchors reset=35 seconds to the observation time and allows available quota", () => {
     const now = new Date("2026-10-16T12:00:00.000Z");
-    const reset = String(Math.floor((now.getTime() + 3_600_000) / 1000));
+    const observedAt = new Date("2026-10-16T11:59:50.000Z");
     expect(
       assessPinterestRecoveryRateLimit(
         {
           lastRateLimitRemaining: "6",
-          lastRateLimitReset: reset,
-          rateLimitObservedAt: new Date(now.getTime() - 60_000),
+          lastRateLimitReset: "35",
+          rateLimitObservedAt: observedAt,
         },
         now,
       ),
-    ).toMatchObject({ status: "AVAILABLE", remaining: 6 });
+    ).toEqual({
+      status: "AVAILABLE",
+      remaining: 6,
+      resetAt: new Date("2026-10-16T12:00:25.000Z"),
+    });
+  });
+
+  it("waits at the five-request reserve and for an exhausted budget", () => {
+    const now = new Date("2026-10-16T12:00:00.000Z");
+    const state = {
+      lastRateLimitReset: "35",
+      rateLimitObservedAt: now,
+    };
     expect(
       assessPinterestRecoveryRateLimit(
-        {
-          lastRateLimitRemaining: "5",
-          lastRateLimitReset: reset,
-          rateLimitObservedAt: now,
-        },
+        { ...state, lastRateLimitRemaining: "5" },
         now,
       ),
     ).toMatchObject({ status: "WAIT", remaining: 5 });
     expect(
       assessPinterestRecoveryRateLimit(
+        { ...state, lastRateLimitRemaining: "0" },
+        now,
+      ),
+    ).toMatchObject({ status: "WAIT", remaining: 0 });
+  });
+
+  it("rejects an expired reset deadline", () => {
+    const now = new Date("2026-10-16T12:00:00.000Z");
+    expect(
+      assessPinterestRecoveryRateLimit(
         {
           lastRateLimitRemaining: "60",
-          lastRateLimitReset: reset,
+          lastRateLimitReset: "35",
+          rateLimitObservedAt: new Date("2026-10-16T11:59:20.000Z"),
+        },
+        now,
+      ),
+    ).toEqual({
+      status: "UNRELIABLE",
+      reason: "RATE_LIMIT_RESET_EXPIRED",
+    });
+  });
+
+  it("rejects stale metadata even when its reset delta is otherwise valid", () => {
+    const now = new Date("2026-10-16T12:00:00.000Z");
+    expect(
+      assessPinterestRecoveryRateLimit(
+        {
+          lastRateLimitRemaining: "60",
+          lastRateLimitReset: "3600",
           rateLimitObservedAt: new Date(now.getTime() - 16 * 60_000),
         },
         now,
       ),
     ).toEqual({ status: "UNRELIABLE", reason: "RATE_LIMIT_METADATA_STALE" });
-    expect(
-      assessPinterestRecoveryRateLimit(
-        {
-          lastRateLimitRemaining: "unknown",
-          lastRateLimitReset: null,
-          rateLimitObservedAt: now,
-        },
-        now,
-      ),
-    ).toEqual({ status: "UNRELIABLE", reason: "RATE_LIMIT_METADATA_INVALID" });
+  });
+
+  it.each([null, "", "-1", "1.5", "abc", "90000"])(
+    "rejects invalid reset delta %s",
+    (lastRateLimitReset) => {
+      const now = new Date("2026-10-16T12:00:00.000Z");
+      expect(
+        assessPinterestRecoveryRateLimit(
+          {
+            lastRateLimitRemaining: "60",
+            lastRateLimitReset,
+            rateLimitObservedAt: now,
+          },
+          now,
+        ),
+      ).toEqual({
+        status: "UNRELIABLE",
+        reason: "RATE_LIMIT_METADATA_INVALID",
+      });
+    },
+  );
+
+  it.each([null, "", "-1", "1.5", "unknown"])(
+    "rejects invalid remaining quota %s",
+    (lastRateLimitRemaining) => {
+      const now = new Date("2026-10-16T12:00:00.000Z");
+      expect(
+        assessPinterestRecoveryRateLimit(
+          {
+            lastRateLimitRemaining,
+            lastRateLimitReset: "35",
+            rateLimitObservedAt: now,
+          },
+          now,
+        ),
+      ).toEqual({
+        status: "UNRELIABLE",
+        reason: "RATE_LIMIT_METADATA_INVALID",
+      });
+    },
+  );
+
+  it("rejects missing observation metadata", () => {
+    expect(assessPinterestRecoveryRateLimit(null)).toEqual({
+      status: "UNRELIABLE",
+      reason: "RATE_LIMIT_METADATA_MISSING",
+    });
   });
 });
