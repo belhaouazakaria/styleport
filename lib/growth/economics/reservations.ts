@@ -43,7 +43,7 @@ export async function reserveGrowthAiBudget(input: GrowthReservationRequest) {
       !validBounded(input.model, 120) || !input.pricingVersion || !validBounded(input.pricingVersion, 120)) {
     throw new GrowthBudgetBlockedError("INVALID_OPERATION_OR_PRICING_PROFILE");
   }
-  if (!Number.isSafeInteger(input.priceCeilingCents) || (input.priceCeilingCents ?? 0) <= 0) {
+  if (input.priceCeilingCents === null || !Number.isSafeInteger(input.priceCeilingCents) || input.priceCeilingCents <= 0) {
     throw new GrowthBudgetBlockedError("UNKNOWN_PRICE");
   }
   const priceCeilingCents = input.priceCeilingCents as number;
