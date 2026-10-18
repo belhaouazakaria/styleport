@@ -60,3 +60,10 @@ Check host CPU/RAM headroom before adding another always-on Chromium/browser run
 - https://openwa.dev/docs/getting-started/docker
 - https://openwa.dev/docs/licensing/licensed-features
 - https://www.whatsapp.com/legal/terms-of-service
+
+
+## Dedicated sender confirmed (2026-10-18)
+
+The operator has a dedicated WhatsApp number for **sending** SayTwist reports. The actual telephone number must be supplied only in the private VPS session/pairing workflow and must not be committed into source control or documented in plain text in this repository. `OPENWA_REPORT_RECIPIENT` remains a **separate** value, not the sending number. Confirm the receiving chat ID before enabling any message.
+
+Phase 13 development adds immutable `GrowthDailyReport` archives and sticky, one-attempt `GrowthReportDelivery` state. States are `READY`, `SENDING`, `SUBMITTED`, `OUTCOME_UNKNOWN`. The sender is claimed under a database row lock before calling OpenWA; a crash, rejected response or timeout after claim must never trigger automatic replay. `SENDING` after a crash is deliberately blocked pending operator reconciliation. No daily schedule or background delivery has been activated; admin preview/testing, proper sender identity confirmation and explicit manual reconciliation controls remain pending. `SUBMITTED` means the OpenWA API acknowledged submission, not a WhatsApp delivery receipt.
