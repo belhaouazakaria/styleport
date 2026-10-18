@@ -308,3 +308,7 @@ No phase is complete until:
 ### Phase 1 exit and Phase 2 implementation contract
 
 Phase 1 produces only documentation. `IMPLEMENTATION_MAP.md` and `DATA_MODEL.md` are the technical baseline. Phase 2 may implement **only** Growth Prisma foundation/migrations, domain state types, disabled feature flag and kill switch, persistent job foundation, `/admin/growth` shell, typed settings foundation, append-only audit/activity foundation, bounded worker skeleton and meaningful tests. Phase 2 must not connect Pinterest, build `/ideas` pages, autonomously create translators, publish Pins, ingest analytics, implement attribution or generate new creative systems. Deployed DB/storage/scheduler assumptions must be verified before production rollout; they do not block a host-neutral foundation.
+
+### Phase 13 accepted controls and implementation boundary (2026-10-18)
+
+The operator accepted a $2/day and $30/month Growth AI budget, 3 AI images/day, 1 new Translator/day, 3 Translator improvements/day, 2 new Ideas/week, one repair attempt, and 70%/90% budget alerts. Phase 13A is a read-only usage inventory; Phase 13B adds database-backed approved settings with a clear **not yet enforced** admin label. A complete durable ledger, atomic cost reservations, usage pricing, enforcement of content quotas, warnings, delivery and report archive remain required before the Phase 13 completion gate. No production worker or paid autonomy may be turned on based only on these settings.
