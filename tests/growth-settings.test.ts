@@ -31,6 +31,12 @@ describe("Growth settings persistence", () => {
       workerBatchSize: 5,
       ownedDomains: ["saytwist.com", "www.saytwist.com", "translator.whattypeof.com"],
       configVersion: 1,
+      aiDailyBudgetCents: 200,
+      aiMonthlyBudgetCents: 3000,
+      aiImagesPerDayCap: 3,
+      translatorCreatesPerDayCap: 1,
+      translatorUpdatesPerDayCap: 3,
+      ideaCreatesPerWeekCap: 2,
     });
   });
 
