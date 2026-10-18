@@ -352,3 +352,9 @@ Use a database-only ADMIN dry run followed by an exact confirmation to persist o
 - Maintain Growth and attribution collection disabled while Phase 13/14 are implemented and qualified; rollout will be separately verified before enabling recurrence.
 - No arbitrary AI spending budgets, recipient email/WhatsApp identifiers, provider pricing or production schedule were assumed. Resolve before configuring enforcement/delivery.
 - Phase 13A provides read-only historical usage coverage and deliberately does not claim full cost accounting.
+
+### 2026-10-18 — Accepted financial and production-volume defaults
+
+The operator accepted conservative initial settings for Growth: AI spend **USD $2/day, $30/month**; AI-generated images **3/day**; new Translators **1/day**; Translator improvements **3/day**; newly created Ideas **2/week**; no more than **one explicit AI repair attempt**; 70% and 90% budget warnings. No required minimum spend. These are ceilings, not generation targets.
+
+Budget configuration is stored in integer USD cents. A dated additive migration provides the approved initial values for both new and existing production `GrowthSettings` rows. Phase 13B must implement atomic budget reservations and durable provider-priced actual/estimated operation records before any operator is led to believe limits are enforced. Block unknown-priced paid calls pending a bounded authoritative pricing profile, including internal OpenAI retries/fallback; fail closed when reserve/settlement cannot be recorded. A disabled Growth worker still cannot execute paid actions. The existing per-Pin Pinterest approval remains unchanged.
