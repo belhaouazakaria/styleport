@@ -34,7 +34,7 @@ export const growthSettingsSchema = z
   })
   .strict();
 
-export type GrowthSettingsInput = z.infer<typeof growthSettingsSchema>;
+export type GrowthSettingsInput = z.input<typeof growthSettingsSchema>;
 
 export const growthJobPayloadSchema = z
   .record(z.string().max(80), z.unknown())
