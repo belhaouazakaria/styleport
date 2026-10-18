@@ -362,3 +362,8 @@ Budget configuration is stored in integer USD cents. A dated additive migration 
 ### 2026-10-18 — Operator selects self-hosted OpenWA WhatsApp delivery
 
 The operator specifically chose **WhatsApp** for daily Growth digests and requested **OpenWA** rather than email as the primary provider. Use OpenWA v5 Easy API as a standalone private, localhost-bound service; sender session and recipient must be provisioned manually. The transport is opt-in, off by default, authenticated and restricted to one pre-established contact chat. Its basic existing-chat send capability is free from the provider's paid method licensing, but OpenWA is an **unofficial WhatsApp Web integration** with possible account restrictions; avoid indiscriminate message sending and do not assume Meta support. Never automatically retry unknown send outcomes. Retain an archived report for recovery. This does not authorize WhatsApp session linking or message sending from production yet.
+
+
+### 2026-10-18 — Dedicated WhatsApp sender and recipient separation
+
+The operator confirmed they own a dedicated WhatsApp **sender** number for OpenWA. Do not copy its phone number into GitHub, docs, code, activity logs or AI-generated reports. The sender's WhatsApp Web QR pairing is an operator-only step. The report recipient has **not yet been specified** and requires separate confirmation as a preexisting authorized chat. Keep `OPENWA_REPORTS_ENABLED=false` until explicit pairing, recipient verification, and controlled test delivery. One report per completed UTC date; persist `SENDING` before the external call and block all ambiguous resends.
