@@ -323,3 +323,9 @@ The new ADMIN route `/admin/growth/spend` reports 7/30-day existing provider usa
 **This is not the Phase 13 full ledger or actual spend.** Historic model token prices are not inferred and planned `GrowthDecision.estimatedCost` is not a charge. Only existing estimated AI image costs are separately displayed and clearly labeled estimated. The route performs no paid API requests or content mutation.
 
 Remaining before Phase 13 completion: append-only idempotent cost entries created on every provider call (including failed/billed requests and repair attempts); versioned priced-vs-unpriced actual/estimated semantics; atomic daily/monthly reservation and hard-cap enforcement; budget admin settings, audit confirmation and monitoring; full reports/archive, warning lifecycle, digest generation, and delivery provider. Obtain explicit numeric budgets and channel/recipient configuration before activating spend or delivery gates. Keep Growth/attribution disabled until production qualification.
+
+## Approved Phase 13 operating limits
+
+Configuration in `GrowthSettings`, migration `20261018120000_growth_economics_limits`: `aiDailyBudgetCents=200`, `aiMonthlyBudgetCents=3000`, `aiImagesPerDayCap=3`, `translatorCreatesPerDayCap=1`, `translatorUpdatesPerDayCap=3`, `ideaCreatesPerWeekCap=2`. Thresholds: 70% and 90% warnings. USD cents, UTC daily/calendar monthly buckets and weekly calendar boundaries (to be finalized alongside enforcement). Hard limits must be enforced with transactional reservations before provider requests or public content mutations; settings persistence alone does **not** enforce them.
+
+The admin currently displays these values as **configuration only**. Until ledger/pricing admission and full content quota gates are implemented and tested, production automation must remain disabled. Paid usage from unrelated normal translation is explicitly outside the Growth ledger/budgets.
