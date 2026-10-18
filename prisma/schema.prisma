@@ -142,6 +142,13 @@ enum TranslatorEditorialDraftStatus {
   PUBLISHED
 }
 
+enum GrowthReportDeliveryStatus {
+  READY
+  SENDING
+  SUBMITTED
+  OUTCOME_UNKNOWN
+}
+
 enum GrowthAiOperationKind {
   TEXT
   IMAGE
@@ -961,6 +968,34 @@ model GrowthSettings {
   updatedBy                       User?           @relation("GrowthSettingsUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
 
   @@index([updatedAt])
+}
+
+model GrowthDailyReport {
+  id         String                @id @default(cuid())
+  reportDate DateTime              @unique @db.Date
+  version    String                @db.VarChar(80)
+  snapshot   Json
+  digestText String                @db.Text
+  createdAt  DateTime              @default(now())
+  delivery   GrowthReportDelivery?
+
+  @@index([createdAt])
+}
+
+model GrowthReportDelivery {
+  id                String                     @id @default(cuid())
+  reportId          String                     @unique
+  status            GrowthReportDeliveryStatus @default(READY)
+  channel           String                     @default("OPENWA") @db.VarChar(24)
+  recipientHash     String?                    @db.VarChar(64)
+  providerMessageId String?                    @db.VarChar(512)
+  attemptedAt       DateTime?
+  submittedAt       DateTime?
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
+  report            GrowthDailyReport          @relation(fields: [reportId], references: [id], onDelete: Restrict)
+
+  @@index([status, updatedAt])
 }
 
 model GrowthAiBudgetReservation {
