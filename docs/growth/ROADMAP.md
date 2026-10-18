@@ -320,3 +320,8 @@ An additive AI reservation table and serialized admission service exist on the f
 ### Phase 13C — WhatsApp delivery preference and adapter
 
 The operator selected OpenWA (self-hosted v5 Easy API) for one WhatsApp daily report recipient. An opt-in, local-only adapter and deterministic digest formatter exist on the feature branch with mock transport tests. **Not yet live:** report snapshot/archive, durable delivery state, a daily job/schedule, sender device pairing, recipient confirmation, and an actual test send. Keep Growth and report sending disabled until operator setup and Phase 14 rollout gates. OpenWA's unpaid send flow applies to **existing chats**; this unofficial WhatsApp Web client can cause account restrictions.
+
+
+### Phase 13C reporting persistence status (2026-10-18)
+
+The operator confirmed availability of a dedicated WhatsApp **sender** number for OpenWA. Its value is intentionally excluded from Git; a distinct recipient remains to be specified. Implemented on the feature branch: source-backed UTC daily report snapshot/archive and one-attempt delivery state with a database claim before the external OpenWA call. No recurring enqueuer, report admin preview/reconciliation, production sender pairing or real WhatsApp message exists yet. Phase 13 is still **in progress**, and Phase 14 has not started.
