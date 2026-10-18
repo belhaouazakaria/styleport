@@ -164,6 +164,18 @@ export function GrowthSettingsForm({ initial }: GrowthSettingsFormProps) {
           interval.
         </span>
       </label>
+      <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm">
+        <p className="font-bold text-ink">Approved Phase 13 operating limits — configuration only</p>
+        <p className="mt-1 text-muted-ink">These values are persisted, but billing reservations and enforced spend/volume gates are NOT implemented yet. Do not enable autonomous paid work based on this panel.</p>
+        <dl className="mt-3 grid grid-cols-2 gap-3">
+          <div><dt>Daily AI cap</dt><dd className="font-bold">${(settings.aiDailyBudgetCents / 100).toFixed(2)}</dd></div>
+          <div><dt>Monthly AI cap</dt><dd className="font-bold">${(settings.aiMonthlyBudgetCents / 100).toFixed(2)}</dd></div>
+          <div><dt>AI images/day</dt><dd className="font-bold">{settings.aiImagesPerDayCap}</dd></div>
+          <div><dt>New Translators/day</dt><dd className="font-bold">{settings.translatorCreatesPerDayCap}</dd></div>
+          <div><dt>Translator improvements/day</dt><dd className="font-bold">{settings.translatorUpdatesPerDayCap}</dd></div>
+          <div><dt>New Ideas/week</dt><dd className="font-bold">{settings.ideaCreatesPerWeekCap}</dd></div>
+        </dl>
+      </div>
       <div className="mt-6 rounded-xl border border-border bg-muted/20 p-4">
         <label className="flex items-center gap-3 text-sm font-bold text-ink">
           <input
