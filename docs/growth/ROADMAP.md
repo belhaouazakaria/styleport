@@ -312,3 +312,7 @@ Phase 1 produces only documentation. `IMPLEMENTATION_MAP.md` and `DATA_MODEL.md`
 ### Phase 13 accepted controls and implementation boundary (2026-10-18)
 
 The operator accepted a $2/day and $30/month Growth AI budget, 3 AI images/day, 1 new Translator/day, 3 Translator improvements/day, 2 new Ideas/week, one repair attempt, and 70%/90% budget alerts. Phase 13A is a read-only usage inventory; Phase 13B adds database-backed approved settings with a clear **not yet enforced** admin label. A complete durable ledger, atomic cost reservations, usage pricing, enforcement of content quotas, warnings, delivery and report archive remain required before the Phase 13 completion gate. No production worker or paid autonomy may be turned on based only on these settings.
+
+### Phase 13B implementation progress
+
+An additive AI reservation table and serialized admission service exist on the feature branch. The policy is fail-closed for unknown-priced requests; UTC 70%/90% warnings and image/day accounting are implemented in the reservation service. This is **not wired to paid provider calls yet**, and content-action quotas/report delivery remain unfinished. No claim of hard-spend enforcement is valid before provider integration, verified pricing, and concurrent database tests.
