@@ -19,7 +19,7 @@ export class OpenWaReportError extends Error {
   }
 }
 
-export function getOpenWaReportSettings(source: NodeJS.ProcessEnv = process.env): OpenWaReportSettings {
+export function getOpenWaReportSettings(source: Record<string, string | undefined> = process.env): OpenWaReportSettings {
   const enabled = source.OPENWA_REPORTS_ENABLED === "true";
   const baseUrl = source.OPENWA_API_URL || "";
   const apiKey = source.OPENWA_API_KEY || "";
@@ -59,7 +59,7 @@ export async function submitOpenWaDailyReport(
     OPENWA_API_URL: config.baseUrl,
     OPENWA_API_KEY: config.apiKey,
     OPENWA_REPORT_RECIPIENT: config.recipientChatId,
-  } as NodeJS.ProcessEnv);
+  });
 
   if (!message.trim() || message.length > 3500 || /[\u0000-\u0008\u000B-\u001F\u007F]/.test(message)) {
     throw new OpenWaReportError("INVALID_MESSAGE", "NOT_SENT");
