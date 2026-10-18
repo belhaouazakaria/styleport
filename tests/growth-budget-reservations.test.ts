@@ -1,3 +1,4 @@
+import { GrowthAiOperationKind } from "@prisma/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -36,7 +37,7 @@ describe("Growth AI reservation safety", () => {
     mocks.activity.mockResolvedValue(undefined);
   });
 
-  const request = { requestKey: "one-api-call", kind: "IMAGE" as const, provider: "OPENAI",
+  const request = { requestKey: "one-api-call", kind: GrowthAiOperationKind.IMAGE, provider: "OPENAI",
     model: "gpt-image-2", pricingVersion: "verified-tariff-v1", priceCeilingCents: 30 };
 
   it("fails before starting a transaction when request pricing is missing", async () => {
@@ -45,7 +46,7 @@ describe("Growth AI reservation safety", () => {
     expect(mocks.transaction).not.toHaveBeenCalled();
   });
 
-  it("acquires the database advisory lock before assessing and inserting", async () => {
+  it("locks settings before assessing and inserting", async () => {
     const result = await reserveGrowthAiBudget(request);
     expect(result).toMatchObject({ newlyReserved: true });
     expect(mocks.advisoryLock).toHaveBeenCalledTimes(1);
