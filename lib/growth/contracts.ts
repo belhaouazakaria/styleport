@@ -25,6 +25,12 @@ export const growthSettingsSchema = z
     attributionSessionRetentionDays: z.number().int().min(7).max(90).default(DEFAULT_ATTRIBUTION_SESSION_RETENTION_DAYS),
     attributionEventRetentionDays: z.number().int().min(30).max(365).default(DEFAULT_ATTRIBUTION_EVENT_RETENTION_DAYS),
     evergreenCooldownDays: z.number().int().min(14).max(180).default(DEFAULT_EVERGREEN_COOLDOWN_DAYS),
+    aiDailyBudgetCents: z.number().int().min(1).max(10_000).default(200),
+    aiMonthlyBudgetCents: z.number().int().min(1).max(300_000).default(3000),
+    aiImagesPerDayCap: z.number().int().min(0).max(100).default(3),
+    translatorCreatesPerDayCap: z.number().int().min(0).max(100).default(1),
+    translatorUpdatesPerDayCap: z.number().int().min(0).max(100).default(3),
+    ideaCreatesPerWeekCap: z.number().int().min(0).max(100).default(2),
   })
   .strict();
 
