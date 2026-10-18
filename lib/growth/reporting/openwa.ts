@@ -44,7 +44,7 @@ export function getOpenWaReportSettings(source: NodeJS.ProcessEnv = process.env)
   )) {
     throw new OpenWaReportError("INVALID_CONFIGURATION", "NOT_SENT");
   }
-  return { enabled, baseUrl, apiKey, recipientChatId };
+  return { enabled, baseUrl: parsed?.origin ?? baseUrl, apiKey, recipientChatId };
 }
 
 export async function submitOpenWaDailyReport(
