@@ -109,7 +109,7 @@ export async function reserveGrowthAiBudget(input: GrowthReservationRequest) {
         provider: input.provider,
         model: input.model,
         kind: input.kind,
-        pricingVersion: input.pricingVersion,
+        pricingVersion: input.pricingVersion!,
         reservedCents: priceCeilingCents,
         status: GrowthAiReservationStatus.RESERVED,
       },
