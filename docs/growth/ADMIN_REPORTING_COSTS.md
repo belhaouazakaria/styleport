@@ -329,3 +329,9 @@ Remaining before Phase 13 completion: append-only idempotent cost entries create
 Configuration in `GrowthSettings`, migration `20261018120000_growth_economics_limits`: `aiDailyBudgetCents=200`, `aiMonthlyBudgetCents=3000`, `aiImagesPerDayCap=3`, `translatorCreatesPerDayCap=1`, `translatorUpdatesPerDayCap=3`, `ideaCreatesPerWeekCap=2`. Thresholds: 70% and 90% warnings. USD cents, UTC daily/calendar monthly buckets and weekly calendar boundaries (to be finalized alongside enforcement). Hard limits must be enforced with transactional reservations before provider requests or public content mutations; settings persistence alone does **not** enforce them.
 
 The admin currently displays these values as **configuration only**. Until ledger/pricing admission and full content quota gates are implemented and tested, production automation must remain disabled. Paid usage from unrelated normal translation is explicitly outside the Growth ledger/budgets.
+
+### Phase 13B financial admission foundation
+
+The isolated Phase 13 branch includes `lib/growth/economics/budget-policy.ts` and `reservations.ts`, backed by `GrowthAiBudgetReservation`. The policy rejects unknown prices and invalid amounts, checks **both** UTC daily and monthly limits, and recognizes 70%/90% warning crossings. Database admission serializes on the existing `GrowthSettings` row, counts image reservations, persists one immutable request reservation, and retains the upper bound for accounting after reconciliation. This is deliberately pessimistic.
+
+Provider interception and an authenticated/versioned model pricing source are still required before real paid work. In particular, OpenAI model fallbacks and SDK retries must not make extra paid requests behind one reservation. Content-action quotas must be checked transactionally at the apply boundary. The AI usage inventory remains **historical partial metadata**, not a full paid-usage ledger. Phase 13 is not complete.
