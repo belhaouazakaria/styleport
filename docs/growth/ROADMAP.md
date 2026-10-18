@@ -236,7 +236,7 @@ The two earlier HTTP 401 attempts and their immutable publication/approval/ref/j
 
 The additive migration includes `GrowthSettings.evergreenCooldownDays`, bounded to 14–180 days with a conservative 45-day default and editable only through the existing audited ADMIN settings path.
 
-**Status:** Phase 12 v1 and Phase 12.1 v2 production-validated; Phase 12.2 recovery pending deployment
+**Status:** Phase 12 v1 and Phase 12.1 v2 production-validated; Phase 12.2 deployed and bounded recovery validated (13/13 requests COMPLETED on 2026-10-17). Existing v2 evidence gaps remain distinct from recovery-job completion.
 
 Deliver:
 
