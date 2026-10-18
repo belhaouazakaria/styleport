@@ -130,3 +130,12 @@ Oct 17, 2026 Phase 12.2 live QA: The Oct 4 one-day recovery plan was queued for 
 
 
 Oct 17, 2026 follow-up: Twelve consecutive bounded Growth recovery worker invocations succeeded but all deferred with zero progress; recovery stayed RUNNING with 0/13 completed, Growth disabled afterward. Root cause is the overly conservative five-second minimum reset-window check introduced in the previous recovery hotfix. Pinterest's official rate-limit documentation uses `x-ratelimit-remaining: 99` and `x-ratelimit-reset: 1` as its NORMAL response example (`https://developers.pinterest.com/docs/reference/rate-limits/`). The short reset duration by itself must not block available quota. New hotfix branch `hotfix/pinterest-recovery-one-second-window` removes the minimum five-second window check while keeping the five-request reserve, strict actual expiry fail-closed logic, bounded single probe per execution, eight GET cap, immutable historical recovery tasks, no cron/recurrence, and disabled Growth between operator invocations. A guarded PostgreSQL test uses actual provider header format. Do not queue duplicate recovery or reset progress; review, test and approved deploy, then resume existing continuation with capped executions and no-progress detection.
+
+
+## Phase 13 execution note (2026-10-18)
+
+The operator explicitly chose to retain automatic SayTwist Translator/Ideas publication after existing validation gates, rather than adding a new human content-approval gate. Preserve all deterministic eligibility, quality, duplicate, idempotency and rollback rules. This decision does not waive the independent Pinterest per-Pin approval requirement. The October 2026 Google Search visibility decline and repeat AdSense low-value rejection raise content-quality risk; do not increase autonomous publishing volume or enable recurring production jobs until full Phase 14 security, content-quality and rollout gates pass.
+
+Phase 12.2 recovery was deployed and a single existing plan completed 13/13 requests on 2026-10-17; do not represent that as 90-day historical completeness. Growth and attribution collection remain disabled.
+
+Phase 13A begins with a read-only inventory at `/admin/growth/spend` using existing provider metadata. It is not a full spend ledger, budget enforcement or payment proof. Later work must implement durable accounting and obtain explicit daily/monthly budgets before paid-job automation is enabled. All phase docs must advance alongside implementation.
