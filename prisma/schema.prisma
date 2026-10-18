@@ -142,6 +142,16 @@ enum TranslatorEditorialDraftStatus {
   PUBLISHED
 }
 
+enum GrowthAiOperationKind {
+  TEXT
+  IMAGE
+}
+
+enum GrowthAiReservationStatus {
+  RESERVED
+  RECONCILED
+}
+
 enum GrowthIntensity {
   LOW
   BALANCED
@@ -951,6 +961,24 @@ model GrowthSettings {
   updatedBy                       User?           @relation("GrowthSettingsUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
 
   @@index([updatedAt])
+}
+
+model GrowthAiBudgetReservation {
+  id                String                    @id @default(cuid())
+  requestKey        String                    @unique @db.VarChar(191)
+  jobId             String?                   @db.VarChar(191)
+  kind              GrowthAiOperationKind
+  status            GrowthAiReservationStatus @default(RESERVED)
+  provider          String                    @db.VarChar(80)
+  model             String                    @db.VarChar(120)
+  pricingVersion    String                    @db.VarChar(120)
+  reservedCents     Int
+  reconciledCents   Int?
+  createdAt         DateTime                  @default(now())
+  reconciledAt      DateTime?
+
+  @@index([createdAt, kind])
+  @@index([jobId, createdAt])
 }
 
 model GrowthJob {
