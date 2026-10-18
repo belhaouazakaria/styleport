@@ -32,6 +32,9 @@ export default async function AdminGrowthPage() {
       />
       <main className="space-y-6 p-4 sm:p-6">
         <div className="flex flex-wrap justify-end gap-3">
+          <Link href="/admin/growth/spend" className={cn(buttonVariants({ variant: "outline" }))}>
+            AI usage & cost coverage
+          </Link>
           <Link
             href="/admin/growth/learning"
             className={cn(buttonVariants({ variant: "outline" }))}
