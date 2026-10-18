@@ -259,7 +259,7 @@ Phase 12 v1 was deployed and production-validated on October 15, 2026; its immut
 
 ## Phase 13 — Economics, Admin and Reporting
 
-**Status:** Not started
+**Status:** In progress — Phase 13A read-only AI usage inventory implemented on feature branch; cost ledger, limits, reporting and delivery remain outstanding.
 
 Deliver:
 
