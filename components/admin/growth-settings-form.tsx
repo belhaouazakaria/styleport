@@ -63,6 +63,12 @@ export function GrowthSettingsForm({ initial }: GrowthSettingsFormProps) {
         attributionSessionRetentionDays: result.settings.attributionSessionRetentionDays,
         attributionEventRetentionDays: result.settings.attributionEventRetentionDays,
         evergreenCooldownDays: result.settings.evergreenCooldownDays,
+        aiDailyBudgetCents: result.settings.aiDailyBudgetCents,
+        aiMonthlyBudgetCents: result.settings.aiMonthlyBudgetCents,
+        aiImagesPerDayCap: result.settings.aiImagesPerDayCap,
+        translatorCreatesPerDayCap: result.settings.translatorCreatesPerDayCap,
+        translatorUpdatesPerDayCap: result.settings.translatorUpdatesPerDayCap,
+        ideaCreatesPerWeekCap: result.settings.ideaCreatesPerWeekCap,
       });
       setOwnedDomainsText(result.settings.ownedDomains.join("\n"));
       toast({ title: "Growth settings saved" });
