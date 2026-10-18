@@ -6,6 +6,7 @@ import {
   DEFAULT_ATTRIBUTION_SESSION_RETENTION_DAYS,
   DEFAULT_ATTRIBUTION_WINDOW_DAYS,
   GROWTH_SETTINGS_ID,
+  growthSettingsSchema,
   type GrowthSettingsInput,
 } from "@/lib/growth/contracts";
 import { recordGrowthActivity } from "@/lib/growth/activity";
@@ -41,13 +42,14 @@ export async function getGrowthSettings() {
 }
 
 export async function updateGrowthSettings(input: GrowthSettingsInput, updatedById: string) {
+  const validated = growthSettingsSchema.parse(input);
   return prisma.$transaction(async (tx) => {
     const previous = await tx.growthSettings.findUnique({ where: { id: GROWTH_SETTINGS_ID } });
     const settings = await tx.growthSettings.upsert({
       where: { id: GROWTH_SETTINGS_ID },
-      create: { id: GROWTH_SETTINGS_ID, ...input, updatedById },
+      create: { id: GROWTH_SETTINGS_ID, ...validated, updatedById },
       update: {
-        ...input,
+        ...validated,
         updatedById,
         configVersion: { increment: 1 },
       },
