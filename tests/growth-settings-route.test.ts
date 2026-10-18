@@ -67,6 +67,12 @@ describe("Growth settings API", () => {
       attributionWindowDays: 7,
       attributionSessionRetentionDays: 30,
       attributionEventRetentionDays: 90,
+      aiDailyBudgetCents: 200,
+      aiMonthlyBudgetCents: 3000,
+      aiImagesPerDayCap: 3,
+      translatorCreatesPerDayCap: 1,
+      translatorUpdatesPerDayCap: 3,
+      ideaCreatesPerWeekCap: 2,
     }, "admin-1");
   });
 });
