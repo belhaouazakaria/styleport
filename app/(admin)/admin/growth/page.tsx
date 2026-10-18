@@ -184,6 +184,12 @@ export default async function AdminGrowthPage() {
               overview.settings.attributionEventRetentionDays,
             evergreenCooldownDays:
               overview.settings.evergreenCooldownDays,
+            aiDailyBudgetCents: overview.settings.aiDailyBudgetCents,
+            aiMonthlyBudgetCents: overview.settings.aiMonthlyBudgetCents,
+            aiImagesPerDayCap: overview.settings.aiImagesPerDayCap,
+            translatorCreatesPerDayCap: overview.settings.translatorCreatesPerDayCap,
+            translatorUpdatesPerDayCap: overview.settings.translatorUpdatesPerDayCap,
+            ideaCreatesPerWeekCap: overview.settings.ideaCreatesPerWeekCap,
           }}
         />
 
