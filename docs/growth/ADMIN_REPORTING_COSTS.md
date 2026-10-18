@@ -335,3 +335,9 @@ The admin currently displays these values as **configuration only**. Until ledge
 The isolated Phase 13 branch includes `lib/growth/economics/budget-policy.ts` and `reservations.ts`, backed by `GrowthAiBudgetReservation`. The policy rejects unknown prices and invalid amounts, checks **both** UTC daily and monthly limits, and recognizes 70%/90% warning crossings. Database admission serializes on the existing `GrowthSettings` row, counts image reservations, persists one immutable request reservation, and retains the upper bound for accounting after reconciliation. This is deliberately pessimistic.
 
 Provider interception and an authenticated/versioned model pricing source are still required before real paid work. In particular, OpenAI model fallbacks and SDK retries must not make extra paid requests behind one reservation. Content-action quotas must be checked transactionally at the apply boundary. The AI usage inventory remains **historical partial metadata**, not a full paid-usage ledger. Phase 13 is not complete.
+
+### OpenWA WhatsApp delivery selection
+
+Operator decision: daily executive reports should go to a **single recipient through OpenWA**, not an email-first report. `lib/growth/reporting/openwa.ts` implements the opt-in v5 HTTP transport to `127.0.0.1` only, validates one `@c.us` chat recipient, requires `X-API-Key`, checks live session readiness, and never retries unknown send outcomes. `lib/growth/reporting/digest.ts` formats a conservative summary that labels uncollected conversion metrics and unpriced AI spend as unavailable.
+
+This transport is not yet connected to a durable report archive, once-per-day job or production schedule. Do not claim WhatsApp reports are operational before the recipient initiates a chat, the sender device is paired, and a controlled test proves submission. OpenWA is unofficial and may be restricted by WhatsApp/Meta. No automatic email fallback or multiple recipients. See `OPENWA_RUNBOOK.md`.
