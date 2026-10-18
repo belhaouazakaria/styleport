@@ -33,3 +33,36 @@ CREATE TABLE "GrowthAiBudgetReservation" (
 CREATE UNIQUE INDEX "GrowthAiBudgetReservation_requestKey_key" ON "GrowthAiBudgetReservation"("requestKey");
 CREATE INDEX "GrowthAiBudgetReservation_createdAt_kind_idx" ON "GrowthAiBudgetReservation"("createdAt", "kind");
 CREATE INDEX "GrowthAiBudgetReservation_jobId_createdAt_idx" ON "GrowthAiBudgetReservation"("jobId", "createdAt");
+
+-- Phase 13 reporting. One immutable digest per UTC report date and one
+-- delivery state per report. SENDING is sticky across worker crashes.
+CREATE TYPE "GrowthReportDeliveryStatus" AS ENUM ('READY','SENDING','SUBMITTED','OUTCOME_UNKNOWN');
+
+CREATE TABLE "GrowthDailyReport" (
+  "id" TEXT NOT NULL,
+  "reportDate" DATE NOT NULL,
+  "version" VARCHAR(80) NOT NULL,
+  "snapshot" JSONB NOT NULL,
+  "digestText" TEXT NOT NULL,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "GrowthDailyReport_pkey" PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX "GrowthDailyReport_reportDate_key" ON "GrowthDailyReport"("reportDate");
+CREATE INDEX "GrowthDailyReport_createdAt_idx" ON "GrowthDailyReport"("createdAt");
+
+CREATE TABLE "GrowthReportDelivery" (
+  "id" TEXT NOT NULL,
+  "reportId" TEXT NOT NULL,
+  "status" "GrowthReportDeliveryStatus" NOT NULL DEFAULT 'READY',
+  "channel" VARCHAR(24) NOT NULL DEFAULT 'OPENWA',
+  "recipientHash" VARCHAR(64),
+  "providerMessageId" VARCHAR(512),
+  "attemptedAt" TIMESTAMP(3),
+  "submittedAt" TIMESTAMP(3),
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL,
+  CONSTRAINT "GrowthReportDelivery_pkey" PRIMARY KEY ("id"),
+  CONSTRAINT "GrowthReportDelivery_reportId_fkey" FOREIGN KEY ("reportId") REFERENCES "GrowthDailyReport"("id") ON DELETE RESTRICT ON UPDATE CASCADE
+);
+CREATE UNIQUE INDEX "GrowthReportDelivery_reportId_key" ON "GrowthReportDelivery"("reportId");
+CREATE INDEX "GrowthReportDelivery_status_updatedAt_idx" ON "GrowthReportDelivery"("status", "updatedAt");
