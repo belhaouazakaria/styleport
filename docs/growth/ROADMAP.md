@@ -316,3 +316,7 @@ The operator accepted a $2/day and $30/month Growth AI budget, 3 AI images/day, 
 ### Phase 13B implementation progress
 
 An additive AI reservation table and serialized admission service exist on the feature branch. The policy is fail-closed for unknown-priced requests; UTC 70%/90% warnings and image/day accounting are implemented in the reservation service. This is **not wired to paid provider calls yet**, and content-action quotas/report delivery remain unfinished. No claim of hard-spend enforcement is valid before provider integration, verified pricing, and concurrent database tests.
+
+### Phase 13C — WhatsApp delivery preference and adapter
+
+The operator selected OpenWA (self-hosted v5 Easy API) for one WhatsApp daily report recipient. An opt-in, local-only adapter and deterministic digest formatter exist on the feature branch with mock transport tests. **Not yet live:** report snapshot/archive, durable delivery state, a daily job/schedule, sender device pairing, recipient confirmation, and an actual test send. Keep Growth and report sending disabled until operator setup and Phase 14 rollout gates. OpenWA's unpaid send flow applies to **existing chats**; this unofficial WhatsApp Web client can cause account restrictions.
