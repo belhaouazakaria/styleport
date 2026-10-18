@@ -139,3 +139,7 @@ The operator explicitly chose to retain automatic SayTwist Translator/Ideas publ
 Phase 12.2 recovery was deployed and a single existing plan completed 13/13 requests on 2026-10-17; do not represent that as 90-day historical completeness. Growth and attribution collection remain disabled.
 
 Phase 13A begins with a read-only inventory at `/admin/growth/spend` using existing provider metadata. It is not a full spend ledger, budget enforcement or payment proof. Later work must implement durable accounting and obtain explicit daily/monthly budgets before paid-job automation is enabled. All phase docs must advance alongside implementation.
+
+### Phase 13C delivery decision
+
+User chose OpenWA to deliver a single daily WhatsApp Growth digest; no email delivery by default. The OpenWA v5 adapter and formatter are included in Phase 13's isolated branch, but no scheduled report or live WhatsApp account has been configured. Add a durable daily delivery state machine before wiring jobs to the provider, and never automatically retry when submission is uncertain. Sender and recipient account pairing is an operator-only task. Document and warn about unofficial WhatsApp Web account restrictions. See `OPENWA_RUNBOOK.md`.
