@@ -17,6 +17,12 @@ interface GrowthSettingsFormProps {
     attributionSessionRetentionDays: number;
     attributionEventRetentionDays: number;
     evergreenCooldownDays: number;
+    aiDailyBudgetCents: number;
+    aiMonthlyBudgetCents: number;
+    aiImagesPerDayCap: number;
+    translatorCreatesPerDayCap: number;
+    translatorUpdatesPerDayCap: number;
+    ideaCreatesPerWeekCap: number;
   };
 }
 
