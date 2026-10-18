@@ -52,10 +52,10 @@ export async function reserveGrowthAiBudget(input: GrowthReservationRequest) {
   }
 
   return prisma.$transaction(async (tx) => {
-    // One transaction-scoped advisory lock serializes all Growth reservations
-    // across worker processes. It does not lock normal translation or Pinterest
-    // analytics transactions and is released on commit/rollback.
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(947213643::bigint)`;
+    // Lock the existing singleton settings row. Growth cannot execute unless
+    // this row exists and is enabled. This serializes spending admissions across
+    // workers and setting changes without locking normal translation requests.
+    await tx.$queryRaw`SELECT "id" FROM "GrowthSettings" WHERE "id" = 'global' FOR UPDATE`;
 
     const previousRequest = await tx.growthAiBudgetReservation.findUnique({ where: { requestKey } });
     if (previousRequest) {
