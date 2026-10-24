@@ -1,7 +1,8 @@
 import sharp from "sharp";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ generate: vi.fn(), imageModel: "gpt-image-test" as string | undefined }));
+const mocks = vi.hoisted(() => ({ generate: vi.fn(), reserve: vi.fn(), imageModel: "gpt-image-2" as string | undefined }));
+vi.mock("@/lib/growth/economics/image-admission", () => ({ reserveGrowthImageAttempt: mocks.reserve }));
 vi.mock("openai", () => ({ default: class { images = { generate: mocks.generate }; } }));
 vi.mock("@/lib/env", () => ({ getServerEnv: () => ({ OPENAI_API_KEY: "test-key", GROWTH_OPENAI_IMAGE_MODEL: mocks.imageModel }) }));
 
@@ -23,14 +24,14 @@ const fullCreativeInput: CreativeAiImageInput = {
 };
 
 describe("Creative Lab OpenAI image provider", () => {
-  beforeEach(() => { vi.clearAllMocks(); mocks.imageModel = "gpt-image-test"; });
+  beforeEach(() => { vi.clearAllMocks(); mocks.imageModel = "gpt-image-2"; mocks.reserve.mockResolvedValue("res-1"); });
 
   it("makes one configured full-creative request with exact copy and normalizes its result", async () => {
     const source = await sharp({ create: { width: 1024, height: 1536, channels: 3, background: "#14B8A6" } }).png().toBuffer();
     mocks.generate.mockResolvedValue({ data: [{ b64_json: source.toString("base64") }], created: 1 });
-    const result = await new OpenAICreativeImageProvider().generate(fullCreativeInput);
+    const result = await new OpenAICreativeImageProvider("test-job-1").generate(fullCreativeInput);
     expect(mocks.generate).toHaveBeenCalledTimes(1);
-    expect(mocks.generate).toHaveBeenCalledWith(expect.objectContaining({ model: "gpt-image-test", n: 1, size: "1024x1536", output_format: "png", quality: "medium" }));
+    expect(mocks.generate).toHaveBeenCalledWith(expect.objectContaining({ model: "gpt-image-2", n: 1, size: "1024x1536", output_format: "png", quality: "medium" }));
     const prompt = mocks.generate.mock.calls[0][0].prompt;
     expect(prompt).toContain(JSON.stringify(fullCreativeInput.headline));
     expect(prompt).toContain(JSON.stringify(fullCreativeInput.beforeText));
@@ -41,19 +42,30 @@ describe("Creative Lab OpenAI image provider", () => {
     expect(prompt).toContain("any extra visible text");
     expect(prompt.toLowerCase()).not.toContain("no text");
     expect(readPngDimensions(result.bytes)).toEqual({ width: 1000, height: 1500 });
-    expect(result.metadata).toMatchObject({ provider: "OPENAI", model: "gpt-image-test", imageUnits: 1, estimatedCost: null });
+    expect(result.metadata).toMatchObject({ provider: "OPENAI", model: "gpt-image-2", imageUnits: 1, estimatedCost: null });
   });
 
   it("fails after the single provider call when no image is returned", async () => {
     mocks.generate.mockResolvedValue({ data: [], created: 1 });
-    await expect(new OpenAICreativeImageProvider().generate({ ...fullCreativeInput, direction: "CHAT_FOCUS" })).rejects.toThrow("no image data");
+    await expect(new OpenAICreativeImageProvider("test-job-1").generate({ ...fullCreativeInput, direction: "CHAT_FOCUS" })).rejects.toThrow("no image data");
+    expect(mocks.generate).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails before network call if budget rejects", async () => {
+    mocks.reserve.mockRejectedValueOnce(new Error("LIMIT"));
+    await expect(new OpenAICreativeImageProvider("test-job-1").generate(fullCreativeInput)).rejects.toThrow("LIMIT");
+    expect(mocks.generate).not.toHaveBeenCalled();
+  });
+  it("fails closed after a single ambiguous provider error", async () => {
+    mocks.generate.mockRejectedValueOnce(new Error("timeout"));
+    await expect(new OpenAICreativeImageProvider("test-job-1").generate(fullCreativeInput)).rejects.toThrow("IMAGE_PROVIDER_OUTCOME_UNKNOWN");
     expect(mocks.generate).toHaveBeenCalledTimes(1);
   });
 
   it("defaults to gpt-image-2 without attempting a model fallback", async () => {
     mocks.imageModel = undefined;
     mocks.generate.mockResolvedValue({ data: [], created: 1 });
-    await expect(new OpenAICreativeImageProvider().generate({ ...fullCreativeInput, direction: "EDITORIAL_SPLIT" })).rejects.toThrow("no image data");
+    await expect(new OpenAICreativeImageProvider("test-job-1").generate({ ...fullCreativeInput, direction: "EDITORIAL_SPLIT" })).rejects.toThrow("no image data");
     expect(mocks.generate).toHaveBeenCalledTimes(1);
     expect(mocks.generate).toHaveBeenCalledWith(expect.objectContaining({ model: "gpt-image-2" }));
   });

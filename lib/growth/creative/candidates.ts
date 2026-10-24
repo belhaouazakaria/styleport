@@ -1251,7 +1251,7 @@ export async function generateCreativeCandidate(
       );
     const budget = createCreativeAiImageBudget(1);
     budget.consume();
-    const provider = options.aiProvider || new OpenAICreativeImageProvider();
+    const provider = options.aiProvider || new OpenAICreativeImageProvider(jobId || "");
     if (!copy.exampleInput || !copy.exampleOutput)
       throw new NonRetryableGrowthJobError(
         "Before-and-after creative requires verified example evidence.",
