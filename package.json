@@ -44,6 +44,7 @@
     "growth:verify-legacy-evidence": "tsx scripts/report-legacy-learning-evidence.ts",
     "test:growth-publishing-db": "sh scripts/test-growth-publishing-db.sh",
     "test:growth-learning-db": "sh scripts/test-growth-learning-db.sh",
+    "test:growth-economics-db": "sh scripts/test-growth-economics-db.sh",
     "test:growth-analytics-recovery-db": "sh scripts/test-growth-analytics-recovery-db.sh"
   },
   "postinstall": "node node_modules/prisma/build/index.js generate",
