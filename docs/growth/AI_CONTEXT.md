@@ -183,3 +183,11 @@ The new lib/growth/economics/exposure.ts reads GrowthAiBudgetReservation daily/m
 ## Phase 13H admin archived-report readers, 2026-10-24
 
 ADMIN-only route /admin/growth/reports lists at most 30 latest immutable archived UTC reports, and /admin/growth/reports/[reportId] shows the archived text and once-only delivery audit state. getArchivedGrowthReport validates growth-YYYYMMDD IDs before database access. Content is rendered as escaped React text, not executable HTML. These routes do not generate reports, send Telegram messages or enable a scheduler. Growth main admin now links the report list, and the original digest URL no longer points at a missing page. Full cost reporting, warning management, bot setup, scheduling and Phase 14 remain outstanding.
+
+
+
+## Phase 13I immutable OpenAI request evidence, 2026-10-24
+
+Feature branch Prisma + migration add enum `GrowthAiUsageOutcome` and immutable `GrowthAiUsageEvent` with FK/unique reservation link, DB CHECK constraints and trigger blocking UPDATE/DELETE. This is one event per actual provider-request reservation, no secrets, prompts or response body. Text providers record response ID and provider token counters when available; unknown outcomes have no fabricated usage. Image provider records image response evidence with count when known. Exposed separately in ADMIN spend dashboard through bounded local queries. Unknown remains unknown. All provider-call attempts were previously one-time reserved; evidence append failure blocks job completion and retains pessimistic exposure.
+
+Text estimates are computed in integer microUSD only for exact dated standard `gpt-4.1-mini` pricing/version; they are NOT invoice-verified actual charges and may overestimate cached input tokens. Image cost is unpriced without a defensible usage-source accounting profile. Legacy Growth metadata and normal site translations are not rewritten. The formal provider-billing settlement mechanism remains outstanding, as do warnings management, production DB concurrency qualification, Telegram delivery and scheduler. No live provider calls, migration or Growth activation occurred.

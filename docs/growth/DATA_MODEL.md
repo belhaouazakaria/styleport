@@ -131,3 +131,11 @@ Migration `20261015120000_growth_evergreen_learning` adds immutable `GrowthLearn
 `GrowthDailyReport`: one row per fully completed UTC `reportDate` with unique date, model version, immutable source evidence JSON `snapshot`, bounded human-readable `digestText`, createdAt. A repeat archive request reuses the earliest snapshot; late-arriving analytics must not silently rewrite history.
 
 `GrowthReportDelivery`: one row per report, channel `OPENWA` and state `READY -> SENDING -> SUBMITTED` or `READY -> SENDING -> OUTCOME_UNKNOWN`. Row-lock claim transaction precedes the single external send. A crash can leave `SENDING`, which is intentionally non-retryable until an operator checks the chat. The provider's message ID is evidence only of API submission, not delivery. Never include WhatsApp sender/recipient numbers, API keys or browser session credentials in report snapshots or commit them to Git. This remains isolated feature-branch work until real database tests and controlled live session validation.
+
+
+
+### Phase 13I immutable provider-usage evidence (2026-10-24)
+
+`GrowthAiUsageEvent` is a 1:1 child of `GrowthAiBudgetReservation` with `reservationId @unique` and `onDelete: Restrict`. `outcome` is `RESPONSE_RECEIVED` or `OUTCOME_UNKNOWN`; it stores optional validated provider response ID, token counts, image units, and *estimated* microUSD (BigInt). No actual billed amount is stored. An SQL constraint prevents unknown outcomes from being decorated with fabricated response usage or estimated costs. An append-only SQL trigger disallows UPDATE and DELETE; no application repair can modify an existing response event. Even when a provider request fails or its response is lost, the reservation remains counted under the daily/monthly budget. Missing event means absence of confirmed usage evidence, NOT proof that no provider charge occurred.
+
+The response event is separate from a future verified settlement with provider billing provenance. Estimates must not automatically update `GrowthAiBudgetReservation.reconciledCents`. A provider response ID alone is not an invoice and cannot justify automatic reconciliation.

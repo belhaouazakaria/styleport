@@ -383,3 +383,11 @@ A nonauthoritative pre-generation quota check now avoids paid Translator or new 
 The Growth admin navigation includes a Reports link. /admin/growth/reports offers a read-only 30-report listing and /admin/growth/reports/[reportId] shows immutable digest text and delivery audit information. The provider's message ID and SUBMITTED status indicate API acceptance, not recipient delivery. No resend or live provider action is offered, preserving conservative SENDING/OUTCOME_UNKNOWN behavior.
 
 This is archival visibility, not a scheduled reporting solution; no Telegram bot provisioning or daily enqueuer has been activated. The budget ledger and warning/reconciliation controls still need qualification.
+
+
+
+### Phase 13I provider-response ledger (2026-10-24)
+
+The feature branch includes immutable per-request `GrowthAiUsageEvent` records linked to each budget reservation, append-only at PostgreSQL level. The Growth spend page now shows provider response/unknown status, input/output tokens where available, image units, and a conservatively priced microUSD usage estimate for the pinned text model. These are **response-derived estimates**, not verified actual billed charges; appending evidence never reduces budget reservations. An unknown outcome stays unknown after attempted API submission; no automated retry or reconciliation is permitted. The existing settings-based 70%/90% warnings are still activity records, not a full administrable warning lifecycle.
+
+Phase 13 still requires trusted billed-charge settlement with audit provenance, full provider error/database concurrency qualification, warning acknowledgment and resolution UI, controlled Telegram test/scheduling and release validation before merging into staging.
