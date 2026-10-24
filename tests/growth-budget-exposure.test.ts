@@ -39,7 +39,12 @@ describe("Read-only Growth reserved-cost dashboard", () => {
       where: { createdAt: { gte: new Date("2026-10-01T00:00:00Z") } },
       _sum: { reservedCents: true },
     });
-    expect(mocks.recent).toHaveBeenCalledWith(expect.objectContaining({ take: 20 }));
+    expect(mocks.recent).toHaveBeenCalledWith(expect.objectContaining({
+      take: 20,
+      select: expect.objectContaining({ usageEvidence: { select: expect.objectContaining({
+        outcome: true, inputTokens: true, imageUnits: true, estimatedMicroUsd: true,
+      }) } }),
+    }));
   });
 
   it("refuses to turn missing configuration or invalid denominator into zero-percent safety", async () => {

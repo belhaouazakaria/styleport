@@ -40,7 +40,8 @@ export default async function GrowthSpendPage({
           <div className="rounded-2xl border border-border bg-white p-5 text-sm leading-6">
             <h2 className="font-display text-2xl font-bold text-ink">Growth budget reservations</h2>
             <p className="text-muted-ink">
-              This is a read-only record of conservative budget ceilings, not actual OpenAI charges, settled expenses, invoices or payments.
+              This is a read-only record of conservative budget ceilings and append-only API-response evidence,
+              not actual OpenAI charges, settled expenses, invoices or payments.
               OpenAI call reservations are currently configured for strictly bounded supported Growth models only.
               {exposure.settingsProvisioned ? "" : " Growth settings have not been provisioned in this database."}
               {exposure.growthEnabled ? " Growth execution is enabled in the database; check independent rollout gates before any production work." : " Growth execution is disabled in the database."}
@@ -63,6 +64,7 @@ export default async function GrowthSpendPage({
                 <thead className="bg-muted/40"><tr>
                   <th className="p-3">UTC time</th><th className="p-3">Kind</th>
                   <th className="p-3">Model / pricing profile</th><th className="p-3">Reserved ceiling</th>
+                  <th className="p-3">API response evidence</th>
                   <th className="p-3">Settlement</th>
                 </tr></thead>
                 <tbody>
@@ -71,11 +73,24 @@ export default async function GrowthSpendPage({
                     <td className="p-3">{row.kind}</td>
                     <td className="p-3">{row.provider} / {row.model}<span className="block text-xs text-muted-ink">{row.pricingVersion}</span></td>
                     <td className="p-3">{asUsd(row.reservedCents)}</td>
+                    <td className="p-3">
+                      {row.usageEvidence?.outcome ?? "No response evidence"}
+                      {row.usageEvidence?.inputTokens != null && row.usageEvidence?.outputTokens != null
+                        ? <span className="block text-xs text-muted-ink">
+                            {row.usageEvidence.inputTokens.toLocaleString()} input / {row.usageEvidence.outputTokens.toLocaleString()} output tokens
+                          </span> : null}
+                      {row.usageEvidence?.imageUnits != null
+                        ? <span className="block text-xs text-muted-ink">{row.usageEvidence.imageUnits} image unit(s)</span> : null}
+                      {row.usageEvidence?.estimatedMicroUsd != null
+                        ? <span className="block text-xs text-muted-ink">
+                            Unverified usage estimate: ${(Number(row.usageEvidence.estimatedMicroUsd) / 1_000_000).toFixed(6)}
+                          </span> : null}
+                    </td>
                     <td className="p-3">{row.status === "RECONCILED" && row.reconciledCents !== null
                       ? `Reconciled ${asUsd(row.reconciledCents)}`
                       : "Actual cost unverified"}</td>
                   </tr>)}
-                  {!exposure.recent.length && <tr><td colSpan={5} className="p-5 text-muted-ink">No durable paid-AI reservations recorded.</td></tr>}
+                  {!exposure.recent.length && <tr><td colSpan={6} className="p-5 text-muted-ink">No durable paid-AI reservations recorded.</td></tr>}
                 </tbody>
               </table>
             </div>

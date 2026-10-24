@@ -38,6 +38,10 @@ export async function getGrowthBudgetExposure(now = new Date()) {
         id: true, createdAt: true, kind: true, provider: true, model: true,
         pricingVersion: true, reservedCents: true, reconciledCents: true,
         status: true,
+        usageEvidence: { select: {
+          outcome: true, inputTokens: true, outputTokens: true,
+          totalTokens: true, imageUnits: true, estimatedMicroUsd: true,
+        } },
       },
     }),
   ]);
