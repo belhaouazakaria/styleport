@@ -222,6 +222,10 @@ export async function generateWithOneRepair(
   try {
     return await provider.generate(request);
   } catch (error) {
+    // A denied, previously attempted, or uncertain paid request is terminal.
+    // A second reserved repair attempt is permitted only for a received
+    // response with a content-validation problem.
+    if (error instanceof GrowthBudgetBlockedError) throw error;
     const issue = error instanceof Error ? error.message : "Generated content was invalid.";
     return provider.generate(request, { attempt: 1, issue });
   }
