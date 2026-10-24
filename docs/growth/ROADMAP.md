@@ -365,3 +365,11 @@ Before a paid Translator or Ideas create/generation request, the worker performs
 The ADMIN /admin/growth/spend screen now shows conservative USD-cent **budget reservation exposure** for the current UTC day/calendar month, image reservations, unreconciled attempts, and a bounded recent list with pricing profile/status. This is read-only local evidence, with **no provider query and no new charge**, and it explicitly labels ceilings as not actual billed costs. The original historical metadata inventory remains separate. The accounting view is limited to Phase 13 reservations, not unrelated site translation usage.
 
 Next required before completion: append-only provider-attempt ledger with actual vs estimated/unknown costs, secure verified settlement and reconciliation workflows, disposable-PostgreSQL concurrency/failure qualification, warning lifecycle and admin management, Telegram recipient setup and live opt-in delivery, report scheduler and Phase 14 controlled rollout. Growth, attribution and outbound report sending remain disabled.
+
+
+
+### Phase 13H — ADMIN daily report archive views (2026-10-24)
+
+ADMIN-only read-only pages now provide the latest 30 immutable daily report summaries at `/admin/growth/reports` and individual digest previews at `/admin/growth/reports/growth-YYYYMMDD`. This fixes the destination URL used by archived daily digest messages. The detail page displays UTC archive creation, report version, source digest text, delivery channel/status, attempted/submitted timestamps and provider message ID when known. Provider API acceptance is explicitly not called recipient delivery/reading. Unknown outcomes are not automatically resent.
+
+The archive reader performs bounded PostgreSQL selects after requiring the established ADMIN gate; the page does not generate reports, create delivery rows, call the Telegram API, or modify Growth. It does not provide a manual send/resend button. Phase 13 cost ledger and settlement, warning lifecycle, operator bot/recipient setup, daily schedule, concurrency qualification and Phase 14 remain release blockers.

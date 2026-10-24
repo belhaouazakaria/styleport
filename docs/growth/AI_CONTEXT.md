@@ -177,3 +177,9 @@ The quota gate is late and authoritative. A pre-generation early advisory quota 
 Added read-only preflightGrowthContentQuota before Translator and CREATE_IDEA AI generation, using the same version-row UTC accounting policy as the final locked mutation. The preflight avoids deterministic quota waste but DOES NOT replace transaction-level lock/validation. The final mutation still serializes on GrowthSettings FOR UPDATE. No external API costs were incurred.
 
 The new lib/growth/economics/exposure.ts reads GrowthAiBudgetReservation daily/monthly sums, image counts, un-reconciled reservations and the last 20 rows using bounded local queries; /admin/growth/spend shows this separately from its historical AI usage inventory. Reserved amounts are conservative upper envelopes, not invoice spend, regardless of provider success, failure or uncertain outcome. Provider cost settlement remains incomplete. Disabled Growth, lack of Telegram recipient, lack of scheduling, and Phase 14 gating remain unchanged. Do not claim a completed ledger or production automation.
+
+
+
+## Phase 13H admin archived-report readers, 2026-10-24
+
+ADMIN-only route /admin/growth/reports lists at most 30 latest immutable archived UTC reports, and /admin/growth/reports/[reportId] shows the archived text and once-only delivery audit state. getArchivedGrowthReport validates growth-YYYYMMDD IDs before database access. Content is rendered as escaped React text, not executable HTML. These routes do not generate reports, send Telegram messages or enable a scheduler. Growth main admin now links the report list, and the original digest URL no longer points at a missing page. Full cost reporting, warning management, bot setup, scheduling and Phase 14 remain outstanding.

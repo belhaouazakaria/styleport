@@ -375,3 +375,11 @@ The 1-Translator-create/UTC-day, 3-Translator-improvement/UTC-day and 2-Ideas-cr
 The read-only /admin/growth/spend view now distinguishes persisted budget reservation ceilings from historical provider usage estimates, exposing committed USD amounts for UTC day and month, image/day allocation and unresolved reservations, plus 20 recent durable attempts with pricing profiles and statuses. No credentials or provider request bodies are shown. Unknown actual charges remain unpriced/unknown, never represented as zero. The route is ADMIN-guarded and makes no billable provider request.
 
 A nonauthoritative pre-generation quota check now avoids paid Translator or new Idea generation when the known content quota is exhausted, followed by the same authoritative late write-transaction check to protect concurrent workers. Full billing ledger, reconciliation, warnings admin, background delivery, database concurrency tests and Phase 14 acceptance remain unimplemented.
+
+
+
+### Phase 13H daily report archive UI
+
+The Growth admin navigation includes a Reports link. /admin/growth/reports offers a read-only 30-report listing and /admin/growth/reports/[reportId] shows immutable digest text and delivery audit information. The provider's message ID and SUBMITTED status indicate API acceptance, not recipient delivery. No resend or live provider action is offered, preserving conservative SENDING/OUTCOME_UNKNOWN behavior.
+
+This is archival visibility, not a scheduled reporting solution; no Telegram bot provisioning or daily enqueuer has been activated. The budget ledger and warning/reconciliation controls still need qualification.
