@@ -22,7 +22,9 @@ if (enabled) {
 }
 
 async function clean() {
-  await prisma.growthAiUsageEvent.deleteMany();
+  // Truncate is permitted ONLY in the guarded disposable test database: the
+  // production SQL trigger must continue to reject UPDATE and DELETE of evidence.
+  await prisma.$executeRawUnsafe('TRUNCATE TABLE "GrowthAiUsageEvent"');
   await prisma.growthAiBudgetReservation.deleteMany();
   await prisma.growthActivity.deleteMany();
   await prisma.growthSettings.deleteMany();
