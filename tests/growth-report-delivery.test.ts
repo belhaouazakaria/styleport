@@ -9,9 +9,9 @@ const mocks = vi.hoisted(() => ({
   markDelivery: vi.fn(),
   query: vi.fn(),
 }));
-vi.mock("@/lib/growth/reporting/openwa", () => ({
-  getOpenWaReportSettings: mocks.config,
-  submitOpenWaDailyReport: mocks.submit,
+vi.mock("@/lib/growth/reporting/telegram", () => ({
+  getTelegramReportSettings: mocks.config,
+  submitTelegramDailyReport: mocks.submit,
 }));
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -24,12 +24,11 @@ import { GrowthReportDeliveryBlocked, submitArchivedDailyReport } from "@/lib/gr
 import { growthReportWindow } from "@/lib/growth/reporting/archive";
 
 const config = {
-  enabled: true, baseUrl: "http://127.0.0.1:8080",
-  apiKey: "a-long-unguessable-server-only-key-for-openwa",
-  recipientChatId: "213555123456@c.us",
+  enabled: true, botToken: "123456789:" + "A".repeat(35),
+  chatId: "123456789",
 };
 
-describe("Once-only daily Growth WhatsApp report delivery", () => {
+describe("Once-only daily Growth Telegram report delivery", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.config.mockReturnValue(config);
@@ -64,6 +63,9 @@ describe("Once-only daily Growth WhatsApp report delivery", () => {
       data: expect.objectContaining({ status: "SENDING" }),
     }));
     expect(mocks.submit).toHaveBeenCalledTimes(1);
+    expect(mocks.upsertDelivery).toHaveBeenCalledWith(expect.objectContaining({
+      create: expect.objectContaining({ channel: "TELEGRAM" }),
+    }));
     expect(mocks.claimDelivery.mock.invocationCallOrder[0]).toBeLessThan(mocks.submit.mock.invocationCallOrder[0]);
     expect(mocks.markDelivery).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ status: "SUBMITTED", providerMessageId: "remote-message-1" }),

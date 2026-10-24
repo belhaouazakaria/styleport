@@ -986,7 +986,7 @@ model GrowthReportDelivery {
   id                String                     @id @default(cuid())
   reportId          String                     @unique
   status            GrowthReportDeliveryStatus @default(READY)
-  channel           String                     @default("OPENWA") @db.VarChar(24)
+  channel           String                     @default("TELEGRAM") @db.VarChar(24)
   recipientHash     String?                    @db.VarChar(64)
   providerMessageId String?                    @db.VarChar(512)
   attemptedAt       DateTime?

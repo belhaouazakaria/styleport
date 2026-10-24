@@ -24,7 +24,7 @@ function textLine(value: string, maximum: number): string {
   return value.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, maximum);
 }
 
-export function formatGrowthWhatsAppDigest(data: GrowthDigestData): string {
+export function formatGrowthDailyDigest(data: GrowthDigestData): string {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(data.date) ||
       !Number.isFinite(new Date(`${data.date}T00:00:00Z`).getTime())) {
     throw new Error("Invalid daily Growth report date");
@@ -33,7 +33,7 @@ export function formatGrowthWhatsAppDigest(data: GrowthDigestData): string {
     ? "Unavailable"
     : `$${data.aiSpendUsd.toFixed(2)} USD`;
   const entries = [
-    `*SayTwist Growth · ${data.date} (UTC)*`,
+    `SayTwist Growth · ${data.date} (UTC)`,
     `Pinterest landings: ${value(data.pinterestLandingSessions)}`,
     `Qualified translations: ${value(data.qualifiedConversions)}`,
     `Pinterest outbound clicks: ${value(data.outboundClicks)}`,

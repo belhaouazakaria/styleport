@@ -1,5 +1,5 @@
 import { GrowthReportDeliveryStatus } from "@prisma/client";
-import { getOpenWaReportSettings, submitOpenWaDailyReport } from "@/lib/growth/reporting/openwa";
+import { getTelegramReportSettings, submitTelegramDailyReport } from "@/lib/growth/reporting/telegram";
 import { prisma } from "@/lib/prisma";
 
 export class GrowthReportDeliveryBlocked extends Error {
@@ -11,12 +11,12 @@ export class GrowthReportDeliveryBlocked extends Error {
 
 /**
  * One report has at most one external send attempt. Durable SENDING is written
- * *before* calling OpenWA. Network uncertainty, process crashes or a database
+ * *before* calling Telegram. Network uncertainty, process crashes or a database
  * write failure after submission never reopen the report for automatic resend.
  */
 export async function submitArchivedDailyReport(reportId: string) {
   if (!/^growth-\d{8}$/.test(reportId)) throw new GrowthReportDeliveryBlocked("INVALID_REPORT_ID");
-  const config = getOpenWaReportSettings();
+  const config = getTelegramReportSettings();
   if (!config.enabled) throw new GrowthReportDeliveryBlocked("CHANNEL_DISABLED");
 
   const report = await prisma.$transaction(async (tx) => {
@@ -29,7 +29,7 @@ export async function submitArchivedDailyReport(reportId: string) {
     const delivery = await tx.growthReportDelivery.upsert({
       where: { reportId },
       update: {},
-      create: { reportId, status: GrowthReportDeliveryStatus.READY, channel: "OPENWA" },
+      create: { reportId, status: GrowthReportDeliveryStatus.READY, channel: "TELEGRAM" },
     });
     if (delivery.status !== GrowthReportDeliveryStatus.READY) {
       throw new GrowthReportDeliveryBlocked(`ALREADY_ATTEMPTED_${delivery.status}`);
@@ -43,7 +43,7 @@ export async function submitArchivedDailyReport(reportId: string) {
   });
 
   try {
-    const submitted = await submitOpenWaDailyReport(report.digestText, config);
+    const submitted = await submitTelegramDailyReport(report.digestText, config);
     const result = await prisma.growthReportDelivery.updateMany({
       where: { reportId, status: GrowthReportDeliveryStatus.SENDING },
       data: { status: GrowthReportDeliveryStatus.SUBMITTED,

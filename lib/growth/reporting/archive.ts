@@ -1,7 +1,7 @@
 import { GrowthContentVersionAction, GrowthIdeaVersionAction, Prisma } from "@prisma/client";
 import { ATTRIBUTION_MODEL_VERSION } from "@/lib/growth/attribution/constants";
 import { getAttributionCollectionStatus } from "@/lib/growth/attribution/config";
-import { formatGrowthWhatsAppDigest, type GrowthDigestData } from "@/lib/growth/reporting/digest";
+import { formatGrowthDailyDigest, type GrowthDigestData } from "@/lib/growth/reporting/digest";
 import { prisma } from "@/lib/prisma";
 
 export const GROWTH_REPORT_VERSION = "growth_daily_v1";
@@ -78,7 +78,7 @@ export async function archiveGrowthDailyReport(date: string) {
     nextAction: null,
     reportId,
   };
-  const body = formatGrowthWhatsAppDigest(digest);
+  const body = formatGrowthDailyDigest(digest);
   const snapshot = { ...digest, version: GROWTH_REPORT_VERSION, source: "LOCAL_DATABASE",
     pinterestReady: fullyReadyPinterest, attributionAvailable } satisfies Prisma.JsonObject;
 
