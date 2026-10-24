@@ -391,3 +391,11 @@ This is archival visibility, not a scheduled reporting solution; no Telegram bot
 The feature branch includes immutable per-request `GrowthAiUsageEvent` records linked to each budget reservation, append-only at PostgreSQL level. The Growth spend page now shows provider response/unknown status, input/output tokens where available, image units, and a conservatively priced microUSD usage estimate for the pinned text model. These are **response-derived estimates**, not verified actual billed charges; appending evidence never reduces budget reservations. An unknown outcome stays unknown after attempted API submission; no automated retry or reconciliation is permitted. The existing settings-based 70%/90% warnings are still activity records, not a full administrable warning lifecycle.
 
 Phase 13 still requires trusted billed-charge settlement with audit provenance, full provider error/database concurrency qualification, warning acknowledgment and resolution UI, controlled Telegram test/scheduling and release validation before merging into staging.
+
+
+
+### Phase 13J administrator warning acknowledgment
+
+Admin warnings at `/admin/growth/warnings` expose persisted 70% and 90% reserved-budget threshold occurrences. Administrators can append explicit acknowledged and resolved audit states via a same-origin protected API. A RESOLVE transition is valid only after ACKNOWLEDGE and never erases the original warning. No button adjusts budgets, releases reservations or assumes actual billing has been confirmed. The warning lifecycle is implemented only for AI budget warnings; automatic Telegram delivery of budget notices remains out of scope until the approved delivery rollout.
+
+Required before acceptance: trusted provider charge settlement, live Postgres transaction contention tests, verified report cadence, operator recipient setup and Phase 14 security gate.

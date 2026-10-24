@@ -383,3 +383,11 @@ A new `GrowthAiUsageEvent` table is added on the feature branch, uniquely linked
 For a bounded `gpt-4.1-mini` text response, when the provider returns complete usage, the ledger also records a conservative **standard uncached-rate estimate in integer micro-USD**, tagged implicitly by the original reservation's immutable pricing profile. No response/usage means unknown, not zero. Image API responses record count evidence when known; their cost estimate remains null unless defensible modality-specific usage is available. No API response has been invoiced or settled by this feature. The ADMIN Growth spend page distinguishes per-request evidence, estimated cost and conservative budget reservation; none is called actual billed spend.
 
 **Not yet complete:** trusted provider-invoice reconciliation and append-only settlement audit; concurrent disposable PostgreSQL integration tests, warning acknowledgment/lifecycle controls, Telegram bot/private recipient and authorized delivery, scheduler, security/rollout review. Enabling production Growth or merging PR #15 remains prohibited.
+
+
+
+### Phase 13J — auditable admin budget warning lifecycle (2026-10-24)
+
+The already emitted immutable `GrowthActivity` alerts at 70%/90% budget reservation thresholds are now manageable at `/admin/growth/warnings`. A bounded read-only list computes `OPEN -> ACKNOWLEDGED -> RESOLVED` from additional append-only `GrowthActivity` transitions. Only ADMIN-authenticated same-origin POST requests may change these states, with source event locking and actor-user audit provenance. Acknowledgment must precede resolution; duplicate acknowledgments are idempotent. Original alerts and cost reservations are neither rewritten nor deleted.
+
+Warnings are about **conservative reserved exposure**, not provider-invoiced actual costs. Acknowledgment/resolution is informational only: it does not increase budgets, release reservations, restart Growth, send a message or imply the financial risk has passed. No background notification or scheduled Telegram transport was enabled. The full trusted invoice settlement/reconciliation workflow, real PostgreSQL contention drills, operator bot recipient setup, scheduled report delivery, security review and Phase 14 acceptance are still required.

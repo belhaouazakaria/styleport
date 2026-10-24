@@ -191,3 +191,11 @@ ADMIN-only route /admin/growth/reports lists at most 30 latest immutable archive
 Feature branch Prisma + migration add enum `GrowthAiUsageOutcome` and immutable `GrowthAiUsageEvent` with FK/unique reservation link, DB CHECK constraints and trigger blocking UPDATE/DELETE. This is one event per actual provider-request reservation, no secrets, prompts or response body. Text providers record response ID and provider token counters when available; unknown outcomes have no fabricated usage. Image provider records image response evidence with count when known. Exposed separately in ADMIN spend dashboard through bounded local queries. Unknown remains unknown. All provider-call attempts were previously one-time reserved; evidence append failure blocks job completion and retains pessimistic exposure.
 
 Text estimates are computed in integer microUSD only for exact dated standard `gpt-4.1-mini` pricing/version; they are NOT invoice-verified actual charges and may overestimate cached input tokens. Image cost is unpriced without a defensible usage-source accounting profile. Legacy Growth metadata and normal site translations are not rewritten. The formal provider-billing settlement mechanism remains outstanding, as do warnings management, production DB concurrency qualification, Telegram delivery and scheduler. No live provider calls, migration or Growth activation occurred.
+
+
+
+## Phase 13J budget warning review (2026-10-24)
+
+Created `lib/growth/economics/warnings.ts`, `/admin/growth/warnings` and a same-origin ADMIN-only POST transition route. It queries the latest 50 existing `AI_BUDGET_WARNING` activity events and derives OPEN / ACKNOWLEDGED / RESOLVED from immutable follow-up activities rather than mutable flags. Transitions hold a database row lock on the source warning so concurrent admin requests cannot append conflicting states. All mutations append actor-user audit events. Acknowledge and resolve are UI-only review actions, never budget/AI/payment actions.
+
+No automated alert notifications, billing reconciliation, scheduler or Telegram send is implemented. Keep Growth disabled; qualify the new feature with CI and an isolated transactional database test before Phase 13 completion.
