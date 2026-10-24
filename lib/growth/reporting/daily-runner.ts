@@ -1,5 +1,5 @@
 import { archiveGrowthDailyReport } from "@/lib/growth/reporting/archive";
-import { submitArchivedDailyReport } from "@/lib/growth/reporting/delivery";
+import { GrowthReportDeliveryBlocked, submitArchivedDailyReport } from "@/lib/growth/reporting/delivery";
 import { getTelegramReportSettings } from "@/lib/growth/reporting/telegram";
 
 /**
@@ -32,6 +32,16 @@ export async function runScheduledGrowthDailyReport(
   const { report, reused } = await archiveGrowthDailyReport(date);
   // submitArchivedDailyReport atomically claims one immutable archive report.
   // A second invocation refuses any attempted delivery, even when uncertain.
-  const result = await submitArchivedDailyReport(report.id);
-  return { status: result.status, date, reportId: report.id, archiveReused: reused };
+  try {
+    const result = await submitArchivedDailyReport(report.id);
+    return { status: result.status, date, reportId: report.id, archiveReused: reused };
+  } catch (error) {
+    // Repeat cron ticks are normal. Only a confirmed SUBMITTED outcome can
+    // be reported as a harmless duplicate. Never swallow SENDING / UNKNOWN.
+    if (error instanceof GrowthReportDeliveryBlocked &&
+        error.reason === "ALREADY_ATTEMPTED_SUBMITTED") {
+      return { status: "ALREADY_SENT" as const, date, reportId: report.id, archiveReused: reused };
+    }
+    throw error;
+  }
 }

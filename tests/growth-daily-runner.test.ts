@@ -9,9 +9,13 @@ vi.mock("@/lib/growth/reporting/archive", () => ({
 }));
 vi.mock("@/lib/growth/reporting/delivery", () => ({
   submitArchivedDailyReport: mocks.send,
+  GrowthReportDeliveryBlocked: class extends Error {
+    constructor(public reason: string) { super(reason); }
+  },
 }));
 
 import { dueGrowthReportDate, runScheduledGrowthDailyReport } from "@/lib/growth/reporting/daily-runner";
+import { GrowthReportDeliveryBlocked } from "@/lib/growth/reporting/delivery";
 
 const valid = {
   GROWTH_DAILY_REPORT_SCHEDULE_ENABLED: "true",
@@ -60,6 +64,19 @@ describe("Disabled-by-default UTC daily report runner", () => {
     expect(mocks.archive.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.send.mock.invocationCallOrder[0],
     );
+  });
+  it("does not resend a submitted report on a duplicate scheduled tick", async () => {
+    mocks.send.mockRejectedValueOnce(new GrowthReportDeliveryBlocked("ALREADY_ATTEMPTED_SUBMITTED"));
+    await expect(runScheduledGrowthDailyReport(clock, valid)).resolves.toMatchObject({
+      status: "ALREADY_SENT", reportId: "growth-20261024",
+    });
+    expect(mocks.send).toHaveBeenCalledTimes(1);
+  });
+  it("does not conceal a stale SENDING or unknown-outcome delivery", async () => {
+    mocks.send.mockRejectedValueOnce(new GrowthReportDeliveryBlocked("ALREADY_ATTEMPTED_OUTCOME_UNKNOWN"));
+    await expect(runScheduledGrowthDailyReport(clock, valid))
+      .rejects.toThrow("ALREADY_ATTEMPTED_OUTCOME_UNKNOWN");
+    expect(mocks.send).toHaveBeenCalledTimes(1);
   });
   it("does not retry or trigger an alternate transport after ambiguous outcome", async () => {
     mocks.send.mockRejectedValueOnce(new Error("OUTCOME_UNKNOWN_REQUIRES_OPERATOR_REVIEW"));
