@@ -314,3 +314,100 @@ Deterministic and reused assets have no AI charge. Full-image AI generation is w
 The main Growth settings form exposes the evergreen cooldown as a bounded 14–180-day ADMIN setting (45 days by default); changes use the existing strict same-origin settings route and activity audit.
 
 `/admin/growth/learning` shows the latest run freshness/model versions, `REVIVE`/`WAIT`/`SKIP`/`INSUFFICIENT_DATA` recommendations with confidence and reasons, exposure-normalized performance comparisons, versioned opportunity feedback proposals, account-specific learned windows, and experiment findings including explicit inconclusive states. Actions are explicit evaluation, creative preparation, and audited start/pause/resume/request-analysis/finalize experiment transitions. Preparation can incur the normal Creative Lab image cost only after server-side revalidation; none of these actions approves or publishes. Experiment start requires READY materially distinct variants, and finalization requires a retained post-request evaluation. Phase 12 adds no paid provider or complete cost ledger.
+
+
+## Phase 13A: read-only historical AI usage inventory (2026-10-18)
+
+The new ADMIN route `/admin/growth/spend` reports 7/30-day existing provider usage evidence from `GrowthDecision`, `GrowthIdeaVersion`, and AI-kind `GrowthAsset`. It deduplicates text operation metadata copied into Idea versions by decision ID or provider response ID, distinguishes unknown token quantities from recorded counts, shows image units, preserves unknown prices, and discloses a 2,000-row-per-source cap.
+
+**This is not the Phase 13 full ledger or actual spend.** Historic model token prices are not inferred and planned `GrowthDecision.estimatedCost` is not a charge. Only existing estimated AI image costs are separately displayed and clearly labeled estimated. The route performs no paid API requests or content mutation.
+
+Remaining before Phase 13 completion: append-only idempotent cost entries created on every provider call (including failed/billed requests and repair attempts); versioned priced-vs-unpriced actual/estimated semantics; atomic daily/monthly reservation and hard-cap enforcement; budget admin settings, audit confirmation and monitoring; full reports/archive, warning lifecycle, digest generation, and delivery provider. Obtain explicit numeric budgets and channel/recipient configuration before activating spend or delivery gates. Keep Growth/attribution disabled until production qualification.
+
+## Approved Phase 13 operating limits
+
+Configuration in `GrowthSettings`, migration `20261018120000_growth_economics_limits`: `aiDailyBudgetCents=200`, `aiMonthlyBudgetCents=3000`, `aiImagesPerDayCap=3`, `translatorCreatesPerDayCap=1`, `translatorUpdatesPerDayCap=3`, `ideaCreatesPerWeekCap=2`. Thresholds: 70% and 90% warnings. USD cents, UTC daily/calendar monthly buckets and weekly calendar boundaries (to be finalized alongside enforcement). Hard limits must be enforced with transactional reservations before provider requests or public content mutations; settings persistence alone does **not** enforce them.
+
+The admin currently displays these values as **configuration only**. Until ledger/pricing admission and full content quota gates are implemented and tested, production automation must remain disabled. Paid usage from unrelated normal translation is explicitly outside the Growth ledger/budgets.
+
+### Phase 13B financial admission foundation
+
+The isolated Phase 13 branch includes `lib/growth/economics/budget-policy.ts` and `reservations.ts`, backed by `GrowthAiBudgetReservation`. The policy rejects unknown prices and invalid amounts, checks **both** UTC daily and monthly limits, and recognizes 70%/90% warning crossings. Database admission serializes on the existing `GrowthSettings` row, counts image reservations, persists one immutable request reservation, and retains the upper bound for accounting after reconciliation. This is deliberately pessimistic.
+
+Provider interception and an authenticated/versioned model pricing source are still required before real paid work. In particular, OpenAI model fallbacks and SDK retries must not make extra paid requests behind one reservation. Content-action quotas must be checked transactionally at the apply boundary. The AI usage inventory remains **historical partial metadata**, not a full paid-usage ledger. Phase 13 is not complete.
+
+### OpenWA WhatsApp delivery selection
+
+Operator decision: daily executive reports should go to a **single recipient through OpenWA**, not an email-first report. `lib/growth/reporting/openwa.ts` implements the opt-in v5 HTTP transport to `127.0.0.1` only, validates one `@c.us` chat recipient, requires `X-API-Key`, checks live session readiness, and never retries unknown send outcomes. `lib/growth/reporting/digest.ts` formats a conservative summary that labels uncollected conversion metrics and unpriced AI spend as unavailable.
+
+This transport is not yet connected to a durable report archive, once-per-day job or production schedule. Do not claim WhatsApp reports are operational before the recipient initiates a chat, the sender device is paired, and a controlled test proves submission. OpenWA is unofficial and may be restricted by WhatsApp/Meta. No automatic email fallback or multiple recipients. See `OPENWA_RUNBOOK.md`.
+
+
+## 2026-10-24 Phase 13C transport supersession
+
+Earlier WhatsApp provider sections in this specification are superseded. Telegram Bot API is now the preferred one-recipient provider, with email a possible future fallback. The feature branch uses a provider-independent plain-text digest and archived UTC daily reports, fixed-host HTTPS Telegram submission, opt-in server-only bot token/private chat ID, and durable one-attempt delivery claims. A successfully returned Telegram message ID means API submission, not recipient read confirmation.
+
+No Telegram bot has been provisioned through this feature, no message was sent, and no recurrence or production activation is enabled. Actual AI provider-cost interception, settlement, content quotas, warning lifecycle, reports UI, operator confirmation and rollout remain open. See TELEGRAM_RUNBOOK.md.
+
+
+### Phase 13D image spending safeguard — partial, not complete
+
+The opt-in Growth Creative Lab OpenAI image provider has a strict **30-cent per-request upper-bound reservation**, recorded before its fixed `gpt-image-2` medium 1024x1536 call. The conservative allowance is counted toward both USD daily/monthly budgets and the 3-images/day reservation cap. Failed and ambiguous attempts retain their budget reservations; no automatic retry is allowed. Unknown model prices/shapes fail closed.
+
+This is not a statement of actual billed cost, a reconciled ledger, or complete spend enforcement. **Text provider calls and content mutation quotas still require integration**, plus independent database concurrency tests, report/admin reconciliation and release gates. Until the entire boundary is qualified, keep Growth and recurring sending disabled.
+
+
+### Phase 13E text spending admission — partial
+
+Growth Translator/Ideas text calls now reserve 20 cents per bounded, pinned `gpt-4.1-mini` API attempt; both initially generated and explicitly requested repair drafts have distinct per-decision keys. The OpenAI SDK retry is disabled for these Growth calls and model fallback is disabled. Unknown price/model/prompt envelope and reused reservations stop before an API call, while HTTP ambiguity retains the pessimistic reservation and forbids retry.
+
+**These are reserved maximum exposures, not provider-confirmed actual USD charges.** A complete provider-priced actual/estimated ledger, settlement and cost-per-conversion reporting, content-action quotas and production concurrency validation are still required. Growth remains disabled.
+
+
+### Phase 13F content volume ceilings — implemented at write boundary
+
+The 1-Translator-create/UTC-day, 3-Translator-improvement/UTC-day and 2-Ideas-create/UTC-week caps now use `GrowthContentVersion` and `GrowthIdeaVersion` records to count already accepted worker mutations. The check is performed after acquiring a strong lock on the singleton Growth settings record, in the same transaction that applies the mutation, so parallel Growth workers cannot oversubscribe the period. The cap stops content creation, not background budget debits that may already have occurred during candidate generation. The remaining work includes earlier nonauthoritative preflights to avoid waste, full concurrent PostgreSQL tests, durable actual-cost settlement, warnings/admin UI, reporting delivery activation and Phase 14 rollout.
+
+
+
+### Phase 13G administrator reserved budget visibility (2026-10-24)
+
+The read-only /admin/growth/spend view now distinguishes persisted budget reservation ceilings from historical provider usage estimates, exposing committed USD amounts for UTC day and month, image/day allocation and unresolved reservations, plus 20 recent durable attempts with pricing profiles and statuses. No credentials or provider request bodies are shown. Unknown actual charges remain unpriced/unknown, never represented as zero. The route is ADMIN-guarded and makes no billable provider request.
+
+A nonauthoritative pre-generation quota check now avoids paid Translator or new Idea generation when the known content quota is exhausted, followed by the same authoritative late write-transaction check to protect concurrent workers. Full billing ledger, reconciliation, warnings admin, background delivery, database concurrency tests and Phase 14 acceptance remain unimplemented.
+
+
+
+### Phase 13H daily report archive UI
+
+The Growth admin navigation includes a Reports link. /admin/growth/reports offers a read-only 30-report listing and /admin/growth/reports/[reportId] shows immutable digest text and delivery audit information. The provider's message ID and SUBMITTED status indicate API acceptance, not recipient delivery. No resend or live provider action is offered, preserving conservative SENDING/OUTCOME_UNKNOWN behavior.
+
+This is archival visibility, not a scheduled reporting solution; no Telegram bot provisioning or daily enqueuer has been activated. The budget ledger and warning/reconciliation controls still need qualification.
+
+
+
+### Phase 13I provider-response ledger (2026-10-24)
+
+The feature branch includes immutable per-request `GrowthAiUsageEvent` records linked to each budget reservation, append-only at PostgreSQL level. The Growth spend page now shows provider response/unknown status, input/output tokens where available, image units, and a conservatively priced microUSD usage estimate for the pinned text model. These are **response-derived estimates**, not verified actual billed charges; appending evidence never reduces budget reservations. An unknown outcome stays unknown after attempted API submission; no automated retry or reconciliation is permitted. The existing settings-based 70%/90% warnings are still activity records, not a full administrable warning lifecycle.
+
+Phase 13 still requires trusted billed-charge settlement with audit provenance, full provider error/database concurrency qualification, warning acknowledgment and resolution UI, controlled Telegram test/scheduling and release validation before merging into staging.
+
+
+
+### Phase 13J administrator warning acknowledgment
+
+Admin warnings at `/admin/growth/warnings` expose persisted 70% and 90% reserved-budget threshold occurrences. Administrators can append explicit acknowledged and resolved audit states via a same-origin protected API. A RESOLVE transition is valid only after ACKNOWLEDGE and never erases the original warning. No button adjusts budgets, releases reservations or assumes actual billing has been confirmed. The warning lifecycle is implemented only for AI budget warnings; automatic Telegram delivery of budget notices remains out of scope until the approved delivery rollout.
+
+Required before acceptance: trusted provider charge settlement, live Postgres transaction contention tests, verified report cadence, operator recipient setup and Phase 14 security gate.
+
+
+### Phase 13K real database tests and safe report entry point
+
+CI now qualifies true PostgreSQL row-lock serialization, budget reservation idempotency, immutable provider response events, and admin warning transitions on a disposable exact-name loopback database. It does not run paid API or production tests. The read-only admin spend view keeps estimates distinct from verified charges.
+
+The UTC daily Telegram report entry point runs only when two distinct server-side gates are set true: `GROWTH_DAILY_REPORT_SCHEDULE_ENABLED` and `TELEGRAM_REPORTS_ENABLED`. It archives yesterday (only after 04:00 UTC), sends no more than once per immutable report, and never retries an unknown outcome. The script is NOT installed in cron/systemd or activated. A production-like migration dry run, private Telegram recipient acceptance, verified external billing-source reconciliation and Phase 14 rollout approval remain outstanding.
+
+
+### Phase 13L settlement provenance gate
+
+Direct reconciliation from caller supplied actualCostCents is forbidden. The legacy helper now blocks all settlement attempts pending a dedicated provider-billing provenance and administrative audit workflow. Reservation exposure remains pessimistic. Unreconciled is a truthful status; missing billing data must not be displayed as zero cost.

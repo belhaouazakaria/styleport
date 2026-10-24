@@ -32,6 +32,15 @@ export default async function AdminGrowthPage() {
       />
       <main className="space-y-6 p-4 sm:p-6">
         <div className="flex flex-wrap justify-end gap-3">
+          <Link href="/admin/growth/spend" className={cn(buttonVariants({ variant: "outline" }))}>
+            AI usage & cost coverage
+          </Link>
+          <Link href="/admin/growth/warnings" className={cn(buttonVariants({ variant: "outline" }))}>
+            Budget warning review
+          </Link>
+          <Link href="/admin/growth/reports" className={cn(buttonVariants({ variant: "outline" }))}>
+            Archived daily reports
+          </Link>
           <Link
             href="/admin/growth/learning"
             className={cn(buttonVariants({ variant: "outline" }))}
@@ -181,6 +190,12 @@ export default async function AdminGrowthPage() {
               overview.settings.attributionEventRetentionDays,
             evergreenCooldownDays:
               overview.settings.evergreenCooldownDays,
+            aiDailyBudgetCents: overview.settings.aiDailyBudgetCents,
+            aiMonthlyBudgetCents: overview.settings.aiMonthlyBudgetCents,
+            aiImagesPerDayCap: overview.settings.aiImagesPerDayCap,
+            translatorCreatesPerDayCap: overview.settings.translatorCreatesPerDayCap,
+            translatorUpdatesPerDayCap: overview.settings.translatorUpdatesPerDayCap,
+            ideaCreatesPerWeekCap: overview.settings.ideaCreatesPerWeekCap,
           }}
         />
 

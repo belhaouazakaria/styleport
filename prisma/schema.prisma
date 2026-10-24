@@ -142,6 +142,28 @@ enum TranslatorEditorialDraftStatus {
   PUBLISHED
 }
 
+enum GrowthReportDeliveryStatus {
+  READY
+  SENDING
+  SUBMITTED
+  OUTCOME_UNKNOWN
+}
+
+enum GrowthAiOperationKind {
+  TEXT
+  IMAGE
+}
+
+enum GrowthAiReservationStatus {
+  RESERVED
+  RECONCILED
+}
+
+enum GrowthAiUsageOutcome {
+  RESPONSE_RECEIVED
+  OUTCOME_UNKNOWN
+}
+
 enum GrowthIntensity {
   LOW
   BALANCED
@@ -938,6 +960,12 @@ model GrowthSettings {
   attributionSessionRetentionDays Int             @default(30)
   attributionEventRetentionDays   Int             @default(90)
   evergreenCooldownDays           Int             @default(45)
+  aiDailyBudgetCents              Int             @default(200)
+  aiMonthlyBudgetCents            Int             @default(3000)
+  aiImagesPerDayCap               Int             @default(3)
+  translatorCreatesPerDayCap      Int             @default(1)
+  translatorUpdatesPerDayCap      Int             @default(3)
+  ideaCreatesPerWeekCap           Int             @default(2)
   configVersion                   Int             @default(1)
   updatedById                     String?
   createdAt                       DateTime        @default(now())
@@ -945,6 +973,69 @@ model GrowthSettings {
   updatedBy                       User?           @relation("GrowthSettingsUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
 
   @@index([updatedAt])
+}
+
+model GrowthDailyReport {
+  id         String                @id @default(cuid())
+  reportDate DateTime              @unique @db.Date
+  version    String                @db.VarChar(80)
+  snapshot   Json
+  digestText String                @db.Text
+  createdAt  DateTime              @default(now())
+  delivery   GrowthReportDelivery?
+
+  @@index([createdAt])
+}
+
+model GrowthReportDelivery {
+  id                String                     @id @default(cuid())
+  reportId          String                     @unique
+  status            GrowthReportDeliveryStatus @default(READY)
+  channel           String                     @default("TELEGRAM") @db.VarChar(24)
+  recipientHash     String?                    @db.VarChar(64)
+  providerMessageId String?                    @db.VarChar(512)
+  attemptedAt       DateTime?
+  submittedAt       DateTime?
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
+  report            GrowthDailyReport          @relation(fields: [reportId], references: [id], onDelete: Restrict)
+
+  @@index([status, updatedAt])
+}
+
+model GrowthAiBudgetReservation {
+  id                String                    @id @default(cuid())
+  requestKey        String                    @unique @db.VarChar(191)
+  jobId             String?                   @db.VarChar(191)
+  kind              GrowthAiOperationKind
+  status            GrowthAiReservationStatus @default(RESERVED)
+  provider          String                    @db.VarChar(80)
+  model             String                    @db.VarChar(120)
+  pricingVersion    String                    @db.VarChar(120)
+  reservedCents     Int
+  reconciledCents   Int?
+  createdAt         DateTime                  @default(now())
+  reconciledAt      DateTime?
+  usageEvidence     GrowthAiUsageEvent?
+
+  @@index([createdAt, kind])
+  @@index([jobId, createdAt])
+}
+
+model GrowthAiUsageEvent {
+  id                  String                    @id @default(cuid())
+  reservationId       String                    @unique
+  outcome             GrowthAiUsageOutcome
+  providerResponseId  String?                   @db.VarChar(191)
+  inputTokens         Int?
+  outputTokens        Int?
+  totalTokens         Int?
+  imageUnits          Int?
+  estimatedMicroUsd   BigInt?
+  createdAt           DateTime                  @default(now())
+  reservation         GrowthAiBudgetReservation @relation(fields: [reservationId], references: [id], onDelete: Restrict)
+
+  @@index([createdAt, outcome])
 }
 
 model GrowthJob {
