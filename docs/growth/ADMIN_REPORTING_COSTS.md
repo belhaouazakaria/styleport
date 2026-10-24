@@ -348,3 +348,10 @@ This transport is not yet connected to a durable report archive, once-per-day jo
 Earlier WhatsApp provider sections in this specification are superseded. Telegram Bot API is now the preferred one-recipient provider, with email a possible future fallback. The feature branch uses a provider-independent plain-text digest and archived UTC daily reports, fixed-host HTTPS Telegram submission, opt-in server-only bot token/private chat ID, and durable one-attempt delivery claims. A successfully returned Telegram message ID means API submission, not recipient read confirmation.
 
 No Telegram bot has been provisioned through this feature, no message was sent, and no recurrence or production activation is enabled. Actual AI provider-cost interception, settlement, content quotas, warning lifecycle, reports UI, operator confirmation and rollout remain open. See TELEGRAM_RUNBOOK.md.
+
+
+### Phase 13D image spending safeguard — partial, not complete
+
+The opt-in Growth Creative Lab OpenAI image provider has a strict **30-cent per-request upper-bound reservation**, recorded before its fixed `gpt-image-2` medium 1024x1536 call. The conservative allowance is counted toward both USD daily/monthly budgets and the 3-images/day reservation cap. Failed and ambiguous attempts retain their budget reservations; no automatic retry is allowed. Unknown model prices/shapes fail closed.
+
+This is not a statement of actual billed cost, a reconciled ledger, or complete spend enforcement. **Text provider calls and content mutation quotas still require integration**, plus independent database concurrency tests, report/admin reconciliation and release gates. Until the entire boundary is qualified, keep Growth and recurring sending disabled.

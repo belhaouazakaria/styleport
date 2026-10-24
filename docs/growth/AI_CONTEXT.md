@@ -148,3 +148,10 @@ User chose OpenWA to deliver a single daily WhatsApp Growth digest; no email del
 ## 2026-10-24 Phase 13C Telegram migration
 
 The operator selected Telegram as the preferred Growth digest channel and abandoned WhatsApp/OpenWA after persistence and new-device pairing problems. The feature branch implements a disabled-by-default official Bot API adapter, a one-private-chat recipient restriction, sanitized error handling, no automatic retries and a plain-text digest; existing immutable archives and SENDING/SUBMITTED/OUTCOME_UNKNOWN database claims are retained. OPENWA_RUNBOOK.md is historical; use TELEGRAM_RUNBOOK.md. The service has not sent a Telegram message and has no schedule. No Growth, attribution, paid AI or Pinterest publication is enabled. Phase 13 still lacks enforcement and Phase 14 remains not started.
+
+
+## 2026-10-24 Phase 13D image spend boundary
+
+The feature branch now gates the real Creative Lab OpenAI image provider with `lib/growth/economics/image-admission.ts` and the existing serialized budget reservation service. It allows only model `gpt-image-2`, medium, portrait 1024x1536, bounded text prompt, one job key/one call, SDK maxRetries=0. A dated 30-cent reservation is deliberately pessimistic (official estimated output ~4.1 cents plus prompt input). It is not provider-reported actual spending. Replays/unknown prices are terminal; no image is requested before an admitted reservation. The existing database image/day, daily/monthly budget checks apply.
+
+This is a *partial* economic hardening slice. Translator and Ideas text-generation provider calls are NOT YET covered. The report cost ledger and actual cost reconciliation remain unknown. No live API calls, production database migration, Growth enablement or Pinterest publication were performed. CI acceptance required before further phase work.
