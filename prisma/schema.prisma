@@ -159,6 +159,11 @@ enum GrowthAiReservationStatus {
   RECONCILED
 }
 
+enum GrowthAiUsageOutcome {
+  RESPONSE_RECEIVED
+  OUTCOME_UNKNOWN
+}
+
 enum GrowthIntensity {
   LOW
   BALANCED
@@ -1011,9 +1016,26 @@ model GrowthAiBudgetReservation {
   reconciledCents   Int?
   createdAt         DateTime                  @default(now())
   reconciledAt      DateTime?
+  usageEvidence     GrowthAiUsageEvent?
 
   @@index([createdAt, kind])
   @@index([jobId, createdAt])
+}
+
+model GrowthAiUsageEvent {
+  id                  String                    @id @default(cuid())
+  reservationId       String                    @unique
+  outcome             GrowthAiUsageOutcome
+  providerResponseId  String?                   @db.VarChar(191)
+  inputTokens         Int?
+  outputTokens        Int?
+  totalTokens         Int?
+  imageUnits          Int?
+  estimatedMicroUsd   BigInt?
+  createdAt           DateTime                  @default(now())
+  reservation         GrowthAiBudgetReservation @relation(fields: [reservationId], references: [id], onDelete: Restrict)
+
+  @@index([createdAt, outcome])
 }
 
 model GrowthJob {
