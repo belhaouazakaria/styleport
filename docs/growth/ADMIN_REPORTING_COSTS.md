@@ -399,3 +399,10 @@ Phase 13 still requires trusted billed-charge settlement with audit provenance, 
 Admin warnings at `/admin/growth/warnings` expose persisted 70% and 90% reserved-budget threshold occurrences. Administrators can append explicit acknowledged and resolved audit states via a same-origin protected API. A RESOLVE transition is valid only after ACKNOWLEDGE and never erases the original warning. No button adjusts budgets, releases reservations or assumes actual billing has been confirmed. The warning lifecycle is implemented only for AI budget warnings; automatic Telegram delivery of budget notices remains out of scope until the approved delivery rollout.
 
 Required before acceptance: trusted provider charge settlement, live Postgres transaction contention tests, verified report cadence, operator recipient setup and Phase 14 security gate.
+
+
+### Phase 13K real database tests and safe report entry point
+
+CI now qualifies true PostgreSQL row-lock serialization, budget reservation idempotency, immutable provider response events, and admin warning transitions on a disposable exact-name loopback database. It does not run paid API or production tests. The read-only admin spend view keeps estimates distinct from verified charges.
+
+The UTC daily Telegram report entry point runs only when two distinct server-side gates are set true: `GROWTH_DAILY_REPORT_SCHEDULE_ENABLED` and `TELEGRAM_REPORTS_ENABLED`. It archives yesterday (only after 04:00 UTC), sends no more than once per immutable report, and never retries an unknown outcome. The script is NOT installed in cron/systemd or activated. A production-like migration dry run, private Telegram recipient acceptance, verified external billing-source reconciliation and Phase 14 rollout approval remain outstanding.

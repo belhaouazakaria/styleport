@@ -35,3 +35,15 @@ Rollback: disable TELEGRAM_REPORTS_ENABLED; retain all historical delivery recor
 ## Still outstanding
 
 Pricing-backed AI call reservations, actual usage ledger/settlement, content quotas, warnings/report admin UI, bot/recipient provisioning, authorized live test, production scheduling, Phase 13 acceptance and Phase 14 rollout.
+
+
+## Phase 13K controlled daily-runner readiness (no live send authorized)
+
+The code supports a one-shot `npm run growth:daily-report` CLI, not a running daemon. By default it returns DISABLED and makes **no provider calls and no archive**. For an authorized future scheduled report, both private server-side settings must be enabled:
+
+- `GROWTH_DAILY_REPORT_SCHEDULE_ENABLED=true`: permits the scheduled reporting entry point (default off).
+- `TELEGRAM_REPORTS_ENABLED=true`: independently permits Telegram Bot API submission (default off).
+
+The UTC runner never selects today's incomplete data. It targets the previous UTC calendar day at/after 04:00 UTC, and uses the existing once-only database delivery claim. Repeated invocations of an already SUBMITTED archive return ALREADY_SENT without sending. SENDING or OUTCOME_UNKNOWN stays blocked. Do **not** add a VPS timer, cron entry, webhook, bot polling or enabled flag until the operator has completed a **single explicitly authorized live recipient test** and all Phase 13/14 security rollout gates have passed.
+
+**Operator action required at the live-test gate, not before:** create a dedicated Telegram bot with @BotFather, start its private chat from the destination Telegram account, securely collect and independently confirm the private numeric chat ID without sharing the token, configure token/chat ID as private deployment secrets, and confirm a deliberately requested test appears once in that chat. Run this only in the approved isolated/staging context before production scheduling. In parallel, trusted actual billing reconciliation requires operator-supplied authentic provider billing records; API usage estimates are not invoices.

@@ -199,3 +199,10 @@ Text estimates are computed in integer microUSD only for exact dated standard `g
 Created `lib/growth/economics/warnings.ts`, `/admin/growth/warnings` and a same-origin ADMIN-only POST transition route. It queries the latest 50 existing `AI_BUDGET_WARNING` activity events and derives OPEN / ACKNOWLEDGED / RESOLVED from immutable follow-up activities rather than mutable flags. Transitions hold a database row lock on the source warning so concurrent admin requests cannot append conflicting states. All mutations append actor-user audit events. Acknowledge and resolve are UI-only review actions, never budget/AI/payment actions.
 
 No automated alert notifications, billing reconciliation, scheduler or Telegram send is implemented. Keep Growth disabled; qualify the new feature with CI and an isolated transactional database test before Phase 13 completion.
+
+
+## 2026-10-24 Phase 13K isolated DB acceptance + opt-in reporting runner
+
+`.github/workflows/growth-phase13-db.yml`, `scripts/test-growth-economics-db.sh` and `tests/growth-economics-persistence.integration.test.ts` validate actual disposable PostgreSQL reservations, concurrency, append-only usage trigger, warning locking and migrations. Test-only cleanup truncates immutable events solely after a guarded exact loopback database URL validation; no production delete capability is added.
+
+`lib/growth/reporting/daily-runner.ts` + `workers/growth-report-runner.ts` implement one-shot previous-UTC-day archiving/delivery at or after 04:00 UTC, guarded by BOTH `GROWTH_DAILY_REPORT_SCHEDULE_ENABLED` and `TELEGRAM_REPORTS_ENABLED` (both default disabled). No timer/cron has been created. A confirmed already-submitted report is a no-op; SENDING/UNKNOWN is terminal, no resend. Running the CLI does not enable Growth or paid AI. Operator must approve and verify live Telegram private recipient delivery before scheduling, and verify billing source documents before recording any actual settlement.
