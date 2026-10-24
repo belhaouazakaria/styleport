@@ -14,6 +14,7 @@ import { recordGrowthActivity } from "@/lib/growth/activity";
 import { GROWTH_SETTINGS_ID } from "@/lib/growth/contracts";
 import { RetryableGrowthJobError } from "@/lib/growth/errors";
 import { GrowthBudgetBlockedError } from "@/lib/growth/economics/reservations";
+import { assertGrowthContentQuotaUnderLock, GrowthContentQuotaError } from "@/lib/growth/economics/content-quotas";
 import { enqueueGrowthJob } from "@/lib/growth/jobs";
 import { resolveIdeaCategory } from "@/lib/growth/ideas/categories";
 import { checksumIdeaCandidate } from "@/lib/growth/ideas/checksum";
@@ -394,7 +395,7 @@ async function executeIdeaDecisionAttempt(decisionId: string, options: ExecuteId
   }
   const metadata = aggregateIdeaGenerationMetadata(attempts);
   const result = await prisma.$transaction(async (tx) => {
-    const settings = await tx.$queryRaw<Array<{ enabled: boolean }>>`SELECT "enabled" FROM "GrowthSettings" WHERE "id" = ${GROWTH_SETTINGS_ID} FOR SHARE`;
+    const settings = await tx.$queryRaw<Array<{ enabled: boolean }>>`SELECT "enabled" FROM "GrowthSettings" WHERE "id" = ${GROWTH_SETTINGS_ID} FOR UPDATE`;
     if (!settings[0]?.enabled) throw new IdeaExecutionBlockedError(GrowthDecisionStatus.FAILED_RETRYABLE, IDEA_DECISION_REASON.GROWTH_DISABLED_BEFORE_APPLY);
     const decision = await tx.growthDecision.findUniqueOrThrow({ where: { id: decisionId } });
     if (decision.status !== GrowthDecisionStatus.EXECUTING) return { decision, ideaId: decision.ideaId, version: null, reused: true };
@@ -412,6 +413,7 @@ async function executeIdeaDecisionAttempt(decisionId: string, options: ExecuteId
 
     let ideaId = decision.ideaId;
     if (decision.type === GrowthDecisionType.CREATE_IDEA) {
+      await assertGrowthContentQuotaUnderLock(tx, "IDEA_CREATE");
       await tx.$queryRaw`SELECT 1::int AS "locked" FROM (SELECT pg_advisory_xact_lock(hashtext('growth-idea-create-v1'))) AS "acquired"`;
       const lateCandidates = await readDedupeCandidates(null, tx);
       if (lateCandidates.length > MAX_IDEA_DEDUPE_CANDIDATES) throw new IdeaExecutionBlockedError(GrowthDecisionStatus.WAITING_DATA, IDEA_DECISION_REASON.DEDUPE_CAP_EXCEEDED);
@@ -459,6 +461,14 @@ export async function executeIdeaDecision(decisionId: string, options: ExecuteId
   catch (error) {
     const current = await prisma.growthDecision.findUnique({ where: { id: decisionId }, select: { status: true } });
     const uniqueConflict = error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+    if (error instanceof GrowthContentQuotaError) {
+      if (current?.status === GrowthDecisionStatus.EXECUTING)
+        await updateFailure(decisionId, GrowthDecisionStatus.WAITING_DATA, error.reason);
+      return {
+        decision: await prisma.growthDecision.findUniqueOrThrow({ where: { id: decisionId } }),
+        reused: false, blocked: true,
+      };
+    }
     if (error instanceof GrowthBudgetBlockedError) {
       if (current?.status === GrowthDecisionStatus.EXECUTING)
         await updateFailure(decisionId, GrowthDecisionStatus.FAILED_TERMINAL, error.reason);
