@@ -5,6 +5,7 @@ import { CREATIVE_HEIGHT, CREATIVE_WIDTH, MAX_CREATIVE_BYTES, type CreativeDirec
 import { validateCreativePng } from "@/lib/growth/creative/storage";
 import { getServerEnv } from "@/lib/env";
 import { reserveGrowthImageAttempt } from "@/lib/growth/economics/image-admission";
+import { appendGrowthAiUsageEvidence } from "@/lib/growth/economics/usage-evidence";
 import { GrowthBudgetBlockedError } from "@/lib/growth/economics/reservations";
 
 export interface CreativeAiImageMetadata {
@@ -126,7 +127,7 @@ export class OpenAICreativeImageProvider implements CreativeAiImageProvider {
     if (!env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is missing.");
     const model = env.GROWTH_OPENAI_IMAGE_MODEL || "gpt-image-2";
     const prompt = buildCreativeImagePrompt(input);
-    await reserveGrowthImageAttempt({
+    const reservationId = await reserveGrowthImageAttempt({
       jobId: this.jobId, model, prompt, size: "1024x1536", quality: "medium",
     });
     const client = new OpenAI({ apiKey: env.OPENAI_API_KEY, maxRetries: 0 });
@@ -142,9 +143,22 @@ export class OpenAICreativeImageProvider implements CreativeAiImageProvider {
       background: "opaque",
       });
     } catch {
+      try {
+        await appendGrowthAiUsageEvidence({ reservationId, outcome: "OUTCOME_UNKNOWN" });
+      } catch {
+        throw new GrowthBudgetBlockedError("AI_USAGE_LEDGER_WRITE_FAILED");
+      }
       throw new GrowthBudgetBlockedError("IMAGE_PROVIDER_OUTCOME_UNKNOWN");
     }
     const encoded = response.data?.[0]?.b64_json;
+    try {
+      await appendGrowthAiUsageEvidence({
+        reservationId, outcome: "RESPONSE_RECEIVED",
+        imageUnits: encoded ? 1 : null,
+      });
+    } catch {
+      throw new GrowthBudgetBlockedError("AI_USAGE_LEDGER_WRITE_FAILED");
+    }
     if (!encoded) throw new Error("OpenAI image generation returned no image data.");
     const source = Buffer.from(encoded, "base64");
     if (!source.length || source.length > MAX_CREATIVE_BYTES) throw new Error("OpenAI image generation returned an invalid bounded image.");

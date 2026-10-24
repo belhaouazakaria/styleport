@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   reserve: vi.fn(),
   generate: vi.fn(),
+  record: vi.fn(),
   model: "gpt-4.1-mini",
 }));
 vi.mock("@/lib/growth/economics/text-admission", () => ({
@@ -14,6 +15,7 @@ vi.mock("@/lib/growth/economics/reservations", () => ({
   },
 }));
 vi.mock("@/lib/openai", () => ({ generateOpenAIText: mocks.generate }));
+vi.mock("@/lib/growth/economics/usage-evidence", () => ({ appendGrowthAiUsageEvidence: mocks.record }));
 vi.mock("@/lib/env", () => ({
   getServerEnv: () => ({ OPENAI_MODEL: mocks.model }),
 }));
@@ -38,6 +40,7 @@ describe("Paid Growth text generation boundary", () => {
     vi.clearAllMocks();
     mocks.model = "gpt-4.1-mini";
     mocks.reserve.mockResolvedValue("reservation-1");
+    mocks.record.mockResolvedValue({ id: "usage-1" });
     mocks.generate.mockResolvedValue({
       model: "gpt-4.1-mini", text: "{}", promptTokens: 20,
       completionTokens: 30, totalTokens: 50,
@@ -95,5 +98,6 @@ describe("Paid Growth text generation boundary", () => {
     await expect(new OpenAITranslatorGenerationProvider("decision-3").generate(translator))
       .rejects.toThrow("TEXT_PROVIDER_OUTCOME_UNKNOWN");
     expect(mocks.generate).toHaveBeenCalledTimes(1);
+    expect(mocks.record).toHaveBeenCalledWith({ reservationId: "reservation-1", outcome: "OUTCOME_UNKNOWN" });
   });
 });

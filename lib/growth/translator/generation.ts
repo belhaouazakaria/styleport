@@ -4,6 +4,7 @@ import { generateOpenAIText } from "@/lib/openai";
 import { DEFAULT_MODEL } from "@/lib/constants";
 import { getServerEnv } from "@/lib/env";
 import { reserveGrowthTextAttempt } from "@/lib/growth/economics/text-admission";
+import { appendGrowthAiUsageEvidence } from "@/lib/growth/economics/usage-evidence";
 import { GrowthBudgetBlockedError } from "@/lib/growth/economics/reservations";
 import {
   MAX_CATEGORY_OPTIONS,
@@ -164,7 +165,7 @@ export class OpenAITranslatorGenerationProvider implements TranslatorGenerationP
         JSON.stringify(outputShape),
       ].filter(Boolean).join("\n\n");
     const model = getServerEnv().OPENAI_MODEL || DEFAULT_MODEL;
-    await reserveGrowthTextAttempt({
+    const reservationId = await reserveGrowthTextAttempt({
       decisionId: this.decisionId, contentKind: "translator", attempt: repair ? 1 : 0,
       model, systemPrompt, userPrompt, maxOutputTokens: 2600,
     });
@@ -175,14 +176,29 @@ export class OpenAITranslatorGenerationProvider implements TranslatorGenerationP
         maximumAttemptsPerModel: 1, allowModelFallback: false, sdkMaxRetries: 0,
       });
     } catch {
-      // Network/provider failure could have been billed. Keep the reservation.
+      // Provider may have billed the attempted request even if response was lost.
+      try {
+        await appendGrowthAiUsageEvidence({ reservationId, outcome: "OUTCOME_UNKNOWN" });
+      } catch {
+        throw new GrowthBudgetBlockedError("AI_USAGE_LEDGER_WRITE_FAILED");
+      }
       throw new GrowthBudgetBlockedError("TEXT_PROVIDER_OUTCOME_UNKNOWN");
+    }
+    try {
+      await appendGrowthAiUsageEvidence({
+        reservationId, outcome: "RESPONSE_RECEIVED",
+        responseId: result.responseId,
+        inputTokens: result.promptTokens, outputTokens: result.completionTokens,
+        totalTokens: result.totalTokens,
+      });
+    } catch {
+      throw new GrowthBudgetBlockedError("AI_USAGE_LEDGER_WRITE_FAILED");
     }
     let draft: TranslatorDraft;
     const metadata = {
       provider: "OPENAI",
       model: result.model,
-      responseId: null,
+      responseId: result.responseId ?? null,
       promptTokens: result.promptTokens,
       completionTokens: result.completionTokens,
       totalTokens: result.totalTokens,

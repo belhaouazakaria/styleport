@@ -95,6 +95,7 @@ async function tryGenerate(params: {
       return {
         text: result,
         usage: extractUsage(response),
+        responseId: response.id,
       };
     }
   }
@@ -110,7 +111,7 @@ export async function generateOpenAIText(params: {
   maximumAttemptsPerModel?: 1 | 2;
   allowModelFallback?: boolean;
   sdkMaxRetries?: 0;
-}): Promise<{ text: string; model: string; promptTokens: number | null; completionTokens: number | null; totalTokens: number | null }> {
+}): Promise<{ text: string; model: string; promptTokens: number | null; completionTokens: number | null; totalTokens: number | null; responseId?: string | null }> {
   const env = getServerEnv();
   const client = getClient();
   const envModel = env.OPENAI_MODEL || DEFAULT_MODEL;
@@ -132,7 +133,7 @@ export async function generateOpenAIText(params: {
       });
 
       if (generated) {
-        return { text: generated.text, model, ...generated.usage };
+        return { text: generated.text, model, ...generated.usage, responseId: generated.responseId };
       }
     } catch (error) {
       logError("openai_content_generation_error", "OpenAI content generation failed for model candidate.", { model }, error);
