@@ -406,3 +406,8 @@ Required before acceptance: trusted provider charge settlement, live Postgres tr
 CI now qualifies true PostgreSQL row-lock serialization, budget reservation idempotency, immutable provider response events, and admin warning transitions on a disposable exact-name loopback database. It does not run paid API or production tests. The read-only admin spend view keeps estimates distinct from verified charges.
 
 The UTC daily Telegram report entry point runs only when two distinct server-side gates are set true: `GROWTH_DAILY_REPORT_SCHEDULE_ENABLED` and `TELEGRAM_REPORTS_ENABLED`. It archives yesterday (only after 04:00 UTC), sends no more than once per immutable report, and never retries an unknown outcome. The script is NOT installed in cron/systemd or activated. A production-like migration dry run, private Telegram recipient acceptance, verified external billing-source reconciliation and Phase 14 rollout approval remain outstanding.
+
+
+### Phase 13L settlement provenance gate
+
+Direct reconciliation from caller supplied actualCostCents is forbidden. The legacy helper now blocks all settlement attempts pending a dedicated provider-billing provenance and administrative audit workflow. Reservation exposure remains pessimistic. Unreconciled is a truthful status; missing billing data must not be displayed as zero cost.

@@ -206,3 +206,8 @@ No automated alert notifications, billing reconciliation, scheduler or Telegram 
 `.github/workflows/growth-phase13-db.yml`, `scripts/test-growth-economics-db.sh` and `tests/growth-economics-persistence.integration.test.ts` validate actual disposable PostgreSQL reservations, concurrency, append-only usage trigger, warning locking and migrations. Test-only cleanup truncates immutable events solely after a guarded exact loopback database URL validation; no production delete capability is added.
 
 `lib/growth/reporting/daily-runner.ts` + `workers/growth-report-runner.ts` implement one-shot previous-UTC-day archiving/delivery at or after 04:00 UTC, guarded by BOTH `GROWTH_DAILY_REPORT_SCHEDULE_ENABLED` and `TELEGRAM_REPORTS_ENABLED` (both default disabled). No timer/cron has been created. A confirmed already-submitted report is a no-op; SENDING/UNKNOWN is terminal, no resend. Running the CLI does not enable Growth or paid AI. Operator must approve and verify live Telegram private recipient delivery before scheduling, and verify billing source documents before recording any actual settlement.
+
+
+## Phase 13L no invented billing actuals
+
+`reconcileGrowthAiBudget` now fails closed with `VERIFIED_BILLING_EVIDENCE_REQUIRED` regardless of caller-supplied numbers. The immutable provider-response evidence gives estimation only; no verified invoice/project usage source has been connected. Do not reduce budget reservations, change the status to RECONCILED or assert actual cost until an approved verified-cost source and audit workflow is designed and tested. No invoice, billing account, live OpenAI provider request or production database was accessed.

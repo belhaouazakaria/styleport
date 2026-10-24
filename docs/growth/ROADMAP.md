@@ -400,3 +400,8 @@ Dedicated disposable-PostgreSQL CI job now executes actual migrations, six concu
 The `npm run growth:daily-report` one-shot runner archives the **previous complete UTC day** no earlier than 04:00 UTC, then attempts exactly one Telegram delivery using the report's durable claim. Both `GROWTH_DAILY_REPORT_SCHEDULE_ENABLED=true` and `TELEGRAM_REPORTS_ENABLED=true` are independently required; otherwise it exits without a database archive or network send. Repeating a confirmed SUBMITTED report produces ALREADY_SENT with no new request; SENDING/OUTCOME_UNKNOWN failures stay blocked. No cron/systemd timer or schedule was installed and no live message was sent.
 
 **Next required:** verified invoice-based actual-cost settlement and source provenance, staging-like acceptance of the new database migration, security qualification of report and warning views, Telegram private-chat provisioning and one explicitly authorized live send, then approval of any UTC daily schedule. Keep Growth, attribution and publishing disabled; Phase 13 is NOT complete, Phase 14 NOT started.
+
+
+### Phase 13L — fail-closed actual-cost settlement (2026-10-24)
+
+The previous permissive `reconcileGrowthAiBudget` function has been blocked unconditionally with `VERIFIED_BILLING_EVIDENCE_REQUIRED`. A caller-supplied cost number or usage-derived estimate is not an OpenAI invoice and may never set `reconciledCents` or `RECONCILED`. Conservative reservations remain counted. Implement source-authenticated project-level provider billing ingestion/attestation, per-attempt cost attribution (where possible), discrepancy controls and actor audit BEFORE allowing actual reconciliation. This is a deliberate incomplete release gate, not a completed settlement system.
