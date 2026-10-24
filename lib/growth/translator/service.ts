@@ -14,7 +14,7 @@ import { recordGrowthActivity } from "@/lib/growth/activity";
 import { GROWTH_SETTINGS_ID } from "@/lib/growth/contracts";
 import { RetryableGrowthJobError } from "@/lib/growth/errors";
 import { GrowthBudgetBlockedError } from "@/lib/growth/economics/reservations";
-import { assertGrowthContentQuotaUnderLock, GrowthContentQuotaError } from "@/lib/growth/economics/content-quotas";
+import { assertGrowthContentQuotaUnderLock, preflightGrowthContentQuota, GrowthContentQuotaError } from "@/lib/growth/economics/content-quotas";
 import { enqueueGrowthJob } from "@/lib/growth/jobs";
 import { resolveCategory } from "@/lib/growth/translator/categories";
 import {
@@ -453,6 +453,20 @@ async function executeTranslatorDecisionAttempt(
   if (prepared.decision.type === GrowthDecisionType.IMPROVE_TRANSLATOR && (!prepared.current || !prepared.expectedTargetChecksum || prepared.current.checksum !== prepared.expectedTargetChecksum)) {
     await updateFailure(decisionId, GrowthDecisionStatus.WAITING_DATA, DECISION_REASON.TARGET_CHANGED);
     return { decision: await prisma.growthDecision.findUniqueOrThrow({ where: { id: decisionId } }), translatorId: prepared.decision.translatorId, reused: false, blocked: true };
+  }
+  // Advisory only: final content mutation checks this quota again under FOR UPDATE.
+  // Check BEFORE billable provider.generate() so an already-full quota spends $0.
+  try {
+    await preflightGrowthContentQuota(
+      prepared.decision.type === GrowthDecisionType.CREATE_TRANSLATOR ? "TRANSLATOR_CREATE" : "TRANSLATOR_IMPROVE",
+    );
+  } catch (error) {
+    if (!(error instanceof GrowthContentQuotaError)) throw error;
+    await updateFailure(decisionId, GrowthDecisionStatus.WAITING_DATA, error.reason);
+    return {
+      decision: await prisma.growthDecision.findUniqueOrThrow({ where: { id: decisionId } }),
+      translatorId: prepared.decision.translatorId, reused: false, blocked: true,
+    };
   }
   let generated;
   let repairAttempted = false;

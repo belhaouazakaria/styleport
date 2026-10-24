@@ -5,6 +5,7 @@ import {
 } from "@prisma/client";
 import { GROWTH_SETTINGS_ID } from "@/lib/growth/contracts";
 import { NonRetryableGrowthJobError } from "@/lib/growth/errors";
+import { prisma } from "@/lib/prisma";
 
 export type GrowthContentQuotaKind = "TRANSLATOR_CREATE" | "TRANSLATOR_IMPROVE" | "IDEA_CREATE";
 
@@ -25,18 +26,13 @@ export function growthQuotaUtcStart(kind: GrowthContentQuotaKind, now: Date) {
   return today;
 }
 
-/**
- * MUST run inside the same Prisma mutation transaction, AFTER acquiring the
- * GrowthSettings singleton row FOR UPDATE, BEFORE content mutation/versioning.
- * The row lock serializes competing content submissions across worker processes.
- * A plain read outside that lock is not an admission decision.
- */
-export async function assertGrowthContentQuotaUnderLock(
-  tx: Pick<Prisma.TransactionClient, "growthSettings" | "growthContentVersion" | "growthIdeaVersion">,
-  kind: GrowthContentQuotaKind,
-  now = new Date(),
+type QuotaReadClient = Pick<Prisma.TransactionClient, "growthSettings" | "growthContentVersion" | "growthIdeaVersion">;
+
+/** Shared quota calculation. Only the caller's transaction lock makes it authoritative. */
+async function checkQuota(
+  db: QuotaReadClient, kind: GrowthContentQuotaKind, now: Date,
 ) {
-  const settings = await tx.growthSettings.findUnique({
+  const settings = await db.growthSettings.findUnique({
     where: { id: GROWTH_SETTINGS_ID },
     select: {
       enabled: true, translatorCreatesPerDayCap: true,
@@ -50,10 +46,10 @@ export async function assertGrowthContentQuotaUnderLock(
   if (!Number.isSafeInteger(cap) || cap < 0) throw new GrowthContentQuotaError("INVALID_CONTENT_CAP");
   const from = growthQuotaUtcStart(kind, now);
   const used = kind === "IDEA_CREATE"
-    ? await tx.growthIdeaVersion.count({
+    ? await db.growthIdeaVersion.count({
         where: { action: GrowthIdeaVersionAction.CREATE, createdAt: { gte: from } },
       })
-    : await tx.growthContentVersion.count({
+    : await db.growthContentVersion.count({
         where: {
           action: kind === "TRANSLATOR_CREATE"
             ? GrowthContentVersionAction.CREATE : GrowthContentVersionAction.IMPROVE,
@@ -61,4 +57,31 @@ export async function assertGrowthContentQuotaUnderLock(
         },
       });
   if (used >= cap) throw new GrowthContentQuotaError(kind + "_LIMIT");
+}
+
+
+/**
+ * Read-only, non-authoritative preflight to avoid paying for obviously
+ * quota-exhausted content. A concurrent worker can fill the last slot after
+ * this check. NEVER use this as the final write authorization.
+ */
+export async function preflightGrowthContentQuota(
+  kind: GrowthContentQuotaKind,
+  now = new Date(),
+  db: QuotaReadClient = prisma,
+) {
+  return checkQuota(db, kind, now);
+}
+
+/**
+ * Authoritative check. Caller MUST already hold GrowthSettings FOR UPDATE
+ * in the SAME transaction that persists the new content version. Serialize
+ * worker mutations and budget-setting changes on that singleton row.
+ */
+export async function assertGrowthContentQuotaUnderLock(
+  tx: QuotaReadClient,
+  kind: GrowthContentQuotaKind,
+  now = new Date(),
+) {
+  return checkQuota(tx, kind, now);
 }

@@ -14,7 +14,7 @@ import { recordGrowthActivity } from "@/lib/growth/activity";
 import { GROWTH_SETTINGS_ID } from "@/lib/growth/contracts";
 import { RetryableGrowthJobError } from "@/lib/growth/errors";
 import { GrowthBudgetBlockedError } from "@/lib/growth/economics/reservations";
-import { assertGrowthContentQuotaUnderLock, GrowthContentQuotaError } from "@/lib/growth/economics/content-quotas";
+import { assertGrowthContentQuotaUnderLock, preflightGrowthContentQuota, GrowthContentQuotaError } from "@/lib/growth/economics/content-quotas";
 import { enqueueGrowthJob } from "@/lib/growth/jobs";
 import { resolveIdeaCategory } from "@/lib/growth/ideas/categories";
 import { checksumIdeaCandidate } from "@/lib/growth/ideas/checksum";
@@ -311,6 +311,19 @@ async function executeIdeaDecisionAttempt(decisionId: string, options: ExecuteId
   if (prepared.decision.type === GrowthDecisionType.IMPROVE_IDEA && (!prepared.current || prepared.current.checksum !== prepared.expectedChecksum)) {
     await updateFailure(decisionId, GrowthDecisionStatus.WAITING_DATA, IDEA_DECISION_REASON.TARGET_CHANGED);
     return { decision: await prisma.growthDecision.findUniqueOrThrow({ where: { id: decisionId } }), reused: false, blocked: true };
+  }
+  if (prepared.decision.type === GrowthDecisionType.CREATE_IDEA) {
+    // Advisory only: final create remains under the exclusive settings row lock.
+    try {
+      await preflightGrowthContentQuota("IDEA_CREATE");
+    } catch (error) {
+      if (!(error instanceof GrowthContentQuotaError)) throw error;
+      await updateFailure(decisionId, GrowthDecisionStatus.WAITING_DATA, error.reason);
+      return {
+        decision: await prisma.growthDecision.findUniqueOrThrow({ where: { id: decisionId } }),
+        reused: false, blocked: true,
+      };
+    }
   }
   const provider = options.provider || new OpenAIIdeaGenerationProvider(decisionId);
   const attempts: IdeaGenerationMetadata[] = [];

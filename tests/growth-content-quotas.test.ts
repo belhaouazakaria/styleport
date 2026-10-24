@@ -3,7 +3,7 @@ import {
 } from "@prisma/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { assertGrowthContentQuotaUnderLock, growthQuotaUtcStart } from "@/lib/growth/economics/content-quotas";
+import { assertGrowthContentQuotaUnderLock, growthQuotaUtcStart, preflightGrowthContentQuota } from "@/lib/growth/economics/content-quotas";
 
 const db = {
   growthSettings: { findUnique: vi.fn() },
@@ -48,6 +48,28 @@ describe("Transactional Growth content quotas (under caller's settings row lock)
     expect(db.growthIdeaVersion.count).toHaveBeenCalledWith({
       where: { action: GrowthIdeaVersionAction.CREATE, createdAt: { gte: new Date("2026-10-19T00:00:00Z") } },
     });
+  });
+  it("preflights a full quota without reserving AI spend, with the same UTC accounting", async () => {
+    db.growthContentVersion.count.mockResolvedValue(1);
+    await expect(preflightGrowthContentQuota("TRANSLATOR_CREATE", date, db as never))
+      .rejects.toThrow("TRANSLATOR_CREATE_LIMIT");
+    expect(db.growthContentVersion.count).toHaveBeenCalledWith({
+      where: { action: GrowthContentVersionAction.CREATE, createdAt: { gte: new Date("2026-10-25T00:00:00Z") } },
+    });
+  });
+  it("preflight is advisory: authoritative locked check still blocks a concurrent slot claim", async () => {
+    db.growthIdeaVersion.count.mockResolvedValueOnce(1).mockResolvedValueOnce(2);
+    await expect(preflightGrowthContentQuota("IDEA_CREATE", date, db as never))
+      .resolves.toBeUndefined();
+    await expect(assertGrowthContentQuotaUnderLock(db as never, "IDEA_CREATE", date))
+      .rejects.toThrow("IDEA_CREATE_LIMIT");
+  });
+  it("does not consume a quota for an Idea improvement", async () => {
+    // Only CREATE_IDEA is subject to the accepted Ideas/week cap.
+    db.growthIdeaVersion.count.mockResolvedValue(2);
+    await expect(preflightGrowthContentQuota("TRANSLATOR_IMPROVE", date, db as never))
+      .resolves.toBeUndefined();
+    expect(db.growthIdeaVersion.count).not.toHaveBeenCalled();
   });
   it("fails closed on disabled Growth, invalid configuration, missing settings", async () => {
     db.growthSettings.findUnique.mockResolvedValueOnce({ ...settings, enabled: false });
