@@ -362,3 +362,8 @@ This is not a statement of actual billed cost, a reconciled ledger, or complete 
 Growth Translator/Ideas text calls now reserve 20 cents per bounded, pinned `gpt-4.1-mini` API attempt; both initially generated and explicitly requested repair drafts have distinct per-decision keys. The OpenAI SDK retry is disabled for these Growth calls and model fallback is disabled. Unknown price/model/prompt envelope and reused reservations stop before an API call, while HTTP ambiguity retains the pessimistic reservation and forbids retry.
 
 **These are reserved maximum exposures, not provider-confirmed actual USD charges.** A complete provider-priced actual/estimated ledger, settlement and cost-per-conversion reporting, content-action quotas and production concurrency validation are still required. Growth remains disabled.
+
+
+### Phase 13F content volume ceilings — implemented at write boundary
+
+The 1-Translator-create/UTC-day, 3-Translator-improvement/UTC-day and 2-Ideas-create/UTC-week caps now use `GrowthContentVersion` and `GrowthIdeaVersion` records to count already accepted worker mutations. The check is performed after acquiring a strong lock on the singleton Growth settings record, in the same transaction that applies the mutation, so parallel Growth workers cannot oversubscribe the period. The cap stops content creation, not background budget debits that may already have occurred during candidate generation. The remaining work includes earlier nonauthoritative preflights to avoid waste, full concurrent PostgreSQL tests, durable actual-cost settlement, warnings/admin UI, reporting delivery activation and Phase 14 rollout.

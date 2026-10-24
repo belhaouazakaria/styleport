@@ -348,3 +348,10 @@ Supersedes the earlier Phase 13D statement that text was uncovered. The feature 
 These reserved ceilings are budget exposure, **not actual invoice amounts**. The pricing registry must be reverified when model/rates change. The shared ordinary SayTwist translation helper retains its prior retry/fallback behavior unless called with the explicit Growth options. Production Growth remains disabled.
 
 **Still not complete:** actual billed provider-cost append-only ledger, reconciliation/settlement, transactional content mutations caps (1 new translator/day, 3 improvements/day, 2 Ideas/week), database concurrency proof, warnings/admin report UX, Telegram setup/live delivery, scheduled recurrence and Phase 14 qualification.
+
+
+### Phase 13F — transactional content mutation ceilings (2026-10-24)
+
+The feature branch now checks configured content caps under the same PostgreSQL `GrowthSettings` singleton `FOR UPDATE` lock and transaction as the final approved Growth mutation, with counters from immutable version records. The initial accepted limits are 1 new Translator/UTC day, 3 Translator improvement versions/UTC day, and 2 new Ideas/UTC Monday-start calendar week. Idempotently reused existing mutations exit before quota admission, and rollover boundaries are UTC. A limit blocks the content mutation and leaves a waiting-data decision; the agent does not manufacture extra work to fill quotas. Rollback operations remain outside creation/improvement counters, preserving operator recovery options.
+
+The transaction lock ensures competing workers cannot both observe the same remaining slot while applying new content. **Remaining:** avoid unnecessary AI expense by adding a nonauthoritative early quota check before generation; validate with real concurrent PostgreSQL tests and production schema migration. The full append-only actual-cost ledger/settlement, warning/report admin UX, Telegram provisioning and controlled delivery, scheduling, monitoring, phase acceptance and Phase 14 remain unfinished. Keep Growth and attribution off.
