@@ -14,6 +14,7 @@
     "start:hostinger": "node server.js",
     "start:editorial-worker": "tsx workers/editorial-worker.ts",
     "growth:worker": "tsx workers/growth-worker.ts",
+    "growth:daily-report": "tsx workers/growth-report-runner.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "check": "npm run lint && npm run typecheck && npm run test",
