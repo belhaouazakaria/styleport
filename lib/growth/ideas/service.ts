@@ -13,6 +13,7 @@ import {
 import { recordGrowthActivity } from "@/lib/growth/activity";
 import { GROWTH_SETTINGS_ID } from "@/lib/growth/contracts";
 import { RetryableGrowthJobError } from "@/lib/growth/errors";
+import { GrowthBudgetBlockedError } from "@/lib/growth/economics/reservations";
 import { enqueueGrowthJob } from "@/lib/growth/jobs";
 import { resolveIdeaCategory } from "@/lib/growth/ideas/categories";
 import { checksumIdeaCandidate } from "@/lib/growth/ideas/checksum";
@@ -310,7 +311,7 @@ async function executeIdeaDecisionAttempt(decisionId: string, options: ExecuteId
     await updateFailure(decisionId, GrowthDecisionStatus.WAITING_DATA, IDEA_DECISION_REASON.TARGET_CHANGED);
     return { decision: await prisma.growthDecision.findUniqueOrThrow({ where: { id: decisionId } }), reused: false, blocked: true };
   }
-  const provider = options.provider || new OpenAIIdeaGenerationProvider();
+  const provider = options.provider || new OpenAIIdeaGenerationProvider(decisionId);
   const attempts: IdeaGenerationMetadata[] = [];
   let generated;
   let repairUsed = false;
@@ -320,6 +321,7 @@ async function executeIdeaDecisionAttempt(decisionId: string, options: ExecuteId
     await persistIdeaGenerationMetadata(decisionId, attempts);
   }
   catch (error) {
+    if (error instanceof GrowthBudgetBlockedError) throw error;
     if (error instanceof IdeaGenerationError && error.metadata) {
       attempts.push(error.metadata);
       await persistIdeaGenerationMetadata(decisionId, attempts);
@@ -331,6 +333,7 @@ async function executeIdeaDecisionAttempt(decisionId: string, options: ExecuteId
       await persistIdeaGenerationMetadata(decisionId, attempts);
     }
     catch (repairError) {
+      if (repairError instanceof GrowthBudgetBlockedError) throw repairError;
       if (repairError instanceof IdeaGenerationError && repairError.metadata) {
         attempts.push(repairError.metadata);
         await persistIdeaGenerationMetadata(decisionId, attempts);
@@ -358,6 +361,7 @@ async function executeIdeaDecisionAttempt(decisionId: string, options: ExecuteId
       checksum = checksumIdeaCandidate(resolved.candidate);
       quality = validateIdeaQuality(resolved.candidate, { activeTranslatorIds: new Set(resolved.translatorIds), translatorContextById: resolved.translatorContextById, previousChecksum: prepared.current?.checksum, checksum });
     } catch (repairError) {
+      if (repairError instanceof GrowthBudgetBlockedError) throw repairError;
       if (repairError instanceof IdeaGenerationError && repairError.metadata) {
         attempts.push(repairError.metadata);
         await persistIdeaGenerationMetadata(decisionId, attempts);
@@ -455,6 +459,11 @@ export async function executeIdeaDecision(decisionId: string, options: ExecuteId
   catch (error) {
     const current = await prisma.growthDecision.findUnique({ where: { id: decisionId }, select: { status: true } });
     const uniqueConflict = error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+    if (error instanceof GrowthBudgetBlockedError) {
+      if (current?.status === GrowthDecisionStatus.EXECUTING)
+        await updateFailure(decisionId, GrowthDecisionStatus.FAILED_TERMINAL, error.reason);
+      throw error;
+    }
     if (error instanceof IdeaExecutionBlockedError && current?.status === GrowthDecisionStatus.EXECUTING) {
       await updateFailure(decisionId, error.status, error.reason);
       if (error.status === GrowthDecisionStatus.FAILED_RETRYABLE) throw new RetryableGrowthJobError(error.message);

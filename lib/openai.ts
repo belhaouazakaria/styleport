@@ -69,6 +69,7 @@ async function tryGenerate(params: {
   userPrompt: string;
   maxOutputTokens?: number;
   maximumAttempts?: 1 | 2;
+  sdkMaxRetries?: 0;
 }) {
   for (let attempt = 0; attempt < (params.maximumAttempts || 2); attempt += 1) {
     const temperature = attempt === 0 ? 0.7 : 0.45;
@@ -87,7 +88,7 @@ async function tryGenerate(params: {
       ],
       temperature,
       max_output_tokens: params.maxOutputTokens || 1000,
-    });
+    }, params.sdkMaxRetries === 0 ? { maxRetries: 0 } : {});
 
     const result = toPlainText(extractTextFromResponse(response));
     if (result) {
@@ -108,6 +109,7 @@ export async function generateOpenAIText(params: {
   maxOutputTokens?: number;
   maximumAttemptsPerModel?: 1 | 2;
   allowModelFallback?: boolean;
+  sdkMaxRetries?: 0;
 }): Promise<{ text: string; model: string; promptTokens: number | null; completionTokens: number | null; totalTokens: number | null }> {
   const env = getServerEnv();
   const client = getClient();
@@ -126,6 +128,7 @@ export async function generateOpenAIText(params: {
         userPrompt: params.userPrompt,
         maxOutputTokens: params.maxOutputTokens,
         maximumAttempts: params.maximumAttemptsPerModel,
+        sdkMaxRetries: params.sdkMaxRetries,
       });
 
       if (generated) {

@@ -13,6 +13,7 @@ import { invalidatePublicTranslatorCaches } from "@/lib/data/translator-cache-in
 import { recordGrowthActivity } from "@/lib/growth/activity";
 import { GROWTH_SETTINGS_ID } from "@/lib/growth/contracts";
 import { RetryableGrowthJobError } from "@/lib/growth/errors";
+import { GrowthBudgetBlockedError } from "@/lib/growth/economics/reservations";
 import { enqueueGrowthJob } from "@/lib/growth/jobs";
 import { resolveCategory } from "@/lib/growth/translator/categories";
 import {
@@ -446,7 +447,7 @@ async function executeTranslatorDecisionAttempt(
   }
 
   const prepared = await loadGenerationRequest(decisionId);
-  const provider = options.provider || new OpenAITranslatorGenerationProvider();
+  const provider = options.provider || new OpenAITranslatorGenerationProvider(decisionId);
   const beforeChecksum = prepared.current?.checksum || null;
   if (prepared.decision.type === GrowthDecisionType.IMPROVE_TRANSLATOR && (!prepared.current || !prepared.expectedTargetChecksum || prepared.current.checksum !== prepared.expectedTargetChecksum)) {
     await updateFailure(decisionId, GrowthDecisionStatus.WAITING_DATA, DECISION_REASON.TARGET_CHANGED);
@@ -460,6 +461,7 @@ async function executeTranslatorDecisionAttempt(
     attemptMetadata.push(generated.metadata);
     await persistGenerationMetadata(decisionId, attemptMetadata);
   } catch (error) {
+    if (error instanceof GrowthBudgetBlockedError) throw error;
     const failedMetadata = generationMetadataFromError(error);
     if (failedMetadata) attemptMetadata.push(failedMetadata);
     await persistGenerationMetadata(decisionId, attemptMetadata);
@@ -469,6 +471,7 @@ async function executeTranslatorDecisionAttempt(
       attemptMetadata.push(generated.metadata);
       await persistGenerationMetadata(decisionId, attemptMetadata);
     } catch (repairError) {
+      if (repairError instanceof GrowthBudgetBlockedError) throw repairError;
       const repairMetadata = generationMetadataFromError(repairError);
       if (repairMetadata) attemptMetadata.push(repairMetadata);
       await persistGenerationMetadata(decisionId, attemptMetadata);
@@ -505,6 +508,7 @@ async function executeTranslatorDecisionAttempt(
       input = mergeOperationalFields(draftToTranslatorInput({ draft: generated.draft, categoryIds: [repairedCategory.category.id], primaryCategoryId: repairedCategory.category.id }), prepared.current?.snapshot || null, repairedCategory.category.id);
       quality = validateTranslatorQuality(input, { activeCategoryIds, previous: prepared.current ? snapshotToTranslatorInput(prepared.current.snapshot) : null });
     } catch (error) {
+      if (error instanceof GrowthBudgetBlockedError) throw error;
       await updateFailure(decisionId, GrowthDecisionStatus.FAILED_TERMINAL, "QUALITY_REPAIR_FAILED");
       return { decision: await prisma.growthDecision.findUniqueOrThrow({ where: { id: decisionId } }), reused: false, blocked: true, error: error instanceof Error ? error.message : String(error) };
     }
@@ -686,6 +690,11 @@ export async function executeTranslatorDecision(
   } catch (error) {
     const current = await prisma.growthDecision.findUnique({ where: { id: decisionId }, select: { status: true } });
     const uniqueConflict = error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+    if (error instanceof GrowthBudgetBlockedError) {
+      if (current?.status === GrowthDecisionStatus.EXECUTING)
+        await updateFailure(decisionId, GrowthDecisionStatus.FAILED_TERMINAL, error.reason);
+      throw error;
+    }
     if (error instanceof ExecutionBlockedError && current?.status === GrowthDecisionStatus.EXECUTING) {
       await updateFailure(decisionId, error.status, error.reason);
       if (error.status === GrowthDecisionStatus.FAILED_RETRYABLE) throw new RetryableGrowthJobError(error.message);
