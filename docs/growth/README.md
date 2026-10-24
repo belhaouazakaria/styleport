@@ -112,3 +112,8 @@ Candidate generation supports active Translators and fully schema-valid publishe
 ### Phase 13 WhatsApp reporting choice
 
 Daily operator Growth digests are now planned for one WhatsApp recipient via OpenWA v5, hosted separately on the same VPS with a localhost-only API. This is the operator's preferred transport, not the Meta WhatsApp Business API. The adapter and formatter are development-only until private sender pairing, recipient existing-chat confirmation, a durable daily report archive, delivery idempotency and controlled rollout. See `OPENWA_RUNBOOK.md`.
+
+
+### 2026-10-24 Reporting transport update (supersedes WhatsApp section above)
+
+Telegram Bot API replaces OpenWA for the single private Growth executive digest recipient. The earlier OpenWA section is historical and not a current operational instruction. This is disabled-by-default feature-branch code; no live message, cron, deploy, Growth activation or recurring delivery is authorized. See TELEGRAM_RUNBOOK.md and the Phase 13C roadmap update.

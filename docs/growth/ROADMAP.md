@@ -259,7 +259,7 @@ Phase 12 v1 was deployed and production-validated on October 15, 2026; its immut
 
 ## Phase 13 — Economics, Admin and Reporting
 
-**Status:** In progress — Phase 13A read-only AI usage inventory implemented on feature branch; cost ledger, limits, reporting and delivery remain outstanding.
+**Status:** In progress — Phase 13A usage inventory, Phase 13B budget reservations, Phase 13C archived reports and opt-in Telegram delivery implemented on feature branch; full paid-call enforcement, quotas, scheduling and live validation remain outstanding.
 
 Deliver:
 
@@ -268,8 +268,8 @@ Deliver:
 - complete Growth dashboards;
 - warnings/recommended actions;
 - report archive;
-- WhatsApp provider if viable;
-- email fallback;
+- Telegram Bot API as preferred single-recipient notification provider;
+- optional future email fallback;
 - concise executive daily digest.
 
 Exit:
@@ -325,3 +325,10 @@ The operator selected OpenWA (self-hosted v5 Easy API) for one WhatsApp daily re
 ### Phase 13C reporting persistence status (2026-10-18)
 
 The operator confirmed availability of a dedicated WhatsApp **sender** number for OpenWA. Its value is intentionally excluded from Git; the operator has now confirmed a distinct personal recipient privately, also excluded from Git. The existing chat and OpenWA sender pairing still require verification. Implemented on the feature branch: source-backed UTC daily report snapshot/archive and one-attempt delivery state with a database claim before the external OpenWA call. No recurring enqueuer, report admin preview/reconciliation, production sender pairing or real WhatsApp message exists yet. Phase 13 is still **in progress**, and Phase 14 has not started.
+
+
+### 2026-10-24 — Telegram replaces WhatsApp report transport
+
+The operator abandoned OpenWA and the whatsapp-web.js fallback after session persistence and VPS device-linking failures. Telegram Bot API is now the chosen daily digest provider. The feature branch contains a fixed-host HTTPS adapter, private one-recipient chat validation, server-only credentials, bounded once-only sends, and durable archived report delivery. New delivery rows are labeled TELEGRAM, while old OpenWA history is retained unchanged. The older WhatsApp Phase 13 notes are historical only.
+
+This does NOT enable reporting, schedule a job, send messages, enable attribution, start Growth AI, or satisfy Phase 13 or 14 gates. Operator bot/chat setup, authorized delivery test, full provider-priced usage/cost enforcement, content quotas, warnings UI and controlled production qualification remain required. See TELEGRAM_RUNBOOK.md.

@@ -341,3 +341,10 @@ Provider interception and an authenticated/versioned model pricing source are st
 Operator decision: daily executive reports should go to a **single recipient through OpenWA**, not an email-first report. `lib/growth/reporting/openwa.ts` implements the opt-in v5 HTTP transport to `127.0.0.1` only, validates one `@c.us` chat recipient, requires `X-API-Key`, checks live session readiness, and never retries unknown send outcomes. `lib/growth/reporting/digest.ts` formats a conservative summary that labels uncollected conversion metrics and unpriced AI spend as unavailable.
 
 This transport is not yet connected to a durable report archive, once-per-day job or production schedule. Do not claim WhatsApp reports are operational before the recipient initiates a chat, the sender device is paired, and a controlled test proves submission. OpenWA is unofficial and may be restricted by WhatsApp/Meta. No automatic email fallback or multiple recipients. See `OPENWA_RUNBOOK.md`.
+
+
+## 2026-10-24 Phase 13C transport supersession
+
+Earlier WhatsApp provider sections in this specification are superseded. Telegram Bot API is now the preferred one-recipient provider, with email a possible future fallback. The feature branch uses a provider-independent plain-text digest and archived UTC daily reports, fixed-host HTTPS Telegram submission, opt-in server-only bot token/private chat ID, and durable one-attempt delivery claims. A successfully returned Telegram message ID means API submission, not recipient read confirmation.
+
+No Telegram bot has been provisioned through this feature, no message was sent, and no recurrence or production activation is enabled. Actual AI provider-cost interception, settlement, content quotas, warning lifecycle, reports UI, operator confirmation and rollout remain open. See TELEGRAM_RUNBOOK.md.

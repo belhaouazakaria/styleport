@@ -1,3 +1,5 @@
+> ARCHIVED / SUPERSEDED (2026-10-24). Telegram is now preferred. Historical reference only. Do not restart, re-pair or enable OpenWA for Growth reporting. See TELEGRAM_RUNBOOK.md.
+
 # OpenWA reporting provider — deployment preparation
 
 **Status:** Adapter and formatter implemented on isolated Phase 13 branch. No daily report archive, recurring scheduler, delivery-state persistence or production WhatsApp session is enabled by this file.

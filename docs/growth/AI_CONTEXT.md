@@ -143,3 +143,8 @@ Phase 13A begins with a read-only inventory at `/admin/growth/spend` using exist
 ### Phase 13C delivery decision
 
 User chose OpenWA to deliver a single daily WhatsApp Growth digest; no email delivery by default. The OpenWA v5 adapter and formatter are included in Phase 13's isolated branch, but no scheduled report or live WhatsApp account has been configured. Add a durable daily delivery state machine before wiring jobs to the provider, and never automatically retry when submission is uncertain. Sender and recipient account pairing is an operator-only task. Document and warn about unofficial WhatsApp Web account restrictions. See `OPENWA_RUNBOOK.md`.
+
+
+## 2026-10-24 Phase 13C Telegram migration
+
+The operator selected Telegram as the preferred Growth digest channel and abandoned WhatsApp/OpenWA after persistence and new-device pairing problems. The feature branch implements a disabled-by-default official Bot API adapter, a one-private-chat recipient restriction, sanitized error handling, no automatic retries and a plain-text digest; existing immutable archives and SENDING/SUBMITTED/OUTCOME_UNKNOWN database claims are retained. OPENWA_RUNBOOK.md is historical; use TELEGRAM_RUNBOOK.md. The service has not sent a Telegram message and has no schedule. No Growth, attribution, paid AI or Pinterest publication is enabled. Phase 13 still lacks enforcement and Phase 14 remains not started.

@@ -122,7 +122,7 @@ Full detail remains in `/admin/growth`.
 
 ## D-015 — WhatsApp desired, not assumed free
 
-**Status:** Accepted
+**Status:** Superseded 2026-10-24 by Telegram decision below; historical entry retained
 
 Implement notification provider abstraction. Verify current WhatsApp Business Platform cost/requirements during implementation and provide email fallback.
 
@@ -367,3 +367,10 @@ The operator specifically chose **WhatsApp** for daily Growth digests and reques
 ### 2026-10-18 — Dedicated WhatsApp sender and recipient separation
 
 The operator confirmed they own a dedicated WhatsApp **sender** number for OpenWA. Do not copy its phone number into GitHub, docs, code, activity logs or AI-generated reports. The sender's WhatsApp Web QR pairing is an operator-only step. The operator subsequently confirmed a distinct personal WhatsApp recipient on 2026-10-18. Neither the sender nor recipient number is to be stored in Git; configure the recipient only in a private VPS environment. The recipient must initiate an existing chat with the dedicated sender before any OpenWA messaging test. Chat establishment and sender pairing remain unverified. Keep `OPENWA_REPORTS_ENABLED=false` until explicit pairing, recipient verification, and controlled test delivery. One report per completed UTC date; persist `SENDING` before the external call and block all ambiguous resends.
+
+
+### 2026-10-24 — Telegram is the preferred Growth report provider
+
+**Accepted; supersedes the WhatsApp/OpenWA operator choice (including D-015).**
+
+Use the official Telegram Bot API for a single private recipient chat after the recipient starts the bot. No WhatsApp browser-pairing, unofficial OpenWA service or QR workflow is part of ongoing Growth development. The bot token and chat ID are private server-only values. Telegram delivery is opt-in and disabled by default. A single immutable UTC daily report has at most one external send attempt; network ambiguity is OUTCOME_UNKNOWN with no automatic retry. Telegram acceptance is not a read receipt. No live send, recurrence, deployment, or activation is authorized by this decision. Future email is optional, not implemented. Phase 13 economics and Phase 14 security and publishing qualification remain required.
