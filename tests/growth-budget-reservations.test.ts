@@ -16,7 +16,7 @@ vi.mock("@/lib/prisma", () => ({
 }));
 vi.mock("@/lib/growth/activity", () => ({ recordGrowthActivity: mocks.activity }));
 
-import { reserveGrowthAiBudget } from "@/lib/growth/economics/reservations";
+import { reserveGrowthAiBudget, reconcileGrowthAiBudget } from "@/lib/growth/economics/reservations";
 
 describe("Growth AI reservation safety", () => {
   beforeEach(() => {
@@ -39,6 +39,16 @@ describe("Growth AI reservation safety", () => {
 
   const request = { requestKey: "one-api-call", kind: GrowthAiOperationKind.IMAGE, provider: "OPENAI",
     model: "gpt-image-2", pricingVersion: "verified-tariff-v1", priceCeilingCents: 30 };
+
+  it("refuses unverified actual-charge settlement and never alters a reservation", async () => {
+    await expect(reconcileGrowthAiBudget({
+      reservationId: "reservation-1", actualCostCents: 3,
+    })).rejects.toThrow("VERIFIED_BILLING_EVIDENCE_REQUIRED");
+    await expect(reconcileGrowthAiBudget({
+      reservationId: "reservation-1", actualCostCents: null,
+    })).rejects.toThrow("VERIFIED_BILLING_EVIDENCE_REQUIRED");
+    expect(mocks.transaction).not.toHaveBeenCalled();
+  });
 
   it("fails before starting a transaction when request pricing is missing", async () => {
     await expect(reserveGrowthAiBudget({ ...request, priceCeilingCents: null }))

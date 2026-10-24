@@ -134,21 +134,17 @@ export async function reserveGrowthAiBudget(input: GrowthReservationRequest) {
   }, { timeout: 10_000 });
 }
 
-// Pessimistic reservations remain counted even after reconciliation so any
-// missing provider usage and retry ambiguity cannot silently free budget.
-export async function reconcileGrowthAiBudget(input: {
+/**
+ * Deliberately disabled until a verified provider-billing provenance model,
+ * actor audit and reliable per-request attribution are implemented.
+ *
+ * An arbitrary caller-supplied number (or response-token price ESTIMATE)
+ * MUST NOT be written as an actual billed cost. Reservations stay counted
+ * against the original hard daily/monthly budgets in the meantime.
+ */
+export async function reconcileGrowthAiBudget(_input: {
   reservationId: string;
   actualCostCents: number | null;
-}) {
-  if (!input.reservationId || input.reservationId.length > 191 ||
-      input.actualCostCents === null || !Number.isSafeInteger(input.actualCostCents) || input.actualCostCents < 0) {
-    throw new GrowthBudgetBlockedError("UNKNOWN_ACTUAL_COST");
-  }
-  const updated = await prisma.growthAiBudgetReservation.updateMany({
-    where: { id: input.reservationId, status: GrowthAiReservationStatus.RESERVED,
-      reservedCents: { gte: input.actualCostCents } },
-    data: { reconciledCents: input.actualCostCents,
-      status: GrowthAiReservationStatus.RECONCILED, reconciledAt: new Date() },
-  });
-  if (updated.count !== 1) throw new GrowthBudgetBlockedError("RECONCILIATION_FAILED_OR_OVER_CEILING");
+}): Promise<never> {
+  throw new GrowthBudgetBlockedError("VERIFIED_BILLING_EVIDENCE_REQUIRED");
 }
