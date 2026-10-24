@@ -367,3 +367,11 @@ Growth Translator/Ideas text calls now reserve 20 cents per bounded, pinned `gpt
 ### Phase 13F content volume ceilings — implemented at write boundary
 
 The 1-Translator-create/UTC-day, 3-Translator-improvement/UTC-day and 2-Ideas-create/UTC-week caps now use `GrowthContentVersion` and `GrowthIdeaVersion` records to count already accepted worker mutations. The check is performed after acquiring a strong lock on the singleton Growth settings record, in the same transaction that applies the mutation, so parallel Growth workers cannot oversubscribe the period. The cap stops content creation, not background budget debits that may already have occurred during candidate generation. The remaining work includes earlier nonauthoritative preflights to avoid waste, full concurrent PostgreSQL tests, durable actual-cost settlement, warnings/admin UI, reporting delivery activation and Phase 14 rollout.
+
+
+
+### Phase 13G administrator reserved budget visibility (2026-10-24)
+
+The read-only /admin/growth/spend view now distinguishes persisted budget reservation ceilings from historical provider usage estimates, exposing committed USD amounts for UTC day and month, image/day allocation and unresolved reservations, plus 20 recent durable attempts with pricing profiles and statuses. No credentials or provider request bodies are shown. Unknown actual charges remain unpriced/unknown, never represented as zero. The route is ADMIN-guarded and makes no billable provider request.
+
+A nonauthoritative pre-generation quota check now avoids paid Translator or new Idea generation when the known content quota is exhausted, followed by the same authoritative late write-transaction check to protect concurrent workers. Full billing ledger, reconciliation, warnings admin, background delivery, database concurrency tests and Phase 14 acceptance remain unimplemented.

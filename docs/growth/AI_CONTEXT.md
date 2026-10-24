@@ -169,3 +169,11 @@ No live OpenAI usage, admin spend settlement, content quota enforcement, staging
 Content mutation ceilings are now enforced in `lib/growth/economics/content-quotas.ts` from the actual version tables, while holding the `GrowthSettings` singleton row `FOR UPDATE` inside the same transaction as the public Translator/Ideas content change. Scope: CREATE Translator (1/UTC day), IMPROVE Translator (3/UTC day), CREATE Idea (2/UTC week beginning Monday). The existing per-decision mutation idempotency check runs before quota admission. Distinct active worker transactions serialize on the same settings lock. Quota-exhausted decisions become WAITING_DATA with no mutation. Version rollbacks remain separate recovery operations. No new schema is needed for the quota counter itself.
 
 The quota gate is late and authoritative. A pre-generation early advisory quota guard can be added later to prevent paying for content ultimately blocked by a concurrent or already-full quota. Tests added for UTC windows and cap behavior; full concurrent disposable PostgreSQL acceptance still required. No production release/activation. Phase 13 is not complete.
+
+
+
+## 2026-10-24 Phase 13G preflight and budget exposure admin
+
+Added read-only preflightGrowthContentQuota before Translator and CREATE_IDEA AI generation, using the same version-row UTC accounting policy as the final locked mutation. The preflight avoids deterministic quota waste but DOES NOT replace transaction-level lock/validation. The final mutation still serializes on GrowthSettings FOR UPDATE. No external API costs were incurred.
+
+The new lib/growth/economics/exposure.ts reads GrowthAiBudgetReservation daily/monthly sums, image counts, un-reconciled reservations and the last 20 rows using bounded local queries; /admin/growth/spend shows this separately from its historical AI usage inventory. Reserved amounts are conservative upper envelopes, not invoice spend, regardless of provider success, failure or uncertain outcome. Provider cost settlement remains incomplete. Disabled Growth, lack of Telegram recipient, lack of scheduling, and Phase 14 gating remain unchanged. Do not claim a completed ledger or production automation.
