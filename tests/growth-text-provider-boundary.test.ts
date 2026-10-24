@@ -20,7 +20,8 @@ vi.mock("@/lib/env", () => ({
   getServerEnv: () => ({ OPENAI_MODEL: mocks.model }),
 }));
 
-import { OpenAITranslatorGenerationProvider } from "@/lib/growth/translator/generation";
+import { OpenAITranslatorGenerationProvider, generateWithOneRepair } from "@/lib/growth/translator/generation";
+import { GrowthBudgetBlockedError } from "@/lib/growth/economics/reservations";
 import { OpenAIIdeaGenerationProvider } from "@/lib/growth/ideas/generation";
 
 const evidence = {
@@ -91,6 +92,13 @@ describe("Paid Growth text generation boundary", () => {
       model: "gpt-4.1-mini", maxOutputTokens: 4200,
       maximumAttemptsPerModel: 1, allowModelFallback: false, sdkMaxRetries: 0,
     }));
+  });
+
+  it("does not attempt any repair after a budget-blocked or ambiguous error", async () => {
+    const provider = { generate: vi.fn().mockRejectedValue(new GrowthBudgetBlockedError("TEXT_PROVIDER_OUTCOME_UNKNOWN")) };
+    await expect(generateWithOneRepair(provider as never, translator as never))
+      .rejects.toThrow("TEXT_PROVIDER_OUTCOME_UNKNOWN");
+    expect(provider.generate).toHaveBeenCalledTimes(1);
   });
 
   it("does not blindly retry an ambiguous paid request", async () => {
