@@ -45,11 +45,12 @@ export async function listGrowthBudgetWarnings() {
     const summary = w.summary && typeof w.summary === "object" &&
       !Array.isArray(w.summary) ? w.summary as Record<string, unknown> : {};
     const rawPercent = summary.thresholdPercent;
+    const thresholdPercent: 70 | 90 | null = rawPercent === 70 ? 70 : rawPercent === 90 ? 90 : null;
     return {
       id: w.id,
       createdAt: w.createdAt.toISOString(),
       reservationId: w.entityId,
-      thresholdPercent: rawPercent === 70 || rawPercent === 90 ? rawPercent : null,
+      thresholdPercent,
       state: stateFromWarningActions(byId.get(w.id) ?? []),
     };
   });

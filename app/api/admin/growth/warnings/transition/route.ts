@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     return apiOk(result);
   } catch (error) {
     if (error instanceof GrowthBudgetWarningError) {
-      return apiError(409, "WARNING_STATE_CONFLICT", error.message);
+      return apiError(409, "CONFLICT", error.message);
     }
     throw error;
   }
