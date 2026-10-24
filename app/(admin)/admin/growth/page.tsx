@@ -35,6 +35,9 @@ export default async function AdminGrowthPage() {
           <Link href="/admin/growth/spend" className={cn(buttonVariants({ variant: "outline" }))}>
             AI usage & cost coverage
           </Link>
+          <Link href="/admin/growth/warnings" className={cn(buttonVariants({ variant: "outline" }))}>
+            Budget warning review
+          </Link>
           <Link href="/admin/growth/reports" className={cn(buttonVariants({ variant: "outline" }))}>
             Archived daily reports
           </Link>

@@ -28,6 +28,9 @@ export default async function GrowthSpendPage({
           <Link href="/admin/growth" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
             ← Growth overview
           </Link>
+          <Link href="/admin/growth/warnings" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
+            Budget warnings
+          </Link>
           <form method="get">
             <select name="range" defaultValue={String(days)} className="rounded-xl border border-border px-3 py-2 text-sm">
               <option value="7">Last 7 days</option>
