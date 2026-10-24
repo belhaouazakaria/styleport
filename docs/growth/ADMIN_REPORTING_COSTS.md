@@ -355,3 +355,10 @@ No Telegram bot has been provisioned through this feature, no message was sent, 
 The opt-in Growth Creative Lab OpenAI image provider has a strict **30-cent per-request upper-bound reservation**, recorded before its fixed `gpt-image-2` medium 1024x1536 call. The conservative allowance is counted toward both USD daily/monthly budgets and the 3-images/day reservation cap. Failed and ambiguous attempts retain their budget reservations; no automatic retry is allowed. Unknown model prices/shapes fail closed.
 
 This is not a statement of actual billed cost, a reconciled ledger, or complete spend enforcement. **Text provider calls and content mutation quotas still require integration**, plus independent database concurrency tests, report/admin reconciliation and release gates. Until the entire boundary is qualified, keep Growth and recurring sending disabled.
+
+
+### Phase 13E text spending admission — partial
+
+Growth Translator/Ideas text calls now reserve 20 cents per bounded, pinned `gpt-4.1-mini` API attempt; both initially generated and explicitly requested repair drafts have distinct per-decision keys. The OpenAI SDK retry is disabled for these Growth calls and model fallback is disabled. Unknown price/model/prompt envelope and reused reservations stop before an API call, while HTTP ambiguity retains the pessimistic reservation and forbids retry.
+
+**These are reserved maximum exposures, not provider-confirmed actual USD charges.** A complete provider-priced actual/estimated ledger, settlement and cost-per-conversion reporting, content-action quotas and production concurrency validation are still required. Growth remains disabled.
