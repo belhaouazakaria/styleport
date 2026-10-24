@@ -24,7 +24,7 @@ describe("Append-only Growth AI request evidence", () => {
     expect(estimateGrowthTextMicroUsd({
       model: "gpt-4.1-mini", pricingVersion: GROWTH_TEXT_PRICE_VERSION,
       inputTokens: 1000, outputTokens: 500,
-    })).toBe(1200n);
+    })).toBe(BigInt(1200));
     expect(estimateGrowthTextMicroUsd({
       model: "unknown", pricingVersion: GROWTH_TEXT_PRICE_VERSION,
       inputTokens: 1000, outputTokens: 500,
@@ -42,7 +42,7 @@ describe("Append-only Growth AI request evidence", () => {
     expect(mocks.insert).toHaveBeenCalledWith({ data: {
       reservationId: "reservation-1", outcome: GrowthAiUsageOutcome.RESPONSE_RECEIVED,
       providerResponseId: "resp_123", inputTokens: 1000, outputTokens: 500,
-      totalTokens: 1500, imageUnits: null, estimatedMicroUsd: 1200n,
+      totalTokens: 1500, imageUnits: null, estimatedMicroUsd: BigInt(1200),
     } });
   });
   it("retains unknown outcome without inventing usage or settlement", async () => {

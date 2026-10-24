@@ -21,8 +21,8 @@ export function estimateGrowthTextMicroUsd(input: {
       !Number.isSafeInteger(input.inputTokens) || !Number.isSafeInteger(input.outputTokens) ||
       input.inputTokens < 0 || input.outputTokens < 0 ||
       input.inputTokens > 10_000_000 || input.outputTokens > 10_000_000) return null;
-  const units = 2n * BigInt(input.inputTokens) + 8n * BigInt(input.outputTokens);
-  return (units + 4n) / 5n;
+  const units = BigInt(2) * BigInt(input.inputTokens) + BigInt(8) * BigInt(input.outputTokens);
+  return (units + BigInt(4)) / BigInt(5);
 }
 
 function validTokenCount(value: number | null | undefined): value is number {
