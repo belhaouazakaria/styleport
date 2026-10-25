@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 import { discoverGrowthTelegramPrivateChat } from "@/lib/growth/reporting/pairing";
+import { safeGrowthTelegramPairingFailureCode } from "@/lib/growth/reporting/pairing-diagnostics";
 
 /**
  * Never print tokens, message updates, pairing codes, chat IDs or response
@@ -23,8 +24,8 @@ async function main() {
     }
     console.log("[growth-telegram] Private recipient ID saved in the operator's restricted configuration directory.");
     console.log("[growth-telegram] No Telegram message sent. Do not commit or share the private ID file.");
-  } catch {
-    console.error("[growth-telegram] Pairing discovery blocked. Check the private /start code and an unused bot.");
+  } catch (error) {
+    console.error("[growth-telegram] Pairing discovery blocked:", safeGrowthTelegramPairingFailureCode(error));
     process.exitCode = 1;
   }
 }
