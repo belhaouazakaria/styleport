@@ -413,3 +413,7 @@ A one-shot private Telegram setup verifier is implemented under `lib/growth/repo
 ### Phase 13O — isolated staging and role security qualification prep (2026-10-25)
 
 Added a no-provider-call permission-boundary suite for Phase 13 ADMIN pages and warning API, and a self-contained `PHASE13_RELEASE_QUALIFICATION.md` release/rollback matrix. The checklist retains both report gates OFF, requires independently authorized staging deployment and real PostgreSQL 18 migration rehearsal, and separates bot provisioning from one approved live send. The operator still needs to provide real trusted billing source/project-scoping decision and consent for live tests; no staging/production deployment or Telegram send occurred from this code-only phase.
+
+### Phase 13P — explicit staging-only single Telegram report acceptance path (2026-10-25)
+
+A new `growth:telegram:acceptance` CLI supports one **operator-authorized** complete-UTC-day digest send after verified bot/private recipient onboarding and staging setup. Its own default-off flag, isolated-staging marker, exact day-bound confirmation and mandatory disabled regular schedule are separate from the recurring daily runner. It uses unchanged PostgreSQL report claim/UNKNOWN no-retry guarantees. New unit tests call no external Telegram API. Real acceptance, confirmed receipt and operator signoff remain outstanding. Do not assume this work finishes Phase 13 or deploy/enable any live automation.
