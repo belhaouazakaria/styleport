@@ -19,9 +19,14 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || github.head_ref == 'phase/13-finance-reporting'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres-major: ["16", "18"]
+    name: PostgreSQL ${{ matrix.postgres-major }}
     services:
       postgres:
-        image: postgres:16
+        image: postgres:${{ matrix.postgres-major }}
         env:
           POSTGRES_USER: phase13
           POSTGRES_PASSWORD: phase13_ci_only
