@@ -297,3 +297,7 @@ Additional `tests/growth-phase13-admin-boundaries.test.ts` exercises ADMIN befor
 ### Phase 13P one-send Telegram acceptance guard verification (2026-10-25)
 
 The `tests/growth-telegram-acceptance.test.ts` suite verifies default-disabled mode touches neither archive nor sender, confirms distinct isolated staging/confirmation/schedule/transport gates, validates UTC date/time, rejects a mismatched archived report ID and propagates an unknown send outcome without fallback. No CI Telegram token, API call, real message, cron or runtime flag activation is used. Staging must still check the PostgreSQL once-only claim and manually validate one real private-chat reception under independently approved execution.
+
+### Phase 13Q archived daily report database integrity (2026-10-25)
+
+Both disposable PostgreSQL-major CI jobs apply `20261025150000_growth_daily_report_append_only` and verify SQL-level UPDATE/DELETE attempts fail on real `GrowthDailyReport` rows. Existing report-delivery claim tests must still pass without touching immutable snapshots, and concurrent archive attempts now use INSERT with P2002 winner lookup rather than mutating upsert. Test-only TRUNCATE is allowed under the exact guarded disposable database URL; never use it outside CI. Schema persistence, auth/visual and human live recipient signoff are still required on separately authorized staging.
