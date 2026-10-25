@@ -32,10 +32,11 @@ if (enabled) {
 }
 
 async function clean() {
-  await prisma.growthReportDelivery.deleteMany();
-  // Only the exact-name guarded disposable CI database may be truncated.
-  // Real report archives are append-only and reject SQL UPDATE / DELETE.
-  await prisma.$executeRawUnsafe('TRUNCATE TABLE "GrowthDailyReport"');
+  // PostgreSQL requires referencing and referenced relations together in
+  // TRUNCATE even if the referencing table is empty. Both are CI fixtures only.
+  // The guard above must match the exact disposable loopback database.
+  // Never copy this SQL into staging or production.
+  await prisma.$executeRawUnsafe('TRUNCATE TABLE "GrowthReportDelivery", "GrowthDailyReport"');
   // Truncate is permitted ONLY in the guarded disposable test database: the
   // production SQL trigger must continue to reject UPDATE and DELETE of evidence.
   await prisma.$executeRawUnsafe('TRUNCATE TABLE "GrowthAiUsageEvent"');
