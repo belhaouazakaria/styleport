@@ -14,7 +14,7 @@ export const GROWTH_TEXT_RESERVE_CENTS = 20;
 
 export async function reserveGrowthTextAttempt(input: {
   decisionId: string;
-  contentKind: "translator" | "idea";
+  contentKind: "translator" | "idea" | "creative-example";
   attempt: 0 | 1;
   model: string;
   systemPrompt: string;
