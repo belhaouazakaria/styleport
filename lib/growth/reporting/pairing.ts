@@ -3,7 +3,6 @@
  * The operator sends /start <random-code> privately to the bot; a single
  * getUpdates snapshot matches only that code, not public/group traffic.
  */
-import { getTelegramReportSettings } from "@/lib/growth/reporting/telegram";
 import { TelegramProvisioningError } from "@/lib/growth/reporting/provisioning";
 
 const BOT_TOKEN_PATTERN = /^[1-9][0-9]{5,14}:[A-Za-z0-9_-]{30,}$/;
