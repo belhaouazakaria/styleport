@@ -293,3 +293,7 @@ The disposable PostgreSQL Phase 13 integration suite also creates real archived 
 ### Phase 13O protected UI/security verification and staging release gate (2026-10-25)
 
 Additional `tests/growth-phase13-admin-boundaries.test.ts` exercises ADMIN before fetching Growth report list/detail, spend exposure, and warnings; verifies origin, strict warning-body schema and session before any warning mutation. Test doubles make no actual database, Telegram, Pinterest or OpenAI requests. `PHASE13_RELEASE_QUALIFICATION.md` provides the separate manual staging PostgreSQL 18 migration, data/auth/UI viewport testing, rollback and human signoff matrix. CI green alone does not constitute visual acceptance or authorization for an external provider test.
+
+### Phase 13P one-send Telegram acceptance guard verification (2026-10-25)
+
+The `tests/growth-telegram-acceptance.test.ts` suite verifies default-disabled mode touches neither archive nor sender, confirms distinct isolated staging/confirmation/schedule/transport gates, validates UTC date/time, rejects a mismatched archived report ID and propagates an unknown send outcome without fallback. No CI Telegram token, API call, real message, cron or runtime flag activation is used. Staging must still check the PostgreSQL once-only claim and manually validate one real private-chat reception under independently approved execution.
