@@ -53,3 +53,7 @@ The **separate live-test gate** requires explicit operator authorization for one
 ## Additional one-send acceptance command
 
 The purpose-built `npm run growth:telegram:acceptance` is the only recommended human-invoked **live report acceptance** path after staging, bot private-chat validation and express authorization. It independently requires `GROWTH_TELEGRAM_ACCEPTANCE_ENABLED=true`, `GROWTH_TELEGRAM_ACCEPTANCE_ENVIRONMENT=isolated-staging`, daily schedule OFF, reporting transport ON, and the exact `SEND ONE TELEGRAM REPORT growth-YYYYMMDD` confirmation for **yesterday UTC** at or after 04:00 UTC. Unlike `growth:daily-report`, it never enables or invokes a recurring scheduler. It performs no provider/network call when disabled, reuses the one persistent once-only claim and propagates UNKNOWN/prior attempts with no retry. The CLI and tests do not constitute approval or real delivery. See TELEGRAM_RUNBOOK.md for private secret handling and a human receipt check.
+
+## Immutable report schema qualification
+
+The new `20261025150000_growth_daily_report_append_only` migration is mandatory in the isolated PostgreSQL 18 rehearsal. It refuses UPDATE and DELETE of archived daily snapshots. Confirm concurrent archival still picks the first date winner after the archive service's INSERT/P2002 handling and that delivery state changes remain possible. The disposable CI test harness uses TRUNCATE for fixture cleanup; **never copy that command onto production or a populated staging environment.**
