@@ -13,6 +13,7 @@ const now = new Date("2026-10-25T13:04:00.000Z");
 const permitted = {
   GROWTH_TELEGRAM_ACCEPTANCE_ENABLED: "true",
   GROWTH_TELEGRAM_ACCEPTANCE_ENVIRONMENT: "isolated-staging",
+  DATABASE_URL: "postgresql://test:test@127.0.0.1:5432/saytwist_growth_phase13_acceptance_test",
   GROWTH_TELEGRAM_ACCEPTANCE_CONFIRMATION: "SEND ONE TELEGRAM REPORT growth-20261024",
   GROWTH_DAILY_REPORT_SCHEDULE_ENABLED: "false",
   TELEGRAM_REPORTS_ENABLED: "true",
@@ -64,6 +65,31 @@ describe("Controlled one-shot Telegram staging acceptance — never send in CI",
     expect(mocks.archive.mock.invocationCallOrder[0]).toBeLessThan(mocks.send.mock.invocationCallOrder[0]);
   });
 
+  it("blocks a production database masquerading as staging", async () => {
+    await expect(runControlledGrowthTelegramAcceptance(now, {
+      ...permitted, DATABASE_URL: "postgresql://local:local@127.0.0.1:5433/saytwist",
+    })).rejects.toThrow("ISOLATED_STAGING_DATABASE_REQUIRED");
+    expect(mocks.archive).not.toHaveBeenCalled();
+    expect(mocks.send).not.toHaveBeenCalled();
+  });
+  it("requires explicit day-bound production approval and exact database destination", async () => {
+    const production = {
+      ...permitted, GROWTH_TELEGRAM_ACCEPTANCE_ENVIRONMENT: "production",
+      DATABASE_URL: "postgresql://local:local@127.0.0.1:5433/saytwist",
+    };
+    await expect(runControlledGrowthTelegramAcceptance(now, production))
+      .rejects.toThrow("PRODUCTION_SINGLE_SEND_APPROVAL_REQUIRED");
+    await expect(runControlledGrowthTelegramAcceptance(now, {
+      ...production, DATABASE_URL: permitted.DATABASE_URL,
+      GROWTH_TELEGRAM_PRODUCTION_APPROVAL: "I APPROVE ONE PRODUCTION DELIVERY growth-20261024",
+    })).rejects.toThrow("EXACT_PRODUCTION_DATABASE_REQUIRED");
+    expect(mocks.archive).not.toHaveBeenCalled();
+    await expect(runControlledGrowthTelegramAcceptance(now, {
+      ...production, GROWTH_TELEGRAM_PRODUCTION_APPROVAL:
+        "I APPROVE ONE PRODUCTION DELIVERY growth-20261024",
+    })).resolves.toMatchObject({ status: "SUBMITTED" });
+    expect(mocks.send).toHaveBeenCalledTimes(1);
+  });
   it("never sends when the archive does not identify the confirmed day", async () => {
     mocks.archive.mockResolvedValue({ report: { id: "growth-20261023" }, reused: false });
     await expect(runControlledGrowthTelegramAcceptance(now, permitted)).rejects.toThrow("ARCHIVE_ID_MISMATCH");

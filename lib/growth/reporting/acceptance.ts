@@ -26,8 +26,29 @@ export async function runControlledGrowthTelegramAcceptance(
   if (config.GROWTH_TELEGRAM_ACCEPTANCE_ENABLED !== "true") {
     return { status: "DISABLED" as const };
   }
-  if (config.GROWTH_TELEGRAM_ACCEPTANCE_ENVIRONMENT !== "isolated-staging") {
-    throw new GrowthTelegramAcceptanceBlocked("ISOLATED_STAGING_REQUIRED");
+  // A mode label alone is not isolation. Refuse production DB under a
+  // staging label and require an additional day-specific approval in production.
+  const environment = config.GROWTH_TELEGRAM_ACCEPTANCE_ENVIRONMENT;
+  let db: URL;
+  try {
+    db = new URL(config.DATABASE_URL ?? "");
+  } catch {
+    throw new GrowthTelegramAcceptanceBlocked("VERIFIED_DATABASE_URL_REQUIRED");
+  }
+  if (!["postgres:", "postgresql:"].includes(db.protocol) ||
+      !["127.0.0.1", "localhost", "::1"].includes(db.hostname)) {
+    throw new GrowthTelegramAcceptanceBlocked("LOOPBACK_DATABASE_REQUIRED");
+  }
+  const prodDatabase = db.hostname === "127.0.0.1" && db.port === "5433" &&
+    decodeURIComponent(db.pathname.slice(1)) === "saytwist";
+  if (environment === "isolated-staging") {
+    if (prodDatabase || !/^[a-z0-9_]{6,100}$/.test(decodeURIComponent(db.pathname.slice(1)))) {
+      throw new GrowthTelegramAcceptanceBlocked("ISOLATED_STAGING_DATABASE_REQUIRED");
+    }
+  } else if (environment === "production") {
+    if (!prodDatabase) throw new GrowthTelegramAcceptanceBlocked("EXACT_PRODUCTION_DATABASE_REQUIRED");
+  } else {
+    throw new GrowthTelegramAcceptanceBlocked("UNKNOWN_ACCEPTANCE_ENVIRONMENT");
   }
   // Daily scheduling must explicitly remain OFF during one-message acceptance.
   if (config.GROWTH_DAILY_REPORT_SCHEDULE_ENABLED === "true") {
@@ -38,6 +59,10 @@ export async function runControlledGrowthTelegramAcceptance(
   const id = "growth-" + date.replaceAll("-", "");
   if (config.GROWTH_TELEGRAM_ACCEPTANCE_CONFIRMATION !== "SEND ONE TELEGRAM REPORT " + id) {
     throw new GrowthTelegramAcceptanceBlocked("EXACT_REPORT_CONFIRMATION_REQUIRED");
+  }
+  if (environment === "production" &&
+      config.GROWTH_TELEGRAM_PRODUCTION_APPROVAL !== "I APPROVE ONE PRODUCTION DELIVERY " + id) {
+    throw new GrowthTelegramAcceptanceBlocked("PRODUCTION_SINGLE_SEND_APPROVAL_REQUIRED");
   }
   // Validate the single-recipient transport gate before a single database read.
   if (!getTelegramReportSettings(config).enabled) {
