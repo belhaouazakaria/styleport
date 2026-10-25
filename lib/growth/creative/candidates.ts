@@ -24,6 +24,7 @@ import {
 import {
   DEFAULT_CREATIVE_EXAMPLE_INPUT,
   generateCreativeExample,
+  OpenAICreativeExampleProvider,
   type CreativeExampleProvider,
 } from "@/lib/growth/creative/example-provider";
 import {
@@ -317,7 +318,7 @@ async function resolveCreativeExample(
     return await generateCreativeExample({
       savedExample: target.savedExample,
       useAi: useAi && target.kind === GrowthCreativeDestinationKind.TRANSLATOR,
-      provider,
+      provider: provider ?? new OpenAICreativeExampleProvider(jobId ?? ""),
       assertGrowthEnabled: async () => {
         const settings = await prisma.growthSettings.findUnique({
           where: { id: GROWTH_SETTINGS_ID },
@@ -1251,7 +1252,7 @@ export async function generateCreativeCandidate(
       );
     const budget = createCreativeAiImageBudget(1);
     budget.consume();
-    const provider = options.aiProvider || new OpenAICreativeImageProvider();
+    const provider = options.aiProvider || new OpenAICreativeImageProvider(jobId || "");
     if (!copy.exampleInput || !copy.exampleOutput)
       throw new NonRetryableGrowthJobError(
         "Before-and-after creative requires verified example evidence.",

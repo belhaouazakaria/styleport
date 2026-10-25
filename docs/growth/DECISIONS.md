@@ -122,7 +122,7 @@ Full detail remains in `/admin/growth`.
 
 ## D-015 — WhatsApp desired, not assumed free
 
-**Status:** Accepted
+**Status:** Superseded 2026-10-24 by Telegram decision below; historical entry retained
 
 Implement notification provider abstraction. Verify current WhatsApp Business Platform cost/requirements during implementation and provide email fallback.
 
@@ -342,3 +342,41 @@ Production discovery found 222 eligible Pins with preliminary active-Translator 
 Phase 12.1 v2 ran successfully in production but remained `PARTIAL`. Verified gaps are 221 missing observations on each of October 6–8; 221 `PROCESSING` on October 5; 13 `PROCESSING` on October 4; and 221 `PROCESSING` on each of October 14–15. A seven-day rolling refresh cannot permanently repair older gaps.
 
 Use a database-only ADMIN dry run followed by an exact confirmation to persist one immutable recovery plan. Plan active eligible Pins only, exclude pre-publication dates, merge adjacent missing/`PROCESSING` dates into minimal ranges, cap evidence at 500 Pins and 2,000 requests, and use at most eight authenticated Pin-analytics GETs per worker execution. Provider statuses are authoritative: no missing date becomes a zero row and no `PROCESSING` row becomes `READY` unless Pinterest returns it as `READY`. Existing rate-limit, retry, lease, kill-switch, audit, and idempotency contracts remain authoritative. Recovery is separate from inventory/account synchronization and does not change account analytics health or immutable learning runs. No model version changes because learning semantics are unchanged.
+
+
+### 2026-10-18 — Phase 13/14 sequencing and automatic content publication
+
+- The operator authorized continuation through Phase 13 (economics, costs, reporting) and Phase 14 (autopilot qualification), followed by a focused Google Search/AdSense low-value content recovery.
+- SayTwist Translator/Ideas auto-publication **remains governed by existing validation gates**; no new blanket mandatory human approval for site-owned content. This is not permission to create repetitive low-value content or start production autoplay immediately.
+- Pinterest's specific per-Pin admin publication approval remains mandatory; board deletion/removal requires separate admin approval.
+- Maintain Growth and attribution collection disabled while Phase 13/14 are implemented and qualified; rollout will be separately verified before enabling recurrence.
+- No arbitrary AI spending budgets, recipient email/WhatsApp identifiers, provider pricing or production schedule were assumed. Resolve before configuring enforcement/delivery.
+- Phase 13A provides read-only historical usage coverage and deliberately does not claim full cost accounting.
+
+### 2026-10-18 — Accepted financial and production-volume defaults
+
+The operator accepted conservative initial settings for Growth: AI spend **USD $2/day, $30/month**; AI-generated images **3/day**; new Translators **1/day**; Translator improvements **3/day**; newly created Ideas **2/week**; no more than **one explicit AI repair attempt**; 70% and 90% budget warnings. No required minimum spend. These are ceilings, not generation targets.
+
+Budget configuration is stored in integer USD cents. A dated additive migration provides the approved initial values for both new and existing production `GrowthSettings` rows. Phase 13B must implement atomic budget reservations and durable provider-priced actual/estimated operation records before any operator is led to believe limits are enforced. Block unknown-priced paid calls pending a bounded authoritative pricing profile, including internal OpenAI retries/fallback; fail closed when reserve/settlement cannot be recorded. A disabled Growth worker still cannot execute paid actions. The existing per-Pin Pinterest approval remains unchanged.
+
+### 2026-10-18 — Operator selects self-hosted OpenWA WhatsApp delivery
+
+The operator specifically chose **WhatsApp** for daily Growth digests and requested **OpenWA** rather than email as the primary provider. Use OpenWA v5 Easy API as a standalone private, localhost-bound service; sender session and recipient must be provisioned manually. The transport is opt-in, off by default, authenticated and restricted to one pre-established contact chat. Its basic existing-chat send capability is free from the provider's paid method licensing, but OpenWA is an **unofficial WhatsApp Web integration** with possible account restrictions; avoid indiscriminate message sending and do not assume Meta support. Never automatically retry unknown send outcomes. Retain an archived report for recovery. This does not authorize WhatsApp session linking or message sending from production yet.
+
+
+### 2026-10-18 — Dedicated WhatsApp sender and recipient separation
+
+The operator confirmed they own a dedicated WhatsApp **sender** number for OpenWA. Do not copy its phone number into GitHub, docs, code, activity logs or AI-generated reports. The sender's WhatsApp Web QR pairing is an operator-only step. The operator subsequently confirmed a distinct personal WhatsApp recipient on 2026-10-18. Neither the sender nor recipient number is to be stored in Git; configure the recipient only in a private VPS environment. The recipient must initiate an existing chat with the dedicated sender before any OpenWA messaging test. Chat establishment and sender pairing remain unverified. Keep `OPENWA_REPORTS_ENABLED=false` until explicit pairing, recipient verification, and controlled test delivery. One report per completed UTC date; persist `SENDING` before the external call and block all ambiguous resends.
+
+
+### 2026-10-24 — Telegram is the preferred Growth report provider
+
+**Accepted; supersedes the WhatsApp/OpenWA operator choice (including D-015).**
+
+Use the official Telegram Bot API for a single private recipient chat after the recipient starts the bot. No WhatsApp browser-pairing, unofficial OpenWA service or QR workflow is part of ongoing Growth development. The bot token and chat ID are private server-only values. Telegram delivery is opt-in and disabled by default. A single immutable UTC daily report has at most one external send attempt; network ambiguity is OUTCOME_UNKNOWN with no automatic retry. Telegram acceptance is not a read receipt. No live send, recurrence, deployment, or activation is authorized by this decision. Future email is optional, not implemented. Phase 13 economics and Phase 14 security and publishing qualification remain required.
+\n### 2026-10-25 — Phase 13N billing source/attribution rule\n\nThe official OpenAI organization Costs API can provide read-only **UTC daily project-level** USD costs grouped by line item. It is NOT a per-request invoice feed and cannot prove that the full project cost belongs to Growth when a project is shared with ordinary SayTwist translations. An isolated Growth-only provider project is required before calling its project totals Growth-only; even then, per-attempt cost attribution and final invoice reconciliation require independent evidence and approval. The read-only adapter does not store provider secrets, write settlements, alter budgets or make automatic network requests. An organization Admin API key is privileged: only use a secure operator-controlled environment after authorizing a read; never place it in application logs, GitHub, public Next.js configuration or routine web runtime. Unknown/missing/unsupported entries stay unverified. Conservative reservations remain counted.\n
+### 2026-10-25 — operator accepts separate project and no permanent staging
+
+- OpenAI Growth costs must use a new dedicated project; keep the main SayTwist translation key and billing separate. Growth paid provider calls must fail closed if the dedicated project key/project ID is unprovisioned; provider cost feeds still cannot assert exact per-request actuals.
+- Create no permanent staging website. Prior to an approved production rollout, rehearse the migration on disposable PostgreSQL 18 using an independently verified backup/restore, retain automatic main-branch deployment safety, and deploy with Growth/attribution/scheduled reporting OFF. This decision is NOT permission to merge or deploy before signoff, skip backup or delete historical evidence.
+- Operator created a Telegram bot. The bot username is inherently searchable: deliver only to one verified private chat ID, disable BotFather group joining, and never implement public inbound commands/webhooks. Creation is not live verification or authorization to send.

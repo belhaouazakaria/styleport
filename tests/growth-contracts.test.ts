@@ -19,6 +19,12 @@ describe("Growth foundation contracts", () => {
       attributionSessionRetentionDays: 30,
       attributionEventRetentionDays: 90,
       evergreenCooldownDays: 45,
+      aiDailyBudgetCents: 200,
+      aiMonthlyBudgetCents: 3000,
+      aiImagesPerDayCap: 3,
+      translatorCreatesPerDayCap: 1,
+      translatorUpdatesPerDayCap: 3,
+      ideaCreatesPerWeekCap: 2,
     });
     expect(growthSettingsSchema.safeParse({ enabled: true, intensity: "BALANCED", workerBatchSize: 0, ownedDomains: ["saytwist.com"] }).success).toBe(false);
     expect(growthSettingsSchema.safeParse({ enabled: true, intensity: "BALANCED", workerBatchSize: 5, ownedDomains: ["saytwist.com"], token: "secret" }).success).toBe(false);

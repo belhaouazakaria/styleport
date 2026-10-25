@@ -1,0 +1,59 @@
+name: Phase 13 isolated PostgreSQL qualification
+
+on:
+  pull_request:
+    paths:
+      - "lib/growth/economics/**"
+      - "lib/growth/reporting/**"
+      - "lib/growth/translator/**"
+      - "lib/growth/ideas/**"
+      - "lib/growth/creative/**"
+      - "prisma/**"
+      - "tests/growth-economics-persistence.integration.test.ts"
+      - "scripts/test-growth-economics-db.sh"
+      - ".github/workflows/growth-phase13-db.yml"
+  workflow_dispatch:
+
+jobs:
+  phase13-database:
+    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'phase/13-finance-reporting'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres-major: ["16", "18"]
+    name: PostgreSQL ${{ matrix.postgres-major }}
+    services:
+      postgres:
+        image: postgres:${{ matrix.postgres-major }}
+        env:
+          POSTGRES_USER: phase13
+          POSTGRES_PASSWORD: phase13_ci_only
+          POSTGRES_DB: saytwist_growth_phase13_economics_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U phase13 -d saytwist_growth_phase13_economics_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      GROWTH_ECONOMICS_TEST_DATABASE_URL: postgresql://phase13:phase13_ci_only@127.0.0.1:5432/saytwist_growth_phase13_economics_test
+      DATABASE_URL: postgresql://phase13:phase13_ci_only@127.0.0.1:5432/saytwist_growth_phase13_economics_test
+      APP_BASE_URL: https://translators.example.com
+      NEXTAUTH_URL: https://translators.example.com
+      NEXTAUTH_SECRET: test_nextauth_secret_please_replace
+      OPENAI_API_KEY: test_key_no_live_calls
+      OPENAI_MODEL: gpt-4.1-mini
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20.20.2
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Generate Prisma models
+        run: npm run prisma:generate
+      - name: Reset disposable CI database and test transactional invariants
+        run: sh scripts/test-growth-economics-db.sh

@@ -6,6 +6,7 @@ import {
   DEFAULT_ATTRIBUTION_SESSION_RETENTION_DAYS,
   DEFAULT_ATTRIBUTION_WINDOW_DAYS,
   GROWTH_SETTINGS_ID,
+  growthSettingsSchema,
   type GrowthSettingsInput,
 } from "@/lib/growth/contracts";
 import { recordGrowthActivity } from "@/lib/growth/activity";
@@ -24,6 +25,12 @@ export const defaultGrowthSettings = {
   attributionSessionRetentionDays: DEFAULT_ATTRIBUTION_SESSION_RETENTION_DAYS,
   attributionEventRetentionDays: DEFAULT_ATTRIBUTION_EVENT_RETENTION_DAYS,
   evergreenCooldownDays: DEFAULT_EVERGREEN_COOLDOWN_DAYS,
+  aiDailyBudgetCents: 200,
+  aiMonthlyBudgetCents: 3000,
+  aiImagesPerDayCap: 3,
+  translatorCreatesPerDayCap: 1,
+  translatorUpdatesPerDayCap: 3,
+  ideaCreatesPerWeekCap: 2,
   configVersion: 1,
   updatedById: null,
   createdAt: null,
@@ -35,13 +42,14 @@ export async function getGrowthSettings() {
 }
 
 export async function updateGrowthSettings(input: GrowthSettingsInput, updatedById: string) {
+  const validated = growthSettingsSchema.parse(input);
   return prisma.$transaction(async (tx) => {
     const previous = await tx.growthSettings.findUnique({ where: { id: GROWTH_SETTINGS_ID } });
     const settings = await tx.growthSettings.upsert({
       where: { id: GROWTH_SETTINGS_ID },
-      create: { id: GROWTH_SETTINGS_ID, ...input, updatedById },
+      create: { id: GROWTH_SETTINGS_ID, ...validated, updatedById },
       update: {
-        ...input,
+        ...validated,
         updatedById,
         configVersion: { increment: 1 },
       },
@@ -73,6 +81,12 @@ export async function updateGrowthSettings(input: GrowthSettingsInput, updatedBy
           attributionSessionRetentionDays: settings.attributionSessionRetentionDays,
           attributionEventRetentionDays: settings.attributionEventRetentionDays,
           evergreenCooldownDays: settings.evergreenCooldownDays,
+          aiDailyBudgetCents: settings.aiDailyBudgetCents,
+          aiMonthlyBudgetCents: settings.aiMonthlyBudgetCents,
+          aiImagesPerDayCap: settings.aiImagesPerDayCap,
+          translatorCreatesPerDayCap: settings.translatorCreatesPerDayCap,
+          translatorUpdatesPerDayCap: settings.translatorUpdatesPerDayCap,
+          ideaCreatesPerWeekCap: settings.ideaCreatesPerWeekCap,
           configVersion: settings.configVersion,
         },
         correlationKey: `growth-settings:${settings.configVersion}`,

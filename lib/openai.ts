@@ -2,6 +2,7 @@ import OpenAI from "openai";
 
 import { DEFAULT_MODEL } from "@/lib/constants";
 import { getServerEnv } from "@/lib/env";
+import { getGrowthOpenAiCredentials } from "@/lib/growth/economics/credential-policy";
 import { logError } from "@/lib/logger";
 import { toPlainText } from "@/lib/utils";
 
@@ -69,6 +70,7 @@ async function tryGenerate(params: {
   userPrompt: string;
   maxOutputTokens?: number;
   maximumAttempts?: 1 | 2;
+  sdkMaxRetries?: 0;
 }) {
   for (let attempt = 0; attempt < (params.maximumAttempts || 2); attempt += 1) {
     const temperature = attempt === 0 ? 0.7 : 0.45;
@@ -87,13 +89,14 @@ async function tryGenerate(params: {
       ],
       temperature,
       max_output_tokens: params.maxOutputTokens || 1000,
-    });
+    }, params.sdkMaxRetries === 0 ? { maxRetries: 0 } : {});
 
     const result = toPlainText(extractTextFromResponse(response));
     if (result) {
       return {
         text: result,
         usage: extractUsage(response),
+        responseId: response.id,
       };
     }
   }
@@ -108,9 +111,15 @@ export async function generateOpenAIText(params: {
   maxOutputTokens?: number;
   maximumAttemptsPerModel?: 1 | 2;
   allowModelFallback?: boolean;
-}): Promise<{ text: string; model: string; promptTokens: number | null; completionTokens: number | null; totalTokens: number | null }> {
+  sdkMaxRetries?: 0;
+  credentialScope?: "GROWTH";
+}): Promise<{ text: string; model: string; promptTokens: number | null; completionTokens: number | null; totalTokens: number | null; responseId?: string | null }> {
   const env = getServerEnv();
-  const client = getClient();
+  // Growth must never fall back to the core translations client or its key.
+  // A distinct project-scoped key is required for cost provenance.
+  const client = params.credentialScope === "GROWTH"
+    ? new OpenAI({ ...getGrowthOpenAiCredentials(), maxRetries: 0 })
+    : getClient();
   const envModel = env.OPENAI_MODEL || DEFAULT_MODEL;
   const modelCandidates = params.allowModelFallback === false
     ? [params.model || envModel]
@@ -126,10 +135,11 @@ export async function generateOpenAIText(params: {
         userPrompt: params.userPrompt,
         maxOutputTokens: params.maxOutputTokens,
         maximumAttempts: params.maximumAttemptsPerModel,
+        sdkMaxRetries: params.sdkMaxRetries,
       });
 
       if (generated) {
-        return { text: generated.text, model, ...generated.usage };
+        return { text: generated.text, model, ...generated.usage, responseId: generated.responseId };
       }
     } catch (error) {
       logError("openai_content_generation_error", "OpenAI content generation failed for model candidate.", { model }, error);

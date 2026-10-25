@@ -29,6 +29,8 @@ const envSchema = z.object({
   NEXTAUTH_URL: z.string().optional(),
   NEXTAUTH_SECRET: z.string().optional(),
   OPENAI_API_KEY: z.string().min(1).optional(),
+  GROWTH_OPENAI_API_KEY: z.string().min(1).optional(),
+  GROWTH_OPENAI_PROJECT_ID: z.string().min(1).optional(),
   OPENAI_MODEL: z.string().min(1).optional(),
   GROWTH_AI_IMAGE_ENABLED: booleanParser,
   GROWTH_OPENAI_IMAGE_MODEL: z.string().trim().min(1).max(120).optional(),

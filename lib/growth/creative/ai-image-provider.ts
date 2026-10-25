@@ -4,6 +4,10 @@ import sharp from "sharp";
 import { CREATIVE_HEIGHT, CREATIVE_WIDTH, MAX_CREATIVE_BYTES, type CreativeDirection } from "@/lib/growth/creative/constants";
 import { validateCreativePng } from "@/lib/growth/creative/storage";
 import { getServerEnv } from "@/lib/env";
+import { getGrowthOpenAiCredentials } from "@/lib/growth/economics/credential-policy";
+import { reserveGrowthImageAttempt } from "@/lib/growth/economics/image-admission";
+import { appendGrowthAiUsageEvidence } from "@/lib/growth/economics/usage-evidence";
+import { GrowthBudgetBlockedError } from "@/lib/growth/economics/reservations";
 
 export interface CreativeAiImageMetadata {
   provider: string;
@@ -118,21 +122,44 @@ export function buildCreativeImagePrompt(rawInput: CreativeAiImageInput) {
 }
 
 export class OpenAICreativeImageProvider implements CreativeAiImageProvider {
+  constructor(private readonly jobId: string = "") {}
   async generate(input: CreativeAiImageInput): Promise<CreativeAiImageResult> {
     const env = getServerEnv();
-    if (!env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is missing.");
+    const credentials = getGrowthOpenAiCredentials();
     const model = env.GROWTH_OPENAI_IMAGE_MODEL || "gpt-image-2";
-    const client = new OpenAI({ apiKey: env.OPENAI_API_KEY });
-    const response = await client.images.generate({
+    const prompt = buildCreativeImagePrompt(input);
+    const reservationId = await reserveGrowthImageAttempt({
+      jobId: this.jobId, model, prompt, size: "1024x1536", quality: "medium",
+    });
+    const client = new OpenAI({ ...credentials, maxRetries: 0 });
+    let response: Awaited<ReturnType<typeof client.images.generate>>;
+    try {
+      response = await client.images.generate({
       model,
-      prompt: buildCreativeImagePrompt(input),
+      prompt,
       n: 1,
       size: "1024x1536",
       quality: "medium",
       output_format: "png",
       background: "opaque",
-    });
+      });
+    } catch {
+      try {
+        await appendGrowthAiUsageEvidence({ reservationId, outcome: "OUTCOME_UNKNOWN" });
+      } catch {
+        throw new GrowthBudgetBlockedError("AI_USAGE_LEDGER_WRITE_FAILED");
+      }
+      throw new GrowthBudgetBlockedError("IMAGE_PROVIDER_OUTCOME_UNKNOWN");
+    }
     const encoded = response.data?.[0]?.b64_json;
+    try {
+      await appendGrowthAiUsageEvidence({
+        reservationId, outcome: "RESPONSE_RECEIVED",
+        imageUnits: encoded ? 1 : null,
+      });
+    } catch {
+      throw new GrowthBudgetBlockedError("AI_USAGE_LEDGER_WRITE_FAILED");
+    }
     if (!encoded) throw new Error("OpenAI image generation returned no image data.");
     const source = Buffer.from(encoded, "base64");
     if (!source.length || source.length > MAX_CREATIVE_BYTES) throw new Error("OpenAI image generation returned an invalid bounded image.");

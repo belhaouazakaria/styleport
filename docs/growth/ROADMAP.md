@@ -236,7 +236,7 @@ The two earlier HTTP 401 attempts and their immutable publication/approval/ref/j
 
 The additive migration includes `GrowthSettings.evergreenCooldownDays`, bounded to 14–180 days with a conservative 45-day default and editable only through the existing audited ADMIN settings path.
 
-**Status:** Phase 12 v1 and Phase 12.1 v2 production-validated; Phase 12.2 recovery pending deployment
+**Status:** Phase 12 v1 and Phase 12.1 v2 production-validated; Phase 12.2 deployed and bounded recovery validated (13/13 requests COMPLETED on 2026-10-17). Existing v2 evidence gaps remain distinct from recovery-job completion.
 
 Deliver:
 
@@ -259,7 +259,7 @@ Phase 12 v1 was deployed and production-validated on October 15, 2026; its immut
 
 ## Phase 13 — Economics, Admin and Reporting
 
-**Status:** Not started
+**Status:** In progress — Phase 13A usage inventory, Phase 13B budget reservations, Phase 13C archived reports and opt-in Telegram delivery implemented on feature branch; full paid-call enforcement, quotas, scheduling and live validation remain outstanding.
 
 Deliver:
 
@@ -268,8 +268,8 @@ Deliver:
 - complete Growth dashboards;
 - warnings/recommended actions;
 - report archive;
-- WhatsApp provider if viable;
-- email fallback;
+- Telegram Bot API as preferred single-recipient notification provider;
+- optional future email fallback;
 - concise executive daily digest.
 
 Exit:
@@ -308,3 +308,124 @@ No phase is complete until:
 ### Phase 1 exit and Phase 2 implementation contract
 
 Phase 1 produces only documentation. `IMPLEMENTATION_MAP.md` and `DATA_MODEL.md` are the technical baseline. Phase 2 may implement **only** Growth Prisma foundation/migrations, domain state types, disabled feature flag and kill switch, persistent job foundation, `/admin/growth` shell, typed settings foundation, append-only audit/activity foundation, bounded worker skeleton and meaningful tests. Phase 2 must not connect Pinterest, build `/ideas` pages, autonomously create translators, publish Pins, ingest analytics, implement attribution or generate new creative systems. Deployed DB/storage/scheduler assumptions must be verified before production rollout; they do not block a host-neutral foundation.
+
+### Phase 13 accepted controls and implementation boundary (2026-10-18)
+
+The operator accepted a $2/day and $30/month Growth AI budget, 3 AI images/day, 1 new Translator/day, 3 Translator improvements/day, 2 new Ideas/week, one repair attempt, and 70%/90% budget alerts. Phase 13A is a read-only usage inventory; Phase 13B adds database-backed approved settings with a clear **not yet enforced** admin label. A complete durable ledger, atomic cost reservations, usage pricing, enforcement of content quotas, warnings, delivery and report archive remain required before the Phase 13 completion gate. No production worker or paid autonomy may be turned on based only on these settings.
+
+### Phase 13B implementation progress
+
+An additive AI reservation table and serialized admission service exist on the feature branch. The policy is fail-closed for unknown-priced requests; UTC 70%/90% warnings and image/day accounting are implemented in the reservation service. This is **not wired to paid provider calls yet**, and content-action quotas/report delivery remain unfinished. No claim of hard-spend enforcement is valid before provider integration, verified pricing, and concurrent database tests.
+
+### Phase 13C — WhatsApp delivery preference and adapter
+
+The operator selected OpenWA (self-hosted v5 Easy API) for one WhatsApp daily report recipient. An opt-in, local-only adapter and deterministic digest formatter exist on the feature branch with mock transport tests. **Not yet live:** report snapshot/archive, durable delivery state, a daily job/schedule, sender device pairing, recipient confirmation, and an actual test send. Keep Growth and report sending disabled until operator setup and Phase 14 rollout gates. OpenWA's unpaid send flow applies to **existing chats**; this unofficial WhatsApp Web client can cause account restrictions.
+
+
+### Phase 13C reporting persistence status (2026-10-18)
+
+The operator confirmed availability of a dedicated WhatsApp **sender** number for OpenWA. Its value is intentionally excluded from Git; the operator has now confirmed a distinct personal recipient privately, also excluded from Git. The existing chat and OpenWA sender pairing still require verification. Implemented on the feature branch: source-backed UTC daily report snapshot/archive and one-attempt delivery state with a database claim before the external OpenWA call. No recurring enqueuer, report admin preview/reconciliation, production sender pairing or real WhatsApp message exists yet. Phase 13 is still **in progress**, and Phase 14 has not started.
+
+
+### 2026-10-24 — Telegram replaces WhatsApp report transport
+
+The operator abandoned OpenWA and the whatsapp-web.js fallback after session persistence and VPS device-linking failures. Telegram Bot API is now the chosen daily digest provider. The feature branch contains a fixed-host HTTPS adapter, private one-recipient chat validation, server-only credentials, bounded once-only sends, and durable archived report delivery. New delivery rows are labeled TELEGRAM, while old OpenWA history is retained unchanged. The older WhatsApp Phase 13 notes are historical only.
+
+This does NOT enable reporting, schedule a job, send messages, enable attribution, start Growth AI, or satisfy Phase 13 or 14 gates. Operator bot/chat setup, authorized delivery test, full provider-priced usage/cost enforcement, content quotas, warnings UI and controlled production qualification remain required. See TELEGRAM_RUNBOOK.md.
+
+
+### Phase 13D — one-attempt image provider budget admission (2026-10-24)
+
+On the feature branch, the production OpenAI Creative Lab image provider now reserves a conservative **30 USD cents** through the existing PostgreSQL-serialized Growth budget service **before** its exact `gpt-image-2` / `1024x1536` / `medium` request. The bounded <=7,000-byte text-only prompt uses a dated, fixed OpenAI pricing envelope; unrecognized models, job IDs, prompt sizes or request shapes fail closed. The job-specific reservation key is immutable and may not be reused to authorize a second paid request. The OpenAI SDK automatic retry setting is explicitly 0. This does **not** modify injected test providers or deterministic renderers.
+
+Pessimistic reservations remain counted whether a provider call succeeds, fails, or has ambiguous outcome. **30 cents is not actual spending.** The current provider response does not furnish a verified billed amount; do not reconcile to a fabricated charge. Separate provider usage/cost ledger and exact settlement remain outstanding. Text generation still uses the legacy helper and is **not yet admitted under the Growth spend budget**. Other content-action daily/weekly caps remain unimplemented. Keep Growth disabled; Phase 13/14 are incomplete.
+
+
+### Phase 13E — Growth text AI admission (2026-10-24)
+
+Supersedes the earlier Phase 13D statement that text was uncovered. The feature branch now guards the **real** Translator and Ideas OpenAI generation providers with one durable budget reservation per decision/attempt, before the API call. Only standard-priced `gpt-4.1-mini` with bounded <=65,536 UTF-8 prompt bytes and <=4,200 output tokens has a dated conservative 20-cent ceiling. Other models or sizes fail closed. The request is pinned to one model, one application-level attempt, and OpenAI SDK maxRetries=0. The existing one explicit repair attempt requires its **own distinct reservation** and can occur only after a successfully returned but invalid content draft, not after a potentially billed network failure.
+
+These reserved ceilings are budget exposure, **not actual invoice amounts**. The pricing registry must be reverified when model/rates change. The shared ordinary SayTwist translation helper retains its prior retry/fallback behavior unless called with the explicit Growth options. Production Growth remains disabled.
+
+**Still not complete:** actual billed provider-cost append-only ledger, reconciliation/settlement, transactional content mutations caps (1 new translator/day, 3 improvements/day, 2 Ideas/week), database concurrency proof, warnings/admin report UX, Telegram setup/live delivery, scheduled recurrence and Phase 14 qualification.
+
+
+### Phase 13F — transactional content mutation ceilings (2026-10-24)
+
+The feature branch now checks configured content caps under the same PostgreSQL `GrowthSettings` singleton `FOR UPDATE` lock and transaction as the final approved Growth mutation, with counters from immutable version records. The initial accepted limits are 1 new Translator/UTC day, 3 Translator improvement versions/UTC day, and 2 new Ideas/UTC Monday-start calendar week. Idempotently reused existing mutations exit before quota admission, and rollover boundaries are UTC. A limit blocks the content mutation and leaves a waiting-data decision; the agent does not manufacture extra work to fill quotas. Rollback operations remain outside creation/improvement counters, preserving operator recovery options.
+
+The transaction lock ensures competing workers cannot both observe the same remaining slot while applying new content. **Remaining:** avoid unnecessary AI expense by adding a nonauthoritative early quota check before generation; validate with real concurrent PostgreSQL tests and production schema migration. The full append-only actual-cost ledger/settlement, warning/report admin UX, Telegram provisioning and controlled delivery, scheduling, monitoring, phase acceptance and Phase 14 remain unfinished. Keep Growth and attribution off.
+
+
+
+### Phase 13G — advisory quota preflight and read-only reservation exposure (2026-10-24)
+
+Before a paid Translator or Ideas create/generation request, the worker performs a read-only **advisory preflight** using the same UTC content quota policy as the final mutation. An exhausted cap blocks before calling the AI provider. The preflight is intentionally not a concurrency guarantee: the authoritative recheck remains under the singleton GrowthSettings PostgreSQL FOR UPDATE lock in the final content-write transaction. Existing genuine model response reservations remain counted, including rejected downstream changes. Fail closed for missing/disabled Growth settings.
+
+The ADMIN /admin/growth/spend screen now shows conservative USD-cent **budget reservation exposure** for the current UTC day/calendar month, image reservations, unreconciled attempts, and a bounded recent list with pricing profile/status. This is read-only local evidence, with **no provider query and no new charge**, and it explicitly labels ceilings as not actual billed costs. The original historical metadata inventory remains separate. The accounting view is limited to Phase 13 reservations, not unrelated site translation usage.
+
+Next required before completion: append-only provider-attempt ledger with actual vs estimated/unknown costs, secure verified settlement and reconciliation workflows, disposable-PostgreSQL concurrency/failure qualification, warning lifecycle and admin management, Telegram recipient setup and live opt-in delivery, report scheduler and Phase 14 controlled rollout. Growth, attribution and outbound report sending remain disabled.
+
+
+
+### Phase 13H — ADMIN daily report archive views (2026-10-24)
+
+ADMIN-only read-only pages now provide the latest 30 immutable daily report summaries at `/admin/growth/reports` and individual digest previews at `/admin/growth/reports/growth-YYYYMMDD`. This fixes the destination URL used by archived daily digest messages. The detail page displays UTC archive creation, report version, source digest text, delivery channel/status, attempted/submitted timestamps and provider message ID when known. Provider API acceptance is explicitly not called recipient delivery/reading. Unknown outcomes are not automatically resent.
+
+The archive reader performs bounded PostgreSQL selects after requiring the established ADMIN gate; the page does not generate reports, create delivery rows, call the Telegram API, or modify Growth. It does not provide a manual send/resend button. Phase 13 cost ledger and settlement, warning lifecycle, operator bot/recipient setup, daily schedule, concurrency qualification and Phase 14 remain release blockers.
+
+
+
+### Phase 13I — immutable provider-response evidence (2026-10-24)
+
+A new `GrowthAiUsageEvent` table is added on the feature branch, uniquely linked 1:1 to each pessimistic `GrowthAiBudgetReservation`. PostgreSQL check constraints and UPDATE/DELETE triggers make each evidence row append-only and reject incompatible unknown-outcome payloads. Actual Growth Translator, Ideas and Creative Lab OpenAI paths now attempt to append one `RESPONSE_RECEIVED` event after a provider response (before draft parsing and image processing), or `OUTCOME_UNKNOWN` after ambiguous provider/network failure. Failed ledger writes block completion without releasing the reservation. Normal public translator requests are unaffected.
+
+For a bounded `gpt-4.1-mini` text response, when the provider returns complete usage, the ledger also records a conservative **standard uncached-rate estimate in integer micro-USD**, tagged implicitly by the original reservation's immutable pricing profile. No response/usage means unknown, not zero. Image API responses record count evidence when known; their cost estimate remains null unless defensible modality-specific usage is available. No API response has been invoiced or settled by this feature. The ADMIN Growth spend page distinguishes per-request evidence, estimated cost and conservative budget reservation; none is called actual billed spend.
+
+**Not yet complete:** trusted provider-invoice reconciliation and append-only settlement audit; concurrent disposable PostgreSQL integration tests, warning acknowledgment/lifecycle controls, Telegram bot/private recipient and authorized delivery, scheduler, security/rollout review. Enabling production Growth or merging PR #15 remains prohibited.
+
+
+
+### Phase 13J — auditable admin budget warning lifecycle (2026-10-24)
+
+The already emitted immutable `GrowthActivity` alerts at 70%/90% budget reservation thresholds are now manageable at `/admin/growth/warnings`. A bounded read-only list computes `OPEN -> ACKNOWLEDGED -> RESOLVED` from additional append-only `GrowthActivity` transitions. Only ADMIN-authenticated same-origin POST requests may change these states, with source event locking and actor-user audit provenance. Acknowledgment must precede resolution; duplicate acknowledgments are idempotent. Original alerts and cost reservations are neither rewritten nor deleted.
+
+Warnings are about **conservative reserved exposure**, not provider-invoiced actual costs. Acknowledgment/resolution is informational only: it does not increase budgets, release reservations, restart Growth, send a message or imply the financial risk has passed. No background notification or scheduled Telegram transport was enabled. The full trusted invoice settlement/reconciliation workflow, real PostgreSQL contention drills, operator bot recipient setup, scheduled report delivery, security review and Phase 14 acceptance are still required.
+
+
+### Phase 13K — isolated database qualification and gated daily-report runner (2026-10-24)
+
+Dedicated disposable-PostgreSQL CI job now executes actual migrations, six concurrent budget admissions, same-key idempotency, immutable provider usage evidence constraints/triggers, and serialized administrator warning ACK/RESOLVE transitions. The test wrapper refuses any database URL except the explicit local `saytwist_growth_phase13_economics_test` database and never calls OpenAI/Telegram/Pinterest. This suite passed after correcting test-only cleanup for intentionally immutable provider evidence; no production trigger was weakened. Re-run and inspect the CI workflow `Phase 13 isolated PostgreSQL qualification` after material schema or economics changes.
+
+The `npm run growth:daily-report` one-shot runner archives the **previous complete UTC day** no earlier than 04:00 UTC, then attempts exactly one Telegram delivery using the report's durable claim. Both `GROWTH_DAILY_REPORT_SCHEDULE_ENABLED=true` and `TELEGRAM_REPORTS_ENABLED=true` are independently required; otherwise it exits without a database archive or network send. Repeating a confirmed SUBMITTED report produces ALREADY_SENT with no new request; SENDING/OUTCOME_UNKNOWN failures stay blocked. No cron/systemd timer or schedule was installed and no live message was sent.
+
+**Next required:** verified invoice-based actual-cost settlement and source provenance, staging-like acceptance of the new database migration, security qualification of report and warning views, Telegram private-chat provisioning and one explicitly authorized live send, then approval of any UTC daily schedule. Keep Growth, attribution and publishing disabled; Phase 13 is NOT complete, Phase 14 NOT started.
+
+
+### Phase 13L — fail-closed actual-cost settlement (2026-10-24)
+
+The previous permissive `reconcileGrowthAiBudget` function has been blocked unconditionally with `VERIFIED_BILLING_EVIDENCE_REQUIRED`. A caller-supplied cost number or usage-derived estimate is not an OpenAI invoice and may never set `reconciledCents` or `RECONCILED`. Conservative reservations remain counted. Implement source-authenticated project-level provider billing ingestion/attestation, per-attempt cost attribution (where possible), discrepancy controls and actor audit BEFORE allowing actual reconciliation. This is a deliberate incomplete release gate, not a completed settlement system.
+
+### Phase 13M — no-send bot provisioning preparation (2026-10-25)
+
+A one-shot private Telegram setup verifier is implemented under `lib/growth/reporting/provisioning.ts` and `scripts/growth-telegram-verify.ts`. It validates a dedicated BotFather bot and exact private `getChat` recipient without calling sendMessage. The matching one-time pairing-code discovery workflow uses `getUpdates` on the fresh private bot chat and writes only the recipient ID to a local 0600 file, never printing credentials/messages. Unit tests cover malicious/group destinations, malformed tokens and codes, ambiguous identities, timeout and no-send guarantees. This is operator setup tooling, NOT a live message test or scheduled reporter. See `TELEGRAM_RUNBOOK.md`. Rollout still needs trusted external actual billing data and a deliberate one-message test; production/Growth/attribution/Telegram sending remain disabled.
+\n### Phase 13N — OpenAI project cost read-only evidence adapter (2026-10-25)\n\nAdded `lib/growth/economics/provider-costs.ts` and isolated mocked-provider tests in `tests/growth-provider-costs.test.ts`. This **uninvoked code-only adapter** can request an explicit 1–31 day UTC window at the documented `/v1/organization/costs` endpoint with strict project and line-item grouping; it validates every USD project/bucket, exhausts bounded pagination, rejects duplicate or missing days and unsupported precision, and sums integer microUSD without floating-point accumulation. A day counts as zero only with an explicit empty provider bucket. Provider URLs/errors/tokens are never logged and no source data is written. The return type explicitly says `PROJECT_AGGREGATE_ONLY` / `perRequestActualsVerified: false`. This code is not connected to workers or admin routes.\n\n**Still blocked:** operator-approved external billing access and project isolation, robust persisted provenance/attestation and line-item discrepancy handling, trustworthy per-request allocation if possible, audited settlement (still throws `VERIFIED_BILLING_EVIDENCE_REQUIRED`), staging/security/UI checks, manual Telegram setup and one separately approved live delivery. No merge, deploy, token provisioning, payment, provider read, send, or cron authorized.\n
+### Phase 13O — isolated staging and role security qualification prep (2026-10-25)
+
+Added a no-provider-call permission-boundary suite for Phase 13 ADMIN pages and warning API, and a self-contained `PHASE13_RELEASE_QUALIFICATION.md` release/rollback matrix. The checklist retains both report gates OFF, requires independently authorized staging deployment and real PostgreSQL 18 migration rehearsal, and separates bot provisioning from one approved live send. The operator still needs to provide real trusted billing source/project-scoping decision and consent for live tests; no staging/production deployment or Telegram send occurred from this code-only phase.
+
+### Phase 13P — explicit staging-only single Telegram report acceptance path (2026-10-25)
+
+A new `growth:telegram:acceptance` CLI supports one **operator-authorized** complete-UTC-day digest send after verified bot/private recipient onboarding and staging setup. Its own default-off flag, isolated-staging marker, exact day-bound confirmation and mandatory disabled regular schedule are separate from the recurring daily runner. It uses unchanged PostgreSQL report claim/UNKNOWN no-retry guarantees. New unit tests call no external Telegram API. Real acceptance, confirmed receipt and operator signoff remain outstanding. Do not assume this work finishes Phase 13 or deploy/enable any live automation.
+
+### Phase 13Q — PostgreSQL immutable report archive and safe concurrent creation (2026-10-25)
+
+The additional `20261025150000_growth_daily_report_append_only` SQL migration protects daily digest snapshots against UPDATE and DELETE at the DB layer. The archive service now creates once and returns the winner after a P2002 unique conflict instead of an UPDATE-bearing upsert that would hit the trigger. Real database tests on both PostgreSQL 16 and 18 verify the snapshot cannot be changed or removed while delivery audit remains separate. Staging migration rehearsal and real recipient receipt remain outstanding; not deployed, not accepted.
+
+### Phase 13R — separate AI project, bounded Creative Example, private bot and production-only plan (2026-10-25)
+
+Operator chose a dedicated OpenAI Growth project and **no permanent staging website**. All Growth paid text/image paths require distinct project-scoped credentials, with missing/identical normal-site credentials blocking before budget admission. Creative Example text rewriting is now admitted with its own per-job reservation and immutable response evidence; previously it could run with the normal translation key without a hard reservation. Bot verification requires BotFather group membership disabled, and pairing requires private sender/chat identity match. This hardening remains feature-branch only until latest CI and a backup-first disposable populated-database rehearsal are accepted. `PHASE13_PRODUCTION_NO_STAGING.md` overrides earlier generic staging-site assumptions. Phase 13 NOT accepted. A real private Telegram recipient still requires one operator-controlled pairing/verification and separately authorized production live test.
+
+### Phase 13S — separately gated direct-production one-message acceptance (2026-10-25)
+
+In response to the operator's no-staging decision, `growth:telegram:acceptance` now refuses production DB under an isolated-staging label, and allows verified exact production DB targeting only with an independent production-specific exact `I APPROVE ONE PRODUCTION DELIVERY growth-YYYYMMDD` string. It retains its own enabled gate, standard channel gate, day-bound report confirmation, 04:00 UTC cutoff, schedule OFF, immutable report and once-only delivery claim. New tests use mocked providers and never send. The operator has **not** authorized a live message. Phase 13 remains incomplete pending private bot setup, billing project, production backup/rehearsal and explicit release/send signoff.

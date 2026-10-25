@@ -14,6 +14,10 @@
     "start:hostinger": "node server.js",
     "start:editorial-worker": "tsx workers/editorial-worker.ts",
     "growth:worker": "tsx workers/growth-worker.ts",
+    "growth:daily-report": "tsx workers/growth-report-runner.ts",
+    "growth:telegram:verify": "tsx scripts/growth-telegram-verify.ts",
+    "growth:telegram:acceptance": "tsx scripts/growth-telegram-acceptance.ts",
+    "growth:telegram:discover": "tsx scripts/growth-telegram-discover.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "check": "npm run lint && npm run typecheck && npm run test",
@@ -44,6 +48,7 @@
     "growth:verify-legacy-evidence": "tsx scripts/report-legacy-learning-evidence.ts",
     "test:growth-publishing-db": "sh scripts/test-growth-publishing-db.sh",
     "test:growth-learning-db": "sh scripts/test-growth-learning-db.sh",
+    "test:growth-economics-db": "sh scripts/test-growth-economics-db.sh",
     "test:growth-analytics-recovery-db": "sh scripts/test-growth-analytics-recovery-db.sh"
   },
   "postinstall": "node node_modules/prisma/build/index.js generate",

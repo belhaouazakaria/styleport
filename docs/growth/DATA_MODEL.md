@@ -118,3 +118,28 @@ Create and improve atomically append a version, update the current version/check
 ## Phase 12 implemented learning contract
 
 Migration `20261015120000_growth_evergreen_learning` adds immutable `GrowthLearningRun`, `GrowthEvergreenRecommendationRecord`, `GrowthLearnedScheduleWindow`, and `GrowthExperimentLearningEvaluation` records. Runs are unique by UTC analysis day/model and retain bounded performance findings plus opportunity adjustments. Recommendation target uniqueness is enforced by separate partial unique indexes for non-null Translator and Idea IDs; the nullable composite-index loophole is not used. Target, prepared-candidate, preparation-job, and creative-job links use restrictive deletion so the exactly-one-target check and audit chain cannot be invalidated by `SET NULL`. Recommendations link the idempotent preparation job, resulting creative job, and resulting candidate; `PREPARING` is distinct from completed `PREPARED`. Learned windows are account/time-zone specific. Experiment evaluations retain findings without mutating definitions or allocating traffic. Phase 7 opportunity scores and Phase 11 approved snapshots remain immutable.
+
+## Phase 13B AI budget reservation ledger (feature branch, not deployed)
+
+`GrowthAiBudgetReservation` is an append-only financial-admission table keyed by unique `requestKey`. Each row records request model/provider, immutable pricing profile version, operation kind (`TEXT`/`IMAGE`), reserved upper-bound USD cents, optional associated job, status (`RESERVED`/`RECONCILED`), nullable reconciled USD cents, and UTC timestamps. Monetary cents are integers. The table retains reservations even when actual/provider cost is unknown; it never silently refunds paid-call attempts.
+
+`reserveGrowthAiBudget` uses an interactive Prisma transaction, locks the existing enabled `GrowthSettings` singleton row `FOR UPDATE`, checks the sum of daily/monthly reservations plus the new upper bound, applies 3/day image limits and accepts no absent/invalid model pricing ceiling. This is safe for concurrent claims from separate workers once every real paid provider is wired through admission. Crossing 70% or 90% produces an audited activity warning. `reconcileGrowthAiBudget` only sets a nonnegative provider-priced amount up to the reserved ceiling; reserved ceiling remains in daily/monthly admission arithmetic. The reservation service does **not** yet intercept text, example, or image providers, does not track external OpenAI charges, and does not independently enforce Translator/Ideas creation limits. Do not treat its presence as operational hard-cap protection or enable autonomous paid execution until all provider boundaries are integrated, price ceilings verified, and real database concurrency tests pass.
+
+
+## Phase 13C: immutable reports and once-only WhatsApp delivery
+
+`GrowthDailyReport`: one row per fully completed UTC `reportDate` with unique date, model version, immutable source evidence JSON `snapshot`, bounded human-readable `digestText`, createdAt. A repeat archive request reuses the earliest snapshot; late-arriving analytics must not silently rewrite history.
+
+`GrowthReportDelivery`: one row per report, channel `OPENWA` and state `READY -> SENDING -> SUBMITTED` or `READY -> SENDING -> OUTCOME_UNKNOWN`. Row-lock claim transaction precedes the single external send. A crash can leave `SENDING`, which is intentionally non-retryable until an operator checks the chat. The provider's message ID is evidence only of API submission, not delivery. Never include WhatsApp sender/recipient numbers, API keys or browser session credentials in report snapshots or commit them to Git. This remains isolated feature-branch work until real database tests and controlled live session validation.
+
+
+
+### Phase 13I immutable provider-usage evidence (2026-10-24)
+
+`GrowthAiUsageEvent` is a 1:1 child of `GrowthAiBudgetReservation` with `reservationId @unique` and `onDelete: Restrict`. `outcome` is `RESPONSE_RECEIVED` or `OUTCOME_UNKNOWN`; it stores optional validated provider response ID, token counts, image units, and *estimated* microUSD (BigInt). No actual billed amount is stored. An SQL constraint prevents unknown outcomes from being decorated with fabricated response usage or estimated costs. An append-only SQL trigger disallows UPDATE and DELETE; no application repair can modify an existing response event. Even when a provider request fails or its response is lost, the reservation remains counted under the daily/monthly budget. Missing event means absence of confirmed usage evidence, NOT proof that no provider charge occurred.
+
+The response event is separate from a future verified settlement with provider billing provenance. Estimates must not automatically update `GrowthAiBudgetReservation.reconciledCents`. A provider response ID alone is not an invoice and cannot justify automatic reconciliation.
+
+### Phase 13Q immutable daily archive enforcement (2026-10-25)
+
+`GrowthDailyReport` rows are now append-only at the PostgreSQL trigger boundary (`20261025150000_growth_daily_report_append_only`). The service uses insert and unique-conflict lookup to preserve an existing date archive without issuing UPDATE. The separate `GrowthReportDelivery` record continues its atomic READY/SENDING/SUBMITTED/UNKNOWN transitions and is not protected by this snapshot trigger. The Phase 13 disposable test database may TRUNCATE these tables only under the existing exact loopback database safety check; production operators must preserve historical archives and delivery claims.
