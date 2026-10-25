@@ -33,7 +33,9 @@ if (enabled) {
 
 async function clean() {
   await prisma.growthReportDelivery.deleteMany();
-  await prisma.growthDailyReport.deleteMany();
+  // Only the exact-name guarded disposable CI database may be truncated.
+  // Real report archives are append-only and reject SQL UPDATE / DELETE.
+  await prisma.$executeRawUnsafe('TRUNCATE TABLE "GrowthDailyReport"');
   // Truncate is permitted ONLY in the guarded disposable test database: the
   // production SQL trigger must continue to reject UPDATE and DELETE of evidence.
   await prisma.$executeRawUnsafe('TRUNCATE TABLE "GrowthAiUsageEvent"');
@@ -129,6 +131,23 @@ suite("Phase 13 disposable PostgreSQL acceptance — no external APIs", () => {
     await expect(appendGrowthAiUsageEvidence({
       reservationId, outcome: "RESPONSE_RECEIVED", inputTokens: 0, outputTokens: 0,
     })).rejects.toThrow();
+  });
+
+  it("enforces archived digest immutability inside PostgreSQL, not just service code", async () => {
+    const reportId = "growth-20261020";
+    const day = new Date("2026-10-20T00:00:00.000Z");
+    await prisma.growthDailyReport.create({
+      data: { id: reportId, reportDate: day, version: "growth_daily_v1",
+        snapshot: { source: "LOCAL_DATABASE", date: "2026-10-20" },
+        digestText: "Immutable archived UTC digest" },
+    });
+    await expect(prisma.growthDailyReport.update({
+      where: { id: reportId }, data: { digestText: "tampered" },
+    })).rejects.toThrow();
+    await expect(prisma.growthDailyReport.delete({ where: { id: reportId } })).rejects.toThrow();
+    const retained = await prisma.growthDailyReport.findUniqueOrThrow({ where: { id: reportId } });
+    expect(retained.digestText).toBe("Immutable archived UTC digest");
+    expect(await prisma.growthDailyReport.count()).toBe(1);
   });
 
   it("delivers once under simultaneous PostgreSQL claims, then blocks duplicate sends", async () => {
