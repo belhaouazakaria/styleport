@@ -185,7 +185,7 @@ function verifySchema(url) {
 }
 
 function verifyAppendOnlyRuntime(url) {
-  const sql = String.raw[
+  const sql = [
     "BEGIN;",
     "INSERT INTO \"GrowthDailyReport\" (\"id\",\"reportDate\",\"version\",\"snapshot\",\"digestText\")",
     "VALUES ('phase13_rehearsal_probe',DATE '1900-01-01','probe','{}'::jsonb,'probe');",
