@@ -1,11 +1,21 @@
 import { GrowthAiOperationKind } from "@prisma/client";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+
+const telegramMock = vi.hoisted(() => ({
+  submit: vi.fn(),
+  config: vi.fn(),
+}));
+vi.mock("@/lib/growth/reporting/telegram", () => ({
+  getTelegramReportSettings: telegramMock.config,
+  submitTelegramDailyReport: telegramMock.submit,
+}));
 
 import { prisma } from "@/lib/prisma";
 import { reserveGrowthAiBudget } from "@/lib/growth/economics/reservations";
 import { appendGrowthAiUsageEvidence } from "@/lib/growth/economics/usage-evidence";
 import { GROWTH_TEXT_PRICE_VERSION } from "@/lib/growth/economics/text-admission";
 import { listGrowthBudgetWarnings, transitionGrowthBudgetWarning } from "@/lib/growth/economics/warnings";
+import { submitArchivedDailyReport } from "@/lib/growth/reporting/delivery";
 
 const enabled = process.env.RUN_GROWTH_ECONOMICS_DB_TESTS === "1";
 const suite = enabled ? describe.sequential : describe.skip;
@@ -22,6 +32,8 @@ if (enabled) {
 }
 
 async function clean() {
+  await prisma.growthReportDelivery.deleteMany();
+  await prisma.growthDailyReport.deleteMany();
   // Truncate is permitted ONLY in the guarded disposable test database: the
   // production SQL trigger must continue to reject UPDATE and DELETE of evidence.
   await prisma.$executeRawUnsafe('TRUNCATE TABLE "GrowthAiUsageEvent"');
@@ -42,6 +54,9 @@ const textRequest = (key: string, priceCeilingCents = 30) => ({
 
 beforeEach(async () => {
   if (!enabled) return;
+  vi.clearAllMocks();
+  telegramMock.config.mockReturnValue({ enabled: true, botToken: "123456789:" + "A".repeat(35), chatId: "123456789" });
+  telegramMock.submit.mockResolvedValue({ submitted: true, messageId: "message-1" });
   await clean();
   await prisma.growthSettings.create({ data: {
     id: "global", enabled: true, attributionEnabled: false,
@@ -115,6 +130,48 @@ suite("Phase 13 disposable PostgreSQL acceptance — no external APIs", () => {
       reservationId, outcome: "RESPONSE_RECEIVED", inputTokens: 0, outputTokens: 0,
     })).rejects.toThrow();
   });
+
+  it("delivers once under simultaneous PostgreSQL claims, then blocks duplicate sends", async () => {
+    const reportId = "growth-20261021";
+    await prisma.growthDailyReport.create({
+      data: {
+        id: reportId, reportDate: new Date("2026-10-21T00:00:00Z"),
+        version: "growth_daily_v1", snapshot: { date: "2026-10-21" },
+        digestText: "Phase 13 mocked receipt, no external Telegram call",
+      },
+    });
+    const results = await Promise.allSettled([
+      submitArchivedDailyReport(reportId),
+      submitArchivedDailyReport(reportId),
+    ]);
+    expect(results.filter(x => x.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter(x => x.status === "rejected")).toHaveLength(1);
+    expect(telegramMock.submit).toHaveBeenCalledTimes(1);
+    const delivery = await prisma.growthReportDelivery.findUniqueOrThrow({ where: { reportId } });
+    expect(delivery.status).toBe("SUBMITTED");
+    expect(delivery.providerMessageId).toBe("message-1");
+    await expect(submitArchivedDailyReport(reportId)).rejects.toThrow("ALREADY_ATTEMPTED_SUBMITTED");
+    expect(telegramMock.submit).toHaveBeenCalledTimes(1);
+  }, 30_000);
+
+  it("permanently blocks a second Telegram attempt after an ambiguous provider failure", async () => {
+    const reportId = "growth-20261022";
+    await prisma.growthDailyReport.create({
+      data: {
+        id: reportId, reportDate: new Date("2026-10-22T00:00:00Z"),
+        version: "growth_daily_v1", snapshot: { date: "2026-10-22" },
+        digestText: "Simulated provider timeout, no real Telegram contact",
+      },
+    });
+    telegramMock.submit.mockRejectedValueOnce(new Error("simulated timeout"));
+    await expect(submitArchivedDailyReport(reportId))
+      .rejects.toThrow("OUTCOME_UNKNOWN_REQUIRES_OPERATOR_REVIEW");
+    expect((await prisma.growthReportDelivery.findUniqueOrThrow({ where: { reportId } })).status)
+      .toBe("OUTCOME_UNKNOWN");
+    await expect(submitArchivedDailyReport(reportId))
+      .rejects.toThrow("ALREADY_ATTEMPTED_OUTCOME_UNKNOWN");
+    expect(telegramMock.submit).toHaveBeenCalledTimes(1);
+  }, 30_000);
 
   it("preserves warning original and serializes audit ACK -> RESOLVE, never changes budget", async () => {
     const actor = await prisma.user.create({
