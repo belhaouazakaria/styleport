@@ -211,3 +211,7 @@ No automated alert notifications, billing reconciliation, scheduler or Telegram 
 ## Phase 13L no invented billing actuals
 
 `reconcileGrowthAiBudget` now fails closed with `VERIFIED_BILLING_EVIDENCE_REQUIRED` regardless of caller-supplied numbers. The immutable provider-response evidence gives estimation only; no verified invoice/project usage source has been connected. Do not reduce budget reservations, change the status to RECONCILED or assert actual cost until an approved verified-cost source and audit workflow is designed and tested. No invoice, billing account, live OpenAI provider request or production database was accessed.
+
+## Phase 13M read-only Telegram private chat verification (2026-10-25)
+
+Feature branch includes `lib/growth/reporting/provisioning.ts`, `pairing.ts`, `scripts/growth-telegram-verify.ts`, and `growth-telegram-discover.ts`. BotFather provisioning is manual and token must not enter repository, logs or chat. The discovery helper requires a fresh 16–32 hex code sent as `/start <code>` in an intended private Telegram chat; a single bounded getUpdates read locates only that exact message, never sends any bot message and writes the numeric chat ID to `~/.config/saytwist/telegram-private-chat-id` mode 0600. Verification checks getMe and private getChat without exposing identifiers, messages or tokens. Bot/token provision and real delivery **have not occurred**. Both report flags stay false; no timer. Phase 13 and Phase 14 remain in progress/not started respectively.
