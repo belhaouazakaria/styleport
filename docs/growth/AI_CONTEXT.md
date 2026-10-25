@@ -12,6 +12,7 @@ Before planning or coding any Growth task:
 4. Read `docs/growth/ROADMAP.md`.
 5. Read `docs/growth/IMPLEMENTATION_MAP.md`.
 6. Read `docs/growth/DATA_MODEL.md`.
+   For Phase 13, also read `docs/growth/PHASE13_RELEASE_QUALIFICATION.md` before release planning.
 7. Read the remaining topic-specific Growth documents.
 8. Inspect the current implementation and database schema; check Git status and branch before editing.
 
@@ -220,3 +221,6 @@ Feature branch includes `lib/growth/reporting/provisioning.ts`, `pairing.ts`, `s
 
 The isolated Phase 13 PostgreSQL suite now proves delivery once-only behavior using simultaneous claim attempts and a mocked Telegram sender. It verifies both the submitted and OUTCOME_UNKNOWN states with actual database rows. The suite never contacts Telegram and cannot substitute for one manually confirmed private recipient live message. No deployment, bot creation or running schedule has been authorized.
 \n## Phase 13N project-level cost snapshot preparation (2026-10-25)\n\nThe pure/test-injected, currently uncalled `provider-costs.ts` validates OpenAI organization Costs `GET` daily project/line-item response. The bounded read-only adapter rejects incomplete/mismatched/duplicate buckets, USD errors, loss of microUSD precision, bad credentials, pagination loops, and network failure without reporting sensitive values. It has no production caller, no configured Admin API key and makes no live network call during CI. Project totals are not individual Growth requests, and do not prove Growth attribution if regular translation uses the same OpenAI project. No current reconciled actual cost, budget slot release, database schema migration or operator billing approval is claimed. Next: decide dedicated project or defendable allocation, provenance retention/attestation and operator authorization; then staging security/migration review and controlled Telegram reception test.\n
+## Phase 13O release-readiness security tests and staging checklist (2026-10-25)
+
+`tests/growth-phase13-admin-boundaries.test.ts` adds isolated route/page authorization-gate coverage, including ADMIN check before report, spend and warning reads, plus same-origin/mass-assignment/session controls on warning audit transitions. It invokes no database or provider. `PHASE13_RELEASE_QUALIFICATION.md` is the explicit operator/staging/rollback protocol for PostgreSQL 18 rehearsal, UI accessibility, credential safety and Telegram receipt checks. No staging environment or real delivery was created by documentation or unit tests; the final Phase 13 exit requires operator participation.
