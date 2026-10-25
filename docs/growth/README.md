@@ -49,6 +49,7 @@ Read these before changing the Growth system:
 
 - `AI_CONTEXT.md`
 - `PHASE13_RELEASE_QUALIFICATION.md` (isolated migration, auth/UI, billing limitation, manual Telegram acceptance and rollback gates)
+- `PHASE13_PRODUCTION_NO_STAGING.md` (operator's backup-first production-only decision and required guards)
 - `PRODUCT.md`
 - `ACCOUNT_STRATEGY.md`
 - `AGENT_AUTOMATION.md`

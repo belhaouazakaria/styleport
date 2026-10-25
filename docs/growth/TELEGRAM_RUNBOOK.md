@@ -76,3 +76,11 @@ TELEGRAM_REPORTS_ENABLED=true
 ```
 
 Replace `growth-YYYYMMDD` with the exact previous **complete** UTC date for the invocation. Run only `npm run growth:telegram:acceptance` in the approved isolated checkout; do not enable or invoke the daily runner. If the CLI reports `SUBMITTED`, the operator verifies in the private Telegram recipient chat that **one** report appeared. Failure, SENDING or OUTCOME_UNKNOWN must be manually reconciled: do not retry or clear the DB record. After the single attempt, immediately return acceptance/report flags to false and scrub temporary environment variables. The flags do not provide an authorization bypass for running on production; the operator is responsible for choosing the correct isolated database before issuing a send.
+
+## Owner-only delivery safeguards (2026-10-25)
+
+Telegram does not offer a fully hidden bot account: anyone finding the bot username may open its chat or send it a message. They cannot read another recipient's private report without the bot token or recipient account access. The Growth implementation has **no inbound handler or webhook**, sends only to an explicitly configured positive numeric **private chat ID**, and verifies the recipient via `getChat` and the provider's private-chat response.
+
+Required BotFather action: send `/setjoingroups`, choose this reporting bot, select **Disable**. After this, the read-only `growth:telegram:verify` requires the `getMe.can_join_groups` flag to be exactly false or fails with `GROUP_JOINING_NOT_DISABLED`; it makes no `sendMessage` call. The one-time `/start <fresh random hex>` discovery requires a private chat **and matching sender identity**, not a group/channel or forwarded/mismatched user. Keep the token secret. Do not use `setprivacy` as a substitute for disabling group joins.
+
+The operator has created the bot, not yet completed no-send pairing. The operator separately chose production-only rollout with no permanent staging site. For production, do not spoof the `isolated-staging` marker on the existing test command; follow `PHASE13_PRODUCTION_NO_STAGING.md` and obtain approval for a distinct production acceptance procedure **after** the backed-up release and provider verification. Daily schedule still OFF. Never paste bot token/chat ID into issue comments, ChatGPT, GitHub or server logs.
