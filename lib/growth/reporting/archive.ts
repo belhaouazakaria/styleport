@@ -82,12 +82,20 @@ export async function archiveGrowthDailyReport(date: string) {
   const snapshot = { ...digest, version: GROWTH_REPORT_VERSION, source: "LOCAL_DATABASE",
     pinterestReady: fullyReadyPinterest, attributionAvailable } satisfies Prisma.JsonObject;
 
-  // An immutable, one-day unique upsert preserves the first successful snapshot
-  // even if another worker reads newer analytics during report generation.
-  const report = await prisma.growthDailyReport.upsert({
-    where: { reportDate: start },
-    create: { id: reportId, reportDate: start, version: GROWTH_REPORT_VERSION, snapshot, digestText: body },
-    update: {},
-  });
-  return { report, reused: report.digestText !== body };
+  // INSERT-only: a PostgreSQL BEFORE UPDATE/DELETE trigger protects the
+  // snapshot. Prisma upsert's ON CONFLICT UPDATE can still fire that trigger,
+  // even with update: {}, so a unique collision must instead read the winner.
+  // There is never a second mutation to an archived report.
+  try {
+    const report = await prisma.growthDailyReport.create({
+      data: { id: reportId, reportDate: start, version: GROWTH_REPORT_VERSION, snapshot, digestText: body },
+    });
+    return { report, reused: false };
+  } catch (error) {
+    if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") {
+      throw error;
+    }
+    const report = await prisma.growthDailyReport.findUniqueOrThrow({ where: { reportDate: start } });
+    return { report, reused: true };
+  }
 }
