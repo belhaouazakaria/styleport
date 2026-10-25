@@ -64,6 +64,10 @@ export async function verifyGrowthTelegramProvisioning(
       !/^[a-zA-Z0-9_]{5,32}$/.test(me.username)) {
     throw new TelegramProvisioningError("BOT_IDENTITY_NOT_VERIFIED");
   }
+  // BotFather /setjoingroups must be disabled for this private-only bot.
+  if (me.can_join_groups !== false) {
+    throw new TelegramProvisioningError("GROUP_JOINING_NOT_DISABLED");
+  }
   const chat = await readBotApi(
     settings.botToken, "getChat", { chat_id: settings.chatId }, fetcher,
   );

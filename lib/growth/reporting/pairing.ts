@@ -25,6 +25,11 @@ export function findMatchedPrivateChatId(updates: unknown, pairingCode: string):
         !("type" in chat) || chat.type !== "private" ||
         !("id" in chat)) continue;
     const id = String(chat.id);
+    // In a private Telegram bot chat, the message author must be the same
+    // human identity as the recipient chat. Reject forwarded/bot-shaped data.
+    if (!("from" in msg) || !msg.from || typeof msg.from !== "object" ||
+        !("id" in msg.from) || String(msg.from.id) !== id ||
+        ("is_bot" in msg.from && msg.from.is_bot === true)) continue;
     if (PRIVATE_ID_PATTERN.test(id) && Number.isSafeInteger(Number(id))) matches.add(id);
   }
   if (!matches.size) throw new TelegramProvisioningError("PAIRING_MESSAGE_NOT_FOUND");

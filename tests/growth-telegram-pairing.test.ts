@@ -15,6 +15,10 @@ describe("Read-only Telegram private recipient pairing", () => {
       privateUpdate(345678, "/start " + nonce),
     ];
     expect(findMatchedPrivateChatId(updates, nonce)).toBe("345678");
+    expect(() => findMatchedPrivateChatId([
+      { message: { text: "/start " + nonce, chat: { id: 345678, type: "private" },
+        from: { id: 987654 } } },
+    ], nonce)).toThrow("PAIRING_MESSAGE_NOT_FOUND");
   });
 
   it("fails closed for invalid nonce, missing recipient and multiple matching private chats", () => {

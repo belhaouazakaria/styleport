@@ -8,7 +8,7 @@ const env = {
 };
 
 const okBot = () => Response.json({
-  ok: true, result: { id: 123456789, is_bot: true, username: "SayTwistGrowthBot" },
+  ok: true, result: { id: 123456789, is_bot: true, username: "SayTwistGrowthBot", can_join_groups: false },
 });
 const okChat = () => Response.json({
   ok: true, result: { id: 123456789, type: "private", first_name: "PRIVATE" },
@@ -62,4 +62,14 @@ describe("Telegram read-only provisioning verification", () => {
     expect(String(error)).not.toContain(env.TELEGRAM_BOT_TOKEN);
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
+  it("blocks bots that can be added to groups before reading recipient info", async () => {
+    const fetcher = vi.fn().mockResolvedValueOnce(Response.json({
+      ok: true, result: { id: 123456789, is_bot: true,
+        username: "SayTwistGrowthBot", can_join_groups: true },
+    }));
+    await expect(verifyGrowthTelegramProvisioning(env, fetcher))
+      .rejects.toMatchObject({ code: "GROUP_JOINING_NOT_DISABLED" });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
 });
