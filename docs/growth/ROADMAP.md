@@ -417,3 +417,7 @@ Added a no-provider-call permission-boundary suite for Phase 13 ADMIN pages and 
 ### Phase 13P — explicit staging-only single Telegram report acceptance path (2026-10-25)
 
 A new `growth:telegram:acceptance` CLI supports one **operator-authorized** complete-UTC-day digest send after verified bot/private recipient onboarding and staging setup. Its own default-off flag, isolated-staging marker, exact day-bound confirmation and mandatory disabled regular schedule are separate from the recurring daily runner. It uses unchanged PostgreSQL report claim/UNKNOWN no-retry guarantees. New unit tests call no external Telegram API. Real acceptance, confirmed receipt and operator signoff remain outstanding. Do not assume this work finishes Phase 13 or deploy/enable any live automation.
+
+### Phase 13Q — PostgreSQL immutable report archive and safe concurrent creation (2026-10-25)
+
+The additional `20261025150000_growth_daily_report_append_only` SQL migration protects daily digest snapshots against UPDATE and DELETE at the DB layer. The archive service now creates once and returns the winner after a P2002 unique conflict instead of an UPDATE-bearing upsert that would hit the trigger. Real database tests on both PostgreSQL 16 and 18 verify the snapshot cannot be changed or removed while delivery audit remains separate. Staging migration rehearsal and real recipient receipt remain outstanding; not deployed, not accepted.
