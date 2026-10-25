@@ -48,6 +48,7 @@ The initial account count is three. The agent reviews account performance monthl
 Read these before changing the Growth system:
 
 - `AI_CONTEXT.md`
+- `PHASE13_RELEASE_QUALIFICATION.md` (isolated migration, auth/UI, billing limitation, manual Telegram acceptance and rollback gates)
 - `PRODUCT.md`
 - `ACCOUNT_STRATEGY.md`
 - `AGENT_AUTOMATION.md`
