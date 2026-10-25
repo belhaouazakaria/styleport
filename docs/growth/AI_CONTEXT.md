@@ -244,3 +244,7 @@ Telegram remains a username-discoverable bot, not an unfindable private account.
 ## Phase 13S explicitly approved production message path (2026-10-25)
 
 The single-send acceptance runner now supports production as an explicit separate mode after the no-staging operator decision, but guards against staging-label spoofing and requires an exact loopback production PostgreSQL target plus additional report-ID-bound approval. No bot token/chat ID or real message was used. Staging-mode invocations refuse the production DB. The user's initial request to operate directly in production does not itself authorize deployment or a report send; obtain separate operator signoff for each action. This does not change recurring reporting defaults (OFF) or actual billed cost settlement (unverified).
+
+## Phase 13 private Telegram verification succeeded (operator-provided, 2026-10-25)
+
+The user successfully completed the no-send local recipient discovery and reported the read-only verifier output `bot verified: true` / `private chat verified: true`. Reporting remains OFF and no Telegram message or live acceptance run occurred. The token/chat ID are not known to the assistant and must never be requested in logs, GitHub or chat. Next gate is a sanitized read-only live server preflight; production migration/deployment, one Telegram send and daily schedule each require separate approval.

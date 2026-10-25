@@ -102,3 +102,9 @@ The no-send discovery CLI previously hid all error details. It now prints only a
 - `AMBIGUOUS_PRIVATE_RECIPIENT` / `UNEXPECTED_LOCAL_ERROR`: stop and investigate; never pick a recipient arbitrarily.
 
 No database, webhook, cron, messaging, publisher or paid OpenAI request is run by this diagnostic. In particular **never post** the token, private recipient ID, nonce, `getUpdates` JSON or Bot API URLs in issues or chat.
+
+## Phase 13 private recipient verification — operator confirmed 2026-10-25
+
+The operator ran the no-send `growth:telegram:discover` locally and reported a restricted recipient-ID file was created. The operator then executed the read-only `growth:telegram:verify` and reported `bot verified: true`, `private chat verified: true`, and `No messages sent; delivery remains disabled.` This validates the private recipient / BotFather group-disabled settings, *not* a delivered message or independent server-side credentials. Token, numeric chat ID, one-time nonce and Telegram response bodies were not submitted to the repository or assistant. **No report has been sent.**
+
+For no-permanent-staging production rollout, the next required step is a sanitizer-safe read-only preflight of the live database migration inventory and Growth/attribution switches. This precedes any independently approved PostgreSQL 18 backup and clone restore, Phase 13 migrations, controlled manual release or single-message receipt check.

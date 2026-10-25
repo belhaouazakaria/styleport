@@ -24,7 +24,7 @@ The organization Admin API key for Costs API is *not* required at runtime and mu
 ## Manual inputs still required
 
 - Dedicated Growth project created, its model access (gpt-4.1-mini and pinned image model) and enforced spend limit verified, distinct project API key stored privately.
-- BotFather `/setjoingroups` disabled; one recipient's private pairing and read-only verification performed. Never share credentials/chat ID in ChatGPT, screenshots or Git.
+- **Completed (operator-reported 2026-10-25):** BotFather group joins disabled; one recipient's private no-send pairing saved locally; read-only verification returned `bot verified: true` and `private chat verified: true`. This has not verified live production secret provisioning or sent a report. Never share credentials/chat ID in ChatGPT, screenshots or Git.
 - Operator permits a **specific backed-up production release** after backup/rehearsal evidence, followed by separate consent for one live Telegram receipt and later schedule.
 
 ## Production-specific single message gate (NOT AUTHORIZED OR RUN)
