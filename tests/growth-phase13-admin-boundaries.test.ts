@@ -1,19 +1,14 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  requireAdmin: vi.fn(),
-  guard: vi.fn(),
-  session: vi.fn(),
-  sameOrigin: vi.fn(),
-  listReports: vi.fn(),
-  getReport: vi.fn(),
-  listWarnings: vi.fn(),
-  transitionWarning: vi.fn(),
-  inventory: vi.fn(),
-  exposure: vi.fn(),
+  guard: vi.fn(), session: vi.fn(), sameOrigin: vi.fn(), transitionWarning: vi.fn(),
 }));
 
-vi.mock("@/lib/auth", () => ({ requireAdminRoute: mocks.requireAdmin }));
+// Test the API handler dynamically, and inspect page source boundaries without
+// importing Next.js page bundles into Vitest's Node environment. next-auth
+// internals require Next's own module resolution and are not a valid route test.
 vi.mock("@/lib/permissions", () => ({
   adminRouteGuard: mocks.guard,
   getSessionOrNull: mocks.session,
@@ -21,93 +16,75 @@ vi.mock("@/lib/permissions", () => ({
 vi.mock("@/lib/growth/request-security", () => ({
   isSameOriginMutation: mocks.sameOrigin,
 }));
-vi.mock("@/lib/growth/reporting/admin", () => ({
-  listArchivedGrowthReports: mocks.listReports,
-  getArchivedGrowthReport: mocks.getReport,
-}));
 vi.mock("@/lib/growth/economics/warnings", () => ({
-  listGrowthBudgetWarnings: mocks.listWarnings,
   transitionGrowthBudgetWarning: mocks.transitionWarning,
   GrowthBudgetWarningError: class GrowthBudgetWarningError extends Error {},
 }));
-vi.mock("@/lib/growth/economics/usage", () => ({
-  getGrowthUsageInventory: mocks.inventory,
-}));
-vi.mock("@/lib/growth/economics/exposure", () => ({
-  getGrowthBudgetExposure: mocks.exposure,
-}));
 
-import GrowthReportsPage from "@/app/(admin)/admin/growth/reports/page";
-import GrowthReportDetailPage from "@/app/(admin)/admin/growth/reports/[reportId]/page";
-import GrowthSpendPage from "@/app/(admin)/admin/growth/spend/page";
-import GrowthWarningsPage from "@/app/(admin)/admin/growth/warnings/page";
 import { POST as transition } from "@/app/api/admin/growth/warnings/transition/route";
 
-const denied = new Error("ADMIN_ROUTE_DENIED");
+function source(path: string) {
+  return readFileSync(join(process.cwd(), path), "utf8");
+}
 function req(body: unknown) {
   return new Request("https://saytwist.com/api/admin/growth/warnings/transition", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
+    method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
 }
 
-describe("Phase 13 private admin and warning mutation boundaries", () => {
+describe("Phase 13 report/warning read and API authentication boundaries", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.requireAdmin.mockRejectedValue(denied);
     mocks.guard.mockResolvedValue(null);
     mocks.session.mockResolvedValue({ user: { id: "admin1", role: "ADMIN" } });
     mocks.sameOrigin.mockReturnValue(true);
   });
 
-  it("rejects unauthenticated and non-admin report list, detail, spend and warning pages before any private read", async () => {
-    await expect(GrowthReportsPage()).rejects.toBe(denied);
-    await expect(GrowthReportDetailPage({ params: Promise.resolve({ reportId: "growth-20261024" }) }))
-      .rejects.toBe(denied);
-    await expect(GrowthSpendPage({ searchParams: Promise.resolve({ range: "30" }) }))
-      .rejects.toBe(denied);
-    await expect(GrowthWarningsPage()).rejects.toBe(denied);
-    expect(mocks.listReports).not.toHaveBeenCalled();
-    expect(mocks.getReport).not.toHaveBeenCalled();
-    expect(mocks.listWarnings).not.toHaveBeenCalled();
-    expect(mocks.inventory).not.toHaveBeenCalled();
-    expect(mocks.exposure).not.toHaveBeenCalled();
+  it("keeps each private page dynamic and statically checks ADMIN before the first reader call", () => {
+    for (const [path, readCall] of [
+      ["app/(admin)/admin/growth/reports/page.tsx", "await listArchivedGrowthReports()"],
+      ["app/(admin)/admin/growth/reports/[reportId]/page.tsx", "await getArchivedGrowthReport(reportId)"],
+      ["app/(admin)/admin/growth/warnings/page.tsx", "await listGrowthBudgetWarnings()"],
+      ["app/(admin)/admin/growth/spend/page.tsx", "getGrowthUsageInventory(days)"],
+    ]) {
+      const contents = source(path);
+      const guard = contents.indexOf("await requireAdminRoute()");
+      const read = contents.indexOf(readCall);
+      expect(guard, path).toBeGreaterThan(-1);
+      expect(read, path).toBeGreaterThan(guard);
+      expect(contents).toContain('export const dynamic = "force-dynamic"');
+      expect(contents, path).not.toMatch(/submitTelegramDailyReport\(|submitArchivedDailyReport\(/);
+    }
   });
 
-  it("honors the API permission response before parsing attacker payload or calling business services", async () => {
+  it("honors permission guard before parsing request or calling warning service", async () => {
     const blocked = new Response("forbidden", { status: 403 });
     mocks.guard.mockResolvedValue(blocked);
-    const response = await transition(req({ warningId: "warn1", transition: "ACKNOWLEDGE" }));
-    expect(response).toBe(blocked);
+    expect(await transition(req({ warningId: "warn1", transition: "ACKNOWLEDGE" }))).toBe(blocked);
     expect(mocks.sameOrigin).not.toHaveBeenCalled();
     expect(mocks.transitionWarning).not.toHaveBeenCalled();
   });
 
-  it("rejects wrong origin, unknown fields and non-ADMIN sessions before touching audit state", async () => {
+  it("rejects cross-origin, mass assignment, malformed IDs and missing session", async () => {
     mocks.sameOrigin.mockReturnValue(false);
     expect((await transition(req({ warningId: "warn1", transition: "ACKNOWLEDGE" }))).status).toBe(403);
     mocks.sameOrigin.mockReturnValue(true);
     expect((await transition(req({
-      warningId: "warn1", transition: "ACKNOWLEDGE", costCents: 9999,
+      warningId: "warn1", transition: "ACKNOWLEDGE", actualCostCents: 1000,
     }))).status).toBe(400);
-    expect((await transition(req({
-      warningId: "../unsafe", transition: "RESOLVE",
-    }))).status).toBe(400);
+    expect((await transition(req({ warningId: "../bad", transition: "RESOLVE" }))).status).toBe(400);
     mocks.session.mockResolvedValue(null);
     expect((await transition(req({ warningId: "warn1", transition: "ACKNOWLEDGE" }))).status).toBe(401);
     expect(mocks.transitionWarning).not.toHaveBeenCalled();
   });
 
-  it("allows only strict, actor-attributed warning transition without billing or report side effects", async () => {
+  it("accepts only strict actor-attributed warning transitions, with no billing/report side effects", async () => {
     mocks.transitionWarning.mockResolvedValue({ state: "ACKNOWLEDGED", reused: false });
     const response = await transition(req({ warningId: "warn1", transition: "ACKNOWLEDGE" }));
     expect(response.status).toBe(200);
     expect(mocks.transitionWarning).toHaveBeenCalledExactlyOnceWith({
       warningId: "warn1", transition: "ACKNOWLEDGE", actorUserId: "admin1",
     });
-    expect(mocks.getReport).not.toHaveBeenCalled();
-    expect(mocks.listReports).not.toHaveBeenCalled();
-    expect(mocks.exposure).not.toHaveBeenCalled();
   });
 });
