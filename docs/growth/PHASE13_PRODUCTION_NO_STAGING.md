@@ -54,8 +54,32 @@ The operator completed one live-production **read-only** `pg_dump --format=custo
 
 ## Clone restored and migration rehearsal prepared (operator report 2026-10-25)
 
-The operator created the private temporary database `saytwist_phase13_rehearsal_20261025` with PostgreSQL administration access (without granting CREATEDB to the SayTwist app account), and successfully restored the restricted production archive into it. **Observed outcomes:** `CLONE_TARGET_VERIFIED=true`, `CLONE_EMPTY=true`, `RESTORE_COMPLETED=true`, **27 restored finished migrations**, last `20261016120000_growth_analytics_gap_recovery`, restored database **47.1 MiB**, production database unchanged. This satisfies the full populated-backup restore test, but NOT yet the four-migration rehearsal or live-release approval.
+The operator created the private temporary database `saytwist_phase13_rehearsal_20261025` with PostgreSQL administration access (without granting CREATEDB to the SayTwist app account), and successfully restored the restricted production archive into it. **Observed outcomes:** `CLONE_TARGET_VERIFIED=true`, `CLONE_EMPTY=true`, `RESTORE_COMPLETED=true`, **27 restored finished migrations**, last `20261016120000_growth_analytics_gap_recovery`, restored database **47.1 MiB**, production database unchanged. This satisfies the full populated-backup restore test, and the four-migration rehearsal is separately confirmed below; it does NOT authorize a live release.
 
 Purpose-built checked-in runner: `scripts/growth-phase13-clone-rehearsal.cjs`. On a local operator checkout of the latest reviewed `phase/13-finance-reporting` HEAD, create a tar archive via `git archive HEAD prisma/schema.prisma prisma/migrations scripts/growth-phase13-clone-rehearsal.cjs` (pipe to gzip) and transport via authenticated SCP to `/home/saytwist/.local/share/saytwist/phase13-rehearsal/<approved-Git-SHA>/`, mode 0700. This bundle contains migrations, schema and runner only: no API keys or live data. Extract it under that private directory, NOT into htdocs. Invoke the runner as user `saytwist` using the approved Node 24 executable. Its preflight compares exactly 31 source migration directories against 27 live and cloned applied histories and their source SQL checksums; checks clone ownership and target; requires four exact pending migrations; derives the DB connection privately from existing PM2; forces a clone-only `DATABASE_URL` when executing existing production Prisma CLI; verifies migrated structure and enabled append-only triggers, exercises both guards inside a rollback-only clone transaction, and checks production migration history unchanged. On unknown error, it fails closed and suppresses provider/CLI secrets.
 
 **Never** run `prisma migrate deploy` manually against the production `DATABASE_URL` during this rehearsal. Do not upload the private production dump or PM2 JSON into Git. Once the guarded test passes, obtain a separate release authorization for the four live schema migrations and the deployment. Preserve backup and clone until the completed release is verified.
+
+## Completed production-clone migration rehearsal (operator output 2026-10-25)
+
+The operator ran the purpose-built `scripts/growth-phase13-clone-rehearsal.cjs` against the restored, app-owned and exact-named PostgreSQL 18.6 temporary database (not the production database). It reported all of:
+
+```text
+CLONE_BASELINE_MATCHED_PRODUCTION: true
+PENDING_MIGRATIONS_APPROVED: 4
+CLONE_MIGRATION_COMMAND_SUCCEEDED: true
+CLONE_MIGRATIONS_APPLIED: 4
+CLONE_SCHEMA_AND_IMMUTABILITY_VERIFIED: true
+PRODUCTION_MIGRATION_HISTORY_UNCHANGED: true
+PRODUCTION_DATABASE_MIGRATED: false
+```
+
+This confirms four migrations applied successfully on populated, restored production data and passed immutable accounting and report-archive trigger probes. The archive remains restricted off-webroot and the clone should be retained until post-release validation. Latest matching HEAD at time of rehearsal was `5532994985e5e3720a8021c1d9e37e2da258a913`; later guard-only code/docs/test commits require a fresh checked PR head review, but the source SQL and Prisma schema must remain unchanged.
+
+## Phase 13 guarded live-migration helper (PRE-FLIGHT ONLY unless separately approved)
+
+`scripts/growth-phase13-production-migration.cjs` is a new source-only standalone helper that defaults to **read-only** `preflight`; an operator must deliberately invoke `apply` and provide a case-sensitive SHA-bound private environment confirmation `GROWTH_PHASE13_PRODUCTION_APPROVAL` matching the reviewed source SHA. The runner also checks the exact source-only bundle location `/home/saytwist/.local/share/saytwist/phase13-rehearsal/<full-sha>`, live PM2 app identity, live and clone's immutable migration checksums (27/31 entries), exact four pending migration filenames, existing Growth/attribution/reporting disabled status and live `healthz`/`readyz`. It stops if another deployment lock exists.
+
+Only in explicitly approved `apply` mode, the script creates a **new** restricted PostgreSQL 18 custom archive outside `htdocs`, verifies size/permissions/TOC, rechecks live baseline, then runs the four migrations from the approved source bundle using the **live** PM2 connection, before validating final migration history, triggers and app health. This is a production DDL operation; its effects are not automatically rolled back if one Prisma migration fails. Never run it until a separate explicit operator approval and maintenance plan. The old `hostinger-prepare-migration.sh` remains inappropriate because it targets an earlier migration and assumes `.env`.
+
+This helper **never** performs Git merge, production application deployment, PM2 restart, OpenAI paid calls, Pinterest action or Telegram send. Once the four live schema migrations succeed, production code release is a separate explicit GitHub `workflow_dispatch` with exact approved merge SHA. The existing application deployment blocks pending migrations. Keep Growth, attribution, daily scheduler and Telegram sends disabled throughout. The operator must verify the fresh backup and release results before separately approving one private Telegram report acceptance message.
