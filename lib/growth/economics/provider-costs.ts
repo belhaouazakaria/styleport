@@ -84,6 +84,7 @@ export async function readOpenAiGrowthProjectCosts(input: {
   const cursors = new Set<string>();
   let cursor: string | null = null;
   let pagesRead = 0;
+  let complete = false;
   const fetcher = input.fetcher ?? fetch;
 
   while (pagesRead < MAX_PAGES) {
@@ -124,8 +125,8 @@ export async function readOpenAiGrowthProjectCosts(input: {
 
     for (const bucket of page.data) {
       if (!isRecord(bucket) || bucket.object !== "bucket" ||
-          !Number.isSafeInteger(bucket.start_time) || !Number.isSafeInteger(bucket.end_time) ||
           typeof bucket.start_time !== "number" || typeof bucket.end_time !== "number" ||
+          !Number.isSafeInteger(bucket.start_time) || !Number.isSafeInteger(bucket.end_time) ||
           bucket.start_time < start || bucket.end_time > end ||
           bucket.end_time - bucket.start_time !== 86_400 ||
           (bucket.start_time - start) % 86_400 !== 0 ||
@@ -161,6 +162,7 @@ export async function readOpenAiGrowthProjectCosts(input: {
     pagesRead++;
     if (page.has_more === false) {
       if (page.next_page != null) return invalid("INCONSISTENT_PAGINATION");
+      complete = true;
       break;
     }
     if (typeof page.next_page !== "string" ||
@@ -170,7 +172,7 @@ export async function readOpenAiGrowthProjectCosts(input: {
     cursors.add(page.next_page);
     cursor = page.next_page;
   }
-  if (pagesRead >= MAX_PAGES && cursor) return invalid("PAGINATION_LIMIT");
+  if (!complete) return invalid("PAGINATION_LIMIT");
   // An absent day is NOT a confirmed $0 day. Require explicit empty results.
   if (fetchedDays.size !== days) return invalid("INCOMPLETE_COST_WINDOW");
   const ordered: GrowthProjectCostsDay[] = [];
