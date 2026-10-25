@@ -1,6 +1,6 @@
 # SayTwist Growth Agent
 
-**Status:** Phase 12.2 bounded analytics recovery deployed and validated for one 13/13 completed plan (2026-10-17); Phase 13A usage inventory in progress on isolated feature branch; Growth and attribution collection intentionally disabled
+**Status:** Phase 12.2 recovery deployed and validated for one 13/13 completed plan (2026-10-17); Phase 13 economics and Telegram reporting IN PROGRESS on PR #15, not deployed or accepted; Phase 14 NOT STARTED; Growth, attribution and reporting disabled
 **Scope:** Pinterest-first autonomous growth system inside SayTwist  
 **Primary admin surface:** `/admin/growth`  
 **Primary public expansion:** `/ideas`  
@@ -73,7 +73,7 @@ If implementation changes behavior described here, update the relevant document 
 
 - Only static/image Pins are in scope initially. Video is out of scope.
 - Pinterest Standard Access was confirmed by the operator. The two earlier HTTP 401 publication chains remain immutable historical evidence. A later specifically approved real Pin published through Creative Lab, appeared on Pinterest, resolved to the intended destination, and reached `RECONCILED`; direct Create Pin success does not require a second reconcile job. Phase 12 v1 was deployed and production-validated on October 15, 2026. Phase 12.1 v2 subsequently ran successfully but remained `PARTIAL` because Pinterest history contains missing and `PROCESSING` observations. Phase 12.2 is deployed. One existing recovery plan completed all 13 of 13 planned API requests on 2026-10-17, under the eight-request-per-worker and five-request reserve gates. This does not imply historical observation gaps are entirely eliminated. Growth and attribution remain disabled.
-- WhatsApp reporting is desired for one recipient, but provider setup and current pricing must be verified before implementation.
+- Telegram Bot API (not OpenWA/WhatsApp) is the approved single-private-recipient daily report channel; the bot, private recipient, live delivery and schedule remain unconfigured/unapproved.
 
 See `IMPLEMENTATION_MAP.md` for verified repository facts and `DATA_MODEL.md` for implemented and proposed schema/state contracts.
 
@@ -117,3 +117,4 @@ Daily operator Growth digests are now planned for one WhatsApp recipient via Ope
 ### 2026-10-24 Reporting transport update (supersedes WhatsApp section above)
 
 Telegram Bot API replaces OpenWA for the single private Growth executive digest recipient. The earlier OpenWA section is historical and not a current operational instruction. This is disabled-by-default feature-branch code; no live message, cron, deploy, Growth activation or recurring delivery is authorized. See TELEGRAM_RUNBOOK.md and the Phase 13C roadmap update.
+\n### 2026-10-25 Phase 13N provider costs evidence preparation (code only)\n\nA read-only and currently **uninvoked** OpenAI organization Costs adapter validates complete daily, project-scoped USD snapshots from the official endpoint. It cannot prove a Growth-only bill in a project shared with normal translation traffic, and it cannot supply per-request invoiced costs. No admin billing key has been provisioned; no external API call or cost settlement is performed. See ADMIN_REPORTING_COSTS.md.\n
