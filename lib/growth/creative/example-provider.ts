@@ -81,6 +81,8 @@ export class OpenAICreativeExampleProvider implements CreativeExampleProvider {
     });
 
     getGrowthOpenAiCredentials(); // No budget reservation without project isolation.
+    if (!/^[a-zA-Z0-9_-]{1,100}$/.test(this.jobId))
+      throw new GrowthBudgetBlockedError("INVALID_TEXT_DECISION_ID");
     const reservationId = await reserveGrowthTextAttempt({
       decisionId: this.jobId, contentKind: "creative-example", attempt: 0,
       model, systemPrompt, userPrompt, maxOutputTokens,
