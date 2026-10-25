@@ -215,3 +215,7 @@ No automated alert notifications, billing reconciliation, scheduler or Telegram 
 ## Phase 13M read-only Telegram private chat verification (2026-10-25)
 
 Feature branch includes `lib/growth/reporting/provisioning.ts`, `pairing.ts`, `scripts/growth-telegram-verify.ts`, and `growth-telegram-discover.ts`. BotFather provisioning is manual and token must not enter repository, logs or chat. The discovery helper requires a fresh 16–32 hex code sent as `/start <code>` in an intended private Telegram chat; a single bounded getUpdates read locates only that exact message, never sends any bot message and writes the numeric chat ID to `~/.config/saytwist/telegram-private-chat-id` mode 0600. Verification checks getMe and private getChat without exposing identifiers, messages or tokens. Bot/token provision and real delivery **have not occurred**. Both report flags stay false; no timer. Phase 13 and Phase 14 remain in progress/not started respectively.
+
+## Phase 13K additional concurrency coverage (2026-10-25)
+
+The isolated Phase 13 PostgreSQL suite now proves delivery once-only behavior using simultaneous claim attempts and a mocked Telegram sender. It verifies both the submitted and OUTCOME_UNKNOWN states with actual database rows. The suite never contacts Telegram and cannot substitute for one manually confirmed private recipient live message. No deployment, bot creation or running schedule has been authorized.
