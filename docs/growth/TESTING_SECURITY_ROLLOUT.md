@@ -301,3 +301,5 @@ The `tests/growth-telegram-acceptance.test.ts` suite verifies default-disabled m
 ### Phase 13Q archived daily report database integrity (2026-10-25)
 
 Both disposable PostgreSQL-major CI jobs apply `20261025150000_growth_daily_report_append_only` and verify SQL-level UPDATE/DELETE attempts fail on real `GrowthDailyReport` rows. Existing report-delivery claim tests must still pass without touching immutable snapshots, and concurrent archive attempts now use INSERT with P2002 winner lookup rather than mutating upsert. Test-only TRUNCATE is allowed under the exact guarded disposable database URL; never use it outside CI. Schema persistence, auth/visual and human live recipient signoff are still required on separately authorized staging.
+
+Follow-up coverage: `tests/growth-report-archive-immutability.test.ts` confirms INSERT-only successful archiving, unique P2002 collision fetching the persisted first-writer digest without UPDATE, and propagation of unrelated DB failures. This supplements the real PostgreSQL trigger tests; neither suite runs a provider request.
