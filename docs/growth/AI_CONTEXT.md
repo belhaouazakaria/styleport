@@ -232,3 +232,5 @@ The staging-only `lib/growth/reporting/acceptance.ts`, `scripts/growth-telegram-
 ## Phase 13Q database-immutable report archives (2026-10-25)
 
 Additive migration `20261025150000_growth_daily_report_append_only` installs a PostgreSQL trigger that refuses UPDATE and DELETE on `GrowthDailyReport`; delivery status remains separate and mutable for durable claims. `archiveGrowthDailyReport` uses INSERT-first, catches only Prisma unique collision P2002 and reads the existing report, so concurrent archive generation still returns the first immutable snapshot without an ON CONFLICT UPDATE trigger. Dedicated disposable PostgreSQL 16 and 18 tests reject archive mutation/deletion while retaining the original digest; test cleanup uses TRUNCATE only in the exact guarded throwaway DB. This does not migrate production or deliver a Telegram message.
+
+Follow-up coverage: `tests/growth-report-archive-immutability.test.ts` confirms INSERT-only successful archiving, unique P2002 collision fetching the persisted first-writer digest without UPDATE, and propagation of unrelated DB failures. This supplements the real PostgreSQL trigger tests; neither suite runs a provider request.
