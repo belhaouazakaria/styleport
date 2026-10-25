@@ -59,3 +59,20 @@ A dedicated bot can now be connected and verified without delivering a report or
 5. Remove temporary `TELEGRAM_BOT_TOKEN`, `TELEGRAM_REPORT_PAIRING_CODE` and `TELEGRAM_REPORT_CHAT_ID` from the interactive shell. Do not copy the ID file to the repository or an unprotected environment. When production rollout is separately authorized, provision token/chat ID through the server's private environment mechanism.
 
 **Live testing is a separate explicit user approval.** No cron, VPS deployment, database migration, bot message, Growth enablement, paid OpenAI test, or Pinterest publication follows automatically from this setup. After bot verification, the only next live step is one specifically authorized private Telegram acceptance message, with the recipient confirming its arrival. Report job activation is later still and depends on the remaining Phase 13/14 gates.
+
+## Phase 13P — one-shot, explicitly confirmed staging delivery acceptance (NOT RUN)
+
+`npm run growth:telegram:acceptance` invokes `scripts/growth-telegram-acceptance.ts` once. It is **disabled by default**; it does not install cron or run the general daily scheduler. It uses the regular immutable previous-complete-UTC-day archive and existing PostgreSQL at-most-one send claim. It refuses a stale date, disabled private Telegram channel, missing exact report confirmation, enabled daily schedule, or an environment not explicitly labelled isolated staging. It never changes Growth, attribution, pricing or Pinterest state. The CLI prints no bot token, private recipient ID or message body.
+
+**Only after separate explicit operator approval for exactly one real send**, set all of the following in a private isolated staging process environment, using the securely verified bot/recipient values (not GitHub secrets or chat):
+
+```dotenv
+GROWTH_TELEGRAM_ACCEPTANCE_ENABLED=true
+GROWTH_TELEGRAM_ACCEPTANCE_ENVIRONMENT=isolated-staging
+GROWTH_TELEGRAM_ACCEPTANCE_CONFIRMATION="SEND ONE TELEGRAM REPORT growth-YYYYMMDD"
+GROWTH_DAILY_REPORT_SCHEDULE_ENABLED=false
+TELEGRAM_REPORTS_ENABLED=true
+# TELEGRAM_BOT_TOKEN and TELEGRAM_REPORT_CHAT_ID: secret values supplied privately
+```
+
+Replace `growth-YYYYMMDD` with the exact previous **complete** UTC date for the invocation. Run only `npm run growth:telegram:acceptance` in the approved isolated checkout; do not enable or invoke the daily runner. If the CLI reports `SUBMITTED`, the operator verifies in the private Telegram recipient chat that **one** report appeared. Failure, SENDING or OUTCOME_UNKNOWN must be manually reconciled: do not retry or clear the DB record. After the single attempt, immediately return acceptance/report flags to false and scrub temporary environment variables. The flags do not provide an authorization bypass for running on production; the operator is responsible for choosing the correct isolated database before issuing a send.
