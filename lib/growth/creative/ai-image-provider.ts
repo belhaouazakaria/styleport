@@ -4,6 +4,7 @@ import sharp from "sharp";
 import { CREATIVE_HEIGHT, CREATIVE_WIDTH, MAX_CREATIVE_BYTES, type CreativeDirection } from "@/lib/growth/creative/constants";
 import { validateCreativePng } from "@/lib/growth/creative/storage";
 import { getServerEnv } from "@/lib/env";
+import { getGrowthOpenAiCredentials } from "@/lib/growth/economics/credential-policy";
 import { reserveGrowthImageAttempt } from "@/lib/growth/economics/image-admission";
 import { appendGrowthAiUsageEvidence } from "@/lib/growth/economics/usage-evidence";
 import { GrowthBudgetBlockedError } from "@/lib/growth/economics/reservations";
@@ -124,13 +125,13 @@ export class OpenAICreativeImageProvider implements CreativeAiImageProvider {
   constructor(private readonly jobId: string = "") {}
   async generate(input: CreativeAiImageInput): Promise<CreativeAiImageResult> {
     const env = getServerEnv();
-    if (!env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is missing.");
+    const credentials = getGrowthOpenAiCredentials();
     const model = env.GROWTH_OPENAI_IMAGE_MODEL || "gpt-image-2";
     const prompt = buildCreativeImagePrompt(input);
     const reservationId = await reserveGrowthImageAttempt({
       jobId: this.jobId, model, prompt, size: "1024x1536", quality: "medium",
     });
-    const client = new OpenAI({ apiKey: env.OPENAI_API_KEY, maxRetries: 0 });
+    const client = new OpenAI({ ...credentials, maxRetries: 0 });
     let response: Awaited<ReturnType<typeof client.images.generate>>;
     try {
       response = await client.images.generate({

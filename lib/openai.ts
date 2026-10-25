@@ -2,6 +2,7 @@ import OpenAI from "openai";
 
 import { DEFAULT_MODEL } from "@/lib/constants";
 import { getServerEnv } from "@/lib/env";
+import { getGrowthOpenAiCredentials } from "@/lib/growth/economics/credential-policy";
 import { logError } from "@/lib/logger";
 import { toPlainText } from "@/lib/utils";
 
@@ -111,9 +112,14 @@ export async function generateOpenAIText(params: {
   maximumAttemptsPerModel?: 1 | 2;
   allowModelFallback?: boolean;
   sdkMaxRetries?: 0;
+  credentialScope?: "GROWTH";
 }): Promise<{ text: string; model: string; promptTokens: number | null; completionTokens: number | null; totalTokens: number | null; responseId?: string | null }> {
   const env = getServerEnv();
-  const client = getClient();
+  // Growth must never fall back to the core translations client or its key.
+  // A distinct project-scoped key is required for cost provenance.
+  const client = params.credentialScope === "GROWTH"
+    ? new OpenAI({ ...getGrowthOpenAiCredentials(), maxRetries: 0 })
+    : getClient();
   const envModel = env.OPENAI_MODEL || DEFAULT_MODEL;
   const modelCandidates = params.allowModelFallback === false
     ? [params.model || envModel]

@@ -15,6 +15,7 @@ vi.mock("@/lib/growth/economics/reservations", () => ({
   },
 }));
 vi.mock("@/lib/openai", () => ({ generateOpenAIText: mocks.generate }));
+vi.mock("@/lib/growth/economics/credential-policy", () => ({ getGrowthOpenAiCredentials: () => ({ apiKey: "test-key", project: "proj_test" }) }));
 vi.mock("@/lib/growth/economics/usage-evidence", () => ({ appendGrowthAiUsageEvidence: mocks.record }));
 vi.mock("@/lib/env", () => ({
   getServerEnv: () => ({ OPENAI_MODEL: mocks.model }),

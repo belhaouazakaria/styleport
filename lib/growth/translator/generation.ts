@@ -3,6 +3,7 @@ import type { TranslatorDraft } from "@/lib/types";
 import { generateOpenAIText } from "@/lib/openai";
 import { DEFAULT_MODEL } from "@/lib/constants";
 import { getServerEnv } from "@/lib/env";
+import { getGrowthOpenAiCredentials } from "@/lib/growth/economics/credential-policy";
 import { reserveGrowthTextAttempt } from "@/lib/growth/economics/text-admission";
 import { appendGrowthAiUsageEvidence } from "@/lib/growth/economics/usage-evidence";
 import { GrowthBudgetBlockedError } from "@/lib/growth/economics/reservations";
@@ -165,6 +166,8 @@ export class OpenAITranslatorGenerationProvider implements TranslatorGenerationP
         JSON.stringify(outputShape),
       ].filter(Boolean).join("\n\n");
     const model = getServerEnv().OPENAI_MODEL || DEFAULT_MODEL;
+    // Fail before reserving any spend if a separate Growth project key is missing.
+    getGrowthOpenAiCredentials();
     const reservationId = await reserveGrowthTextAttempt({
       decisionId: this.decisionId, contentKind: "translator", attempt: repair ? 1 : 0,
       model, systemPrompt, userPrompt, maxOutputTokens: 2600,
@@ -174,6 +177,7 @@ export class OpenAITranslatorGenerationProvider implements TranslatorGenerationP
       result = await generateOpenAIText({
         systemPrompt, userPrompt, model, maxOutputTokens: 2600,
         maximumAttemptsPerModel: 1, allowModelFallback: false, sdkMaxRetries: 0,
+        credentialScope: "GROWTH",
       });
     } catch {
       // Provider may have billed the attempted request even if response was lost.

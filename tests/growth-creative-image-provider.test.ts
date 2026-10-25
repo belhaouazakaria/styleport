@@ -5,7 +5,8 @@ const mocks = vi.hoisted(() => ({ generate: vi.fn(), reserve: vi.fn(), record: v
 vi.mock("@/lib/growth/economics/image-admission", () => ({ reserveGrowthImageAttempt: mocks.reserve }));
 vi.mock("@/lib/growth/economics/usage-evidence", () => ({ appendGrowthAiUsageEvidence: mocks.record }));
 vi.mock("openai", () => ({ default: class { images = { generate: mocks.generate }; } }));
-vi.mock("@/lib/env", () => ({ getServerEnv: () => ({ OPENAI_API_KEY: "test-key", GROWTH_OPENAI_IMAGE_MODEL: mocks.imageModel }) }));
+vi.mock("@/lib/env", () => ({ getServerEnv: () => ({ GROWTH_OPENAI_IMAGE_MODEL: mocks.imageModel }) }));
+vi.mock("@/lib/growth/economics/credential-policy", () => ({ getGrowthOpenAiCredentials: () => ({ apiKey: "sk-test-key", project: "proj_test" }) }));
 
 import { buildCreativeImagePrompt, OpenAICreativeImageProvider, type CreativeAiImageInput } from "@/lib/growth/creative/ai-image-provider";
 import { readPngDimensions } from "@/lib/growth/creative/storage";
