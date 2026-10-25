@@ -88,3 +88,17 @@ The operator has created the bot, not yet completed no-send pairing. The operato
 ## Production-only operator decision and exact message approval (2026-10-25)
 
 No permanent staging site is planned. The acceptance CLI was extended to **support** a separately approved production-only single message without weakening the earlier staging safety: it verifies the production database target exactly, requires the explicit production environment label and **an additional production-specific day-bound confirmation** besides the ordinary exact report confirmation. Both flags and the real bot/chat config are default off. For the complete field contract, see PHASE13_PRODUCTION_NO_STAGING.md. This change does **not** authorize a real send, production merge or deployment; bot owner receipt and explicit follow-on scheduler approval remain required.
+
+
+## Pairing recovery — safe diagnostic codes (2026-10-25)
+
+The no-send discovery CLI previously hid all error details. It now prints only a controlled uppercase diagnostic code; provider responses, exception messages, Telegram Bot API URL, token, private chat ID and nonce remain suppressed. Use the exact same local checkout and an **entirely fresh** pairing nonce; after sending the new `/start <nonce>` in the intended bot's private chat, run `npm run growth:telegram:discover`.
+
+- `INVALID_PAIRING_CONFIGURATION`: environment did not contain a valid BotFather token and 16–32 lowercase-hex nonce; make sure both exported variables reached the *same shell process*.
+- `PAIRING_MESSAGE_NOT_FOUND`: bot did not receive the exact new private `/start <nonce>` among up to 100 currently unconfirmed updates. Check bot username, own Telegram account, code with no extra punctuation, correct chat (not BotFather), webhook and any other update consumer; avoid creating additional bots.
+- `PAIRING_UPDATES_UNAVAILABLE`: Telegram rejected `getUpdates`; credentials, an existing webhook or another Telegram-side conflict may be the cause. The CLI will not print a raw provider response. Only `getWebhookInfo` can establish whether a webhook is present; do not blindly clear webhook/pending updates.
+- `PAIRING_REQUEST_FAILED` / `INVALID_UPDATES_RESPONSE`: network/timeout or invalid provider JSON; check connectivity and retry manually with a *new* nonce once cause is established.
+- `PRIVATE_RECIPIENT_FILE_ALREADY_EXISTS`: a previous pairing already saved a recipient; do not delete or overwrite without verifying it is your intended chat. Run the read-only verifier with the existing restricted file instead.
+- `AMBIGUOUS_PRIVATE_RECIPIENT` / `UNEXPECTED_LOCAL_ERROR`: stop and investigate; never pick a recipient arbitrarily.
+
+No database, webhook, cron, messaging, publisher or paid OpenAI request is run by this diagnostic. In particular **never post** the token, private recipient ID, nonce, `getUpdates` JSON or Bot API URLs in issues or chat.
