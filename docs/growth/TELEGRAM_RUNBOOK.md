@@ -34,7 +34,7 @@ Rollback: disable TELEGRAM_REPORTS_ENABLED; retain all historical delivery recor
 
 ## Still outstanding
 
-Pricing-backed AI call reservations, actual usage ledger/settlement, content quotas, warnings/report admin UI, bot/recipient provisioning, authorized live test, production scheduling, Phase 13 acceptance and Phase 14 rollout.
+Read-only project-level Costs API groundwork and spending/content admission, warnings and report archive UI are implemented and CI-tested; they are **not activated**. Still required: defensible trusted cost provenance/settlement (or expressly accepted aggregate-only limitation), separately authorized staging PostgreSQL 18/admin UI/security acceptance, operator private bot/recipient provisioning, exactly one authorized live receipt test, and final Phase 13 approval before any production schedule or Phase 14 rollout. See `PHASE13_RELEASE_QUALIFICATION.md`.
 
 
 ## Phase 13K controlled daily-runner readiness (no live send authorized)
