@@ -16,6 +16,7 @@
     "growth:worker": "tsx workers/growth-worker.ts",
     "growth:daily-report": "tsx workers/growth-report-runner.ts",
     "growth:telegram:verify": "tsx scripts/growth-telegram-verify.ts",
+    "growth:telegram:discover": "tsx scripts/growth-telegram-discover.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "check": "npm run lint && npm run typecheck && npm run test",
