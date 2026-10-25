@@ -307,3 +307,7 @@ Follow-up coverage: `tests/growth-report-archive-immutability.test.ts` confirms 
 ### Phase 13R production-only, bot privacy and Growth key separation (2026-10-25)
 
 New tests must verify missing/different project credentials fail before any provider call/reservation and that normal translation retains its independent key. Creative Example text uses unique per-job, model-pinned Growth budget reservation and ledger evidence and cannot make hidden SDK retries. Telegram verifier rejects bots with group joining enabled; private pairing requires matching sender and chat identity. CI still runs no live Telegram or paid OpenAI calls. Production-only acceptance requires a backed-up and restored disposable populated database rehearsal, safe application rollback, unchanged core translator/Ideas functionality and independent operator approvals. No merge, deploy, migration or real send has occurred.
+
+### Phase 13S direct-production live-test guard (2026-10-25)
+
+Unit tests now reject a production DB deceptively labeled isolated staging and reject a production one-send acceptance missing either exact production DB identity or a second date-bound approval. Successful mocked acceptance still uses the existing archive/once-only sender, cannot retry UNKNOWN, and does not install any schedule. This is not equivalent to an operator-approved production release or real recipient verification.

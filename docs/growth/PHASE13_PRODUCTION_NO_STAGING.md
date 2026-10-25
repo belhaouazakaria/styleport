@@ -12,7 +12,7 @@
 6. Only after the operator accepts the backup/restore/rehearsal evidence may the reviewed release migration be applied once, with an exact SHA confirmation and a limited maintenance window. Existing `hostinger-prepare-migration.sh` is hard-pinned to a previous recovery migration and **must not be repurposed blindly**; write/review the Phase 13 migration instructions against the current deploy script before use. Do not bypass the current `EXPECT_NO_PENDING_MIGRATIONS` deployment guard.
 7. Verify the production admin pages, budget reservation/warning displays, no secret disclosure, immutable archive, responsive layout and ordinary translation/Ideas health. Keep every provider send/publish off. If a check fails, stop recurrence, roll back application code using the established release mechanism, and retain financial/report history. Database rollback requires deliberate recovery from backup; never truncate accounting evidence.
 8. BotFather: disable group joins with `/setjoingroups` for the new bot. The read-only `growth:telegram:verify` must confirm `can_join_groups=false` and the single private recipient. A public bot username can still be found/messaged by others; **no inbound runtime** exists, and only the configured numeric private recipient receives reports. Keep token exclusively in private secrets.
-9. Once deployed with flags OFF, the operator must explicitly authorize exactly one **production** report-message acceptance under a dedicated, reviewable run-once gate. The current `growth:telegram:acceptance` command requires `isolated-staging` and **must not be misrepresented as a production-ready approval tool**. Do not spoof its environment marker. No production send is yet approved or executed.
+9. Once deployed with flags OFF, the operator must explicitly authorize exactly one **production** report-message acceptance under a dedicated, reviewable run-once gate. Current `growth:telegram:acceptance` now supports either verified `isolated-staging` on a nonproduction loopback database, OR production only with exact `127.0.0.1:5433/saytwist` database destination plus TWO report/date-bound explicit confirmation strings. No production send is yet approved or executed. The mode marker does not itself authorize or execute anything.
 10. Following a verified single receipt, obtain separate operator signoff before scheduling daily reporting. Growth auto content, attribution and Pinterest publishing remain subject to Phase 14, and individual Pin approval remains mandatory.
 
 ## OpenAI project isolation
@@ -26,3 +26,16 @@ The organization Admin API key for Costs API is *not* required at runtime and mu
 - Dedicated Growth project created, its model access (gpt-4.1-mini and pinned image model) and enforced spend limit verified, distinct project API key stored privately.
 - BotFather `/setjoingroups` disabled; one recipient's private pairing and read-only verification performed. Never share credentials/chat ID in ChatGPT, screenshots or Git.
 - Operator permits a **specific backed-up production release** after backup/rehearsal evidence, followed by separate consent for one live Telegram receipt and later schedule.
+
+## Production-specific single message gate (NOT AUTHORIZED OR RUN)
+
+After a separately approved production release, exact production DB URL validation, completed bot private-chat pairing, human review of today's operational health and explicit consent to one message, the `growth:telegram:acceptance` command may be run ONCE with the regular schedule OFF. It requires:
+
+- `GROWTH_TELEGRAM_ACCEPTANCE_ENABLED=true`
+- `GROWTH_TELEGRAM_ACCEPTANCE_ENVIRONMENT=production`
+- `DATABASE_URL` pointing to the existing production PostgreSQL `127.0.0.1:5433/saytwist` (never provide database password in a report)
+- `GROWTH_TELEGRAM_ACCEPTANCE_CONFIRMATION="SEND ONE TELEGRAM REPORT growth-YYYYMMDD"` for exactly yesterday UTC after 04:00 UTC
+- `GROWTH_TELEGRAM_PRODUCTION_APPROVAL="I APPROVE ONE PRODUCTION DELIVERY growth-YYYYMMDD"`, a second independent, report-bound approval
+- `GROWTH_DAILY_REPORT_SCHEDULE_ENABLED=false`, `TELEGRAM_REPORTS_ENABLED=true`, and privately verified bot token + private chat ID
+
+The CLI does not install recurring jobs, enable Growth or enable Pinterest. `SENDING` and `OUTCOME_UNKNOWN` are terminal for automatic attempts and require operator review, not retry. Immediately restore both Telegram opt-in flags to OFF afterwards. Report API submission is not a receipt. The bot owner must confirm the message was received in their own private chat.
