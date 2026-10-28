@@ -54,6 +54,7 @@ describe("Insert-only daily report archive under immutable PostgreSQL trigger", 
     expect(mocks.winner).not.toHaveBeenCalled();
     const created = mocks.insert.mock.calls[0][0].data;
     expect(created.reportDate).toEqual(archived.reportDate);
+    expect(created.version).toBe("growth_daily_v2");
     expect(created.digestText).toContain("Growth AI spend: Unavailable");
     expect(created.digestText).toContain("Growth AI actual spending not fully priced");
     expect(created.digestText).toContain("Review Pinterest analytics coverage");

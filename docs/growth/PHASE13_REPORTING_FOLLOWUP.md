@@ -9,7 +9,7 @@
 
 ## This follow-up and interpretation
 
-The follow-up modifies **future** archive construction and read-only report page wording only, without a schema migration. No provider calls, synthetic analytics rows, publication actions, AI usage or scheduling are added.
+The follow-up modifies **future** archive construction and read-only report page wording only, without a schema migration. New archives are versioned `growth_daily_v2` so the historical `growth_daily_v1` digest is not silently reinterpreted. Count labels make clear that new Pins/Translators/Ideas refer to **Growth-managed** activity rather than all activity on the platform. No provider calls, synthetic analytics rows, publication actions, AI usage or scheduling are added.
 
 1. **Evidence-gated breakout.** Label a Pin `Top measured Pin` only when (a) account daily metrics are READY for all connected accounts; (b) each active analytics-eligible Pin has one READY, non-null outbound-click observation for that UTC report date; and (c) the chosen Pin has positive, safely representable outbound clicks. Rank by daily outbound clicks with stable ID tiebreak. This is descriptive: not incremental lift, qualified conversion attribution, or evidence to auto-publish.
 2. **Useful but conservative next review.** Missing account-level Pinterest evidence prompts a coverage review; missing first-party attribution prompts an attribution-readiness review; complete evidence may suggest reviewing the top measured Pin but explicitly retains individual approval before publishing. Avoid the unconditional "No action recommended" when nothing was observed.

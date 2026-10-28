@@ -12,7 +12,7 @@ describe("Provider-independent daily Growth digest", () => {
     const text = formatGrowthDailyDigest(data);
     expect(text).toContain("Pinterest landings: Unavailable");
     expect(text).toContain("Growth AI spend: Unavailable");
-    expect(text).toContain("Pins published: 2");
+    expect(text).toContain("Growth-managed Pins published: 2");
     expect(text).toContain("https://saytwist.com/admin/growth/reports/report-abc");
   });
   it("uses compact UTC plain-text output", () => {

@@ -5,7 +5,7 @@ import { formatGrowthDailyDigest, type GrowthDigestData } from "@/lib/growth/rep
 import { deriveDailyGrowthInsights } from "@/lib/growth/reporting/insights";
 import { prisma } from "@/lib/prisma";
 
-export const GROWTH_REPORT_VERSION = "growth_daily_v1";
+export const GROWTH_REPORT_VERSION = "growth_daily_v2";
 
 export function growthReportWindow(date: string, now = new Date()) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Invalid UTC report date");

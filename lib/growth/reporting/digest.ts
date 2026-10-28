@@ -38,8 +38,8 @@ export function formatGrowthDailyDigest(data: GrowthDigestData): string {
     `Pinterest landings: ${value(data.pinterestLandingSessions)}`,
     `Qualified translations: ${value(data.qualifiedConversions)}`,
     `Pinterest outbound clicks: ${value(data.outboundClicks)}`,
-    `Pins published: ${value(data.pinsPublished)}`,
-    `New Translators / Ideas: ${value(data.newTranslators)} / ${value(data.newIdeas)}`,
+    `Growth-managed Pins published: ${value(data.pinsPublished)}`,
+    `Growth-created Translators / Ideas: ${value(data.newTranslators)} / ${value(data.newIdeas)}`,
     `Growth AI spend: ${spend === "Unavailable" ? "Unavailable (billing not reconciled)" : spend}`,
     `Growth AI reserved ceiling: ${data.aiReservedCents != null &&
       Number.isSafeInteger(data.aiReservedCents) && data.aiReservedCents >= 0
