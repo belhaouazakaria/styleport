@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   existing: vi.fn(), insert: vi.fn(), winner: vi.fn(),
   count: vi.fn(), aggregate: vi.fn(), attributionStatus: vi.fn(),
+  eligiblePinCount: vi.fn(), readyPinCount: vi.fn(), topPin: vi.fn(),
 }));
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -17,8 +18,8 @@ vi.mock("@/lib/prisma", () => ({
     growthContentVersion: { count: mocks.count },
     growthIdeaVersion: { count: mocks.count },
     growthAiBudgetReservation: { aggregate: mocks.aggregate },
-    growthPinterestPin: { count: mocks.count },
-    growthPinterestPinMetricDaily: { count: mocks.count, findFirst: vi.fn() },
+    growthPinterestPin: { count: mocks.eligiblePinCount },
+    growthPinterestPinMetricDaily: { count: mocks.readyPinCount, findFirst: mocks.topPin },
   },
 }));
 vi.mock("@/lib/growth/attribution/config", () => ({
@@ -37,6 +38,9 @@ describe("Insert-only daily report archive under immutable PostgreSQL trigger", 
     vi.clearAllMocks();
     mocks.existing.mockResolvedValue(null);
     mocks.count.mockResolvedValue(0);
+    mocks.eligiblePinCount.mockResolvedValue(0);
+    mocks.readyPinCount.mockResolvedValue(0);
+    mocks.topPin.mockResolvedValue(null);
     mocks.aggregate.mockResolvedValue({ _sum: { outboundClicks: null,
       landingSessions: null, qualifiedConversions: null } });
     mocks.attributionStatus.mockResolvedValue({ enabled: false });
@@ -54,6 +58,35 @@ describe("Insert-only daily report archive under immutable PostgreSQL trigger", 
     expect(created.digestText).toContain("Growth AI actual spending not fully priced");
     expect(created.digestText).toContain("Review Pinterest analytics coverage");
     expect(created.snapshot.aiSpendUsd).toBeNull();
+  });
+  it("identifies the top measured Pin only with complete eligible daily coverage", async () => {
+    mocks.count.mockResolvedValue(1);
+    mocks.eligiblePinCount.mockResolvedValue(1);
+    mocks.readyPinCount.mockResolvedValue(1);
+    mocks.topPin.mockResolvedValue({
+      outboundClicks: BigInt(42),
+      pin: { title: "Jester translator", pinterestPinId: "123456789012" },
+    });
+    mocks.aggregate.mockResolvedValue({ _sum: {
+      outboundClicks: BigInt(42), reservedCents: 125,
+      landingSessions: null, qualifiedConversions: null,
+    } });
+    await archiveGrowthDailyReport("2026-10-24");
+    const created = mocks.insert.mock.calls[0][0].data;
+    expect(created.digestText).toContain("Top measured Pin: Jester translator (42 outbound clicks)");
+    expect(created.digestText).toContain("Growth AI reserved ceiling: $1.25 USD (not billed spend)");
+    expect(created.digestText).toContain("Review attribution readiness");
+    expect(created.snapshot.aiSpendUsd).toBeNull();
+    expect(mocks.topPin).toHaveBeenCalledTimes(1);
+  });
+  it("rejects breakout rankings from partial eligible Pin coverage", async () => {
+    mocks.count.mockResolvedValue(1);
+    mocks.eligiblePinCount.mockResolvedValue(2);
+    mocks.readyPinCount.mockResolvedValue(1);
+    await archiveGrowthDailyReport("2026-10-24");
+    expect(mocks.topPin).not.toHaveBeenCalled();
+    expect(mocks.insert.mock.calls[0][0].data.digestText).toContain(
+      "Breakout: Unavailable (no complete Pin-level evidence)");
   });
   it("on a concurrent P2002 insert collision reads the original report unchanged", async () => {
     mocks.insert.mockRejectedValueOnce(new Prisma.PrismaClientKnownRequestError(

@@ -1,6 +1,6 @@
 # Telegram Growth daily digest — operator runbook
 
-**Status: disabled-by-default feature branch only. No production send or schedule has been authorized.**
+**Status (2026-10-28):** deployed, private bot and recipient independently verified, one owner-approved Telegram report `growth-20261024` received on 2026-10-25. No recurring schedule, general Growth execution, Pinterest publication or AI costs are authorized. Keep both delivery/schedule gates disabled by default.
 
 ## Transport contract
 
