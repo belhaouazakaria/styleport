@@ -20,6 +20,7 @@ import { prisma } from "@/lib/prisma";
 const runDatabaseTests = process.env.RUN_GROWTH_DB_TESTS === "1";
 const databaseDescribe = runDatabaseTests ? describe.sequential : describe.skip;
 const requiredDatabaseName = "saytwist_growth_phase2_test";
+const observe = { rolloutConfig: { GROWTH_WORKER_RUN_ENABLED: "true", GROWTH_ROLLOUT_MODE: "OBSERVE" } };
 
 if (runDatabaseTests) {
   const explicitUrl = process.env.GROWTH_TEST_DATABASE_URL;
@@ -66,8 +67,8 @@ databaseDescribe("Growth PostgreSQL persistence and concurrency", () => {
   it("A: exits cleanly on an enabled empty queue and keeps one stable heartbeat row", async () => {
     await enableGrowth();
     const results = await Promise.all([
-      runGrowthWorker({ workerId: "integration-empty" }),
-      runGrowthWorker({ workerId: "integration-empty" }),
+      runGrowthWorker({ workerId: "integration-empty", ...observe }),
+      runGrowthWorker({ workerId: "integration-empty", ...observe }),
     ]);
     expect(results).toEqual([
       { status: "EMPTY", claimed: 0, succeeded: 0, failed: 0 },
@@ -77,10 +78,38 @@ databaseDescribe("Growth PostgreSQL persistence and concurrency", () => {
     expect((await prisma.growthWorkerHeartbeat.findUniqueOrThrow({ where: { workerId: "integration-empty" } })).invocationId).toMatch(/^[0-9a-f-]{36}$/);
   });
 
+  it("Phase 14: queue observation skips preexisting paid/unsafe jobs atomically", async () => {
+    await enableGrowth(1);
+    const unsafe = (await enqueueGrowthJob({
+      type: GrowthJobType.CREATIVE_LAB_GENERATE,
+      idempotencyKey: "phase14:do-not-run-generative-job",
+      payload: {},
+    })).job;
+    const safe = await enqueue("phase14:safe-noop");
+    const result = await runGrowthWorker({
+      workerId: "phase14-observe", batchSize: 1, ...observe,
+    });
+    expect(result).toMatchObject({ status: "COMPLETED", claimed: 1, succeeded: 1, failed: 0 });
+    expect((await prisma.growthJob.findUniqueOrThrow({ where: { id: unsafe.id } })).status)
+      .toBe(GrowthJobStatus.PENDING);
+    expect((await prisma.growthJob.findUniqueOrThrow({ where: { id: safe.id } })).status)
+      .toBe(GrowthJobStatus.SUCCEEDED);
+  });
+
+  it("Phase 14: a valid DB-enabled queue is inert with no rollout process flags", async () => {
+    await enableGrowth();
+    const pending = await enqueue("phase14:off");
+    expect(await runGrowthWorker({ workerId: "phase14-off", rolloutConfig: {} }))
+      .toMatchObject({ status: "DISABLED", claimed: 0 });
+    expect((await prisma.growthJob.findUniqueOrThrow({ where: { id: pending.id } })).status)
+      .toBe(GrowthJobStatus.PENDING);
+    expect(await prisma.growthWorkerHeartbeat.count()).toBe(0);
+  });
+
   it("B: honors the disabled kill switch without claiming or writing a heartbeat", async () => {
     await prisma.growthSettings.create({ data: { id: "global", enabled: false } });
     const job = await enqueue("integration:disabled");
-    await expect(runGrowthWorker({ workerId: "integration-disabled" })).resolves.toEqual({
+    await expect(runGrowthWorker({ workerId: "integration-disabled", ...observe })).resolves.toEqual({
       status: "DISABLED", claimed: 0, succeeded: 0, failed: 0,
     });
     expect((await prisma.growthJob.findUniqueOrThrow({ where: { id: job.id } })).status).toBe(GrowthJobStatus.PENDING);
@@ -90,7 +119,7 @@ databaseDescribe("Growth PostgreSQL persistence and concurrency", () => {
   it("C: persists and completes basic work with its transition activity", async () => {
     await enableGrowth();
     const job = await enqueue("integration:basic");
-    await expect(runGrowthWorker({ workerId: "integration-basic", batchSize: 1 })).resolves.toMatchObject({
+    await expect(runGrowthWorker({ workerId: "integration-basic", batchSize: 1, ...observe })).resolves.toMatchObject({
       status: "COMPLETED", claimed: 1, succeeded: 1, failed: 0,
     });
     const persisted = await prisma.growthJob.findUniqueOrThrow({ where: { id: job.id } });
@@ -108,7 +137,7 @@ databaseDescribe("Growth PostgreSQL persistence and concurrency", () => {
     expect(new Set(results.map(({ job }) => job.id)).size).toBe(1);
     expect(results.filter(({ created }) => created)).toHaveLength(1);
     expect(await prisma.growthJob.count({ where: { idempotencyKey: key } })).toBe(1);
-    await expect(runGrowthWorker({ workerId: "integration-idempotent", batchSize: 5 })).resolves.toMatchObject({ claimed: 1, succeeded: 1 });
+    await expect(runGrowthWorker({ workerId: "integration-idempotent", batchSize: 5, ...observe })).resolves.toMatchObject({ claimed: 1, succeeded: 1 });
     expect(await prisma.growthJob.count({ where: { idempotencyKey: key, status: GrowthJobStatus.SUCCEEDED } })).toBe(1);
   });
 
