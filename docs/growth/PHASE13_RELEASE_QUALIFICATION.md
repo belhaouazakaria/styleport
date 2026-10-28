@@ -1,6 +1,6 @@
 # Phase 13 acceptance checklist — isolated release rehearsal (2026-10-25)
 
-**State: NOT accepted, NOT deployed.** PR #15 (`phase/13-finance-reporting` → `main`) remains open. No production migration, recurring job, Telegram send or paid AI call has been authorized.
+**Historical readiness checklist, updated 2026-10-28:** PR #15 was merged and production-deployed on 2026-10-25 as `3f057334c5eff5393555e38a469243d1b99d74db`, after a PostgreSQL 18 backup, full clone restore and four successful live migrations (31 applied, 0 incomplete). The owner explicitly authorized and confirmed the receipt of one private Telegram report `growth-20261024`, with delivery SUBMITTED. This satisfies delivery acceptance only. Final Phase 13 acceptance still requires RBAC/UX and actual-billing-evidence signoff. No recurring scheduler, Growth or attribution collection, Pinterest publishing or paid AI work is enabled or authorized. See `PHASE13_REPORTING_FOLLOWUP.md`. The instructions below are a historical pre-release checklist, not directions to rerun already completed release operations.
 
 ## Safety boundary before any rehearsal
 

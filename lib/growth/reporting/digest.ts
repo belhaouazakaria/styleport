@@ -8,6 +8,7 @@ export interface GrowthDigestData {
   newTranslators: number | null;
   newIdeas: number | null;
   aiSpendUsd: number | null;
+  aiReservedCents?: number | null;
   breakout: string | null;
   warnings: string[];
   nextAction: string | null;
@@ -37,12 +38,16 @@ export function formatGrowthDailyDigest(data: GrowthDigestData): string {
     `Pinterest landings: ${value(data.pinterestLandingSessions)}`,
     `Qualified translations: ${value(data.qualifiedConversions)}`,
     `Pinterest outbound clicks: ${value(data.outboundClicks)}`,
-    `Pins published: ${value(data.pinsPublished)}`,
-    `New Translators / Ideas: ${value(data.newTranslators)} / ${value(data.newIdeas)}`,
-    `Growth AI spend: ${spend}`,
-    `Breakout: ${data.breakout ? textLine(data.breakout, 180) : "Insufficient data"}`,
-    `Warnings: ${data.warnings.length ? data.warnings.slice(0, 2).map((w) => textLine(w, 170)).join("; ") : "None reported"}`,
-    `Next: ${data.nextAction ? textLine(data.nextAction, 180) : "No action recommended"}`,
+    `Growth-managed Pins published: ${value(data.pinsPublished)}`,
+    `Growth-created Translators / Ideas: ${value(data.newTranslators)} / ${value(data.newIdeas)}`,
+    `Growth AI spend: ${spend === "Unavailable" ? "Unavailable (billing not reconciled)" : spend}`,
+    `Growth AI reserved ceiling: ${data.aiReservedCents != null &&
+      Number.isSafeInteger(data.aiReservedCents) && data.aiReservedCents >= 0
+      ? "$" + (data.aiReservedCents / 100).toFixed(2) + " USD (not billed spend)"
+      : "Unavailable"}`,
+    `Breakout: ${data.breakout ? textLine(data.breakout, 180) : "Unavailable (no complete Pin-level evidence)"}`,
+    `Warnings: ${data.warnings.length ? data.warnings.slice(0, 5).map((w) => textLine(w, 170)).join("; ") + (data.warnings.length > 5 ? `; plus ${data.warnings.length - 5} more warning(s) in the archive` : "") : "None reported"}`,
+    `Next: ${data.nextAction ? textLine(data.nextAction, 180) : "Review data availability before proposing action"}`,
   ];
   if (data.reportId) {
     if (!/^[a-zA-Z0-9_-]{1,100}$/.test(data.reportId)) throw new Error("Invalid Growth report ID");

@@ -2,9 +2,10 @@ import { GrowthContentVersionAction, GrowthIdeaVersionAction, Prisma } from "@pr
 import { ATTRIBUTION_MODEL_VERSION } from "@/lib/growth/attribution/constants";
 import { getAttributionCollectionStatus } from "@/lib/growth/attribution/config";
 import { formatGrowthDailyDigest, type GrowthDigestData } from "@/lib/growth/reporting/digest";
+import { deriveDailyGrowthInsights } from "@/lib/growth/reporting/insights";
 import { prisma } from "@/lib/prisma";
 
-export const GROWTH_REPORT_VERSION = "growth_daily_v1";
+export const GROWTH_REPORT_VERSION = "growth_daily_v2";
 
 export function growthReportWindow(date: string, now = new Date()) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Invalid UTC report date");
@@ -23,14 +24,14 @@ export async function archiveGrowthDailyReport(date: string) {
   const existing = await prisma.growthDailyReport.findUnique({ where: { reportDate: start } });
   if (existing) return { report: existing, reused: true };
 
-  const [collection, accounts, totalMetrics, readyMetrics, metrics, attribution, pinCount, translatorCount, ideaCount] =
+  const [collection, accounts, totalMetrics, readyMetrics, metrics, attribution, pinCount, translatorCount, ideaCount, reservations] =
     await Promise.all([
       getAttributionCollectionStatus({ readSettingWhenServerDisabled: true }),
       prisma.growthPinterestAccount.count({ where: { connectionStatus: { not: "DISCONNECTED" } } }),
-      prisma.growthPinterestAccountMetricDaily.count({ where: { metricDate: { gte: start, lt: end } } }),
-      prisma.growthPinterestAccountMetricDaily.count({ where: { metricDate: { gte: start, lt: end }, dataStatus: "READY" } }),
+      prisma.growthPinterestAccountMetricDaily.count({ where: { metricDate: { gte: start, lt: end }, account: { connectionStatus: { not: "DISCONNECTED" } } } }),
+      prisma.growthPinterestAccountMetricDaily.count({ where: { metricDate: { gte: start, lt: end }, dataStatus: "READY", account: { connectionStatus: { not: "DISCONNECTED" } } } }),
       prisma.growthPinterestAccountMetricDaily.aggregate({
-        where: { metricDate: { gte: start, lt: end }, dataStatus: "READY" },
+        where: { metricDate: { gte: start, lt: end }, dataStatus: "READY", account: { connectionStatus: { not: "DISCONNECTED" } } },
         _sum: { outboundClicks: true },
       }),
       prisma.growthAttributionDailyAggregate.aggregate({
@@ -46,11 +47,16 @@ export async function archiveGrowthDailyReport(date: string) {
       prisma.growthIdeaVersion.count({
         where: { createdAt: { gte: start, lt: end }, action: GrowthIdeaVersionAction.CREATE },
       }),
+      // Pessimistic reservation ceilings are not provider-billed AI spend.
+      prisma.growthAiBudgetReservation.aggregate({
+        where: { createdAt: { gte: start, lt: end } },
+        _sum: { reservedCents: true },
+      }),
     ]);
 
-  const fullyReadyPinterest = accounts > 0 && totalMetrics >= accounts && totalMetrics === readyMetrics;
+  const fullyReadyPinterest = accounts > 0 && totalMetrics === accounts && readyMetrics === accounts;
   const outbound = metrics._sum.outboundClicks;
-  const outboundClicks = fullyReadyPinterest && outbound !== null && outbound <= BigInt(Number.MAX_SAFE_INTEGER)
+  const outboundClicks = fullyReadyPinterest && outbound !== null && outbound >= BigInt(0) && outbound <= BigInt(Number.MAX_SAFE_INTEGER)
     ? Number(outbound) : null;
   // No '0' for attribution while the collection gate is off or when
   // there is no evidence row for this date.
@@ -58,6 +64,55 @@ export async function archiveGrowthDailyReport(date: string) {
     await prisma.growthAttributionDailyAggregate.count({
       where: { metricDate: { gte: start, lt: end }, modelVersion: ATTRIBUTION_MODEL_VERSION },
     }) > 0;
+
+  // A Pin is a defensible daily "top measured" observation only with full
+  // READY, non-null coverage of every active analytics-eligible Pin. Partial
+  // rank lists must not be promoted to a breakout or recommendation.
+  let topPin: { title: string; outboundClicks: number } | null = null;
+  if (fullyReadyPinterest) {
+    const eligiblePins = await prisma.growthPinterestPin.count({
+      where: { isActive: true, analyticsEligible: true, account: { connectionStatus: { not: "DISCONNECTED" } } },
+    });
+    if (eligiblePins > 0) {
+      const completeRows = await prisma.growthPinterestPinMetricDaily.count({
+        where: {
+          metricDate: { gte: start, lt: end },
+          dataStatus: "READY",
+          outboundClicks: { not: null },
+          pin: { isActive: true, analyticsEligible: true, account: { connectionStatus: { not: "DISCONNECTED" } } },
+        },
+      });
+      if (completeRows === eligiblePins) {
+        const top = await prisma.growthPinterestPinMetricDaily.findFirst({
+          where: {
+            metricDate: { gte: start, lt: end },
+            dataStatus: "READY",
+            outboundClicks: { gt: BigInt(0) },
+            pin: { isActive: true, analyticsEligible: true, account: { connectionStatus: { not: "DISCONNECTED" } } },
+          },
+          orderBy: [{ outboundClicks: "desc" }, { pinId: "asc" }],
+          select: { outboundClicks: true, pin: { select: { title: true, pinterestPinId: true } } },
+        });
+        if (top?.outboundClicks != null &&
+            top.outboundClicks <= BigInt(Number.MAX_SAFE_INTEGER)) {
+          topPin = {
+            title: top.pin.title?.trim() || "Pin " + top.pin.pinterestPinId.slice(0, 12),
+            outboundClicks: Number(top.outboundClicks),
+          };
+        }
+      }
+    }
+  }
+  const insights = deriveDailyGrowthInsights({
+    pinterestComplete: fullyReadyPinterest,
+    attributionComplete: attributionAvailable,
+    topPin,
+  });
+  // A complete local aggregate with no reservation rows means zero reserved,
+  // not zero actual provider expenditure.
+  const aiReservedCents = reservations._sum.reservedCents ?? 0;
+  const safeReservedCents = aiReservedCents !== null && Number.isSafeInteger(aiReservedCents) && aiReservedCents >= 0
+    ? aiReservedCents : null;
 
   const warnings = [
     ...(!fullyReadyPinterest ? ["Pinterest daily analytics unavailable or partial"] : []),
@@ -72,10 +127,13 @@ export async function archiveGrowthDailyReport(date: string) {
     pinsPublished: pinCount,
     newTranslators: translatorCount,
     newIdeas: ideaCount,
+    // Provider-verified Growth billing settlements do not exist yet. Even a
+    // zero reservation balance does not establish zero real-world expenditure.
     aiSpendUsd: null,
-    breakout: null,
+    aiReservedCents: safeReservedCents,
+    breakout: insights.breakout,
     warnings,
-    nextAction: null,
+    nextAction: insights.nextAction,
     reportId,
   };
   const body = formatGrowthDailyDigest(digest);

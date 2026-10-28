@@ -12,7 +12,7 @@ describe("Provider-independent daily Growth digest", () => {
     const text = formatGrowthDailyDigest(data);
     expect(text).toContain("Pinterest landings: Unavailable");
     expect(text).toContain("Growth AI spend: Unavailable");
-    expect(text).toContain("Pins published: 2");
+    expect(text).toContain("Growth-managed Pins published: 2");
     expect(text).toContain("https://saytwist.com/admin/growth/reports/report-abc");
   });
   it("uses compact UTC plain-text output", () => {
@@ -21,6 +21,33 @@ describe("Provider-independent daily Growth digest", () => {
     expect(text).toContain("$0.32 USD");
     expect(text).not.toContain("*SayTwist");
     expect(text.length).toBeLessThan(3500);
+  });
+  it("distinguishes provider billing from conservative reserved ceilings and prints all critical warnings", () => {
+    const text = formatGrowthDailyDigest({
+      ...data,
+      aiReservedCents: 135,
+      breakout: null,
+      nextAction: null,
+      warnings: [
+        "Pinterest analytics partial",
+        "Attribution evidence unavailable",
+        "Growth AI actual spending not fully priced",
+      ],
+    });
+    expect(text).toContain("Growth AI spend: Unavailable (billing not reconciled)");
+    expect(text).toContain("Growth AI reserved ceiling: $1.35 USD (not billed spend)");
+    expect(text).toContain("Growth AI actual spending not fully priced");
+    expect(text).toContain("Breakout: Unavailable (no complete Pin-level evidence)");
+    expect(text).not.toContain("No action recommended");
+    expect(text.length).toBeLessThan(3500);
+  });
+  it("bounds long warning lists while signaling omissions", () => {
+    const text = formatGrowthDailyDigest({
+      ...data, warnings: Array.from({ length: 8 }, (_, i) => `Warning ${i + 1}`),
+    });
+    expect(text).toContain("Warning 5");
+    expect(text).not.toContain("Warning 6");
+    expect(text).toContain("plus 3 more warning(s) in the archive");
   });
   it("rejects unsafe report identifiers and dates", () => {
     expect(() => formatGrowthDailyDigest({ ...data, reportId: "../admin" })).toThrow();

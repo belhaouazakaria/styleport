@@ -1,6 +1,6 @@
 # SayTwist Growth Agent
 
-**Status:** Phase 12.2 recovery deployed and validated for one 13/13 completed plan (2026-10-17); Phase 13 economics and Telegram reporting IN PROGRESS on PR #15, not deployed or accepted; Phase 14 NOT STARTED; Growth, attribution and reporting disabled
+**Status (2026-10-28):** Phase 13 schema and application deployed at merge SHA `3f057334c5eff5393555e38a469243d1b99d74db`. One owner-authorized private Telegram report `growth-20261024` was accepted by the API and received by the owner on 2026-10-25. Phase 13 reporting quality and financial provenance remain under qualification in PR #16. Phase 14 NOT STARTED. Growth, attribution, reporting schedule, and Pinterest publishing are disabled.
 **Scope:** Pinterest-first autonomous growth system inside SayTwist  
 **Primary admin surface:** `/admin/growth`  
 **Primary public expansion:** `/ideas`  
@@ -48,7 +48,8 @@ The initial account count is three. The agent reviews account performance monthl
 Read these before changing the Growth system:
 
 - `AI_CONTEXT.md`
-- `PHASE13_RELEASE_QUALIFICATION.md` (isolated migration, auth/UI, billing limitation, manual Telegram acceptance and rollback gates)
+- `PHASE13_RELEASE_QUALIFICATION.md` (historical release qualification and remaining admin/billing signoff gates)
+- `PHASE13_REPORTING_FOLLOWUP.md` (post-live-report findings, content evidence rules and Phase 13 follow-up acceptance)
 - `PHASE13_PRODUCTION_NO_STAGING.md` (operator's backup-first production-only decision and required guards)
 - `PRODUCT.md`
 - `ACCOUNT_STRATEGY.md`
@@ -75,7 +76,7 @@ If implementation changes behavior described here, update the relevant document 
 
 - Only static/image Pins are in scope initially. Video is out of scope.
 - Pinterest Standard Access was confirmed by the operator. The two earlier HTTP 401 publication chains remain immutable historical evidence. A later specifically approved real Pin published through Creative Lab, appeared on Pinterest, resolved to the intended destination, and reached `RECONCILED`; direct Create Pin success does not require a second reconcile job. Phase 12 v1 was deployed and production-validated on October 15, 2026. Phase 12.1 v2 subsequently ran successfully but remained `PARTIAL` because Pinterest history contains missing and `PROCESSING` observations. Phase 12.2 is deployed. One existing recovery plan completed all 13 of 13 planned API requests on 2026-10-17, under the eight-request-per-worker and five-request reserve gates. This does not imply historical observation gaps are entirely eliminated. Growth and attribution remain disabled.
-- Telegram Bot API (not OpenWA/WhatsApp) is the approved single-private-recipient daily report channel; the bot, private recipient, live delivery and schedule remain unconfigured/unapproved.
+- Telegram Bot API (not OpenWA/WhatsApp) is the approved single-private-recipient daily report channel; the private bot and recipient are verified, one single delivery was explicitly authorized and received, and the daily schedule remains disabled.
 
 See `IMPLEMENTATION_MAP.md` for verified repository facts and `DATA_MODEL.md` for implemented and proposed schema/state contracts.
 

@@ -21,7 +21,7 @@ export default async function GrowthReportsPage() {
         </Link>
         <div className="rounded-2xl border border-border bg-white p-5 text-sm leading-6 text-muted-ink">
           Reports cover completed UTC days. No delivery or report generation is initiated by viewing this page.
-          Telegram remains disabled until operator setup, deliberate authorization and rollout qualification.
+          Live delivery is opt-in and separately gated; viewing reports never initiates sending or scheduling.
           API submission does not guarantee recipient delivery or reading.
         </div>
         <section className="overflow-hidden rounded-2xl border border-border bg-white">
