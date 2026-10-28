@@ -16,6 +16,9 @@ vi.mock("@/lib/prisma", () => ({
     growthPinPublication: { count: mocks.count },
     growthContentVersion: { count: mocks.count },
     growthIdeaVersion: { count: mocks.count },
+    growthAiBudgetReservation: { aggregate: mocks.aggregate },
+    growthPinterestPin: { count: mocks.count },
+    growthPinterestPinMetricDaily: { count: mocks.count, findFirst: vi.fn() },
   },
 }));
 vi.mock("@/lib/growth/attribution/config", () => ({
@@ -48,6 +51,9 @@ describe("Insert-only daily report archive under immutable PostgreSQL trigger", 
     const created = mocks.insert.mock.calls[0][0].data;
     expect(created.reportDate).toEqual(archived.reportDate);
     expect(created.digestText).toContain("Growth AI spend: Unavailable");
+    expect(created.digestText).toContain("Growth AI actual spending not fully priced");
+    expect(created.digestText).toContain("Review Pinterest analytics coverage");
+    expect(created.snapshot.aiSpendUsd).toBeNull();
   });
   it("on a concurrent P2002 insert collision reads the original report unchanged", async () => {
     mocks.insert.mockRejectedValueOnce(new Prisma.PrismaClientKnownRequestError(

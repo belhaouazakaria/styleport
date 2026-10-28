@@ -2,6 +2,7 @@ import { GrowthContentVersionAction, GrowthIdeaVersionAction, Prisma } from "@pr
 import { ATTRIBUTION_MODEL_VERSION } from "@/lib/growth/attribution/constants";
 import { getAttributionCollectionStatus } from "@/lib/growth/attribution/config";
 import { formatGrowthDailyDigest, type GrowthDigestData } from "@/lib/growth/reporting/digest";
+import { deriveDailyGrowthInsights } from "@/lib/growth/reporting/insights";
 import { prisma } from "@/lib/prisma";
 
 export const GROWTH_REPORT_VERSION = "growth_daily_v1";
@@ -23,7 +24,7 @@ export async function archiveGrowthDailyReport(date: string) {
   const existing = await prisma.growthDailyReport.findUnique({ where: { reportDate: start } });
   if (existing) return { report: existing, reused: true };
 
-  const [collection, accounts, totalMetrics, readyMetrics, metrics, attribution, pinCount, translatorCount, ideaCount] =
+  const [collection, accounts, totalMetrics, readyMetrics, metrics, attribution, pinCount, translatorCount, ideaCount, reservations] =
     await Promise.all([
       getAttributionCollectionStatus({ readSettingWhenServerDisabled: true }),
       prisma.growthPinterestAccount.count({ where: { connectionStatus: { not: "DISCONNECTED" } } }),
@@ -59,6 +60,53 @@ export async function archiveGrowthDailyReport(date: string) {
       where: { metricDate: { gte: start, lt: end }, modelVersion: ATTRIBUTION_MODEL_VERSION },
     }) > 0;
 
+  // A Pin is a defensible daily "top measured" observation only with full
+  // READY, non-null coverage of every active analytics-eligible Pin. Partial
+  // rank lists must not be promoted to a breakout or recommendation.
+  let topPin: { title: string; outboundClicks: number } | null = null;
+  if (fullyReadyPinterest) {
+    const eligiblePins = await prisma.growthPinterestPin.count({
+      where: { isActive: true, analyticsEligible: true },
+    });
+    if (eligiblePins > 0) {
+      const completeRows = await prisma.growthPinterestPinMetricDaily.count({
+        where: {
+          metricDate: { gte: start, lt: end },
+          dataStatus: "READY",
+          outboundClicks: { not: null },
+          pin: { isActive: true, analyticsEligible: true },
+        },
+      });
+      if (completeRows === eligiblePins) {
+        const top = await prisma.growthPinterestPinMetricDaily.findFirst({
+          where: {
+            metricDate: { gte: start, lt: end },
+            dataStatus: "READY",
+            outboundClicks: { gt: BigInt(0) },
+            pin: { isActive: true, analyticsEligible: true },
+          },
+          orderBy: [{ outboundClicks: "desc" }, { pinId: "asc" }],
+          select: { outboundClicks: true, pin: { select: { title: true, pinterestPinId: true } } },
+        });
+        if (top?.outboundClicks != null &&
+            top.outboundClicks <= BigInt(Number.MAX_SAFE_INTEGER)) {
+          topPin = {
+            title: top.pin.title?.trim() || "Pin " + top.pin.pinterestPinId.slice(0, 12),
+            outboundClicks: Number(top.outboundClicks),
+          };
+        }
+      }
+    }
+  }
+  const insights = deriveDailyGrowthInsights({
+    pinterestComplete: fullyReadyPinterest,
+    attributionComplete: attributionAvailable,
+    topPin,
+  });
+  const aiReservedCents = reservations._sum.reservedCents;
+  const safeReservedCents = Number.isSafeInteger(aiReservedCents) && aiReservedCents !== null && aiReservedCents >= 0
+    ? aiReservedCents : null;
+
   const warnings = [
     ...(!fullyReadyPinterest ? ["Pinterest daily analytics unavailable or partial"] : []),
     ...(!attributionAvailable ? ["Attribution evidence unavailable"] : []),
@@ -72,10 +120,13 @@ export async function archiveGrowthDailyReport(date: string) {
     pinsPublished: pinCount,
     newTranslators: translatorCount,
     newIdeas: ideaCount,
+    // Provider-verified Growth billing settlements do not exist yet. Even a
+    // zero reservation balance does not establish zero real-world expenditure.
     aiSpendUsd: null,
-    breakout: null,
+    aiReservedCents: safeReservedCents,
+    breakout: insights.breakout,
     warnings,
-    nextAction: null,
+    nextAction: insights.nextAction,
     reportId,
   };
   const body = formatGrowthDailyDigest(digest);
