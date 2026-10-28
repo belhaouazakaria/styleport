@@ -47,6 +47,11 @@ export async function archiveGrowthDailyReport(date: string) {
       prisma.growthIdeaVersion.count({
         where: { createdAt: { gte: start, lt: end }, action: GrowthIdeaVersionAction.CREATE },
       }),
+      // Pessimistic reservation ceilings are not provider-billed AI spend.
+      prisma.growthAiBudgetReservation.aggregate({
+        where: { createdAt: { gte: start, lt: end } },
+        _sum: { reservedCents: true },
+      }),
     ]);
 
   const fullyReadyPinterest = accounts > 0 && totalMetrics >= accounts && totalMetrics === readyMetrics;
@@ -104,7 +109,7 @@ export async function archiveGrowthDailyReport(date: string) {
     topPin,
   });
   const aiReservedCents = reservations._sum.reservedCents;
-  const safeReservedCents = Number.isSafeInteger(aiReservedCents) && aiReservedCents !== null && aiReservedCents >= 0
+  const safeReservedCents = aiReservedCents !== null && Number.isSafeInteger(aiReservedCents) && aiReservedCents >= 0
     ? aiReservedCents : null;
 
   const warnings = [
