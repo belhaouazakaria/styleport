@@ -14,7 +14,6 @@ const STATIC_INDEXABLE_ROUTES = [
   "/terms",
   "/disclaimer",
   "/cookies",
-  "/ideas",
 ] as const;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
@@ -56,6 +55,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }),
   );
 
+  const ideaHubEntry: MetadataRoute.Sitemap = ideas.length ? [{
+    url: `${base}/ideas`,
+    changeFrequency: "weekly",
+    priority: 0.7,
+    lastModified: ideas[0].updatedAt,
+  }] : [];
   const translatorEntries: MetadataRoute.Sitemap = translators.map(
     (translator) => ({
       url: `${base}/translators/${translator.slug}`,
@@ -72,5 +77,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     lastModified: idea.updatedAt,
   }));
 
-  return [...staticEntries, ...translatorEntries, ...ideaEntries];
+  return [...staticEntries, ...ideaHubEntry, ...translatorEntries, ...ideaEntries];
 }

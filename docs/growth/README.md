@@ -1,6 +1,6 @@
 # SayTwist Growth Agent
 
-**Status (2026-10-28):** Phase 13 schema and application deployed at merge SHA `3f057334c5eff5393555e38a469243d1b99d74db`. One owner-authorized private Telegram report `growth-20261024` was accepted by the API and received by the owner on 2026-10-25. Phase 13 reporting quality and financial provenance remain under qualification in PR #16. Phase 14 NOT STARTED. Growth, attribution, reporting schedule, and Pinterest publishing are disabled.
+**Status (2026-10-28):** Phase 13 schema and application deployed at merge SHA `3f057334c5eff5393555e38a469243d1b99d74db`. One owner-authorized private Telegram report `growth-20261024` was accepted by the API and received by the owner on 2026-10-25. Phase 13 reporting quality and financial provenance remain under qualification in PR #16. Phase 14A controlled worker/SEO readiness is in development. Growth, attribution, reporting schedule, and Pinterest publishing remain disabled.
 **Scope:** Pinterest-first autonomous growth system inside SayTwist  
 **Primary admin surface:** `/admin/growth`  
 **Primary public expansion:** `/ideas`  

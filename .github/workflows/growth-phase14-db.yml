@@ -1,0 +1,50 @@
+name: Phase 14 isolated queue and rollout qualification
+
+on:
+  pull_request:
+    paths:
+      - "lib/growth/jobs.ts"
+      - "lib/growth/worker.ts"
+      - "lib/growth/rollout.ts"
+      - "tests/growth-persistence.integration.test.ts"
+      - ".github/workflows/growth-phase14-db.yml"
+  workflow_dispatch:
+
+jobs:
+  phase14-database:
+    name: PostgreSQL 18 guarded worker qualification
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: phase14
+          POSTGRES_PASSWORD: phase14_ci_only
+          POSTGRES_DB: saytwist_growth_phase2_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U phase14 -d saytwist_growth_phase2_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      GROWTH_TEST_DATABASE_URL: postgresql://phase14:phase14_ci_only@127.0.0.1:5432/saytwist_growth_phase2_test
+      DATABASE_URL: postgresql://phase14:phase14_ci_only@127.0.0.1:5432/saytwist_growth_phase2_test
+      APP_BASE_URL: https://translators.example.com
+      NEXTAUTH_URL: https://translators.example.com
+      NEXTAUTH_SECRET: test_nextauth_secret_please_replace
+      OPENAI_API_KEY: test_key_never_call
+      OPENAI_MODEL: gpt-4.1-mini
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20.20.2
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run prisma:generate
+      - name: Apply migrations only to disposable PostgreSQL 18 service
+        run: npm run prisma:deploy
+      - name: Exercise atomic queue claims, lease recovery and rollout deny gates
+        run: npm run test:growth-db

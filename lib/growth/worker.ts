@@ -13,6 +13,7 @@ import {
   releaseClaimedGrowthJob,
 } from "@/lib/growth/jobs";
 import { toSafeGrowthError } from "@/lib/growth/safe-data";
+import { resolveGrowthRollout } from "@/lib/growth/rollout";
 import { getGrowthSettings } from "@/lib/growth/settings";
 import { prisma } from "@/lib/prisma";
 
@@ -23,7 +24,11 @@ export interface GrowthWorkerResult {
   failed: number;
 }
 
-export async function runGrowthWorker(options: { workerId?: string; batchSize?: number } = {}): Promise<GrowthWorkerResult> {
+export async function runGrowthWorker(options: {
+  workerId?: string; batchSize?: number; rolloutConfig?: Record<string, string | undefined>;
+} = {}): Promise<GrowthWorkerResult> {
+  const rollout = resolveGrowthRollout(options.rolloutConfig);
+  if (rollout.mode === "OFF") return { status: "DISABLED", claimed: 0, succeeded: 0, failed: 0 };
   const settings = await getGrowthSettings();
   if (!settings.enabled) return { status: "DISABLED", claimed: 0, succeeded: 0, failed: 0 };
 
@@ -51,16 +56,16 @@ export async function runGrowthWorker(options: { workerId?: string; batchSize?: 
 
   const result: GrowthWorkerResult = { status: "EMPTY", claimed: 0, succeeded: 0, failed: 0 };
   try {
-    await promoteDueGrowthRetries(startedAt, batchSize);
-    await recoverStaleGrowthJobs(startedAt, batchSize);
-    const jobs = await claimGrowthJobs({ workerId: leaseOwnerId, limit: batchSize });
+    await promoteDueGrowthRetries(startedAt, batchSize, rollout.allowedTypes);
+    await recoverStaleGrowthJobs(startedAt, batchSize, rollout.allowedTypes);
+    const jobs = await claimGrowthJobs({ workerId: leaseOwnerId, limit: batchSize, allowedTypes: rollout.allowedTypes });
     result.claimed = jobs.length;
     if (jobs.length > 0) result.status = "COMPLETED";
 
     for (let index = 0; index < jobs.length; index += 1) {
       const job = jobs[index];
       const beforeExecution = await getGrowthSettings();
-      if (!beforeExecution.enabled) {
+      if (!beforeExecution.enabled || resolveGrowthRollout(options.rolloutConfig).mode !== rollout.mode || !rollout.allowedTypes.includes(job.type)) {
         for (const unexecutedJob of jobs.slice(index)) {
           await releaseClaimedGrowthJob(unexecutedJob, leaseOwnerId, "Growth was disabled before execution.");
         }

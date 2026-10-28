@@ -55,6 +55,16 @@ describe("SEO route contracts", () => {
     ).toBe(true);
   });
 
+  it("omits the empty public Ideas hub until editorial content exists", async () => {
+    mocks.ideas.mockResolvedValueOnce([]);
+    const urls = (await sitemap()).map((row) => row.url);
+    expect(urls).not.toContain("https://saytwist.com/ideas");
+    expect(urls).toContain("https://saytwist.com/translators/friendly-rewrite");
+  });
+  it("includes the populated Ideas hub only with actual published Ideas", async () => {
+    const urls = (await sitemap()).map((row) => row.url);
+    expect(urls).toContain("https://saytwist.com/ideas");
+  });
   it("omits invented static last-modified dates and preserves genuine content timestamps", async () => {
     const entries = await sitemap();
     const byUrl = new Map(entries.map((entry) => [entry.url, entry]));

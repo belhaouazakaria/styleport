@@ -75,6 +75,18 @@ describe("Growth job persistence", () => {
     expect(mocks.activity).toHaveBeenCalledTimes(2);
   });
 
+  it("refuses to claim anything with an empty allowlist", async () => {
+    expect(await claimGrowthJobs({ workerId: "observer", limit: 5, allowedTypes: [] })).toEqual([]);
+    expect(mocks.queryRaw).not.toHaveBeenCalled();
+  });
+  it("supports an explicit observe-only atomic claim", async () => {
+    mocks.queryRaw.mockResolvedValue([]);
+    expect(await claimGrowthJobs({
+      workerId: "observer", limit: 1,
+      allowedTypes: [GrowthJobType.PINTEREST_ACCOUNT_ANALYTICS_SYNC],
+    })).toEqual([]);
+    expect(mocks.queryRaw).toHaveBeenCalledTimes(1);
+  });
   it("returns the existing job when the idempotency key conflicts", async () => {
     const conflict = new Prisma.PrismaClientKnownRequestError("unique", { code: "P2002", clientVersion: "6.19.3" });
     mocks.transaction.mockRejectedValue(conflict);
