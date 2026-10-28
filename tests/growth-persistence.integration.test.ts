@@ -197,6 +197,8 @@ databaseDescribe("Growth PostgreSQL persistence and concurrency", () => {
     expect(retryable.lastError).not.toMatch(/secret-token|postgresql:\/\/hidden/);
     await expect(claimGrowthJobs({ workerId: "too-early-owner", limit: 1 })).resolves.toEqual([]);
     await expect(promoteDueGrowthRetries(new Date(Date.now() + 31_000), 1)).resolves.toBe(1);
+    // The test advances the eligibility clock; make its due-time realistic for the actual claim SQL.
+    await prisma.growthJob.update({ where: { id: first.id }, data: { runAfter: new Date(Date.now() - 1000) } });
     const [second] = await claimGrowthJobs({ workerId: "retry-owner-2", limit: 1 });
     expect(second.attemptCount).toBe(2);
     await markGrowthJobRunning(second, "retry-owner-2");
@@ -238,6 +240,7 @@ databaseDescribe("Growth PostgreSQL persistence and concurrency", () => {
       enabled: index % 2 === 0,
       intensity: GrowthIntensity.BALANCED,
       workerBatchSize: index + 1,
+      ownedDomains: ["saytwist.com", "www.saytwist.com", "translator.whattypeof.com"],
     }, admin.id)));
     expect(await prisma.growthSettings.count()).toBe(1);
     expect((await prisma.growthSettings.findUniqueOrThrow({ where: { id: "global" } })).configVersion).toBe(5);
