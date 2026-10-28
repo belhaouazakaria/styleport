@@ -14,12 +14,15 @@ interface Props { searchParams: Promise<{ category?: string; page?: string }> }
 export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
   const params = await searchParams;
   const isFiltered = Boolean(params.category?.trim()) || Math.max(1, Number(params.page || 1) || 1) > 1;
+  const hasPublishedIdeas = isFiltered ? false : await getPublicIdeasPage({ pageSize: 1 })
+    .then((result) => result.total > 0)
+    .catch(() => false);
   return {
     title: "SayTwist Ideas | Better Things to Say",
     description: "Practical text ideas, replies, captions, conversation starters, and examples for everyday moments.",
     alternates: { canonical: "/ideas" },
     openGraph: { title: "SayTwist Ideas", description: "Useful, original ways to say what you mean.", type: "website", url: "/ideas" },
-    robots: isFiltered ? { index: false, follow: true } : undefined,
+    robots: { index: hasPublishedIdeas, follow: true },
   };
 }
 

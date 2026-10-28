@@ -34,6 +34,7 @@ vi.mock("@/lib/prisma", () => ({
 import { runGrowthWorker } from "@/lib/growth/worker";
 
 const settings = { enabled: true, workerBatchSize: 5, intensity: "BALANCED" };
+const observe = { rolloutConfig: { GROWTH_WORKER_RUN_ENABLED: "true", GROWTH_ROLLOUT_MODE: "OBSERVE" } };
 const job = {
   id: "job-1",
   type: GrowthJobType.FOUNDATION_NOOP,
@@ -74,17 +75,30 @@ describe("bounded Growth worker", () => {
     expect(mocks.heartbeatUpsert).not.toHaveBeenCalled();
   });
 
+  it("does not execute pending work when rollout flags are missing", async () => {
+    expect(await runGrowthWorker()).toEqual({ status: "DISABLED", claimed: 0, succeeded: 0, failed: 0 });
+    expect(mocks.claimGrowthJobs).not.toHaveBeenCalled();
+  });
+  it("rejects unknown modes even when the worker is explicitly enabled", async () => {
+    expect(await runGrowthWorker({ rolloutConfig: {
+      GROWTH_WORKER_RUN_ENABLED: "true", GROWTH_ROLLOUT_MODE: "AUTOPILOT",
+    } })).toMatchObject({ status: "DISABLED" });
+    expect(mocks.claimGrowthJobs).not.toHaveBeenCalled();
+  });
   it("exits cleanly when the queue is empty", async () => {
     mocks.claimGrowthJobs.mockResolvedValue([]);
-    await expect(runGrowthWorker({ workerId: "test-worker" })).resolves.toEqual({ status: "EMPTY", claimed: 0, succeeded: 0, failed: 0 });
+    await expect(runGrowthWorker({ workerId: "test-worker", ...observe })).resolves.toEqual({ status: "EMPTY", claimed: 0, succeeded: 0, failed: 0 });
     expect(mocks.claimGrowthJobs).toHaveBeenCalledTimes(1);
   });
 
   it("executes a claimed job exactly once and stops at the empty queue", async () => {
     mocks.claimGrowthJobs.mockResolvedValueOnce([job]);
-    const result = await runGrowthWorker({ workerId: "test-worker", batchSize: 3 });
+    const result = await runGrowthWorker({ workerId: "test-worker", batchSize: 3, ...observe });
     expect(result).toEqual({ status: "COMPLETED", claimed: 1, succeeded: 1, failed: 0 });
-    expect(mocks.claimGrowthJobs).toHaveBeenCalledWith({ workerId: expect.stringMatching(/^test-worker:[0-9a-f-]{36}$/), limit: 3 });
+    expect(mocks.claimGrowthJobs).toHaveBeenCalledWith({
+      workerId: expect.stringMatching(/^test-worker:[0-9a-f-]{36}$/),
+      limit: 3, allowedTypes: expect.arrayContaining([GrowthJobType.FOUNDATION_NOOP]),
+    });
     expect(mocks.heartbeatUpsert).toHaveBeenCalledWith(expect.objectContaining({
       create: expect.objectContaining({ invocationId: expect.stringMatching(/^[0-9a-f-]{36}$/) }),
       update: expect.objectContaining({ invocationId: expect.stringMatching(/^[0-9a-f-]{36}$/) }),
@@ -99,7 +113,7 @@ describe("bounded Growth worker", () => {
   it("checks the kill switch after claim and releases work without execution", async () => {
     mocks.getGrowthSettings.mockResolvedValueOnce(settings).mockResolvedValueOnce({ ...settings, enabled: false });
     mocks.claimGrowthJobs.mockResolvedValueOnce([job]);
-    const result = await runGrowthWorker({ workerId: "test-worker" });
+    const result = await runGrowthWorker({ workerId: "test-worker", ...observe });
     expect(result.claimed).toBe(1);
     expect(mocks.releaseClaimedGrowthJob).toHaveBeenCalledWith(job, expect.stringMatching(/^test-worker:/), expect.any(String));
     expect(mocks.dispatchGrowthJob).not.toHaveBeenCalled();
@@ -108,7 +122,7 @@ describe("bounded Growth worker", () => {
   it("persists handler failure instead of retrying in-process", async () => {
     mocks.claimGrowthJobs.mockResolvedValueOnce([job]);
     mocks.dispatchGrowthJob.mockRejectedValueOnce(new Error("expected failure"));
-    const result = await runGrowthWorker({ workerId: "test-worker" });
+    const result = await runGrowthWorker({ workerId: "test-worker", ...observe });
     expect(result.failed).toBe(1);
     expect(mocks.failGrowthJob).toHaveBeenCalledTimes(1);
     expect(mocks.dispatchGrowthJob).toHaveBeenCalledTimes(1);

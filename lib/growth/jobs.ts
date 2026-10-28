@@ -216,9 +216,10 @@ export async function enqueueGrowthJob(input: EnqueueGrowthJobInput) {
   }
 }
 
-export async function promoteDueGrowthRetries(now = new Date(), limit = 25) {
+export async function promoteDueGrowthRetries(now = new Date(), limit = 25, allowedTypes?: GrowthJobType[]) {
+  if (allowedTypes?.length === 0) return 0;
   const due = await prisma.growthJob.findMany({
-    where: { status: GrowthJobStatus.FAILED_RETRYABLE, runAfter: { lte: now } },
+    where: { status: GrowthJobStatus.FAILED_RETRYABLE, runAfter: { lte: now }, ...(allowedTypes ? { type: { in: allowedTypes } } : {}) },
     select: { id: true, idempotencyKey: true, attemptCount: true, maxAttempts: true },
     orderBy: [{ runAfter: "asc" }, { createdAt: "asc" }],
     take: Math.min(100, Math.max(1, limit)),
@@ -248,11 +249,13 @@ export async function promoteDueGrowthRetries(now = new Date(), limit = 25) {
   return promoted;
 }
 
-export async function recoverStaleGrowthJobs(now = new Date(), limit = 25) {
+export async function recoverStaleGrowthJobs(now = new Date(), limit = 25, allowedTypes?: GrowthJobType[]) {
+  if (allowedTypes?.length === 0) return 0;
   const stale = await prisma.growthJob.findMany({
     where: {
       status: { in: [GrowthJobStatus.CLAIMED, GrowthJobStatus.RUNNING] },
       leaseUntil: { lt: now },
+      ...(allowedTypes ? { type: { in: allowedTypes } } : {}),
     },
     select: { id: true, type: true, status: true, attemptCount: true, maxAttempts: true, idempotencyKey: true, payload: true },
     take: Math.min(100, Math.max(1, limit)),
@@ -367,7 +370,10 @@ export async function claimGrowthJobs(params: {
   workerId: string;
   limit: number;
   leaseSeconds?: number;
+  allowedTypes?: GrowthJobType[];
 }): Promise<GrowthJob[]> {
+  if (params.allowedTypes?.length === 0) return [];
+  const typeFilter = params.allowedTypes ? Prisma.sql`AND "type"::text IN (${Prisma.join(params.allowedTypes)})` : Prisma.empty;
   const leaseSeconds = Math.min(3_600, Math.max(30, params.leaseSeconds || DEFAULT_GROWTH_LEASE_SECONDS));
   const limit = Math.min(100, Math.max(1, params.limit));
   return prisma.$transaction(async (tx) => {
@@ -378,6 +384,7 @@ export async function claimGrowthJobs(params: {
         WHERE "status" = 'PENDING'::"GrowthJobStatus"
           AND "runAfter" <= CURRENT_TIMESTAMP
           AND "attemptCount" < "maxAttempts"
+          ${typeFilter}
         ORDER BY "runAfter" ASC, "createdAt" ASC
         FOR UPDATE SKIP LOCKED
         LIMIT ${limit}
