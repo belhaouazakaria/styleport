@@ -108,7 +108,9 @@ export async function archiveGrowthDailyReport(date: string) {
     attributionComplete: attributionAvailable,
     topPin,
   });
-  const aiReservedCents = reservations._sum.reservedCents;
+  // A complete local aggregate with no reservation rows means zero reserved,
+  // not zero actual provider expenditure.
+  const aiReservedCents = reservations._sum.reservedCents ?? 0;
   const safeReservedCents = aiReservedCents !== null && Number.isSafeInteger(aiReservedCents) && aiReservedCents >= 0
     ? aiReservedCents : null;
 
