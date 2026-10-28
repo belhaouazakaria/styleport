@@ -59,6 +59,7 @@ describe("Insert-only daily report archive under immutable PostgreSQL trigger", 
     expect(created.digestText).toContain("Growth AI actual spending not fully priced");
     expect(created.digestText).toContain("Review Pinterest analytics coverage");
     expect(created.snapshot.aiSpendUsd).toBeNull();
+    expect(created.digestText).toContain("Growth AI reserved ceiling: $0.00 USD (not billed spend)");
   });
   it("identifies the top measured Pin only with complete eligible daily coverage", async () => {
     mocks.count.mockResolvedValue(1);
