@@ -154,14 +154,14 @@ jobs:
                   for (const c of v.slice(0, 96)) {
                     const type = /[0-9]/.test(c) ? "N" :
                       /[A-Za-z]/.test(c) ? "A" :
-                      c === " " || c === "\\t" ? "S" :
+                      c === " " || c === "\t" ? "S" :
                       /[,;=:._-]/.test(c) ? c : "X";
                     if (type === previous && ["N", "A", "S", "X"].includes(type)) continue;
                     shape += type;
                     previous = type;
                   }
                   return {
-                    kind: /^\\d{1,8}(?:,\\s*\\d{1,8};w=\\d{1,6})*$/.test(v) ? "DOCUMENTED" : "OTHER",
+                    kind: /^\d{1,8}(?:,\s*\d{1,8};w=\d{1,6})*$/.test(v) ? "DOCUMENTED" : "OTHER",
                     lengthBand: v.length <= 32 ? "1-32" : v.length <= 64 ? "33-64" :
                       v.length <= 128 ? "65-128" : "129+",
                     shape: shape.slice(0, 96),
@@ -192,9 +192,9 @@ jobs:
                   historicalQuota: quotaHistory.map(h => ({
                     observedAt: h.rateLimitObservedAt?.toISOString() || null,
                     limit: historicalHeaderEvidence(h.lastRateLimitLimit),
-                    remainingKind: /^\\d{1,8}$/.test(h.lastRateLimitRemaining || "") ? "INTEGER" :
+                    remainingKind: /^\d{1,8}$/.test(h.lastRateLimitRemaining || "") ? "INTEGER" :
                       h.lastRateLimitRemaining ? "OTHER" : "ABSENT",
-                    resetKind: /^\\d{1,8}$/.test(h.lastRateLimitReset || "") ? "INTEGER" :
+                    resetKind: /^\d{1,8}$/.test(h.lastRateLimitReset || "") ? "INTEGER" :
                       h.lastRateLimitReset ? "OTHER" : "ABSENT",
                   })),
                   messagesSent: 0,
