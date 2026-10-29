@@ -16,6 +16,17 @@ describe("Phase 14B provider quota probe safeguards", () => {
     expect(() => assessPinterestQuota(headers("100, invalid;w=60","99","1"))).toThrow("QUOTA_UNAVAILABLE");
     expect(() => assessPinterestQuota(headers("100, 100;w=1, 1000;w=60","5","1"))).toThrow("QUOTA_LOW");
     expect(() => assessPinterestQuota(headers("60",null,"21"))).toThrow(QuotaProbeBlocked);
+    try { assessPinterestQuota(headers("60", null, "21")); } catch (error) {
+      expect(error).toBeInstanceOf(QuotaProbeBlocked);
+      expect((error as QuotaProbeBlocked).evidence).toEqual({
+        limit: "INTEGER", remaining: "ABSENT", reset: "INTEGER",
+      });
+    }
+    try { assessPinterestQuota(headers("100, 100;w=1, 1000;w=60", "99.9", "1")); } catch (error) {
+      expect((error as QuotaProbeBlocked).evidence).toEqual({
+        limit: "WINDOWS", remaining: "OTHER", reset: "INTEGER",
+      });
+    }
     expect(() => assessPinterestQuota(headers("60","5","21"))).toThrow("QUOTA_LOW");
     expect(() => assessPinterestQuota(headers("60","61","21"))).toThrow("QUOTA_UNAVAILABLE");
     expect(() => assessPinterestQuota(headers("60","43","1690000000"))).toThrow("QUOTA_UNAVAILABLE");
