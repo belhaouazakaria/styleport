@@ -112,9 +112,9 @@ validate_growth_off() {
     const client = new PrismaClient();
     (async () => {
       const settings = await client.$queryRawUnsafe(
-        "SELECT \\"enabled\\", \\"attributionEnabled\\" FROM \\"GrowthSettings\\" WHERE \\"id\\" = '\''global'\''");
+        "SELECT \"enabled\", \"attributionEnabled\" FROM \"GrowthSettings\" WHERE \"id\" = '\''global'\''");
       const queue = await client.$queryRawUnsafe(
-        "SELECT COUNT(*)::int AS count FROM \\"GrowthJob\\" WHERE \\"status\\" IN ( '\''PENDING'\'', '\''CLAIMED'\'', '\''RUNNING'\'', '\''FAILED_RETRYABLE'\'' )");
+        "SELECT COUNT(*)::int AS count FROM \"GrowthJob\" WHERE \"status\" IN ( '\''PENDING'\'', '\''CLAIMED'\'', '\''RUNNING'\'', '\''FAILED_RETRYABLE'\'' )");
       if (settings.length !== 1 || settings[0].enabled || settings[0].attributionEnabled ||
           queue.length !== 1 || queue[0].count !== 0) throw new Error("Growth gates or queue are not OFF/idle");
       console.log("[hostinger-migration] Growth database OFF, attribution OFF and active queue empty.");
