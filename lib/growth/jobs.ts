@@ -371,9 +371,15 @@ export async function claimGrowthJobs(params: {
   limit: number;
   leaseSeconds?: number;
   allowedTypes?: GrowthJobType[];
+  /** Optional exact job scope for isolated one-shot worker trials. */
+  jobId?: string;
 }): Promise<GrowthJob[]> {
   if (params.allowedTypes?.length === 0) return [];
+  if (params.jobId !== undefined && !/^[A-Za-z0-9_-]{1,191}$/.test(params.jobId)) {
+    throw new Error("Invalid exact Growth job ID.");
+  }
   const typeFilter = params.allowedTypes ? Prisma.sql`AND "type"::text IN (${Prisma.join(params.allowedTypes)})` : Prisma.empty;
+  const idFilter = params.jobId !== undefined ? Prisma.sql`AND "id" = ${params.jobId}` : Prisma.empty;
   const leaseSeconds = Math.min(3_600, Math.max(30, params.leaseSeconds || DEFAULT_GROWTH_LEASE_SECONDS));
   const limit = Math.min(100, Math.max(1, params.limit));
   return prisma.$transaction(async (tx) => {
@@ -385,6 +391,7 @@ export async function claimGrowthJobs(params: {
           AND "runAfter" <= CURRENT_TIMESTAMP
           AND "attemptCount" < "maxAttempts"
           ${typeFilter}
+          ${idFilter}
         ORDER BY "runAfter" ASC, "createdAt" ASC
         FOR UPDATE SKIP LOCKED
         LIMIT ${limit}
