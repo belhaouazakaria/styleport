@@ -80,3 +80,10 @@ As an independent safety gate, the Phase 14 worker tests now verify that the pro
 ### Historic provider metadata, no additional API requests
 
 The standard Pinterest analytics adapter stores prior `lastRateLimitLimit`, `lastRateLimitRemaining`, `lastRateLimitReset` and `rateLimitObservedAt` in `GrowthPinterestAnalyticsState`. As the three 2026-10-29 live quota GET diagnostics have not yielded a parseable limit grammar, a later read-only production preflight now samples up to four historical state rows. It emits only the observation time, fixed-character-class limit structure (`A` letters, `N` digits, `S` whitespace, `X` disallowed characters), length band and numeric/absent/other classification of remaining/reset. No raw header value is logged. This query issues **zero Pinterest requests, zero DB writes, zero AI calls and zero Telegram messages**. Historic values may be stale or missing and must not be treated as current quota availability. The historical read cannot itself authorize a worker activation.
+
+
+## Phase 14C incremental gate: exact-job scoped worker (code only)
+
+The worker accepts an optional `onlyJobId` on `runGrowthWorker` for a future one-shot trial. When set, the worker forces a batch of one, selects only that exact pending ID through an atomic parameterized SQL filter, skips general retry promotion and stale-lease recovery, and verifies the ID again before dispatch. Both the process rollout allowlist and persistent `GrowthSettings.enabled` kill switch still apply; the scope does not grant permission to run any forbidden job type. A malformed ID fails closed without querying the queue. Normal, unscoped worker behavior remains unchanged.
+
+**This is not activation.** The next independent gate must design and validate a reversible, expiring authorization for the global DB kill switch and an owner-approved one-shot operator workflow before any production OBSERVE job executes. Do not toggle Growth ON manually, start recurring workers, or assume exact-job scoping alone prevents a crash from leaving the global switch enabled.
