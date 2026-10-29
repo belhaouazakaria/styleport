@@ -72,11 +72,15 @@ jobs:
               failureStage = "PM2_CLI";
               const nodeDir = "/home/saytwist/.nvm/versions/node/v24.20.0/bin";
               // Deploy uses HOSTINGER_PM2_CLI, but issue_comment workflows may not
-              // have access to environment-scoped deployment variables. Resolve
-              // the known application-user NVM installation without broadening
-              // production secret access or searching arbitrary PATH entries.
-              const pm2Cli = process.env.PM2_CLI ||
-                nodeDir + "/pm2";
+              // have access to environment-scoped deployment variables. The first
+              // fallback is the exact PM2 v7.0.4 binary confirmed by the guarded
+              // Hostinger deploy log on 2026-10-29; NVM global bin is secondary.
+              // Never search PATH or broaden GitHub production secret access.
+              const verifiedPm2Cli =
+                "/home/saytwist/.npm/_npx/5f7878ce38f1eb13/node_modules/pm2/bin/pm2";
+              const fallbackPm2Cli = [verifiedPm2Cli, nodeDir + "/pm2"]
+                .find(candidate => fs.existsSync(candidate));
+              const pm2Cli = process.env.PM2_CLI || fallbackPm2Cli || "";
               if (!pm2Cli.startsWith("/") || !fs.existsSync(pm2Cli)) {
                 throw Error("Existing PM2 CLI unavailable.");
               }
