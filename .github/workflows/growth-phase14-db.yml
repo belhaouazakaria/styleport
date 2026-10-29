@@ -10,6 +10,8 @@ on:
       - "prisma/schema.prisma"
       - "prisma/migrations/20261029220000_growth_worker_activation_expiry/**"
       - "scripts/qualify-growth-activation-migration.mjs"
+      - "scripts/hostinger-prepare-growth-expiry-migration.sh"
+      - "workers/growth-lease-watchdog.ts"
       - "lib/growth/rollout.ts"
       - "tests/growth-persistence.integration.test.ts"
       - ".github/workflows/growth-phase14-db.yml"
@@ -49,6 +51,11 @@ jobs:
           cache: npm
       - run: npm ci --no-audit --no-fund
       - run: npm run prisma:generate
+      - name: Validate migration operator shell and isolated qualifier syntax
+        run: |
+          bash -n scripts/hostinger-prepare-growth-expiry-migration.sh
+          node --check scripts/qualify-growth-activation-migration.mjs
+          HOSTINGER_MIGRATION_SOURCE_ONLY=1 bash scripts/hostinger-prepare-growth-expiry-migration.sh
       - name: Qualify additive expiry migration against isolated legacy schema and existing OFF row
         env:
           RUN_GROWTH_MIGRATION_QUALIFICATION: "1"
