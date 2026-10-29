@@ -1,6 +1,7 @@
 import { GrowthWorkerStatus } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 
+import { isGrowthWorkerActivationValid } from "@/lib/growth/activation-lease";
 import { MAX_GROWTH_WORKER_BATCH_SIZE } from "@/lib/growth/contracts";
 import { dispatchGrowthJob } from "@/lib/growth/handlers";
 import {
@@ -14,7 +15,7 @@ import {
 } from "@/lib/growth/jobs";
 import { toSafeGrowthError } from "@/lib/growth/safe-data";
 import { resolveGrowthRollout } from "@/lib/growth/rollout";
-import { getGrowthSettings } from "@/lib/growth/settings";
+import { getGrowthSettings, revokeGrowthWorkerActivation } from "@/lib/growth/settings";
 import { prisma } from "@/lib/prisma";
 
 export interface GrowthWorkerResult {
@@ -35,7 +36,10 @@ export async function runGrowthWorker(options: {
   const rollout = resolveGrowthRollout(options.rolloutConfig);
   if (rollout.mode === "OFF") return { status: "DISABLED", claimed: 0, succeeded: 0, failed: 0 };
   const settings = await getGrowthSettings();
-  if (!settings.enabled) return { status: "DISABLED", claimed: 0, succeeded: 0, failed: 0 };
+  if (!isGrowthWorkerActivationValid(settings)) {
+    return { status: "DISABLED", claimed: 0, succeeded: 0, failed: 0 };
+  }
+  const activationExpiresAt = settings.workerActivationExpiresAt!;
 
   const workerId = (options.workerId || process.env.GROWTH_WORKER_ID || "growth-worker").slice(0, 191);
   const invocationId = randomUUID();
@@ -44,6 +48,9 @@ export async function runGrowthWorker(options: {
     MAX_GROWTH_WORKER_BATCH_SIZE,
     Math.max(1, options.batchSize || settings.workerBatchSize),
   );
+  // A scoped one-shot must revoke the matching lease even on handler or
+  // heartbeat failure. A hard crash still expires independently in the DB.
+  try {
   const startedAt = new Date();
   await prisma.growthWorkerHeartbeat.upsert({
     where: { workerId },
@@ -66,6 +73,11 @@ export async function runGrowthWorker(options: {
       await promoteDueGrowthRetries(startedAt, batchSize, rollout.allowedTypes);
       await recoverStaleGrowthJobs(startedAt, batchSize, rollout.allowedTypes);
     }
+    const beforeClaim = await getGrowthSettings();
+    if (!isGrowthWorkerActivationValid(beforeClaim) ||
+        beforeClaim.workerActivationExpiresAt?.getTime() !== activationExpiresAt.getTime()) {
+      throw new Error("Growth worker activation expired or changed before claim.");
+    }
     const jobs = await claimGrowthJobs({
       workerId: leaseOwnerId, limit: batchSize, allowedTypes: rollout.allowedTypes,
       ...(options.onlyJobId ? { jobId: options.onlyJobId } : {}),
@@ -83,7 +95,10 @@ export async function runGrowthWorker(options: {
     for (let index = 0; index < jobs.length; index += 1) {
       const job = jobs[index];
       const beforeExecution = await getGrowthSettings();
-      if (!beforeExecution.enabled || resolveGrowthRollout(options.rolloutConfig).mode !== rollout.mode || !rollout.allowedTypes.includes(job.type)) {
+      if (!isGrowthWorkerActivationValid(beforeExecution) ||
+          beforeExecution.workerActivationExpiresAt?.getTime() !== activationExpiresAt.getTime() ||
+          resolveGrowthRollout(options.rolloutConfig).mode !== rollout.mode ||
+          !rollout.allowedTypes.includes(job.type)) {
         for (const unexecutedJob of jobs.slice(index)) {
           await releaseClaimedGrowthJob(unexecutedJob, leaseOwnerId, "Growth was disabled before execution.");
         }
@@ -128,5 +143,8 @@ export async function runGrowthWorker(options: {
       },
     });
     throw error;
+  }
+  } finally {
+    if (options.onlyJobId) await revokeGrowthWorkerActivation(activationExpiresAt);
   }
 }
