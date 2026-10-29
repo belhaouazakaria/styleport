@@ -110,6 +110,34 @@ describe("bounded Growth worker", () => {
     expect(mocks.completeGrowthJob).toHaveBeenCalledTimes(1);
   });
 
+  it("only claims the exact requested job and skips unrelated retry/recovery", async () => {
+    mocks.claimGrowthJobs.mockResolvedValueOnce([job]);
+    const result = await runGrowthWorker({
+      workerId: "scoped-trial", batchSize: 20, onlyJobId: job.id, ...observe,
+    });
+    expect(result).toEqual({ status: "COMPLETED", claimed: 1, succeeded: 1, failed: 0 });
+    expect(mocks.claimGrowthJobs).toHaveBeenCalledWith(expect.objectContaining({
+      limit: 1, jobId: job.id, allowedTypes: expect.arrayContaining([GrowthJobType.FOUNDATION_NOOP]),
+    }));
+    expect(mocks.promoteDueGrowthRetries).not.toHaveBeenCalled();
+    expect(mocks.recoverStaleGrowthJobs).not.toHaveBeenCalled();
+    expect(mocks.dispatchGrowthJob).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects malformed exact-job scopes before accessing the queue", async () => {
+    await expect(runGrowthWorker({ onlyJobId: " ", ...observe })).rejects.toThrow("Invalid scoped");
+    expect(mocks.getGrowthSettings).not.toHaveBeenCalled();
+    expect(mocks.claimGrowthJobs).not.toHaveBeenCalled();
+  });
+
+  it("releases all returned jobs and refuses dispatch if scoped claim is violated", async () => {
+    mocks.claimGrowthJobs.mockResolvedValueOnce([{ ...job, id: "another-job" }]);
+    await expect(runGrowthWorker({ workerId: "scoped-trial", onlyJobId: job.id, ...observe }))
+      .rejects.toThrow("Exact Growth job scope violation");
+    expect(mocks.releaseClaimedGrowthJob).toHaveBeenCalledTimes(1);
+    expect(mocks.dispatchGrowthJob).not.toHaveBeenCalled();
+  });
+
   it("checks the kill switch after claim and releases work without execution", async () => {
     mocks.getGrowthSettings.mockResolvedValueOnce(settings).mockResolvedValueOnce({ ...settings, enabled: false });
     mocks.claimGrowthJobs.mockResolvedValueOnce([job]);
