@@ -13,7 +13,7 @@ import {
   recoverStaleGrowthJobs,
 } from "@/lib/growth/jobs";
 import { dispatchGrowthJob } from "@/lib/growth/handlers";
-import { updateGrowthSettings } from "@/lib/growth/settings";
+import { expireGrowthWorkerActivation, updateGrowthSettings } from "@/lib/growth/settings";
 import { runGrowthWorker } from "@/lib/growth/worker";
 import { prisma } from "@/lib/prisma";
 
@@ -107,6 +107,35 @@ databaseDescribe("Growth PostgreSQL persistence and concurrency", () => {
     expect((await prisma.growthJob.findUniqueOrThrow({ where: { id: pending.id } })).status)
       .toBe(GrowthJobStatus.PENDING);
     expect(await prisma.growthWorkerHeartbeat.count()).toBe(0);
+  });
+
+  it("Phase 14C: expired lease cleanup physically disables only an expired activation", async () => {
+    const expiredAt = new Date(Date.now() - 60_000);
+    await prisma.growthSettings.create({
+      data: { id: "global", enabled: true, workerActivationExpiresAt: expiredAt },
+    });
+    expect(await expireGrowthWorkerActivation()).toBe(1);
+    const current = await prisma.growthSettings.findUniqueOrThrow({ where: { id: "global" } });
+    expect(current).toMatchObject({
+      enabled: false, workerActivationExpiresAt: null, configVersion: 2,
+    });
+    expect(await expireGrowthWorkerActivation()).toBe(0);
+    expect(await prisma.growthActivity.count({
+      where: { entityType: "GrowthSettings", action: "WORKER_ACTIVATION_EXPIRED" },
+    })).toBe(1);
+  });
+
+  it("Phase 14C: watchdog leaves valid future activation untouched", async () => {
+    const expiresAt = new Date(Date.now() + 120_000);
+    await prisma.growthSettings.create({
+      data: { id: "global", enabled: true, workerActivationExpiresAt: expiresAt },
+    });
+    expect(await expireGrowthWorkerActivation()).toBe(0);
+    expect(await prisma.growthSettings.findUniqueOrThrow({ where: { id: "global" } }))
+      .toMatchObject({ enabled: true, workerActivationExpiresAt: expiresAt, configVersion: 1 });
+    expect(await prisma.growthActivity.count({
+      where: { action: "WORKER_ACTIVATION_EXPIRED" },
+    })).toBe(0);
   });
 
   it("B: honors the disabled kill switch without claiming or writing a heartbeat", async () => {
