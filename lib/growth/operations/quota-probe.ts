@@ -12,17 +12,34 @@ export type QuotaProbeCode =
   | "PINTEREST_HTTP_FAILURE" | "QUOTA_UNAVAILABLE" | "QUOTA_LOW"
   | "UNEXPECTED_RESPONSE";
 
+export type SafeQuotaHeaderKind = "ABSENT" | "INTEGER" | "WINDOWS" | "OTHER";
+export type SafeQuotaHeaderEvidence = {
+  limit: SafeQuotaHeaderKind; remaining: SafeQuotaHeaderKind; reset: SafeQuotaHeaderKind;
+};
 export class QuotaProbeBlocked extends Error {
-  constructor(public readonly code: QuotaProbeCode) { super(code); }
+  constructor(public readonly code: QuotaProbeCode,
+    public readonly evidence: SafeQuotaHeaderEvidence | null = null) { super(code); }
 }
 
-function block(code: QuotaProbeCode): never { throw new QuotaProbeBlocked(code); }
+function block(code: QuotaProbeCode, evidence: SafeQuotaHeaderEvidence | null = null): never {
+  throw new QuotaProbeBlocked(code, evidence);
+}
+function quotaHeaderKind(value: string | null): SafeQuotaHeaderKind {
+  if (value === null || value === "") return "ABSENT";
+  if (/^\\d{1,8}$/.test(value)) return "INTEGER";
+  if (/^\\d{1,8}(?:,\\s*\\d{1,8};w=\\d{1,6})+$/.test(value)) return "WINDOWS";
+  return "OTHER";
+}
 
 /** Untrusted Pinterest response headers must be complete and preserve >= 5 requests. */
 export function assessPinterestQuota(headers: Pick<Headers, "get">) {
   const rawLimit = headers.get("x-ratelimit-limit");
   const rawRemaining = headers.get("x-ratelimit-remaining");
   const rawReset = headers.get("x-ratelimit-reset");
+  const evidence: SafeQuotaHeaderEvidence = {
+    limit: quotaHeaderKind(rawLimit), remaining: quotaHeaderKind(rawRemaining),
+    reset: quotaHeaderKind(rawReset),
+  };
   // Pinterest officially documents composite limits, e.g.
   // "100, 100;w=1, 1000;w=60" (universal and category windows).
   // Validate all windows, but use the first numeric limit with the documented
@@ -30,16 +47,16 @@ export function assessPinterestQuota(headers: Pick<Headers, "get">) {
   if (typeof rawLimit !== "string" || rawLimit.length > 128 ||
       typeof rawRemaining !== "string" || !/^\d{1,8}$/.test(rawRemaining) ||
       typeof rawReset !== "string" || !/^\d{1,8}$/.test(rawReset))
-    return block("QUOTA_UNAVAILABLE");
+    return block("QUOTA_UNAVAILABLE", evidence);
   const parts = rawLimit.split(",").map(x => x.trim());
   if (!parts.length || !/^\d{1,8}$/.test(parts[0]) ||
       parts.slice(1).some(x => !/^\d{1,8};w=\d{1,6}$/.test(x)))
-    return block("QUOTA_UNAVAILABLE");
+    return block("QUOTA_UNAVAILABLE", evidence);
   if (parts.slice(1).some(x => Number(x.split(";")[0]) < 1 ||
-      Number(x.split("=")[1]) < 1)) return block("QUOTA_UNAVAILABLE");
+      Number(x.split("=")[1]) < 1)) return block("QUOTA_UNAVAILABLE", evidence);
   const limit = Number(parts[0]), remaining = Number(rawRemaining), resetSeconds = Number(rawReset);
   if (limit < 1 || remaining > limit || !Number.isSafeInteger(resetSeconds) || resetSeconds > 86_400)
-    return block("QUOTA_UNAVAILABLE");
+    return block("QUOTA_UNAVAILABLE", evidence);
   if (remaining <= 5) return block("QUOTA_LOW");
   return { limit, remaining, resetSeconds };
 }
