@@ -44,7 +44,10 @@ async function resetGrowthTables() {
 
 async function enableGrowth(batchSize = 5) {
   return prisma.growthSettings.create({
-    data: { id: "global", enabled: true, intensity: GrowthIntensity.BALANCED, workerBatchSize: batchSize },
+    data: {
+      id: "global", enabled: true, intensity: GrowthIntensity.BALANCED,
+      workerBatchSize: batchSize, workerActivationExpiresAt: new Date(Date.now() + 3 * 60_000),
+    },
   });
 }
 
