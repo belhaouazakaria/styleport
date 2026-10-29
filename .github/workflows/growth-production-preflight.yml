@@ -111,7 +111,7 @@ jobs:
               failureStage = "DB_READ";
               const db = new PrismaClient();
               try {
-                const [settings, queued, accounts, heartbeat, reports] = await Promise.all([
+                const [settings, queued, accounts, heartbeat, reports, quotaHistory] = await Promise.all([
                   db.growthSettings.findUnique({ where: { id: "global" }, select: {
                     enabled: true, attributionEnabled: true, workerBatchSize: true,
                     aiDailyBudgetCents: true, aiMonthlyBudgetCents: true,
@@ -129,6 +129,10 @@ jobs:
                   }, take: 8, orderBy: { heartbeatAt: "desc" } }),
                   db.growthDailyReport.findFirst({ select: { id: true, version: true },
                     orderBy: { reportDate: "desc" } }),
+                  db.growthPinterestAnalyticsState.findMany({ select: {
+                    lastRateLimitLimit: true, lastRateLimitRemaining: true,
+                    lastRateLimitReset: true, rateLimitObservedAt: true,
+                  }, orderBy: { rateLimitObservedAt: "desc" }, take: 4 }),
                 ]);
                 const flags = {};
                 for (const name of [
@@ -142,6 +146,28 @@ jobs:
                     (name === "GROWTH_ROLLOUT_MODE" ? (["OFF","OBSERVE","RECOMMEND"].includes(value) ? value : "OFF_OR_UNSUPPORTED") : "OFF");
                 }
                 const now = Date.now();
+                // Character-class-only evidence. No original rate-limit value may
+                // enter any report, even when a header is malformed or very long.
+                function historicalHeaderEvidence(v) {
+                  if (typeof v !== "string" || !v) return { kind: "ABSENT" };
+                  let shape = "", previous = "";
+                  for (const c of v.slice(0, 96)) {
+                    const type = /[0-9]/.test(c) ? "N" :
+                      /[A-Za-z]/.test(c) ? "A" :
+                      c === " " || c === "\\t" ? "S" :
+                      /[,;=:._-]/.test(c) ? c : "X";
+                    if (type === previous && ["N", "A", "S", "X"].includes(type)) continue;
+                    shape += type;
+                    previous = type;
+                  }
+                  return {
+                    kind: /^\\d{1,8}(?:,\\s*\\d{1,8};w=\\d{1,6})*$/.test(v) ? "DOCUMENTED" : "OTHER",
+                    lengthBand: v.length <= 32 ? "1-32" : v.length <= 64 ? "33-64" :
+                      v.length <= 128 ? "65-128" : "129+",
+                    shape: shape.slice(0, 96),
+                    truncated: v.length > 96,
+                  };
+                }
                 failureStage = "REPORT_BUILD";
                 const report = {
                   status: "READONLY_PREFLIGHT_COMPLETE",
@@ -163,6 +189,14 @@ jobs:
                     status: x.status, lastAt: x.heartbeatAt.toISOString(),
                   })),
                   lastReport: reports || null,
+                  historicalQuota: quotaHistory.map(h => ({
+                    observedAt: h.rateLimitObservedAt?.toISOString() || null,
+                    limit: historicalHeaderEvidence(h.lastRateLimitLimit),
+                    remainingKind: /^\\d{1,8}$/.test(h.lastRateLimitRemaining || "") ? "INTEGER" :
+                      h.lastRateLimitRemaining ? "OTHER" : "ABSENT",
+                    resetKind: /^\\d{1,8}$/.test(h.lastRateLimitReset || "") ? "INTEGER" :
+                      h.lastRateLimitReset ? "OTHER" : "ABSENT",
+                  })),
                   messagesSent: 0,
                   providerApiCalls: 0,
                   databaseWrites: 0,
