@@ -103,7 +103,7 @@ jobs:
               if (result.status !== 0) {
                 const code = /^GROWTH_QUOTA_PROBE_FAILED=([A-Z_]+)$/m.exec(result.stderr || "")?.[1];
                 console.error("PRODUCTION_GROWTH_QUOTA_PROBE_BLOCKED=" + (code || "UNEXPECTED"));
-                const matchEvidence = /^GROWTH_QUOTA_PROBE_HEADER_EVIDENCE=(\\{[^\\n]*\\})$/m
+                const matchEvidence = /^GROWTH_QUOTA_PROBE_HEADER_EVIDENCE=(\{[^\n]*\})$/m
                   .exec(result.stderr || "");
                 if (matchEvidence) {
                   const e = JSON.parse(matchEvidence[1]);
