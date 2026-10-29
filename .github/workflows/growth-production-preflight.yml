@@ -1,0 +1,161 @@
+name: SayTwist Growth Production Read-Only Preflight
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+
+jobs:
+  production-preflight:
+    if: >-
+      github.event.issue.pull_request == null &&
+      github.event.sender.login == 'belhaouazakaria' &&
+      github.event.comment.user.login == 'belhaouazakaria' &&
+      startsWith(github.event.comment.body, 'RUN SAYTWIST GROWTH READONLY PREFLIGHT ')
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    concurrency:
+      group: saytwist-growth-production-preflight
+      cancel-in-progress: false
+    steps:
+      - name: Checkout trusted main
+        uses: actions/checkout@v5
+
+      - name: Validate exact-SHA owner authorization
+        env:
+          GROWTH_PREFLIGHT_EVENT_PATH: ${{ github.event_path }}
+        run: node scripts/validate-growth-preflight-request.mjs
+
+      - name: Verify main has not advanced
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '.commit.sha')" = "$GITHUB_SHA"
+
+      - name: Read-only production queue, account and runtime audit (no writes or secrets logged)
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          PM2_CLI: ${{ secrets.HOSTINGER_PM2_CLI || vars.HOSTINGER_PM2_CLI }}
+          EXPECTED_RELEASE: ${{ github.sha }}
+        with:
+          host: ${{ secrets.HOSTINGER_SSH_HOST || vars.HOSTINGER_SSH_HOST }}
+          username: ${{ secrets.HOSTINGER_SSH_USER || vars.HOSTINGER_SSH_USER }}
+          key: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
+          port: ${{ secrets.HOSTINGER_SSH_PORT || vars.HOSTINGER_SSH_PORT }}
+          script_stop: true
+          command_timeout: 5m
+          envs: PM2_CLI,EXPECTED_RELEASE
+          script: |
+            set -eu
+            test "$(id -un)" = "saytwist"
+            cd /home/saytwist/htdocs/saytwist.com
+            /home/saytwist/.nvm/versions/node/v24.20.0/bin/node <<'NODE'
+            const fs = require("node:fs");
+            const { execFileSync } = require("node:child_process");
+            const { PrismaClient } = require("@prisma/client");
+
+            async function main() {
+              const expected = process.env.EXPECTED_RELEASE || "";
+              if (!/^[a-f0-9]{40}$/.test(expected) ||
+                  fs.readFileSync(".deployed-release", "utf8").trim() !== expected) {
+                throw Error("Deployed SHA differs from exact audit request.");
+              }
+              const pm2Cli = process.env.PM2_CLI || "";
+              if (!pm2Cli.startsWith("/") || !fs.existsSync(pm2Cli)) {
+                throw Error("Existing PM2 CLI unavailable.");
+              }
+              const nodeDir = "/home/saytwist/.nvm/versions/node/v24.20.0/bin";
+              const apps = JSON.parse(execFileSync(pm2Cli, ["jlist"], {
+                encoding: "utf8", timeout: 10000, maxBuffer: 16 * 1024 * 1024,
+                env: {
+                  ...process.env, PM2_HOME: "/home/saytwist/.pm2",
+                  PATH: nodeDir + ":/usr/local/bin:/usr/bin:/bin",
+                },
+              }));
+              const app = apps.find(x => x.name === "saytwist");
+              if (!app || app.pm2_env?.status !== "online") throw Error("Application not online.");
+              const env = app.pm2_env;
+              const raw = env.DATABASE_URL || env.env?.DATABASE_URL;
+              if (!raw) throw Error("Live database configuration unavailable.");
+              const url = new URL(raw);
+              if (!["postgres:", "postgresql:"].includes(url.protocol) ||
+                  url.hostname !== "127.0.0.1" || url.port !== "5433" ||
+                  decodeURIComponent(url.pathname.slice(1)) !== "saytwist" ||
+                  url.searchParams.has("host")) {
+                throw Error("Production database target mismatch.");
+              }
+              process.env.DATABASE_URL = raw;
+              const db = new PrismaClient();
+              try {
+                const [settings, queued, accounts, heartbeat, reports] = await Promise.all([
+                  db.growthSettings.findUnique({ where: { id: "global" }, select: {
+                    enabled: true, attributionEnabled: true, workerBatchSize: true,
+                    aiDailyBudgetCents: true, aiMonthlyBudgetCents: true,
+                    aiImagesPerDayCap: true, translatorCreatesPerDayCap: true,
+                    translatorUpdatesPerDayCap: true, ideaCreatesPerWeekCap: true,
+                  } }),
+                  db.growthJob.groupBy({ by: ["type", "status"], _count: { _all: true } }),
+                  db.growthPinterestAccount.findMany({ select: {
+                    connectionStatus: true, apiEnvironment: true, encryptedCredentials: true,
+                    accessTokenExpiresAt: true, refreshTokenExpiresAt: true,
+                    grantedScopes: true, lastSuccessfulApiCallAt: true,
+                  } }),
+                  db.growthWorkerHeartbeat.findMany({ select: {
+                    workerId: true, status: true, heartbeatAt: true, completedAt: true,
+                  }, take: 8, orderBy: { heartbeatAt: "desc" } }),
+                  db.growthDailyReport.findFirst({ select: { id: true, version: true },
+                    orderBy: { reportDate: "desc" } }),
+                ]);
+                const flags = {};
+                for (const name of [
+                  "GROWTH_WORKER_RUN_ENABLED", "GROWTH_ROLLOUT_MODE",
+                  "GROWTH_DAILY_REPORT_SCHEDULE_ENABLED", "TELEGRAM_REPORTS_ENABLED",
+                  "GROWTH_ATTRIBUTION_COLLECTION_ENABLED",
+                ]) {
+                  // Never print the configured credential values.
+                  const value = env[name] ?? env.env?.[name];
+                  flags[name] = value === "true" ? "ON" :
+                    (name === "GROWTH_ROLLOUT_MODE" ? (["OFF","OBSERVE","RECOMMEND"].includes(value) ? value : "OFF_OR_UNSUPPORTED") : "OFF");
+                }
+                const now = Date.now();
+                const report = {
+                  status: "READONLY_PREFLIGHT_COMPLETE",
+                  release: expected,
+                  pm2: "online",
+                  growth: settings || "NO_SETTINGS_RECORD",
+                  flags,
+                  queued: queued.map(x=>({
+                    type: x.type, status: x.status, count: x._count._all,
+                  })).sort((a,b)=>a.type.localeCompare(b.type)||a.status.localeCompare(b.status)),
+                  pinterestAccounts: accounts.map(x=>({
+                    state: x.connectionStatus, environment: x.apiEnvironment,
+                    credentialsPresent: Boolean(x.encryptedCredentials),
+                    accessTokenExpired: Boolean(x.accessTokenExpiresAt && x.accessTokenExpiresAt.getTime() < now),
+                    refreshTokenExpired: Boolean(x.refreshTokenExpiresAt && x.refreshTokenExpiresAt.getTime() < now),
+                    scopes: x.grantedScopes, lastApiCall: x.lastSuccessfulApiCallAt?.toISOString() || null,
+                  })),
+                  recentHeartbeat: heartbeat.map(x=>({
+                    status: x.status, lastAt: x.heartbeatAt.toISOString(),
+                  })),
+                  lastReport: reports || null,
+                  messagesSent: 0,
+                  providerApiCalls: 0,
+                  databaseWrites: 0,
+                };
+                console.log("SAYTWIST_GROWTH_PREFLIGHT_JSON_BEGIN");
+                console.log(JSON.stringify(report, null, 2));
+                console.log("SAYTWIST_GROWTH_PREFLIGHT_JSON_END");
+              } finally {
+                await db.$disconnect();
+              }
+            }
+
+            main().catch(() => {
+              console.error("PRODUCTION_GROWTH_PREFLIGHT_FAILED: details withheld");
+              process.exitCode = 1;
+            });
+            NODE
