@@ -434,3 +434,8 @@ In response to the operator's no-staging decision, `growth:telegram:acceptance` 
 ### Phase 14 production preflight blocker (2026-10-29)
 
 PR #18's OBSERVE/RECOMMEND allowlisted process gate was deployed; full AUTOPILOT is deliberately unsupported. Owner-only read-only Growth preflight PR #22 and SSH heredoc fix PR #25 were deployed on main SHA `82c49c58688c688496a88cdeea86163be8ee90f5`. The latest preflight run `40875624035` nevertheless failed inside remote Node without a sanitized queue report. The failed workflow's `PM2_CLI` input displayed empty. The follow-up branch introduces trusted NVM PM2 resolution and stage-coded, non-secret errors. **Until an exact-SHA production preflight succeeds and queued jobs/quotas/budgets/flags are reviewed, Growth activation is BLOCKED.** Next qualify one bounded OBSERVE run, then deterministic RECOMMEND, then persist safe recurrence and independently secure new-date daily Telegram reporting. No blanket autonomous Pin publishing, attribution collection, AI spend, or unsafe queue replay is authorized.
+
+
+### Phase 14B pending one-GET qualification (2026-10-29)
+
+Read-only preflight `40887966490` PASSED on `4ae22c6dd6b72990d0fe9978acea8530b8a38554`. Global Growth/process/Telegram/attribution switches OFF, no runnable queue, one connected scoped Pinterest account, caps unchanged; its last recorded API call was Oct 11. A new owner-gated, exact-SHA one-GET production Pinterest quota probe is implemented behind an explicit issue-comment authorization, default OFF, with no database writes and a five-call reserve. **Not yet run or deployed** as of this code change. Phase 14 OBSERVE/RECOMMEND worker execution and recurring services still pending; no bulk publishing/paid AI or visitor attribution permitted.
