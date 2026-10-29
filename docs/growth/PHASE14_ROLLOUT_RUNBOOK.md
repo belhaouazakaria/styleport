@@ -37,3 +37,12 @@ Before an AdSense resubmission, inspect the exact rejection notice, real Search 
 ## Rollback
 
 Immediately disable worker execution in operator-only secret configuration and stop any manually installed task. Keep global Growth disabled if uncertain. Preserve immutable reports, cost reservations, content versions, error evidence and Pinterest provider response IDs. The application-only backup/restore and GitHub exact-SHA deployment procedure remain authoritative.
+
+
+## Owner-gated read-only production preflight (2026-10-29 follow-up)
+
+The owner-created issue-comment workflow in `.github/workflows/growth-production-preflight.yml` must pass before any Growth switch, scheduled worker, paid work or Pinterest write is enabled. The Oct 29 release at `82c49c58688c688496a88cdeea86163be8ee90f5` passed guarded deployment, but subsequent read-only preflight `40875624035` failed during remote audit and printed no queue report. GitHub's failed-step environment showed an empty `PM2_CLI`; the deploy workflow separately validates `HOSTINGER_PM2_CLI`, and the root cause of the remote failure has not been independently established.
+
+The repair branch uses the exact trusted `/home/saytwist/.nvm/versions/node/v24.20.0/bin/pm2` application-user installation as fallback when the optional deployment-supplied PM2 path is absent. No production-scoped GitHub environment or additional secret privileges are granted. The script rejects a nonexistent or nonexecutable PM2 path, verifies exact deployed SHA and online app, restricts DB targeting to production loopback, and runs Prisma reads only. Any failure emits one predefined `PRODUCTION_GROWTH_PREFLIGHT_FAILED_STAGE` from RELEASE_SHA, PM2_CLI, PM2_SNAPSHOT, PM2_APP_STATUS, DB_TARGET, DB_READ, REPORT_BUILD or REPORT_OUTPUT. It must not print exception text, env/PM2 JSON, tokens, chat IDs or DB URLs.
+
+This change is *diagnostic only*: merging and guarded deployment do not prove a successful production audit. Trigger a single new exact-SHA owner-approved preflight only after deployment, inspect its sanitized `READONLY_PREFLIGHT_COMPLETE` queue/settings/account/flags evidence, and retain Growth OFF if any check fails. The owner-approved issue/comment must use the fresh main SHA, not replay an old authorization. No recurring process or Telegram send follows from passing the preflight.
