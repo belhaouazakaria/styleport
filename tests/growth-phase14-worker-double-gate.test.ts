@@ -66,7 +66,8 @@ describe("Phase 14 worker double gates and forbidden job defense", () => {
   });
 
   it("only passes OBSERVE allowlists into all three queue operations", async () => {
-    mocks.settings.mockImplementation(async () => ({ enabled: true, workerBatchSize: 5, workerActivationExpiresAt: new Date(Date.now() + 120_000) }));
+    const expiresAt = new Date(Date.now() + 120_000);
+    mocks.settings.mockImplementation(async () => ({ enabled: true, workerBatchSize: 5, workerActivationExpiresAt: expiresAt }));
     expect(await runGrowthWorker({ rolloutConfig: observe, batchSize: 1 }))
       .toEqual({ status: "EMPTY", claimed: 0, succeeded: 0, failed: 0 });
     const allowlist = mocks.claim.mock.calls[0]?.[0]?.allowedTypes as GrowthJobType[];
@@ -84,7 +85,8 @@ describe("Phase 14 worker double gates and forbidden job defense", () => {
   });
 
   it("releases a forbidden claimed job without dispatch even if a queue layer regresses", async () => {
-    mocks.settings.mockImplementation(async () => ({ enabled: true, workerBatchSize: 5, workerActivationExpiresAt: new Date(Date.now() + 120_000) }));
+    const expiresAt = new Date(Date.now() + 120_000);
+    mocks.settings.mockImplementation(async () => ({ enabled: true, workerBatchSize: 5, workerActivationExpiresAt: expiresAt }));
     mocks.claim.mockImplementation(async () => [{ id: "forbidden", type: GrowthJobType.PINTEREST_PIN_PUBLISH }]);
     expect(await runGrowthWorker({ rolloutConfig: observe, batchSize: 1 }))
       .toEqual({ status: "COMPLETED", claimed: 1, succeeded: 0, failed: 0 });
