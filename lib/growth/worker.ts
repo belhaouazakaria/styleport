@@ -26,7 +26,12 @@ export interface GrowthWorkerResult {
 
 export async function runGrowthWorker(options: {
   workerId?: string; batchSize?: number; rolloutConfig?: Record<string, string | undefined>;
+  /** Restrict this invocation to one specified pending job. Does not override either kill switch. */
+  onlyJobId?: string;
 } = {}): Promise<GrowthWorkerResult> {
+  if (options.onlyJobId !== undefined && !/^[A-Za-z0-9_-]{1,191}$/.test(options.onlyJobId)) {
+    throw new Error("Invalid scoped Growth worker job ID.");
+  }
   const rollout = resolveGrowthRollout(options.rolloutConfig);
   if (rollout.mode === "OFF") return { status: "DISABLED", claimed: 0, succeeded: 0, failed: 0 };
   const settings = await getGrowthSettings();
@@ -35,7 +40,7 @@ export async function runGrowthWorker(options: {
   const workerId = (options.workerId || process.env.GROWTH_WORKER_ID || "growth-worker").slice(0, 191);
   const invocationId = randomUUID();
   const leaseOwnerId = `${workerId}:${invocationId}`.slice(0, 191);
-  const batchSize = Math.min(
+  const batchSize = options.onlyJobId ? 1 : Math.min(
     MAX_GROWTH_WORKER_BATCH_SIZE,
     Math.max(1, options.batchSize || settings.workerBatchSize),
   );
@@ -56,9 +61,22 @@ export async function runGrowthWorker(options: {
 
   const result: GrowthWorkerResult = { status: "EMPTY", claimed: 0, succeeded: 0, failed: 0 };
   try {
-    await promoteDueGrowthRetries(startedAt, batchSize, rollout.allowedTypes);
-    await recoverStaleGrowthJobs(startedAt, batchSize, rollout.allowedTypes);
-    const jobs = await claimGrowthJobs({ workerId: leaseOwnerId, limit: batchSize, allowedTypes: rollout.allowedTypes });
+    // Scoped trials must not touch unrelated retries or stale leases.
+    if (!options.onlyJobId) {
+      await promoteDueGrowthRetries(startedAt, batchSize, rollout.allowedTypes);
+      await recoverStaleGrowthJobs(startedAt, batchSize, rollout.allowedTypes);
+    }
+    const jobs = await claimGrowthJobs({
+      workerId: leaseOwnerId, limit: batchSize, allowedTypes: rollout.allowedTypes,
+      ...(options.onlyJobId ? { jobId: options.onlyJobId } : {}),
+    });
+    // Defense in depth if a claim implementation ever loses the exact-ID filter.
+    if (options.onlyJobId && (jobs.length > 1 || jobs.some(job => job.id !== options.onlyJobId))) {
+      for (const claimed of jobs) {
+        await releaseClaimedGrowthJob(claimed, leaseOwnerId, "Exact job scope mismatch.");
+      }
+      throw new Error("Exact Growth job scope violation.");
+    }
     result.claimed = jobs.length;
     if (jobs.length > 0) result.status = "COMPLETED";
 
