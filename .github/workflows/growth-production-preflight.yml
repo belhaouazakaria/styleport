@@ -46,7 +46,10 @@ jobs:
           username: ${{ secrets.HOSTINGER_SSH_USER || vars.HOSTINGER_SSH_USER }}
           key: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
           port: ${{ secrets.HOSTINGER_SSH_PORT || vars.HOSTINGER_SSH_PORT }}
-          script_stop: true
+          # drone-ssh script_stop injects a shell check after every newline,
+          # corrupting the quoted Node.js heredoc below. set -eu already
+          # makes the remote script fail on a nonzero Node exit.
+          script_stop: false
           command_timeout: 5m
           envs: PM2_CLI,EXPECTED_RELEASE
           script: |
