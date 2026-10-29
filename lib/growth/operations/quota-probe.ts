@@ -23,9 +23,21 @@ export function assessPinterestQuota(headers: Pick<Headers, "get">) {
   const rawLimit = headers.get("x-ratelimit-limit");
   const rawRemaining = headers.get("x-ratelimit-remaining");
   const rawReset = headers.get("x-ratelimit-reset");
-  if (![rawLimit, rawRemaining, rawReset].every(x => typeof x === "string" && /^\d{1,8}$/.test(x)))
+  // Pinterest officially documents composite limits, e.g.
+  // "100, 100;w=1, 1000;w=60" (universal and category windows).
+  // Validate all windows, but use the first numeric limit with the documented
+  // aggregate remaining/reset values. Never infer missing quotas.
+  if (typeof rawLimit !== "string" || rawLimit.length > 128 ||
+      typeof rawRemaining !== "string" || !/^\d{1,8}$/.test(rawRemaining) ||
+      typeof rawReset !== "string" || !/^\d{1,8}$/.test(rawReset))
     return block("QUOTA_UNAVAILABLE");
-  const limit = Number(rawLimit), remaining = Number(rawRemaining), resetSeconds = Number(rawReset);
+  const parts = rawLimit.split(",").map(x => x.trim());
+  if (!parts.length || !/^\d{1,8}$/.test(parts[0]) ||
+      parts.slice(1).some(x => !/^\d{1,8};w=\d{1,6}$/.test(x)))
+    return block("QUOTA_UNAVAILABLE");
+  if (parts.slice(1).some(x => Number(x.split(";")[0]) < 1 ||
+      Number(x.split("=")[1]) < 1)) return block("QUOTA_UNAVAILABLE");
+  const limit = Number(parts[0]), remaining = Number(rawRemaining), resetSeconds = Number(rawReset);
   if (limit < 1 || remaining > limit || !Number.isSafeInteger(resetSeconds) || resetSeconds > 86_400)
     return block("QUOTA_UNAVAILABLE");
   if (remaining <= 5) return block("QUOTA_LOW");
