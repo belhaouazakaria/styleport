@@ -87,6 +87,25 @@ describe("Growth job persistence", () => {
     })).toEqual([]);
     expect(mocks.queryRaw).toHaveBeenCalledTimes(1);
   });
+  it("adds a parameterized exact job ID to the atomic claim query", async () => {
+    mocks.queryRaw.mockResolvedValue([]);
+    expect(await claimGrowthJobs({
+      workerId: "scoped", limit: 1, allowedTypes: [GrowthJobType.FOUNDATION_NOOP], jobId: job.id,
+    })).toEqual([]);
+    const query = mocks.queryRaw.mock.calls[0]?.[0] as { sql: string; values: unknown[] };
+    expect(query.sql).toContain('AND "id" =');
+    expect(query.values).toContain(job.id);
+    expect(query.values).toContain(GrowthJobType.FOUNDATION_NOOP);
+  });
+
+  it("fails closed on empty or malformed exact job IDs", async () => {
+    await expect(claimGrowthJobs({ workerId: "scoped", limit: 1, jobId: "" }))
+      .rejects.toThrow("Invalid exact Growth job ID");
+    await expect(claimGrowthJobs({ workerId: "scoped", limit: 1, jobId: "bad id" }))
+      .rejects.toThrow("Invalid exact Growth job ID");
+    expect(mocks.queryRaw).not.toHaveBeenCalled();
+  });
+
   it("returns the existing job when the idempotency key conflicts", async () => {
     const conflict = new Prisma.PrismaClientKnownRequestError("unique", { code: "P2002", clientVersion: "6.19.3" });
     mocks.transaction.mockRejectedValue(conflict);
