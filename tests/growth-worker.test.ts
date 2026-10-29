@@ -192,7 +192,8 @@ describe("bounded Growth worker", () => {
   });
 
   it("checks the kill switch after claim and releases work without execution", async () => {
-    mocks.getGrowthSettings.mockResolvedValueOnce(settings).mockResolvedValueOnce({ ...settings, enabled: false });
+    mocks.getGrowthSettings.mockResolvedValueOnce(settings).mockResolvedValueOnce(settings)
+      .mockResolvedValueOnce({ ...settings, enabled: false });
     mocks.claimGrowthJobs.mockResolvedValueOnce([job]);
     const result = await runGrowthWorker({ workerId: "test-worker", ...observe });
     expect(result.claimed).toBe(1);
