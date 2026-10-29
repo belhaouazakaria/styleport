@@ -28,7 +28,7 @@ function block(code: QuotaProbeCode, evidence: SafeQuotaHeaderEvidence | null = 
 function quotaHeaderKind(value: string | null): SafeQuotaHeaderKind {
   if (value === null || value === "") return "ABSENT";
   if (/^\d{1,8}$/.test(value)) return "INTEGER";
-  if (/^\d{1,8}(?:,\s*\d{1,8};w=\d{1,6})+$/.test(value)) return "WINDOWS";
+  if (/^\d{1,8}(?:,\s*\d{1,8};w=\d{1,6}(?:;name="[a-z][a-z0-9_]{0,63}")?)+$/.test(value)) return "WINDOWS";
   return "OTHER";
 }
 
@@ -61,7 +61,7 @@ export function assessPinterestQuota(headers: Pick<Headers, "get">) {
     return block("QUOTA_UNAVAILABLE", evidence);
   const parts = rawLimit.split(",").map(x => x.trim());
   if (!parts.length || !/^\d{1,8}$/.test(parts[0]) ||
-      parts.slice(1).some(x => !/^\d{1,8};w=\d{1,6}$/.test(x)))
+      parts.slice(1).some(x => !/^\d{1,8};w=\d{1,6}(?:;name="[a-z][a-z0-9_]{0,63}")?$/.test(x)))
     return block("QUOTA_UNAVAILABLE", evidence);
   if (parts.slice(1).some(x => Number(x.split(";")[0]) < 1 ||
       Number(x.split("=")[1]) < 1)) return block("QUOTA_UNAVAILABLE", evidence);
