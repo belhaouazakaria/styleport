@@ -1,0 +1,125 @@
+name: SayTwist Phase14B Production Pinterest Quota Probe
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+
+jobs:
+  one-get-probe:
+    if: >-
+      github.event.issue.pull_request == null &&
+      github.event.sender.login == 'belhaouazakaria' &&
+      github.event.comment.user.login == 'belhaouazakaria' &&
+      startsWith(github.event.comment.body, 'RUN SAYTWIST GROWTH ONE GET QUOTA PROBE ')
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    concurrency:
+      group: saytwist-production-growth-quota-probe
+      cancel-in-progress: false
+    steps:
+      - name: Checkout trusted main
+        uses: actions/checkout@v5
+
+      - name: Authorize exact SHA and owner
+        env:
+          GROWTH_QUOTA_PROBE_EVENT_PATH: ${{ github.event_path }}
+        run: node scripts/validate-growth-quota-probe-request.mjs
+
+      - name: Verify main has not advanced
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '.commit.sha')" = "$GITHUB_SHA"
+
+      - name: Production one-GET Pinterest quota audit, read-only
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          PM2_CLI: ${{ secrets.HOSTINGER_PM2_CLI || vars.HOSTINGER_PM2_CLI }}
+          EXPECTED_RELEASE: ${{ github.sha }}
+        with:
+          host: ${{ secrets.HOSTINGER_SSH_HOST || vars.HOSTINGER_SSH_HOST }}
+          username: ${{ secrets.HOSTINGER_SSH_USER || vars.HOSTINGER_SSH_USER }}
+          key: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
+          port: ${{ secrets.HOSTINGER_SSH_PORT || vars.HOSTINGER_SSH_PORT }}
+          command_timeout: 3m
+          script_stop: false
+          envs: PM2_CLI,EXPECTED_RELEASE
+          script: |
+            set -eu
+            test "$(id -un)" = "saytwist"
+            cd /home/saytwist/htdocs/saytwist.com
+            /home/saytwist/.nvm/versions/node/v24.20.0/bin/node <<'NODE'
+            const fs = require("node:fs");
+            const { spawnSync } = require("node:child_process");
+            let stage = "RELEASE";
+            try {
+              const expected = process.env.EXPECTED_RELEASE || "";
+              if (!/^[a-f0-9]{40}$/.test(expected) ||
+                  fs.readFileSync(".deployed-release", "utf8").trim() !== expected) throw Error();
+              stage = "PM2";
+              const nodeBin = "/home/saytwist/.nvm/versions/node/v24.20.0/bin";
+              const pm2 = process.env.PM2_CLI || [
+                "/home/saytwist/.npm/_npx/5f7878ce38f1eb13/node_modules/pm2/bin/pm2",
+                nodeBin + "/pm2",
+              ].find(x => fs.existsSync(x));
+              if (!pm2 || !pm2.startsWith("/")) throw Error();
+              fs.accessSync(pm2, fs.constants.X_OK);
+              const pm = spawnSync(pm2, ["jlist"], {
+                encoding: "utf8", timeout: 10000, maxBuffer: 16 * 1024 * 1024,
+                env: { ...process.env, PM2_HOME: "/home/saytwist/.pm2",
+                  PATH: nodeBin + ":/usr/local/bin:/usr/bin:/bin" },
+              });
+              if (pm.status !== 0) throw Error();
+              const app = JSON.parse(pm.stdout).find(x => x.name === "saytwist");
+              if (!app || app.pm2_env?.status !== "online") throw Error();
+              stage = "RUNTIME";
+              const vars = app.pm2_env;
+              const env = {
+                NODE_ENV: "production", HOME: "/home/saytwist", PATH: nodeBin + ":/usr/local/bin:/usr/bin:/bin",
+                EXPECTED_RELEASE: expected,
+              };
+              for (const k of [
+                "DATABASE_URL", "PINTEREST_APP_ID", "PINTEREST_APP_SECRET",
+                "PINTEREST_REDIRECT_URI", "PINTEREST_API_ENVIRONMENT",
+                "GROWTH_CREDENTIAL_ENCRYPTION_KEY", "GROWTH_WORKER_RUN_ENABLED",
+                "GROWTH_ROLLOUT_MODE", "GROWTH_DAILY_REPORT_SCHEDULE_ENABLED",
+                "TELEGRAM_REPORTS_ENABLED", "GROWTH_ATTRIBUTION_COLLECTION_ENABLED",
+              ]) {
+                const v = vars[k] ?? vars.env?.[k];
+                if (typeof v === "string") env[k] = v;
+              }
+              if (!env.DATABASE_URL) throw Error();
+              const script = "node_modules/tsx/dist/cli.mjs";
+              if (!fs.existsSync(script) || !fs.existsSync("workers/growth-quota-probe.ts")) throw Error();
+              stage = "PROBE";
+              const result = spawnSync(nodeBin + "/node", [script, "workers/growth-quota-probe.ts"], {
+                cwd: process.cwd(), env, encoding: "utf8", timeout: 30000, maxBuffer: 32768,
+              });
+              if (result.status !== 0) {
+                const code = /^GROWTH_QUOTA_PROBE_FAILED=([A-Z_]+)$/m.exec(result.stderr || "")?.[1];
+                console.error("PRODUCTION_GROWTH_QUOTA_PROBE_BLOCKED=" + (code || "UNEXPECTED"));
+                process.exitCode = 1;
+              } else {
+                const match = /^GROWTH_QUOTA_PROBE_RESULT=(\{[^\n]*\})$/m.exec(result.stdout || "");
+                if (!match) throw Error();
+                const data = JSON.parse(match[1]);
+                if (data.status !== "QUOTA_PROBE_PASSED" || data.databaseWrites !== 0 ||
+                    data.providerCalls !== 1 || data.telegramMessages !== 0 ||
+                    data.providerWrites !== 0 || data.aiCalls !== 0 ||
+                    !Number.isInteger(data.remaining) || data.remaining <= 5) throw Error();
+                console.log("GROWTH_QUOTA_PROBE_VERIFIED=" + JSON.stringify({
+                  status: data.status, limit: data.limit, remaining: data.remaining,
+                  resetSeconds: data.resetSeconds, providerCalls: 1,
+                  providerWrites: 0, databaseWrites: 0, telegramMessages: 0, aiCalls: 0,
+                }));
+              }
+            } catch {
+              console.error("PRODUCTION_GROWTH_QUOTA_PROBE_STAGE=" + stage);
+              process.exitCode = 1;
+            }
+            NODE
