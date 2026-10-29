@@ -74,6 +74,7 @@ export async function runPinterestQuotaProbe(fetchImpl: typeof fetch = fetch) {
   if (accounts.length !== 1 || !accounts[0].encryptedCredentials ||
       !accounts[0].grantedScopes.includes("user_accounts:read")) block("ACCOUNT_NOT_READY");
   const account = accounts[0];
+  if (!account.encryptedCredentials) block("ACCOUNT_NOT_READY");
   const now = Date.now();
   if (!account.accessTokenExpiresAt || account.accessTokenExpiresAt.getTime() - now < 300_000 ||
       (account.refreshTokenExpiresAt && account.refreshTokenExpiresAt.getTime() <= now))
