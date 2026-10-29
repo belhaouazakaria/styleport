@@ -13,6 +13,10 @@ describe("Phase 14B provider quota probe safeguards", () => {
     expect(assessPinterestQuota(headers("60","43","21"))).toEqual({limit:60,remaining:43,resetSeconds:21});
     expect(assessPinterestQuota(headers("100, 100;w=1, 1000;w=60","99","1")))
       .toEqual({limit:100,remaining:99,resetSeconds:1});
+    expect(assessPinterestQuota(headers('100, 100;w=1;name="global_default_limit", 1000;w=60;name="org_read_rate_limit"',"99","1")))
+      .toEqual({limit:100,remaining:99,resetSeconds:1});
+    expect(() => assessPinterestQuota(headers('100, 100;w=1;name="unexpected;reset=0"',"99","1"))).toThrow("QUOTA_UNAVAILABLE");
+    expect(() => assessPinterestQuota(headers('100, 100;w=1;name="bad-value"',"99","1"))).toThrow("QUOTA_UNAVAILABLE");
     expect(() => assessPinterestQuota(headers("100, invalid;w=60","99","1"))).toThrow("QUOTA_UNAVAILABLE");
     expect(() => assessPinterestQuota(headers("100, 100;w=1, 1000;w=60","5","1"))).toThrow("QUOTA_LOW");
     expect(() => assessPinterestQuota(headers("60",null,"21"))).toThrow(QuotaProbeBlocked);
