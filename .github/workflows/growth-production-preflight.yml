@@ -61,17 +61,27 @@ jobs:
             const { execFileSync } = require("node:child_process");
             const { PrismaClient } = require("@prisma/client");
 
+            // Only predefined stages are emitted. Never log exception messages, PM2 JSON or credentials.
+            let failureStage = "RELEASE_SHA";
             async function main() {
               const expected = process.env.EXPECTED_RELEASE || "";
               if (!/^[a-f0-9]{40}$/.test(expected) ||
                   fs.readFileSync(".deployed-release", "utf8").trim() !== expected) {
                 throw Error("Deployed SHA differs from exact audit request.");
               }
-              const pm2Cli = process.env.PM2_CLI || "";
+              failureStage = "PM2_CLI";
+              const nodeDir = "/home/saytwist/.nvm/versions/node/v24.20.0/bin";
+              // Deploy uses HOSTINGER_PM2_CLI, but issue_comment workflows may not
+              // have access to environment-scoped deployment variables. Resolve
+              // the known application-user NVM installation without broadening
+              // production secret access or searching arbitrary PATH entries.
+              const pm2Cli = process.env.PM2_CLI ||
+                nodeDir + "/pm2";
               if (!pm2Cli.startsWith("/") || !fs.existsSync(pm2Cli)) {
                 throw Error("Existing PM2 CLI unavailable.");
               }
-              const nodeDir = "/home/saytwist/.nvm/versions/node/v24.20.0/bin";
+              fs.accessSync(pm2Cli, fs.constants.X_OK);
+              failureStage = "PM2_SNAPSHOT";
               const apps = JSON.parse(execFileSync(pm2Cli, ["jlist"], {
                 encoding: "utf8", timeout: 10000, maxBuffer: 16 * 1024 * 1024,
                 env: {
@@ -79,8 +89,10 @@ jobs:
                   PATH: nodeDir + ":/usr/local/bin:/usr/bin:/bin",
                 },
               }));
+              failureStage = "PM2_APP_STATUS";
               const app = apps.find(x => x.name === "saytwist");
               if (!app || app.pm2_env?.status !== "online") throw Error("Application not online.");
+              failureStage = "DB_TARGET";
               const env = app.pm2_env;
               const raw = env.DATABASE_URL || env.env?.DATABASE_URL;
               if (!raw) throw Error("Live database configuration unavailable.");
@@ -92,6 +104,7 @@ jobs:
                 throw Error("Production database target mismatch.");
               }
               process.env.DATABASE_URL = raw;
+              failureStage = "DB_READ";
               const db = new PrismaClient();
               try {
                 const [settings, queued, accounts, heartbeat, reports] = await Promise.all([
@@ -125,6 +138,7 @@ jobs:
                     (name === "GROWTH_ROLLOUT_MODE" ? (["OFF","OBSERVE","RECOMMEND"].includes(value) ? value : "OFF_OR_UNSUPPORTED") : "OFF");
                 }
                 const now = Date.now();
+                failureStage = "REPORT_BUILD";
                 const report = {
                   status: "READONLY_PREFLIGHT_COMPLETE",
                   release: expected,
@@ -149,6 +163,7 @@ jobs:
                   providerApiCalls: 0,
                   databaseWrites: 0,
                 };
+                failureStage = "REPORT_OUTPUT";
                 console.log("SAYTWIST_GROWTH_PREFLIGHT_JSON_BEGIN");
                 console.log(JSON.stringify(report, null, 2));
                 console.log("SAYTWIST_GROWTH_PREFLIGHT_JSON_END");
@@ -158,7 +173,7 @@ jobs:
             }
 
             main().catch(() => {
-              console.error("PRODUCTION_GROWTH_PREFLIGHT_FAILED: details withheld");
+              console.error("PRODUCTION_GROWTH_PREFLIGHT_FAILED_STAGE: " + failureStage);
               process.exitCode = 1;
             });
             NODE
