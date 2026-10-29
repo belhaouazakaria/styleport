@@ -109,8 +109,15 @@ jobs:
                   const e = JSON.parse(matchEvidence[1]);
                   const kinds = ["ABSENT", "INTEGER", "WINDOWS", "OTHER"];
                   if (["limit", "remaining", "reset"].every(key => kinds.includes(e[key]))) {
+                    // Never print raw header values. Permit only punctuation and
+                    // abstract A/N character classes, with a strict upper bound.
+                    const structure = typeof e.limitStructure === "string" &&
+                      e.limitStructure.length <= 96 &&
+                      /^(?:ABSENT|REDACTED|[AN,;=:. _-]+)$/.test(e.limitStructure)
+                        ? e.limitStructure : "REDACTED";
                     console.error("PRODUCTION_GROWTH_QUOTA_HEADER_EVIDENCE=" + JSON.stringify({
                       limit: e.limit, remaining: e.remaining, reset: e.reset,
+                      limitStructure: structure,
                     }));
                   }
                 }

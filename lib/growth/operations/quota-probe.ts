@@ -15,6 +15,7 @@ export type QuotaProbeCode =
 export type SafeQuotaHeaderKind = "ABSENT" | "INTEGER" | "WINDOWS" | "OTHER";
 export type SafeQuotaHeaderEvidence = {
   limit: SafeQuotaHeaderKind; remaining: SafeQuotaHeaderKind; reset: SafeQuotaHeaderKind;
+  limitStructure: string;
 };
 export class QuotaProbeBlocked extends Error {
   constructor(public readonly code: QuotaProbeCode,
@@ -31,6 +32,15 @@ function quotaHeaderKind(value: string | null): SafeQuotaHeaderKind {
   return "OTHER";
 }
 
+/** Only delimiters and character classes, never raw provider values or token text. */
+export function safeQuotaLimitStructure(value: string | null): string {
+  if (value === null || value === "") return "ABSENT";
+  if (value.length > 120 || !/^[a-zA-Z0-9,;=:. _-]+$/.test(value)) return "REDACTED";
+  const structure = value.replace(/[a-zA-Z]+/g, "A").replace(/[0-9]+/g, "N")
+    .replace(/ +/g, " ");
+  return structure.length <= 96 ? structure : "REDACTED";
+}
+
 /** Untrusted Pinterest response headers must be complete and preserve >= 5 requests. */
 export function assessPinterestQuota(headers: Pick<Headers, "get">) {
   const rawLimit = headers.get("x-ratelimit-limit");
@@ -39,6 +49,7 @@ export function assessPinterestQuota(headers: Pick<Headers, "get">) {
   const evidence: SafeQuotaHeaderEvidence = {
     limit: quotaHeaderKind(rawLimit), remaining: quotaHeaderKind(rawRemaining),
     reset: quotaHeaderKind(rawReset),
+    limitStructure: safeQuotaLimitStructure(rawLimit),
   };
   // Pinterest officially documents composite limits, e.g.
   // "100, 100;w=1, 1000;w=60" (universal and category windows).
