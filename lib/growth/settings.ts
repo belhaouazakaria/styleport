@@ -17,6 +17,7 @@ import { DEFAULT_EVERGREEN_COOLDOWN_DAYS } from "@/lib/growth/learning/constants
 export const defaultGrowthSettings = {
   id: GROWTH_SETTINGS_ID,
   enabled: false,
+  workerActivationExpiresAt: null,
   intensity: GrowthIntensity.BALANCED,
   workerBatchSize: DEFAULT_GROWTH_WORKER_BATCH_SIZE,
   ownedDomains: [...DEFAULT_OWNED_PINTEREST_DOMAINS],
@@ -95,5 +96,37 @@ export async function updateGrowthSettings(input: GrowthSettingsInput, updatedBy
     );
 
     return settings;
+  });
+}
+
+/**
+ * Revoke only the exact lease that this scoped invocation received. If another
+ * actor changed the deadline, do not disable their different authorization.
+ * A process crash cannot extend the persisted deadline, and every worker
+ * independently treats an expired/missing deadline as disabled.
+ */
+export async function revokeGrowthWorkerActivation(expiresAt: Date) {
+  return prisma.$transaction(async (tx) => {
+    const updated = await tx.growthSettings.updateMany({
+      where: { id: GROWTH_SETTINGS_ID, enabled: true, workerActivationExpiresAt: expiresAt },
+      data: {
+        enabled: false,
+        workerActivationExpiresAt: null,
+        configVersion: { increment: 1 },
+      },
+    });
+    if (updated.count === 1) {
+      await recordGrowthActivity({
+        actorKind: GrowthActivityActorKind.SYSTEM,
+        entityType: "GrowthSettings",
+        entityId: GROWTH_SETTINGS_ID,
+        action: "WORKER_ACTIVATION_REVOKED",
+        fromState: "ENABLED",
+        toState: "DISABLED",
+        summary: { reason: "SCOPED_WORKER_EXIT" },
+        correlationKey: `growth-worker-revoke:${expiresAt.toISOString()}`,
+      }, tx);
+    }
+    return updated.count;
   });
 }
