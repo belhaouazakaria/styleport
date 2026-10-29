@@ -26,8 +26,8 @@ function block(code: QuotaProbeCode, evidence: SafeQuotaHeaderEvidence | null = 
 }
 function quotaHeaderKind(value: string | null): SafeQuotaHeaderKind {
   if (value === null || value === "") return "ABSENT";
-  if (/^\\d{1,8}$/.test(value)) return "INTEGER";
-  if (/^\\d{1,8}(?:,\\s*\\d{1,8};w=\\d{1,6})+$/.test(value)) return "WINDOWS";
+  if (/^\d{1,8}$/.test(value)) return "INTEGER";
+  if (/^\d{1,8}(?:,\s*\d{1,8};w=\d{1,6})+$/.test(value)) return "WINDOWS";
   return "OTHER";
 }
 
