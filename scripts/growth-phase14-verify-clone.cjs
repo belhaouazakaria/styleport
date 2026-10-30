@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* eslint-disable @typescript-eslint/no-require-imports */
 "use strict";
 
 /* Read-only final verification of the Phase14 populated-clone Prisma migration. */
