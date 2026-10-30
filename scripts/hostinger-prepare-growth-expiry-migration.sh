@@ -38,10 +38,10 @@ validate_executable_major() {
 
 validate_inputs() {
   [[ "$APP_PATH" == /* && "$APP_PATH" != "/" ]] || fail "HOSTINGER_APP_PATH must be a safe absolute path."
+  [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] || fail "HOSTINGER_RELEASE_SHA must be the reviewed full commit SHA."
   [[ "$MIGRATION_ROOT" == "/home/saytwist/.local/share/saytwist/phase14-rehearsal/$RELEASE_SHA" ]] || fail "Reviewed source must use the exact private SHA-scoped rehearsal directory."
   [[ "$MIGRATION_ROOT" != "$APP_PATH" && "$MIGRATION_ROOT" != "$APP_PATH/"* ]] \
     || fail "Migration staging must remain outside the live application directory."
-  [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] || fail "HOSTINGER_RELEASE_SHA must be the reviewed full commit SHA."
   [[ "$APPROVAL" == "APPLY $APPROVED_MIGRATION" ]] || fail "Exact operator approval is required for $APPROVED_MIGRATION."
   [[ -x "$NODE_BIN" ]] || fail "Approved production Node.js binary is unavailable."
   [[ "$(id -un)" == "saytwist" ]] || fail "Migration requires the saytwist application SSH user."
@@ -174,6 +174,47 @@ validate_growth_off() {
   ' "$APP_PATH" || fail "Growth OFF/empty queue preflight failed."
 }
 
+# The actual reviewed Prisma migration must already have succeeded on the
+# restored, populated private clone. Never treat a rolled-back SQL probe alone
+# as authorization to apply the live migration.
+validate_clone_rehearsal() {
+  MIGRATION_ROOT="$MIGRATION_ROOT" APPROVED_MIGRATION="$APPROVED_MIGRATION" \
+    "$NODE_BIN" --env-file="$ENV_FILE" -e '
+      const fs = require("node:fs");
+      const path = require("node:path");
+      const crypto = require("node:crypto");
+      const { spawnSync } = require("node:child_process");
+      const url = new URL(process.env.DATABASE_URL || "");
+      const clone = "saytwist_phase14_rehearsal_20261030";
+      const env = { ...process.env,
+        PGHOST: "127.0.0.1", PGPORT: "5433",
+        PGDATABASE: clone, PGUSER: decodeURIComponent(url.username),
+        PGPASSWORD: decodeURIComponent(url.password), PGCONNECT_TIMEOUT: "5" };
+      delete env.DATABASE_URL;
+      delete env.PGOPTIONS;
+      function sql(q) {
+        const p = spawnSync("/usr/lib/postgresql/18/bin/psql",
+          ["-X", "-qAt", "-w", "-v", "ON_ERROR_STOP=1", "-d", clone, "-c", q],
+          { env, encoding: "utf8", timeout: 15000, maxBuffer: 1024 * 1024 });
+        if (p.error || p.status !== 0) process.exit(2);
+        return p.stdout.trim();
+      }
+      const applied = sql(
+        "SELECT checksum FROM \"_prisma_migrations\" WHERE migration_name=" +
+        "'20261029220000_growth_worker_activation_expiry' AND finished_at IS NOT NULL");
+      const source = fs.readFileSync(path.join(process.env.MIGRATION_ROOT,
+        "prisma/migrations", process.env.APPROVED_MIGRATION, "migration.sql"));
+      const checksum = crypto.createHash("sha256").update(source).digest("hex");
+      if (applied !== checksum) process.exit(3);
+      if (sql("SELECT COUNT(*) FROM \"_prisma_migrations\" WHERE finished_at IS NOT NULL") !== "32") process.exit(4);
+      if (sql("SELECT count(*) FROM information_schema.columns WHERE table_name=" +
+        "'GrowthSettings' AND column_name='workerActivationExpiresAt' AND is_nullable='YES'") !== "1") process.exit(5);
+      if (sql("SELECT (NOT \"enabled\" AND NOT \"attributionEnabled\" AND \"workerActivationExpiresAt\" IS NULL)::int FROM \"GrowthSettings\" WHERE id='global'") !== "1") process.exit(6);
+      if (sql("SELECT COUNT(*) FROM \"GrowthJob\" WHERE status IN ('PENDING','CLAIMED','RUNNING','FAILED_RETRYABLE')") !== "0") process.exit(7);
+      console.log("[hostinger-migration] Populated clone migration checksum and OFF gates verified.");
+    ' >/dev/null || fail "Populated-clone Prisma rehearsal precondition failed."
+}
+
 create_verified_backup() {
   mkdir -p "$BACKUP_ROOT"
   chmod 700 "$BACKUP_ROOT"
@@ -215,6 +256,7 @@ main() {
   check_runtime
   validate_exact_pending_migration
   validate_growth_off
+  validate_clone_rehearsal
   create_verified_backup
   apply_approved_migration
   check_runtime
