@@ -11,6 +11,10 @@ UNIT_DIR="/etc/systemd/system"
 
 fail() { echo "WATCHDOG_INSTALL=BLOCKED" >&2; exit 1; }
 [[ "$(id -un)" == "root" ]] || fail
+# Root must execute a reviewed, checksum-verified, root-owned copy, never
+# a script directly from the writable application directory.
+[[ -f "$0" && ! -L "$0" && "$(stat -c %u "$0")" == "0" ]] || fail
+[[ "$(stat -c %a "$0")" == "700" ]] || fail
 command -v systemctl >/dev/null || fail
 command -v systemd-analyze >/dev/null || fail
 [[ -f "$APP/.deployed-release" && -f "$LAUNCHER" && -x "$NODE" ]] || fail
