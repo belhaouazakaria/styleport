@@ -1,0 +1,104 @@
+name: SayTwist Phase14 Clone Source Staging
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+
+jobs:
+  stage-and-rehearse:
+    if: >-
+      github.event.issue.pull_request == null &&
+      github.event.sender.login == 'belhaouazakaria' &&
+      github.event.comment.user.login == 'belhaouazakaria' &&
+      startsWith(github.event.comment.body, 'STAGE SAYTWIST PHASE14 CLONE SOURCE ')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    concurrency:
+      group: saytwist-phase14-source-stage
+      cancel-in-progress: false
+    steps:
+      - name: Checkout trusted main branch
+        uses: actions/checkout@v5
+
+      - name: Verify issue/comment owner and exact release SHA
+        env:
+          PHASE14_STAGE_EVENT_PATH: ${ github.event_path }
+        run: node scripts/authorize-growth-phase14-source-stage.mjs
+
+      - name: Reject stale main or missing target migration
+        shell: bash
+        env:
+          GH_TOKEN: ${ github.token }
+        run: |
+          set -Eeuo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '.commit.sha')" = "$GITHUB_SHA"
+          test -f prisma/migrations/20261029220000_growth_worker_activation_expiry/migration.sql
+          test -f scripts/growth-phase14-clone-rehearsal.cjs
+          test -f scripts/hostinger-prepare-growth-expiry-migration.sh
+
+      - name: Prepare reviewed source-only archive
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          printf '%s\n' "$GITHUB_SHA" > .release-sha
+          tar -czf phase14-source.tar.gz .release-sha prisma/schema.prisma \
+            prisma/migrations scripts/growth-phase14-clone-rehearsal.cjs \
+            scripts/hostinger-prepare-growth-expiry-migration.sh
+          tar -tzf phase14-source.tar.gz >/dev/null
+
+      - name: Create private exact-SHA staging folder (no DB writes)
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${ secrets.HOSTINGER_SSH_HOST || vars.HOSTINGER_SSH_HOST }
+          username: ${ secrets.HOSTINGER_SSH_USER || vars.HOSTINGER_SSH_USER }
+          key: ${ secrets.HOSTINGER_SSH_PRIVATE_KEY }
+          port: ${ secrets.HOSTINGER_SSH_PORT || vars.HOSTINGER_SSH_PORT }
+          script_stop: true
+          command_timeout: 1m
+          script: |
+            set -eu
+            test "$(id -un)" = "saytwist"
+            umask 077
+            ROOT=/home/saytwist/.local/share/saytwist/phase14-rehearsal
+            DIR="$ROOT/${ github.sha }"
+            install -d -m 700 "$ROOT"
+            test ! -e "$DIR"
+            install -d -m 700 "$DIR"
+
+      - name: Upload source-only archive to private staging folder
+        uses: appleboy/scp-action@v1.0.0
+        with:
+          host: ${ secrets.HOSTINGER_SSH_HOST || vars.HOSTINGER_SSH_HOST }
+          username: ${ secrets.HOSTINGER_SSH_USER || vars.HOSTINGER_SSH_USER }
+          key: ${ secrets.HOSTINGER_SSH_PRIVATE_KEY }
+          port: ${ secrets.HOSTINGER_SSH_PORT || vars.HOSTINGER_SSH_PORT }
+          source: phase14-source.tar.gz
+          target: /home/saytwist/.local/share/saytwist/phase14-rehearsal/${ github.sha }
+          overwrite: false
+
+      - name: Verify source identity and execute clone-only Prisma migration
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${ secrets.HOSTINGER_SSH_HOST || vars.HOSTINGER_SSH_HOST }
+          username: ${ secrets.HOSTINGER_SSH_USER || vars.HOSTINGER_SSH_USER }
+          key: ${ secrets.HOSTINGER_SSH_PRIVATE_KEY }
+          port: ${ secrets.HOSTINGER_SSH_PORT || vars.HOSTINGER_SSH_PORT }
+          script_stop: true
+          command_timeout: 7m
+          script: |
+            set -eu
+            test "$(id -un)" = "saytwist"
+            umask 077
+            DIR=/home/saytwist/.local/share/saytwist/phase14-rehearsal/${ github.sha }
+            test -f "$DIR/phase14-source.tar.gz"
+            tar -tzf "$DIR/phase14-source.tar.gz" >/dev/null
+            tar -xzf "$DIR/phase14-source.tar.gz" -C "$DIR"
+            test "$(cat "$DIR/.release-sha")" = "${ github.sha }"
+            cd "$DIR"
+            GROWTH_PHASE14_RELEASE_SHA="${ github.sha }" \
+              /home/saytwist/.nvm/versions/node/v24.20.0/bin/node \
+              scripts/growth-phase14-clone-rehearsal.cjs
