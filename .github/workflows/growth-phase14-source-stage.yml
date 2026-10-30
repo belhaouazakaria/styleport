@@ -38,6 +38,7 @@ jobs:
           test "$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '.commit.sha')" = "$GITHUB_SHA"
           test -f prisma/migrations/20261029220000_growth_worker_activation_expiry/migration.sql
           test -f scripts/growth-phase14-clone-rehearsal.cjs
+          test -f scripts/growth-phase14-verify-clone.cjs
           test -f scripts/hostinger-prepare-growth-expiry-migration.sh
 
       - name: Prepare reviewed source-only archive
@@ -47,6 +48,7 @@ jobs:
           printf '%s\n' "$GITHUB_SHA" > .release-sha
           tar -czf phase14-source.tar.gz .release-sha prisma/schema.prisma \
             prisma/migrations scripts/growth-phase14-clone-rehearsal.cjs \
+            scripts/growth-phase14-verify-clone.cjs \
             scripts/hostinger-prepare-growth-expiry-migration.sh
           tar -tzf phase14-source.tar.gz >/dev/null
 
