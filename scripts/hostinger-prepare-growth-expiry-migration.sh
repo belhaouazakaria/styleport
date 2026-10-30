@@ -98,13 +98,13 @@ resolve_runtime_environment() {
         if ((env[flag] ?? env.env?.[flag]) === "true") process.exit(3);
       }
       const url = env.DATABASE_URL ?? env.env?.DATABASE_URL;
-      if (typeof url !== "string" || /[\\r\\n]/.test(url)) process.exit(4);
+      if (typeof url !== "string" || /[\r\n]/.test(url)) process.exit(4);
       const parsed = new URL(url);
       if (!["postgres:", "postgresql:"].includes(parsed.protocol) ||
           parsed.hostname !== "127.0.0.1" || parsed.port !== "5433" ||
           decodeURIComponent(parsed.pathname.slice(1)) !== "saytwist" ||
           parsed.searchParams.has("host")) process.exit(5);
-      fs.writeFileSync(file, "DATABASE_URL=" + JSON.stringify(url) + "\\n", { mode: 0o600 });
+      fs.writeFileSync(file, "DATABASE_URL=" + JSON.stringify(url) + "\n", { mode: 0o600 });
     ' >/dev/null || fail "Private PM2 runtime configuration rejected."
   ENV_FILE="$PRIVATE_RUNTIME_ENV"
 }
