@@ -49,7 +49,7 @@ describe("Phase14C independent watchdog failure notification", () => {
   });
 
   it("reserves the one-hour notification window before calling Brevo", async () => {
-    const fetcher = vi.fn(async () => ({ ok: true }));
+    const fetcher = vi.fn(async (..._args: unknown[]) => ({ ok: true }));
     const write = vi.fn();
     const result = await sendWatchdogFailureAlert({
       env: configuration, ...identity, now: 1782854400000,
