@@ -125,6 +125,28 @@ databaseDescribe("Growth PostgreSQL persistence and concurrency", () => {
     })).toBe(1);
   });
 
+  it("Phase 14C: simulated worker crash leaves a blocked queue and independent watchdog revokes exactly once", async () => {
+    const expiredAt = new Date(Date.now() - 90_000);
+    await prisma.growthSettings.create({
+      data: { id: "global", enabled: true, workerActivationExpiresAt: expiredAt },
+    });
+    const pending = await enqueue("phase14:crashed-worker-would-not-execute");
+    // A crashed worker has not run its finally cleanup. The expired persistent
+    // deadline still blocks any replacement worker before queue claims.
+    expect(await runGrowthWorker({ workerId: "phase14-crash-recovery", ...observe }))
+      .toMatchObject({ status: "DISABLED", claimed: 0 });
+    expect((await prisma.growthJob.findUniqueOrThrow({ where: { id: pending.id } })).status)
+      .toBe(GrowthJobStatus.PENDING);
+    // Multiple overlapping timer executions must physically revoke the expired
+    // global switch only once, recording exactly one audited transition.
+    const results = await Promise.all(Array.from({ length: 4 }, () => expireGrowthWorkerActivation()));
+    expect(results.sort()).toEqual([0, 0, 0, 1]);
+    expect(await prisma.growthSettings.findUniqueOrThrow({ where: { id: "global" } }))
+      .toMatchObject({ enabled: false, workerActivationExpiresAt: null, configVersion: 2 });
+    expect(await prisma.growthActivity.count({ where: { action: "WORKER_ACTIVATION_EXPIRED" } }))
+      .toBe(1);
+  });
+
   it("Phase 14C: watchdog leaves valid future activation untouched", async () => {
     const expiresAt = new Date(Date.now() + 120_000);
     await prisma.growthSettings.create({
