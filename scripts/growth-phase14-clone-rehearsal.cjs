@@ -120,6 +120,8 @@ function main() {
   const afterClone = history(url, CLONE);
   check(afterClone.length === 32 && afterClone[31][0] === MIGRATION &&
     same(afterClone.slice(0,31), beforeClone));
+  const currentSql = fs.readFileSync(path.join(ROOT, "prisma/migrations", MIGRATION, "migration.sql"));
+  check(afterClone[31][1] === crypto.createHash("sha256").update(currentSql).digest("hex"));
   check(query(url, CLONE, "SELECT count(*) FROM information_schema.columns WHERE table_name='GrowthSettings' AND column_name='workerActivationExpiresAt' AND is_nullable='YES'") === "1");
   check(query(url, CLONE,
     'SELECT (NOT "enabled" AND "workerActivationExpiresAt" IS NULL)::int FROM "GrowthSettings" WHERE id=\'global\'') === "1");
