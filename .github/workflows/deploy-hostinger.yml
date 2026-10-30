@@ -123,6 +123,8 @@ jobs:
             lib/growth/worker.ts \
             workers/editorial-worker.ts \
             workers/growth-worker.ts \
+            workers/growth-lease-watchdog-launch.cjs \
+            workers/install-growth-lease-watchdog-systemd.sh \
             node_modules/.bin/tsx \
             node_modules/tsx/dist/cli.mjs \
             node_modules/.prisma/client/libquery_engine-debian-openssl-1.1.x.so.node \
