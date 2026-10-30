@@ -11,6 +11,11 @@ on:
       - "prisma/migrations/20261029220000_growth_worker_activation_expiry/**"
       - "scripts/qualify-growth-activation-migration.mjs"
       - "scripts/hostinger-prepare-growth-expiry-migration.sh"
+      - "scripts/growth-phase14-clone-rehearsal.cjs"
+      - "scripts/growth-phase14-verify-clone.cjs"
+      - "scripts/authorize-growth-phase14-source-stage.mjs"
+      - ".github/workflows/growth-phase14-source-stage.yml"
+      - "tests/growth-phase14-source-authorization.test.ts"
       - "workers/growth-lease-watchdog.ts"
       - "lib/growth/rollout.ts"
       - "tests/growth-persistence.integration.test.ts"
@@ -55,6 +60,9 @@ jobs:
         run: |
           bash -n scripts/hostinger-prepare-growth-expiry-migration.sh
           node --check scripts/qualify-growth-activation-migration.mjs
+          node --check scripts/growth-phase14-clone-rehearsal.cjs
+          node --check scripts/growth-phase14-verify-clone.cjs
+          node --check scripts/authorize-growth-phase14-source-stage.mjs
           HOSTINGER_MIGRATION_SOURCE_ONLY=1 bash scripts/hostinger-prepare-growth-expiry-migration.sh
       - name: Qualify additive expiry migration against isolated legacy schema and existing OFF row
         env:
