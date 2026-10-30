@@ -49,6 +49,7 @@ validate_inputs() {
   [[ -f "$MIGRATION_ROOT/prisma/schema.prisma" ]] || fail "Reviewed Prisma schema is unavailable."
   [[ -f "$MIGRATION_ROOT/prisma/migrations/$APPROVED_MIGRATION/migration.sql" ]] || fail "Approved migration SQL is unavailable."
   [[ -f "$MIGRATION_ROOT/.release-sha" ]] || fail "Migration bundle release identity is unavailable."
+  [[ -f "$MIGRATION_ROOT/scripts/growth-phase14-verify-clone.cjs" ]] || fail "Clone verification script missing."
   [[ "$(tr -d '[:space:]' < "$MIGRATION_ROOT/.release-sha")" == "$RELEASE_SHA" ]] || fail "Migration bundle SHA does not match the approved release SHA."
   validate_executable_major "$PG_DUMP_BIN"
   validate_executable_major "$PG_RESTORE_BIN"
@@ -174,45 +175,11 @@ validate_growth_off() {
   ' "$APP_PATH" || fail "Growth OFF/empty queue preflight failed."
 }
 
-# The actual reviewed Prisma migration must already have succeeded on the
-# restored, populated private clone. Never treat a rolled-back SQL probe alone
-# as authorization to apply the live migration.
+# Require the complete, reviewed Prisma migration on the populated clone.
 validate_clone_rehearsal() {
-  MIGRATION_ROOT="$MIGRATION_ROOT" APPROVED_MIGRATION="$APPROVED_MIGRATION" \
-    "$NODE_BIN" --env-file="$ENV_FILE" -e '
-      const fs = require("node:fs");
-      const path = require("node:path");
-      const crypto = require("node:crypto");
-      const { spawnSync } = require("node:child_process");
-      const url = new URL(process.env.DATABASE_URL || "");
-      const clone = "saytwist_phase14_rehearsal_20261030";
-      const env = { ...process.env,
-        PGHOST: "127.0.0.1", PGPORT: "5433",
-        PGDATABASE: clone, PGUSER: decodeURIComponent(url.username),
-        PGPASSWORD: decodeURIComponent(url.password), PGCONNECT_TIMEOUT: "5" };
-      delete env.DATABASE_URL;
-      delete env.PGOPTIONS;
-      function sql(q) {
-        const p = spawnSync("/usr/lib/postgresql/18/bin/psql",
-          ["-X", "-qAt", "-w", "-v", "ON_ERROR_STOP=1", "-d", clone, "-c", q],
-          { env, encoding: "utf8", timeout: 15000, maxBuffer: 1024 * 1024 });
-        if (p.error || p.status !== 0) process.exit(2);
-        return p.stdout.trim();
-      }
-      const applied = sql(
-        "SELECT checksum FROM \"_prisma_migrations\" WHERE migration_name=" +
-        "'20261029220000_growth_worker_activation_expiry' AND finished_at IS NOT NULL");
-      const source = fs.readFileSync(path.join(process.env.MIGRATION_ROOT,
-        "prisma/migrations", process.env.APPROVED_MIGRATION, "migration.sql"));
-      const checksum = crypto.createHash("sha256").update(source).digest("hex");
-      if (applied !== checksum) process.exit(3);
-      if (sql("SELECT COUNT(*) FROM \"_prisma_migrations\" WHERE finished_at IS NOT NULL") !== "32") process.exit(4);
-      if (sql("SELECT count(*) FROM information_schema.columns WHERE table_name=" +
-        "'GrowthSettings' AND column_name='workerActivationExpiresAt' AND is_nullable='YES'") !== "1") process.exit(5);
-      if (sql("SELECT (NOT \"enabled\" AND NOT \"attributionEnabled\" AND \"workerActivationExpiresAt\" IS NULL)::int FROM \"GrowthSettings\" WHERE id='global'") !== "1") process.exit(6);
-      if (sql("SELECT COUNT(*) FROM \"GrowthJob\" WHERE status IN ('PENDING','CLAIMED','RUNNING','FAILED_RETRYABLE')") !== "0") process.exit(7);
-      console.log("[hostinger-migration] Populated clone migration checksum and OFF gates verified.");
-    ' >/dev/null || fail "Populated-clone Prisma rehearsal precondition failed."
+  HOSTINGER_RELEASE_SHA="$RELEASE_SHA" "$NODE_BIN" --env-file="$ENV_FILE" \
+    "$MIGRATION_ROOT/scripts/growth-phase14-verify-clone.cjs" >/dev/null \
+    || fail "Populated-clone Prisma rehearsal precondition failed."
 }
 
 create_verified_backup() {
