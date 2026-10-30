@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GrowthJobType } from "@prisma/client";
 
 const mocks = vi.hoisted(() => ({
-  settings: vi.fn(async () => ({ enabled: false, workerBatchSize: 5 })),
+  settings: vi.fn(async () => ({ enabled: false, workerBatchSize: 5, workerActivationExpiresAt: null as Date | null })),
   heartbeatUpsert: vi.fn(async () => ({})),
   heartbeatUpdate: vi.fn(async () => ({ count: 1 })),
   promote: vi.fn(async (_now?: unknown, _limit?: unknown, _allowed?: GrowthJobType[]) => 0),
@@ -15,7 +15,10 @@ const mocks = vi.hoisted(() => ({
   fail: vi.fn(async () => ({})),
 }));
 
-vi.mock("@/lib/growth/settings", () => ({ getGrowthSettings: mocks.settings }));
+vi.mock("@/lib/growth/settings", () => ({
+  getGrowthSettings: mocks.settings,
+  revokeGrowthWorkerActivation: vi.fn(),
+}));
 vi.mock("@/lib/prisma", () => ({
   prisma: { growthWorkerHeartbeat: {
     upsert: mocks.heartbeatUpsert, updateMany: mocks.heartbeatUpdate,
@@ -40,7 +43,7 @@ const blocked = { GROWTH_WORKER_RUN_ENABLED: "false", GROWTH_ROLLOUT_MODE: "OBSE
 describe("Phase 14 worker double gates and forbidden job defense", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.settings.mockImplementation(async () => ({ enabled: false, workerBatchSize: 5 }));
+    mocks.settings.mockImplementation(async () => ({ enabled: false, workerBatchSize: 5, workerActivationExpiresAt: null }));
     mocks.claim.mockImplementation(async () => []);
   });
 
@@ -63,7 +66,8 @@ describe("Phase 14 worker double gates and forbidden job defense", () => {
   });
 
   it("only passes OBSERVE allowlists into all three queue operations", async () => {
-    mocks.settings.mockImplementation(async () => ({ enabled: true, workerBatchSize: 5 }));
+    const expiresAt = new Date(Date.now() + 120_000);
+    mocks.settings.mockImplementation(async () => ({ enabled: true, workerBatchSize: 5, workerActivationExpiresAt: expiresAt }));
     expect(await runGrowthWorker({ rolloutConfig: observe, batchSize: 1 }))
       .toEqual({ status: "EMPTY", claimed: 0, succeeded: 0, failed: 0 });
     const allowlist = mocks.claim.mock.calls[0]?.[0]?.allowedTypes as GrowthJobType[];
@@ -81,7 +85,8 @@ describe("Phase 14 worker double gates and forbidden job defense", () => {
   });
 
   it("releases a forbidden claimed job without dispatch even if a queue layer regresses", async () => {
-    mocks.settings.mockImplementation(async () => ({ enabled: true, workerBatchSize: 5 }));
+    const expiresAt = new Date(Date.now() + 120_000);
+    mocks.settings.mockImplementation(async () => ({ enabled: true, workerBatchSize: 5, workerActivationExpiresAt: expiresAt }));
     mocks.claim.mockImplementation(async () => [{ id: "forbidden", type: GrowthJobType.PINTEREST_PIN_PUBLISH }]);
     expect(await runGrowthWorker({ rolloutConfig: observe, batchSize: 1 }))
       .toEqual({ status: "COMPLETED", claimed: 1, succeeded: 0, failed: 0 });

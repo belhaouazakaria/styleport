@@ -4,6 +4,7 @@ import { GrowthJobStatus, GrowthJobType } from "@prisma/client";
 
 const mocks = vi.hoisted(() => ({
   getGrowthSettings: vi.fn(),
+  revokeGrowthWorkerActivation: vi.fn(),
   promoteDueGrowthRetries: vi.fn(),
   recoverStaleGrowthJobs: vi.fn(),
   claimGrowthJobs: vi.fn(),
@@ -16,7 +17,10 @@ const mocks = vi.hoisted(() => ({
   heartbeatUpdateMany: vi.fn(),
 }));
 
-vi.mock("@/lib/growth/settings", () => ({ getGrowthSettings: mocks.getGrowthSettings }));
+vi.mock("@/lib/growth/settings", () => ({
+  getGrowthSettings: mocks.getGrowthSettings,
+  revokeGrowthWorkerActivation: mocks.revokeGrowthWorkerActivation,
+}));
 vi.mock("@/lib/growth/jobs", () => ({
   promoteDueGrowthRetries: mocks.promoteDueGrowthRetries,
   recoverStaleGrowthJobs: mocks.recoverStaleGrowthJobs,
@@ -33,7 +37,10 @@ vi.mock("@/lib/prisma", () => ({
 
 import { runGrowthWorker } from "@/lib/growth/worker";
 
-const settings = { enabled: true, workerBatchSize: 5, intensity: "BALANCED" };
+const settings = {
+  enabled: true, workerBatchSize: 5, intensity: "BALANCED",
+  workerActivationExpiresAt: new Date(Date.now() + 3 * 60_000),
+};
 const observe = { rolloutConfig: { GROWTH_WORKER_RUN_ENABLED: "true", GROWTH_ROLLOUT_MODE: "OBSERVE" } };
 const job = {
   id: "job-1",
@@ -57,7 +64,9 @@ const job = {
 describe("bounded Growth worker", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    settings.workerActivationExpiresAt = new Date(Date.now() + 3 * 60_000);
     mocks.getGrowthSettings.mockResolvedValue(settings);
+    mocks.revokeGrowthWorkerActivation.mockResolvedValue(1);
     mocks.promoteDueGrowthRetries.mockResolvedValue({ count: 0 });
     mocks.recoverStaleGrowthJobs.mockResolvedValue(0);
     mocks.heartbeatUpsert.mockResolvedValue({});
@@ -110,6 +119,49 @@ describe("bounded Growth worker", () => {
     expect(mocks.completeGrowthJob).toHaveBeenCalledTimes(1);
   });
 
+  it("does not touch the queue when the lease is absent, expired or too long", async () => {
+    for (const deadline of [null, new Date(Date.now() - 1_000), new Date(Date.now() + 11 * 60_000)]) {
+      mocks.getGrowthSettings.mockResolvedValue({ ...settings, workerActivationExpiresAt: deadline });
+      await expect(runGrowthWorker({ ...observe })).resolves.toMatchObject({ status: "DISABLED", claimed: 0 });
+    }
+    expect(mocks.claimGrowthJobs).not.toHaveBeenCalled();
+    expect(mocks.heartbeatUpsert).not.toHaveBeenCalled();
+  });
+
+  it("refuses to claim if the activation expires or changes after starting", async () => {
+    mocks.getGrowthSettings.mockResolvedValueOnce(settings)
+      .mockResolvedValueOnce({ ...settings, workerActivationExpiresAt: new Date(Date.now() - 1_000) });
+    await expect(runGrowthWorker({ onlyJobId: job.id, ...observe }))
+      .rejects.toThrow("expired or changed before claim");
+    expect(mocks.claimGrowthJobs).not.toHaveBeenCalled();
+    expect(mocks.revokeGrowthWorkerActivation).toHaveBeenCalledWith(settings.workerActivationExpiresAt);
+  });
+
+  it("releases claimed work without dispatch when the lease expires after claim", async () => {
+    mocks.getGrowthSettings.mockResolvedValueOnce(settings).mockResolvedValueOnce(settings)
+      .mockResolvedValueOnce({ ...settings, workerActivationExpiresAt: new Date(Date.now() - 1_000) });
+    mocks.claimGrowthJobs.mockResolvedValueOnce([job]);
+    const outcome = await runGrowthWorker({ onlyJobId: job.id, ...observe });
+    expect(outcome.succeeded).toBe(0);
+    expect(mocks.releaseClaimedGrowthJob).toHaveBeenCalledTimes(1);
+    expect(mocks.dispatchGrowthJob).not.toHaveBeenCalled();
+    expect(mocks.revokeGrowthWorkerActivation).toHaveBeenCalledWith(settings.workerActivationExpiresAt);
+  });
+
+  it("always revokes the exact activation when a scoped handler fails", async () => {
+    mocks.claimGrowthJobs.mockResolvedValueOnce([job]);
+    mocks.dispatchGrowthJob.mockRejectedValueOnce(new Error("expected failure"));
+    const outcome = await runGrowthWorker({ onlyJobId: job.id, ...observe });
+    expect(outcome.failed).toBe(1);
+    expect(mocks.revokeGrowthWorkerActivation).toHaveBeenCalledWith(settings.workerActivationExpiresAt);
+  });
+
+  it("keeps normal unscoped execution from revoking a shared lease", async () => {
+    mocks.claimGrowthJobs.mockResolvedValueOnce([]);
+    await runGrowthWorker({ ...observe });
+    expect(mocks.revokeGrowthWorkerActivation).not.toHaveBeenCalled();
+  });
+
   it("only claims the exact requested job and skips unrelated retry/recovery", async () => {
     mocks.claimGrowthJobs.mockResolvedValueOnce([job]);
     const result = await runGrowthWorker({
@@ -122,6 +174,7 @@ describe("bounded Growth worker", () => {
     expect(mocks.promoteDueGrowthRetries).not.toHaveBeenCalled();
     expect(mocks.recoverStaleGrowthJobs).not.toHaveBeenCalled();
     expect(mocks.dispatchGrowthJob).toHaveBeenCalledTimes(1);
+    expect(mocks.revokeGrowthWorkerActivation).toHaveBeenCalledWith(settings.workerActivationExpiresAt);
   });
 
   it("rejects malformed exact-job scopes before accessing the queue", async () => {
@@ -139,7 +192,8 @@ describe("bounded Growth worker", () => {
   });
 
   it("checks the kill switch after claim and releases work without execution", async () => {
-    mocks.getGrowthSettings.mockResolvedValueOnce(settings).mockResolvedValueOnce({ ...settings, enabled: false });
+    mocks.getGrowthSettings.mockResolvedValueOnce(settings).mockResolvedValueOnce(settings)
+      .mockResolvedValueOnce({ ...settings, enabled: false });
     mocks.claimGrowthJobs.mockResolvedValueOnce([job]);
     const result = await runGrowthWorker({ workerId: "test-worker", ...observe });
     expect(result.claimed).toBe(1);

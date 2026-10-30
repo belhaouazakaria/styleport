@@ -15,7 +15,9 @@ vi.mock("@/lib/prisma", () => ({
 }));
 vi.mock("@/lib/growth/activity", () => ({ recordGrowthActivity: mocks.activity }));
 
-import { getGrowthSettings, updateGrowthSettings } from "@/lib/growth/settings";
+import {
+  expireGrowthWorkerActivation, getGrowthSettings, revokeGrowthWorkerActivation, updateGrowthSettings,
+} from "@/lib/growth/settings";
 
 describe("Growth settings persistence", () => {
   beforeEach(() => {
@@ -27,6 +29,7 @@ describe("Growth settings persistence", () => {
     const settings = await getGrowthSettings();
     expect(settings).toMatchObject({
       enabled: false,
+      workerActivationExpiresAt: null,
       intensity: "BALANCED",
       workerBatchSize: 5,
       ownedDomains: ["saytwist.com", "www.saytwist.com", "translator.whattypeof.com"],
@@ -51,6 +54,60 @@ describe("Growth settings persistence", () => {
     };
     mocks.transaction.mockImplementationOnce(async (callback: (client: typeof tx) => unknown) => callback(tx));
     await expect(updateGrowthSettings({ enabled: true, intensity: "LOW", workerBatchSize: 3, ownedDomains }, "admin-1")).resolves.toBe(persisted);
+    expect(mocks.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      create: expect.objectContaining({ workerActivationExpiresAt: null }),
+      update: expect.objectContaining({ workerActivationExpiresAt: null }),
+    }));
     expect(mocks.activity).toHaveBeenCalledWith(expect.objectContaining({ action: "SETTINGS_UPDATED", fromState: "DISABLED", toState: "ENABLED" }), tx);
   });
+  it("revokes only the exact activation and writes an audit event atomically", async () => {
+    const expiresAt = new Date("2026-10-29T20:04:00.000Z");
+    const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+    const tx = { growthSettings: { updateMany } };
+    mocks.transaction.mockImplementationOnce(async (callback: (client: typeof tx) => unknown) => callback(tx));
+    expect(await revokeGrowthWorkerActivation(expiresAt)).toBe(1);
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: "global", enabled: true, workerActivationExpiresAt: expiresAt },
+      data: { enabled: false, workerActivationExpiresAt: null, configVersion: { increment: 1 } },
+    });
+    expect(mocks.activity).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "WORKER_ACTIVATION_REVOKED", fromState: "ENABLED", toState: "DISABLED" }),
+      tx,
+    );
+  });
+
+  it("leaves a replaced activation untouched and creates no false audit", async () => {
+    const tx = { growthSettings: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) } };
+    mocks.transaction.mockImplementationOnce(async (callback: (client: typeof tx) => unknown) => callback(tx));
+    expect(await revokeGrowthWorkerActivation(new Date("2026-10-29T20:04:00.000Z"))).toBe(0);
+    expect(mocks.activity).not.toHaveBeenCalled();
+  });
+
+  it("revokes an expired lease in one transaction with a single audit event", async () => {
+    const now = new Date("2026-10-29T21:59:00.000Z");
+    const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+    const tx = { growthSettings: { updateMany } };
+    mocks.transaction.mockImplementationOnce(async (callback: (client: typeof tx) => unknown) => callback(tx));
+    expect(await expireGrowthWorkerActivation(now)).toBe(1);
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: "global", enabled: true, workerActivationExpiresAt: { lte: now } },
+      data: { enabled: false, workerActivationExpiresAt: null, configVersion: { increment: 1 } },
+    });
+    expect(mocks.activity).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "WORKER_ACTIVATION_EXPIRED" }), tx,
+    );
+  });
+
+  it("does not write a false expiry audit if no deadline has expired", async () => {
+    const tx = { growthSettings: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) } };
+    mocks.transaction.mockImplementationOnce(async (callback: (client: typeof tx) => unknown) => callback(tx));
+    expect(await expireGrowthWorkerActivation(new Date("2026-10-29T21:59:00.000Z"))).toBe(0);
+    expect(mocks.activity).not.toHaveBeenCalled();
+  });
+
+  it("rejects an invalid watchdog deadline without writing", async () => {
+    await expect(expireGrowthWorkerActivation(new Date(NaN))).rejects.toThrow();
+    expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+
 });

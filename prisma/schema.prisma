@@ -952,6 +952,7 @@ model AppSetting {
 model GrowthSettings {
   id                              String          @id @default("global")
   enabled                         Boolean         @default(false)
+  workerActivationExpiresAt       DateTime?
   intensity                       GrowthIntensity @default(BALANCED)
   workerBatchSize                 Int             @default(5)
   ownedDomains                    String[]        @default(["saytwist.com", "www.saytwist.com", "translator.whattypeof.com"])

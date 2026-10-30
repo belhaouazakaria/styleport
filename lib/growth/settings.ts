@@ -17,6 +17,7 @@ import { DEFAULT_EVERGREEN_COOLDOWN_DAYS } from "@/lib/growth/learning/constants
 export const defaultGrowthSettings = {
   id: GROWTH_SETTINGS_ID,
   enabled: false,
+  workerActivationExpiresAt: null,
   intensity: GrowthIntensity.BALANCED,
   workerBatchSize: DEFAULT_GROWTH_WORKER_BATCH_SIZE,
   ownedDomains: [...DEFAULT_OWNED_PINTEREST_DOMAINS],
@@ -47,9 +48,11 @@ export async function updateGrowthSettings(input: GrowthSettingsInput, updatedBy
     const previous = await tx.growthSettings.findUnique({ where: { id: GROWTH_SETTINGS_ID } });
     const settings = await tx.growthSettings.upsert({
       where: { id: GROWTH_SETTINGS_ID },
-      create: { id: GROWTH_SETTINGS_ID, ...validated, updatedById },
+      create: { id: GROWTH_SETTINGS_ID, ...validated, workerActivationExpiresAt: null, updatedById },
       update: {
         ...validated,
+        // Ordinary admin edits never create or carry forward a one-shot worker lease.
+        workerActivationExpiresAt: null,
         updatedById,
         configVersion: { increment: 1 },
       },
@@ -95,5 +98,73 @@ export async function updateGrowthSettings(input: GrowthSettingsInput, updatedBy
     );
 
     return settings;
+  });
+}
+
+/**
+ * Revoke only the exact lease that this scoped invocation received. If another
+ * actor changed the deadline, do not disable their different authorization.
+ * A process crash cannot extend the persisted deadline, and every worker
+ * independently treats an expired/missing deadline as disabled.
+ */
+export async function revokeGrowthWorkerActivation(expiresAt: Date) {
+  return prisma.$transaction(async (tx) => {
+    const updated = await tx.growthSettings.updateMany({
+      where: { id: GROWTH_SETTINGS_ID, enabled: true, workerActivationExpiresAt: expiresAt },
+      data: {
+        enabled: false,
+        workerActivationExpiresAt: null,
+        configVersion: { increment: 1 },
+      },
+    });
+    if (updated.count === 1) {
+      await recordGrowthActivity({
+        actorKind: GrowthActivityActorKind.SYSTEM,
+        entityType: "GrowthSettings",
+        entityId: GROWTH_SETTINGS_ID,
+        action: "WORKER_ACTIVATION_REVOKED",
+        fromState: "ENABLED",
+        toState: "DISABLED",
+        summary: { reason: "SCOPED_WORKER_EXIT" },
+        correlationKey: `growth-worker-revoke:${expiresAt.toISOString()}`,
+      }, tx);
+    }
+    return updated.count;
+  });
+}
+
+/**
+ * Idempotent, independent crash recovery for the expiry watchdog.
+ * Only the specific expired global lease is eligible. A concurrently renewed
+ * future lease does not match the predicate and cannot be revoked.
+ */
+export async function expireGrowthWorkerActivation(now = new Date()): Promise<number> {
+  if (!Number.isFinite(now.getTime())) throw new Error("Invalid expiry cleanup deadline.");
+  return prisma.$transaction(async (tx) => {
+    const updated = await tx.growthSettings.updateMany({
+      where: {
+        id: GROWTH_SETTINGS_ID,
+        enabled: true,
+        workerActivationExpiresAt: { lte: now },
+      },
+      data: {
+        enabled: false,
+        workerActivationExpiresAt: null,
+        configVersion: { increment: 1 },
+      },
+    });
+    if (updated.count === 1) {
+      await recordGrowthActivity({
+        actorKind: GrowthActivityActorKind.SYSTEM,
+        entityType: "GrowthSettings",
+        entityId: GROWTH_SETTINGS_ID,
+        action: "WORKER_ACTIVATION_EXPIRED",
+        fromState: "ENABLED",
+        toState: "DISABLED",
+        summary: { reason: "DEADLINE_WATCHDOG" },
+        correlationKey: `growth-expiry:${now.toISOString()}`,
+      }, tx);
+    }
+    return updated.count;
   });
 }
