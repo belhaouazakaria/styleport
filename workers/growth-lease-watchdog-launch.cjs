@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- Intentionally plain Node CommonJS bootstrap: no transpiler before credentials are scoped. */
 "use strict";
 const fs = require("node:fs");
 const os = require("node:os");
