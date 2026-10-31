@@ -97,3 +97,27 @@ A successful no-op trial **does not authorize** live Pinterest requests,
 paid AI, Pin publication, Telegram schedules, recurring OBSERVE/RECOMMEND
 workers, or autonomous Growth. Those require separate provider-safe policy,
 operating review and explicit owner approval.
+
+## Watchdog exact-release pin: required before any future deployment
+
+**Operational dependency:** the installed root-owned
+`saytwist-growth-lease-watchdog.service` has
+`Environment=WATCHDOG_EXPECTED_RELEASE_SHA=<deployed SHA>` baked into the
+system unit by `workers/install-growth-lease-watchdog-systemd.sh`. Its launcher
+compares that value against the application's `.deployed-release` every
+minute. Deploying a new application SHA without coordinated root-owned
+watchdog rotation will make the existing timer service fail and can trigger
+failure-alert email; this is not a Growth job failure.
+
+Do not simply merge and deploy this PR then start the trial. First schedule a
+coordinated **owner-approved, root-operated** update of that single pinned
+systemd service environment at the exact deployed release SHA, followed by
+`systemctl daemon-reload` and successful one-shot service/timer verification.
+Keep Growth OFF and do not interrupt the timer except during a planned,
+bounded maintenance action. Never copy environment credentials to units or
+change the alert service configuration. A separate root-approved rotation is
+required for every future application deployment until a reviewed deployment
+hook supersedes this exact-SHA pin.
+
+The one-shot GitHub workflow intentionally fails at the WATCHDOG stage if
+this rotation has not been completed; it must not bypass the pin.
