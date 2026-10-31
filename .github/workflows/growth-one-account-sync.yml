@@ -49,7 +49,7 @@ jobs:
           key: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
           port: ${{ secrets.HOSTINGER_SSH_PORT || vars.HOSTINGER_SSH_PORT }}
           envs: EXPECTED_RELEASE
-          script_stop: true
+          script_stop: false
           command_timeout: 3m
           script: |
             set -eu
