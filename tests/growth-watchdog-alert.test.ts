@@ -7,9 +7,6 @@ const requireCjs = createRequire(import.meta.url);
 const { sendWatchdogFailureAlert } = requireCjs("../workers/growth-lease-watchdog-alert.cjs") as {
   sendWatchdogFailureAlert: (options?: Record<string, unknown>) => Promise<string>;
 };
-const { validateValues } = requireCjs("../workers/provision-growth-lease-watchdog-alert-env.cjs") as {
-  validateValues: (data: unknown) => Record<string, string>;
-};
 
 const configuration = {
   NODE_ENV: "production",
@@ -96,10 +93,10 @@ describe("Phase14C independent watchdog failure notification", () => {
 
   it("requires root-owned private alert credentials and links the timer to OnFailure", () => {
     const installer = readFileSync("workers/install-growth-lease-watchdog-systemd.sh", "utf8");
-    const provisioner = readFileSync("workers/provision-growth-lease-watchdog-alert-env.cjs", "utf8");
+    const provisioner = readFileSync("workers/provision-growth-lease-watchdog-alert-env.py", "utf8");
     execFileSync("bash", ["-n", "workers/install-growth-lease-watchdog-systemd.sh"]);
     execFileSync("node", ["--check", "workers/growth-lease-watchdog-alert.cjs"]);
-    execFileSync("node", ["--check", "workers/provision-growth-lease-watchdog-alert-env.cjs"]);
+    execFileSync("python3", ["-I", "-m", "unittest", "discover", "-s", "tests", "-p", "test_growth_watchdog_provision.py"]);
     expect(installer).toContain("OnFailure=$ALERT_SERVICE");
     expect(installer).toContain("EnvironmentFile=$ALERT_ENV");
     expect(installer).toContain("StateDirectory=saytwist-growth-watchdog");
@@ -109,15 +106,13 @@ describe("Phase14C independent watchdog failure notification", () => {
     expect(provisioner).toContain("HOSTINGER_WATCHDOG_ALERT_PROVISION_APPROVAL");
   });
 
-  it("provisions only exactly the three required fields", () => {
-    const valid = {
-      BREVO_API_KEY: "test-brevo-key-no-network",
-      EMAIL_FROM: "SayTwist Alerts <alerts@example.com>",
-      ALERT_ADMIN_EMAIL: "owner@example.com",
-    };
-    expect(validateValues(valid)).toEqual(valid);
-    expect(() => validateValues({ ...valid, UNKNOWN_SECRET: "bad" })).toThrow();
-    expect(() => validateValues({ ...valid, BREVO_API_KEY: "abc\nxyz" })).toThrow();
-    expect(() => validateValues({ ...valid, EMAIL_FROM: "" })).toThrow();
+  it("uses an isolated, root-owned Python interpreter for privileged setup only", () => {
+    const provisioner = readFileSync("workers/provision-growth-lease-watchdog-alert-env.py", "utf8");
+    expect(provisioner).toContain("sys.flags.isolated");
+    expect(provisioner).toContain("check_root_owned_binary(sys.executable)");
+    expect(provisioner).toContain('RUNUSER = "/usr/sbin/runuser"');
+    expect(provisioner).toContain("HOSTINGER_WATCHDOG_ALERT_PROVISION_APPROVAL");
+    expect(provisioner).toContain("os.O_NOFOLLOW");
+    expect(provisioner).not.toContain("shell=True");
   });
 });
