@@ -131,7 +131,7 @@ def preflight_root():
 def read_unprivileged_pm2():
     run = subprocess.run(
         [RUNUSER, "-u", "saytwist", "--", NODE, "-e", UNPRIVILEGED_PM2_READ],
-        capture_output=True, timeout=16, check=False,
+        capture_output=True, timeout=16, check=False, cwd=APP,
         env={"HOME": "/home/saytwist", "PATH": "/usr/sbin:/usr/bin:/bin"},
     )
     if run.returncode != 0 or not 0 < len(run.stdout) <= 8192:
