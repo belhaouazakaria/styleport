@@ -165,3 +165,49 @@ It is not authorization for Pinterest, paid AI, recurring work, publishing or
 Telegram scheduling. Pinterest quota headers are still unresolved. For owner
 procedure, expected output and rollback, see
 [PHASE14C_ONE_SHOT_OBSERVE.md](./PHASE14C_ONE_SHOT_OBSERVE.md).
+
+
+## Phase 14D: bounded Pinterest provider quota evidence (code only, 2026-10-31)
+
+The Phase14C host watchdog, independent alert delivery, protected deploy, and first
+owner-approved `FOUNDATION_NOOP` one-job OBSERVE trial passed on deployed
+`6d2cee3ba0854c1258dcab3e986e5c3d0072e873`. The scoped worker
+successfully revoked its temporary activation lease; Growth is back OFF, with
+no active jobs and zero Pinterest, AI, publication or Telegram activity.
+
+**Pinterest provider barrier remains:** prior read-only GETs reported an
+unrecognized `x-ratelimit-limit` grammar (`OTHER`, value redacted) but
+numeric `x-ratelimit-remaining` and `x-ratelimit-reset`. This does not
+prove category-wide, account-wide or app-wide available quota. Official
+Pinterest limits differ across Trial/Standard tiers and endpoint categories;
+see https://developers.pinterest.com/docs/reference/rate-limits/ and
+https://developers.pinterest.com/docs/key-concepts/access-tiers/.
+
+This PR adds an **in-process one-GET diagnostic request ceiling** that reserves
+one request **before** the network call. A timeout, HTTP 429, 5xx, or successful
+GET all consume that allowance; the same invocation never retries. For the
+single authorized diagnostic GET only, a nonempty but unrecognized limit header
+can yield `ONE_GET_REMAINING_CONFIRMED` **if and only if** the response is 2xx,
+remaining is a canonical nonnegative decimal above five, reset is a canonical
+integer from 0 through 86400 seconds, the returned account identity matches,
+and all existing production/Growth-OFF checks pass. Otherwise fail closed.
+
+A documented, internally consistent numeric or composite limit yields
+`QUOTA_PROBE_PASSED`; an unrecognized limit yields `limit: null`,
+`limitGrammar: UNRECOGNIZED`, and an explicit
+`recurringAuthorized: false`. The owner-gated GitHub workflow rejects any
+unexpected status/shape, any provider writes, and any value other than one
+locally reserved request. No raw header, credentials or identity are logged.
+**This local guard does not coordinate across processes, hosts or other apps.**
+It is suitable only for an isolated one-request diagnostic, not for lifting
+production scheduling limits. There are no schema changes or automatic retries.
+
+The historical three failed-format probes MUST NOT be repeated automatically.
+One new GET requires a **new exact-SHA owner approval** after reviewed CI,
+protected deployment, watchdog release-SHA rotation and fresh preflight. Do not
+retry after a failed outcome without investigating. Even a successful diagnostic
+does **not** authorize a live sync, recurring provider work, paid AI, Pin
+publishing, or Telegram reporting. To proceed to one actual account sync, add
+an independently approved one-job workflow with a shared/persistent per-account
+request admission mechanism and post-run read-only audit. Do not turn on
+unscoped OBSERVE or generic Pinterest jobs from this diagnostic alone.
