@@ -59,8 +59,8 @@ export function assessPinterestQuota(headers: Pick<Headers, "get">) {
   };
   if (typeof rawLimit !== "string" || rawLimit.length === 0 ||
       rawLimit.length > 512 ||
-      typeof rawRemaining !== "string" || !/^(?:0|[1-9]\\d{0,7})$/.test(rawRemaining) ||
-      typeof rawReset !== "string" || !/^(?:0|[1-9]\\d{0,7})$/.test(rawReset)) {
+      typeof rawRemaining !== "string" || !/^(?:0|[1-9]\d{0,7})$/.test(rawRemaining) ||
+      typeof rawReset !== "string" || !/^(?:0|[1-9]\d{0,7})$/.test(rawReset)) {
     return block("QUOTA_UNAVAILABLE", evidence);
   }
   const remaining = Number(rawRemaining), resetSeconds = Number(rawReset);
@@ -69,8 +69,8 @@ export function assessPinterestQuota(headers: Pick<Headers, "get">) {
   }
   let limit: number | null = null;
   const parts = rawLimit.split(",").map(x => x.trim());
-  if (parts.length && /^(?:0|[1-9]\\d{0,7})$/.test(parts[0]) &&
-      parts.slice(1).every(x => /^[1-9]\\d{0,7};w=[1-9]\\d{0,5}(?:;name="[a-z][a-z0-9_]{0,63}")?$/.test(x))) {
+  if (parts.length && /^(?:0|[1-9]\d{0,7})$/.test(parts[0]) &&
+      parts.slice(1).every(x => /^[1-9]\d{0,7};w=[1-9]\d{0,5}(?:;name="[a-z][a-z0-9_]{0,63}")?$/.test(x))) {
     const parsed = Number(parts[0]);
     if (parsed < 1 || remaining > parsed) return block("QUOTA_UNAVAILABLE", evidence);
     limit = parsed;
