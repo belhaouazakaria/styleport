@@ -125,7 +125,7 @@ jobs:
             workers/growth-worker.ts \
             workers/growth-lease-watchdog-launch.cjs \
             workers/growth-lease-watchdog-alert.cjs \
-            workers/provision-growth-lease-watchdog-alert-env.cjs \
+            workers/provision-growth-lease-watchdog-alert-env.py \
             workers/install-growth-lease-watchdog-systemd.sh \
             node_modules/.bin/tsx \
             node_modules/tsx/dist/cli.mjs \
