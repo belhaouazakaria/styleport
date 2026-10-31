@@ -13,7 +13,7 @@ export class PinterestOneGetBudget {
   }
 
   observe(status: number) {
-    if (this.attempted !== 1 || !Number.isInteger(status)) {
+    if (this.stopped || this.attempted !== 1 || !Number.isInteger(status)) {
       this.stopped = true;
       throw new Error("PINTEREST_LOCAL_BUDGET_STATE_INVALID");
     }
