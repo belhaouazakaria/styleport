@@ -144,3 +144,24 @@ The owner verified the host lacks a root-owned Node executable (`ROOT_NODE=NOT_F
 The replacement `workers/provision-growth-lease-watchdog-alert-env.py` separates privilege boundaries: the privileged script runs only under a root-owned Python interpreter in **isolated** mode (`/usr/bin/python3 -I`) with a checksum-verified root-owned mode-0700 script outside the app. Root first requires the exact live release SHA and a separate owner approval `HOSTINGER_WATCHDOG_ALERT_PROVISION_APPROVAL=PROVISION SAYTWIST WATCHDOG ALERT <SHA>`. It validates the interpreter, its path, the reviewed script and trusted parent ownership, and refuses existing secret files. Its `runuser -u saytwist -- .../node -e` child reads the exact online PM2 instance and exports only the existing Brevo key, sender and private recipient to the privileged parent over a captured in-memory pipe. Node never runs as root. The parent validates the fields, writes a root-owned mode-0600 systemd EnvironmentFile atomically without overwriting an existing file and reports only fixed status labels. No send, unit, timer or Growth mutation is part of provisioning.
 
 Required **next sequence**, all owner gated where privileged: (1) run main CI and PostgreSQL18 qualification on the remediation PR; (2) review/merge, exact-SHA protected deployment while Growth remains OFF; (3) new exact-SHA read-only preflight and host confirmation `/usr/bin/python3` resolves to a root-owned interpreter; (4) independently verify the Python source checksum against reviewed release evidence, then seek separate owner root-provisioning approval; (5) separately authorize/verify timer installation and a deliberately safe failure-mail delivery test; (6) post-install audit and one-job OBSERVE approval only after other gates pass. The prior clone SQL crash/expiry CAS rehearsal passed with explicit transaction rollback but **did not** exercise a physically installed system timer or real email delivery. No private credentials or host activation are authorized by this code-only revision.
+
+
+## Phase 14C Step 6: owner-gated one-shot OBSERVE qualification (code only)
+
+The isolated workflow at `.github/workflows/growth-observe-one-shot.yml` and
+operator worker `workers/growth-observe-trial.ts` permit **one**
+`FOUNDATION_NOOP` job under an exact-SHA owner comment, a 120-second
+DB activation lease, independent watchdog and a minimal process environment.
+A serializable transaction atomically admits exactly one idempotent job and
+emits auditable transitions. Worker execution is scoped by exact job ID,
+ignores unrelated retries, and both the worker and wrapper revoke the lease.
+The host workflow rejects a missing/failed watchdog, active Growth, a nonempty
+queue, the wrong app release or a changed/unauthorized request. It confirms
+Growth OFF and the queue empty afterward, without provider calls.
+
+**This section is design and tests only until the PR is merged, CI passes,
+the exact main SHA is deployed and an owner explicitly runs the new workflow.**
+It is not authorization for Pinterest, paid AI, recurring work, publishing or
+Telegram scheduling. Pinterest quota headers are still unresolved. For owner
+procedure, expected output and rollback, see
+[PHASE14C_ONE_SHOT_OBSERVE.md](./PHASE14C_ONE_SHOT_OBSERVE.md).
