@@ -9,6 +9,7 @@ import {
   syncPinterestPinInventory,
 } from "@/lib/growth/pinterest/analytics";
 import { recoverPinterestAnalyticsGaps } from "@/lib/growth/pinterest/analytics-recovery";
+import { oneAccountSyncFetch } from "@/lib/growth/pinterest/one-sync-guard";
 import {
   syncPinterestAccount,
   syncPinterestBoards,
@@ -109,7 +110,15 @@ const handlers = new Map<GrowthJobType, GrowthJobHandler>([
     GrowthJobType.PINTEREST_ACCOUNT_SYNC,
     async ({ job }) => {
       const payload = parsePinterestSyncPayload(job.payload);
-      return syncPinterestAccount(payload.accountId);
+      if (process.env.GROWTH_PINTEREST_ONE_SYNC_ENTRYPOINT === "true" &&
+          process.env.GROWTH_PINTEREST_ONE_SYNC_JOB_ID !== job.id) {
+        throw new NonRetryableGrowthJobError("Scoped Pinterest sync mismatch.");
+      }
+      return syncPinterestAccount(
+        payload.accountId,
+        process.env.GROWTH_PINTEREST_ONE_SYNC_JOB_ID === job.id
+          ? oneAccountSyncFetch(job.id) : undefined,
+      );
     },
   ],
   [

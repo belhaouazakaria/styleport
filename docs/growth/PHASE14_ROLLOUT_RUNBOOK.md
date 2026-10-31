@@ -211,3 +211,62 @@ publishing, or Telegram reporting. To proceed to one actual account sync, add
 an independently approved one-job workflow with a shared/persistent per-account
 request admission mechanism and post-run read-only audit. Do not turn on
 unscoped OBSERVE or generic Pinterest jobs from this diagnostic alone.
+
+
+## Phase 14E: first controlled Pinterest account synchronization (code only)
+
+**Launch target:** qualify one actual `PINTEREST_ACCOUNT_SYNC` job. As of
+2026-10-31, protected Phase14D release `627d248b7f991a97908fd2c5bae7f9feeea13b57`
+passed independent read-only preflight, the independent watchdog was updated and
+tested, and owner-gated one GET `41247305759` returned documented
+`limit=100, remaining=99, resetSeconds=1` with **one** API GET and zero
+writes/AI/Telegram. This is per-response quota evidence, not authorization
+for recurring API usage.
+
+This branch adds a **separate** owner-created issue-comment workflow at
+`.github/workflows/growth-one-account-sync.yml` and a short-lived
+`saytwist`-user launcher under `workers/`. It accepts exactly the trusted
+main SHA with issue title `SayTwist Growth one account sync <SHA>`,
+body `ONE_SYNC_SHA=<SHA>\nONE_SYNC_TARGET=saytwist.com`, and distinct owner
+comment `RUN SAYTWIST GROWTH ONE ACCOUNT SYNC <SHA>`. Only after protected
+deployment, matching watchdog SHA update and read-only Growth-OFF audit should
+this workflow be approved. No recurrence is installed or authorized.
+
+The operation requires one CONNECTED production Pinterest account, at least
+15 minutes of access-token validity (thus no OAuth refresh), the required
+user_accounts:read scope, zero active/retryable Growth jobs, Growth/attribution
+OFF, independent watchdog success, and no automation flags. A serializable
+transaction locks that account row, ensures no prior reservation in the last
+24 hours, records a durable immutable `GrowthActivity` request reservation,
+turns on a **120-second DB activation lease**, and inserts exactly one
+maxAttempts=1 `PINTEREST_ACCOUNT_SYNC` job. The worker processes only that
+job ID; the account-sync handler uses a one-request-only GET transport
+restricted to `https://api.pinterest.com/v5/user_account`. It forbids other
+endpoints, methods, token refresh, redirects, automatic retries, and further
+requests, including after timeout or 429. Quota headers must meet the Phase14D
+five-request reserve before any metadata update.
+
+Success requires the one job to SUCCEED, account metadata timestamps to
+advance, the lease to be revoked in finally, global Growth OFF, and
+zero active queue. The independent systemd watchdog remains the hard-crash
+fallback. The workflow emits only fixed result labels, never credentials or
+account identity. It permits account metadata database updates but **no**
+Pinterest publishing, AI work, translator changes or Telegram messages.
+
+**Budget scope:** the durable one-per-24-hour reservation is only for this
+owner-gated account-sync qualification. It does not enforce a global,
+cross-feature Pinterest API limit. Do not infer that all existing scheduled
+Pinterest endpoints have shared admission. Recurring OBSERVE must get
+a separate shared/persistent provider quota policy and monitored frequency
+before being enabled. If this one-shot fails, do not rerun on the same day
+or attempt provider calls outside the owner workflow.
+
+**No schema migration:** reuses existing account, activity, settings and
+GrowthJob tables. No production migrations should be applied for this change.
+
+**Remaining Growth launch definition:** (1) this first scoped real metadata
+sync, (2) bounded recurring OBSERVE/RECOMMEND with independent rate, budget,
+kill-switch and monitoring proof, (3) manually approved small Pin publication
+plus confirmation and attribution/analytics. SEO and AdSense continue afterward
+as a separate track. Do not introduce additional gates unrelated to these
+explicit objectives.
