@@ -4,12 +4,13 @@ import { GrowthPinterestApiEnvironment, GrowthPinterestConnectionStatus } from "
 
 import { decryptPinterestCredentials } from "@/lib/growth/pinterest/credentials";
 import { requirePinterestConfiguration } from "@/lib/growth/pinterest/config";
+import { PinterestOneGetBudget } from "@/lib/growth/pinterest/one-get-budget";
 import { prisma } from "@/lib/prisma";
 
 export type QuotaProbeCode =
   | "RELEASE_MISMATCH" | "GROWTH_NOT_OFF" | "QUEUE_NOT_IDLE"
   | "ACCOUNT_NOT_READY" | "TOKEN_NOT_READY" | "ENV_NOT_READY"
-  | "PINTEREST_HTTP_FAILURE" | "QUOTA_UNAVAILABLE" | "QUOTA_LOW"
+  | "PINTEREST_HTTP_FAILURE" | "PINTEREST_RATE_LIMITED" | "QUOTA_UNAVAILABLE" | "QUOTA_LOW"
   | "UNEXPECTED_RESPONSE";
 
 export type SafeQuotaHeaderKind = "ABSENT" | "INTEGER" | "WINDOWS" | "OTHER";
@@ -41,7 +42,12 @@ export function safeQuotaLimitStructure(value: string | null): string {
   return structure.length <= 96 ? structure : "REDACTED";
 }
 
-/** Untrusted Pinterest response headers must be complete and preserve >= 5 requests. */
+/**
+ * Only a single explicitly approved, budgeted GET may use the
+ * REMAINING_ONLY fallback when Pinterest sends an unrecognized limit value.
+ * This does NOT infer a per-category limit or authorize recurring sync.
+ * Missing/malformed remaining or reset always blocks.
+ */
 export function assessPinterestQuota(headers: Pick<Headers, "get">) {
   const rawLimit = headers.get("x-ratelimit-limit");
   const rawRemaining = headers.get("x-ratelimit-remaining");
@@ -51,25 +57,30 @@ export function assessPinterestQuota(headers: Pick<Headers, "get">) {
     reset: quotaHeaderKind(rawReset),
     limitStructure: safeQuotaLimitStructure(rawLimit),
   };
-  // Pinterest officially documents composite limits, e.g.
-  // "100, 100;w=1, 1000;w=60" (universal and category windows).
-  // Validate all windows, but use the first numeric limit with the documented
-  // aggregate remaining/reset values. Never infer missing quotas.
-  if (typeof rawLimit !== "string" || rawLimit.length > 128 ||
-      typeof rawRemaining !== "string" || !/^\d{1,8}$/.test(rawRemaining) ||
-      typeof rawReset !== "string" || !/^\d{1,8}$/.test(rawReset))
+  if (typeof rawLimit !== "string" || rawLimit.length === 0 ||
+      rawLimit.length > 512 ||
+      typeof rawRemaining !== "string" || !/^(?:0|[1-9]\d{0,7})$/.test(rawRemaining) ||
+      typeof rawReset !== "string" || !/^(?:0|[1-9]\d{0,7})$/.test(rawReset)) {
     return block("QUOTA_UNAVAILABLE", evidence);
+  }
+  const remaining = Number(rawRemaining), resetSeconds = Number(rawReset);
+  if (!Number.isSafeInteger(resetSeconds) || resetSeconds > 86_400) {
+    return block("QUOTA_UNAVAILABLE", evidence);
+  }
+  let limit: number | null = null;
   const parts = rawLimit.split(",").map(x => x.trim());
-  if (!parts.length || !/^\d{1,8}$/.test(parts[0]) ||
-      parts.slice(1).some(x => !/^\d{1,8};w=\d{1,6}(?:;name="[a-z][a-z0-9_]{0,63}")?$/.test(x)))
-    return block("QUOTA_UNAVAILABLE", evidence);
-  if (parts.slice(1).some(x => Number(x.split(";")[0]) < 1 ||
-      Number(x.split("=")[1]) < 1)) return block("QUOTA_UNAVAILABLE", evidence);
-  const limit = Number(parts[0]), remaining = Number(rawRemaining), resetSeconds = Number(rawReset);
-  if (limit < 1 || remaining > limit || !Number.isSafeInteger(resetSeconds) || resetSeconds > 86_400)
-    return block("QUOTA_UNAVAILABLE", evidence);
-  if (remaining <= 5) return block("QUOTA_LOW");
-  return { limit, remaining, resetSeconds };
+  if (parts.length && /^(?:0|[1-9]\d{0,7})$/.test(parts[0]) &&
+      parts.slice(1).every(x => /^[1-9]\d{0,7};w=[1-9]\d{0,5}(?:;name="[a-z][a-z0-9_]{0,63}")?$/.test(x))) {
+    const parsed = Number(parts[0]);
+    if (parsed < 1 || remaining > parsed) return block("QUOTA_UNAVAILABLE", evidence);
+    limit = parsed;
+  }
+  if (remaining <= 5) return block("QUOTA_LOW", evidence);
+  return {
+    limit, remaining, resetSeconds,
+    limitGrammar: limit === null ? "UNRECOGNIZED" as const : "DOCUMENTED" as const,
+    recurringAuthorized: false as const,
+  };
 }
 
 export function assertReadOnlyProbeGates(config: Record<string, string | undefined>) {
@@ -123,6 +134,8 @@ export async function runPinterestQuotaProbe(fetchImpl: typeof fetch = fetch) {
   if (config.apiEnvironment !== GrowthPinterestApiEnvironment.PRODUCTION ||
       config.apiBaseUrl !== "https://api.pinterest.com/v5") block("ENV_NOT_READY");
   const creds = decryptPinterestCredentials(account.encryptedCredentials);
+  const localBudget = new PinterestOneGetBudget();
+  localBudget.claim();
   let response: Response;
   try {
     response = await fetchImpl("https://api.pinterest.com/v5/user_account", {
@@ -131,15 +144,18 @@ export async function runPinterestQuotaProbe(fetchImpl: typeof fetch = fetch) {
       signal: AbortSignal.timeout(10_000),
     });
   } catch { return block("PINTEREST_HTTP_FAILURE"); }
-  if (!response.ok) block("PINTEREST_HTTP_FAILURE");
+  try { localBudget.observe(response.status); }
+  catch { return block(response.status === 429 ? "PINTEREST_RATE_LIMITED" : "PINTEREST_HTTP_FAILURE"); }
   const quota = assessPinterestQuota(response.headers);
   // Do not log provider body, account ID or username.
   const body: unknown = await response.json().catch(() => null);
   if (!body || typeof body !== "object" || Array.isArray(body) ||
       (body as { id?: unknown }).id !== account.pinterestAccountId) block("UNEXPECTED_RESPONSE");
   return {
-    status: "QUOTA_PROBE_PASSED" as const,
+    status: quota.limitGrammar === "DOCUMENTED" ? "QUOTA_PROBE_PASSED" as const : "ONE_GET_REMAINING_CONFIRMED" as const,
     limit: quota.limit, remaining: quota.remaining, resetSeconds: quota.resetSeconds,
+    limitGrammar: quota.limitGrammar, recurringAuthorized: quota.recurringAuthorized,
+    localRequestsReserved: localBudget.requestsReserved,
     providerCalls: 1, providerWrites: 0, databaseWrites: 0, telegramMessages: 0, aiCalls: 0,
   };
 }

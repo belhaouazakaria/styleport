@@ -126,12 +126,21 @@ jobs:
                 const match = /^GROWTH_QUOTA_PROBE_RESULT=(\{[^\n]*\})$/m.exec(result.stdout || "");
                 if (!match) throw Error();
                 const data = JSON.parse(match[1]);
-                if (data.status !== "QUOTA_PROBE_PASSED" || data.databaseWrites !== 0 ||
+                const known = data.status === "QUOTA_PROBE_PASSED" &&
+                  data.limitGrammar === "DOCUMENTED" && Number.isInteger(data.limit) && data.limit >= 1;
+                const fallback = data.status === "ONE_GET_REMAINING_CONFIRMED" &&
+                  data.limitGrammar === "UNRECOGNIZED" && data.limit === null;
+                if ((!known && !fallback) || data.recurringAuthorized !== false ||
+                    data.localRequestsReserved !== 1 || data.databaseWrites !== 0 ||
                     data.providerCalls !== 1 || data.telegramMessages !== 0 ||
                     data.providerWrites !== 0 || data.aiCalls !== 0 ||
-                    !Number.isInteger(data.remaining) || data.remaining <= 5) throw Error();
+                    !Number.isInteger(data.remaining) || data.remaining <= 5 ||
+                    !Number.isInteger(data.resetSeconds) || data.resetSeconds < 0 ||
+                    data.resetSeconds > 86400) throw Error();
                 console.log("GROWTH_QUOTA_PROBE_VERIFIED=" + JSON.stringify({
-                  status: data.status, limit: data.limit, remaining: data.remaining,
+                  status: data.status, limitGrammar: data.limitGrammar,
+                  recurringAuthorized: false, localRequestsReserved: 1,
+                  limit: data.limit, remaining: data.remaining,
                   resetSeconds: data.resetSeconds, providerCalls: 1,
                   providerWrites: 0, databaseWrites: 0, telegramMessages: 0, aiCalls: 0,
                 }));
