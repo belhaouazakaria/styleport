@@ -4,7 +4,7 @@ import type { z } from "zod";
 
 import { NonRetryableGrowthJobError, RetryableGrowthJobError } from "@/lib/growth/errors";
 import { requirePinterestConfiguration } from "@/lib/growth/pinterest/config";
-import { budgetedPinterestFetch } from "@/lib/growth/pinterest/global-budget";
+import { budgetedPinterestFetch, PinterestGlobalBudgetBlocked } from "@/lib/growth/pinterest/global-budget";
 import {
   analyticsDateRange,
   PINTEREST_CORE_ACCOUNT_METRICS,
@@ -198,7 +198,11 @@ export async function createPinterestPin(params: { accountId: string; boardId: s
       body: JSON.stringify({ board_id: params.boardId, title: params.title, description: params.description, link: params.link, media_source: { source_type: "image_url", url: params.imageUrl, is_standard: true } }),
       signal: AbortSignal.timeout(15_000),
     }, params.fetchImpl || fetch);
-  } catch {
+  } catch (error) {
+    // Admission failure proves no Pinterest write was attempted; never mark it
+    // as a possibly published Pin or enter ambiguous-create reconciliation.
+    if (error instanceof PinterestGlobalBudgetBlocked &&
+        error.code !== "TRANSPORT_AMBIGUOUS") throw error;
     throw new PinterestCreateAmbiguousError("Pinterest Create Pin ended without a confirmed response.");
   }
   const metadata = rateLimitMetadata(response.headers);
