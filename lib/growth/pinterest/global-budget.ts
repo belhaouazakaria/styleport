@@ -1,7 +1,6 @@
 import { GrowthActivityActorKind, Prisma } from "@prisma/client";
 
 import { recordGrowthActivity } from "@/lib/growth/activity";
-import { assessPinterestQuota } from "@/lib/growth/operations/quota-probe";
 import { prisma } from "@/lib/prisma";
 
 /**
@@ -112,13 +111,15 @@ export async function budgetedPinterestFetch(
     await recordPinterestGlobalCooldown(response.status === 429 ? "RATE_LIMITED" : "PROVIDER_ERROR");
     return response;
   }
-  if (response.ok) {
-    try {
-      // Unknown limit grammar is allowed only because the independent global
-      // ceiling is now durable and deliberately stricter. Remaining/reset
-      // must be numeric with >5 requests of provider headroom.
-      assessPinterestQuota(response.headers);
-    } catch {
+  if (response.ok && new URL(typeof input === "string" ? input : input.toString()).pathname !== "/v5/oauth/token") {
+    // OAuth token responses may not expose regular API category headers. They
+    // still consume the shared local cap, but cannot imply fresh quota.
+    const remaining = response.headers.get("x-ratelimit-remaining");
+    const reset = response.headers.get("x-ratelimit-reset");
+    const limit = response.headers.get("x-ratelimit-limit");
+    if (!limit || !/^(?:0|[1-9]\\d{0,7})$/.test(remaining || "") ||
+        !/^(?:0|[1-9]\\d{0,7})$/.test(reset || "") ||
+        Number(remaining) <= 5 || Number(reset) > 86_400) {
       await recordPinterestGlobalCooldown("UNKNOWN_QUOTA");
       throw new PinterestGlobalBudgetBlocked("PROVIDER_QUOTA_UNKNOWN");
     }
