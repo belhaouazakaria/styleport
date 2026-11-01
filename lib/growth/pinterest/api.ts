@@ -4,6 +4,7 @@ import type { z } from "zod";
 
 import { NonRetryableGrowthJobError, RetryableGrowthJobError } from "@/lib/growth/errors";
 import { requirePinterestConfiguration } from "@/lib/growth/pinterest/config";
+import { budgetedPinterestFetch } from "@/lib/growth/pinterest/global-budget";
 import {
   analyticsDateRange,
   PINTEREST_CORE_ACCOUNT_METRICS,
@@ -109,10 +110,10 @@ async function pinterestFetch<T>(params: {
 }): Promise<{ data: T; rateLimit: PinterestRateLimitMetadata }> {
   const config = requirePinterestConfiguration();
   if (!params.path.startsWith("/") || params.path.startsWith("//")) throw new Error("Invalid Pinterest API path.");
-  const response = await (params.fetchImpl || fetch)(`${config.apiBaseUrl}${params.path}`, {
+  const response = await budgetedPinterestFetch(`${config.apiBaseUrl}${params.path}`, {
     headers: { Authorization: `Bearer ${params.accessToken}`, Accept: "application/json" },
     signal: AbortSignal.timeout(10_000),
-  });
+  }, params.fetchImpl || fetch);
   const metadata = rateLimitMetadata(response.headers);
   const raw: unknown = await response.json().catch(() => null);
   if (!response.ok) {
@@ -191,12 +192,12 @@ export async function createPinterestPin(params: { accountId: string; boardId: s
   const accessToken = await getValidPinterestAccessToken(params.accountId, params.fetchImpl);
   let response: Response;
   try {
-    response = await (params.fetchImpl || fetch)(`${config.apiBaseUrl}/pins`, {
+    response = await budgetedPinterestFetch(`${config.apiBaseUrl}/pins`, {
       method: "POST",
       headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json", "content-type": "application/json" },
       body: JSON.stringify({ board_id: params.boardId, title: params.title, description: params.description, link: params.link, media_source: { source_type: "image_url", url: params.imageUrl, is_standard: true } }),
       signal: AbortSignal.timeout(15_000),
-    });
+    }, params.fetchImpl || fetch);
   } catch {
     throw new PinterestCreateAmbiguousError("Pinterest Create Pin ended without a confirmed response.");
   }
