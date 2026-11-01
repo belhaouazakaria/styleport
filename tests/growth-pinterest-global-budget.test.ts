@@ -36,3 +36,46 @@ describe("persistent Pinterest quota", () => {
     expect(mock.record).not.toHaveBeenCalled();
   });
 });
+
+
+describe("production network admission", () => {
+  it("blocks unsafe endpoints before network or database access", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    const transport = vi.fn();
+    await expect(budgetedPinterestFetch("https://example.com/v5/user_account", {}, transport))
+      .rejects.toMatchObject({ code: "UNSAFE_ENDPOINT" });
+    expect(transport).not.toHaveBeenCalled();
+    expect(mock.transaction).not.toHaveBeenCalled();
+  });
+  it("charges a request and persists a cooldown on provider 429", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    const transport = vi.fn().mockResolvedValue(new Response("{}", { status: 429 }));
+    await expect(budgetedPinterestFetch("https://api.pinterest.com/v5/user_account", {}, transport))
+      .resolves.toHaveProperty("status", 429);
+    expect(transport).toHaveBeenCalledOnce();
+    expect(mock.record).toHaveBeenCalledTimes(2);
+    expect(mock.record).toHaveBeenCalledWith(expect.objectContaining({
+      action: "PINTEREST_GLOBAL_API_COOLDOWN",
+    }));
+  });
+  it("blocks missing quota headers after consuming the attempt", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    const transport = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+    await expect(budgetedPinterestFetch("https://api.pinterest.com/v5/user_account", {}, transport))
+      .rejects.toMatchObject({ code: "PROVIDER_QUOTA_UNKNOWN" });
+    expect(transport).toHaveBeenCalledOnce();
+    expect(mock.record).toHaveBeenCalledTimes(2);
+  });
+  it("accepts documented remaining headroom and never trusts unparseable limit numbers", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    const transport = vi.fn().mockResolvedValue(new Response("{}", {
+      status: 200, headers: {
+        "x-ratelimit-limit": "nonstandard",
+        "x-ratelimit-remaining": "99", "x-ratelimit-reset": "1",
+      },
+    }));
+    await expect(budgetedPinterestFetch("https://api.pinterest.com/v5/user_account", {}, transport))
+      .resolves.toHaveProperty("status", 200);
+    expect(mock.record).toHaveBeenCalledOnce();
+  });
+});
