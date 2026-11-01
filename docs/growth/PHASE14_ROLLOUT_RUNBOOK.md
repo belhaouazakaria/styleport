@@ -270,3 +270,42 @@ kill-switch and monitoring proof, (3) manually approved small Pin publication
 plus confirmation and attribution/analytics. SEO and AdSense continue afterward
 as a separate track. Do not introduce additional gates unrelated to these
 explicit objectives.
+
+
+## Phase 14E first live attempt and production env bootstrap repair (2026-11-01)
+
+The owner's exact-SHA production read-only preflight completed successfully at
+`2e61bdce2345a22f335568c59537b7954d28d80f` (GitHub Actions run
+`41313270939`): Growth, attribution, recurring schedules and Telegram all OFF;
+zero active/retryable queue; one CONNECTED production account with unexpired
+credentials. The owner then approved issue #85. The one-account-sync workflow
+`41313439736` failed with `GROWTH_ONE_ACCOUNT_SYNC_LAUNCH=BLOCKED`
+before a one-shot job or request reservation was created. Independent,
+read-only production diagnostics showed Growth OFF, no lease, queue zero,
+`TRIAL_JOB=NONE`, `TRIAL_API_RESERVATION=NONE`, watchdog and alert healthy.
+
+Cause: the Phase14E launcher's original code required the five Pinterest
+credentials/configuration variables to appear in the PM2 process snapshot;
+none were set there. The operator verified that `.env.production.local`
+and `.env.local` are present and that the standard Next.js production
+environment loader resolves **all five** Pinterest variables and a valid-length
+32-byte encryption key. This matches the regular Growth worker's existing
+Next environment bootstrap policy. **Do not generate or replace the encryption
+key**, overwrite the env files, restart PM2 or reconnect OAuth on this evidence.
+
+The repair loads the existing Next production environment files in the
+already-identity-checked `saytwist`-user one-shot launcher, rejects missing
+or invalid production Pinterest config, and passes only the five approved
+Pinterest variables to its minimal child environment. The trusted production
+database URL still comes exclusively from the already-validated PM2 snapshot.
+One-job/max-one-GET, quota, watchdog, exact-SHA authorization, idempotency,
+24-hour reservation, and fail-closed controls remain unchanged. Regression
+tests must confirm Next env precedence, only-five-variable forwarding, and
+missing/invalid configuration rejection without exposing secret values.
+
+**This source repair is not proof of a successful sync.** Require CI and a
+protected exact-SHA deploy, rotate the root-owned watchdog SHA, and rerun the
+read-only production preflight against that *new* SHA. Only then create a
+distinct owner issue/comment approval for a single new Pinterest request.
+Do not replay issue #85; do not enable recurring Growth, AI, publication or
+Telegram during the repair.
