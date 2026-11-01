@@ -202,7 +202,8 @@ export async function createPinterestPin(params: { accountId: string; boardId: s
     // Admission failure proves no Pinterest write was attempted; never mark it
     // as a possibly published Pin or enter ambiguous-create reconciliation.
     if (error instanceof PinterestGlobalBudgetBlocked &&
-        error.code !== "TRANSPORT_AMBIGUOUS") throw error;
+        ["ADMISSION_CLOSED", "GLOBAL_QUOTA_EXHAUSTED",
+          "PROVIDER_COOLDOWN", "UNSAFE_ENDPOINT"].includes(error.code)) throw error;
     throw new PinterestCreateAmbiguousError("Pinterest Create Pin ended without a confirmed response.");
   }
   const metadata = rateLimitMetadata(response.headers);
