@@ -309,3 +309,27 @@ read-only production preflight against that *new* SHA. Only then create a
 distinct owner issue/comment approval for a single new Pinterest request.
 Do not replay issue #85; do not enable recurring Growth, AI, publication or
 Telegram during the repair.
+
+
+## Phase 14E production success and Phase 14F code checkpoint
+
+Phase14E passed on 2026-11-01: issue #89, action #41358739611,
+SHA `dd27dd58036973fc2692cf3e22ff440ee8cbc586`.
+One Pinterest GET succeeded; no provider writes, AI or Telegram;
+Growth OFF, no lease and no active queue. This does not enable recurrence.
+
+Phase14F introduces a production-only shared Pinterest API request budget
+using existing immutable GrowthActivity records and a PostgreSQL
+GrowthSettings row lock. Reservations commit before network calls, are
+never refunded and are shared across processes. Global conservative bounds:
+4 requests per rolling hour and 16 per rolling 24 hours. Rate-limited,
+ambiguous or malformed provider evidence triggers 60-minute cooldown.
+Adapter GETs, pagination, Pin POSTs, token exchange/refresh and owner-only
+quota probes enter the same admission gate. Existing one-shot restrictions
+remain. No new database migration or automated schedule.
+
+**Not yet launched:** require complete CI, independent provider-path review,
+disposable PostgreSQL concurrent-admission tests, exact-SHA owner release,
+watchdog rotation and read-only preflight. Only then authorize one monitored,
+bounded OBSERVE scheduling trial. Do not publish Pins or enable paid AI
+without their separate existing safeguards.
