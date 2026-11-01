@@ -79,3 +79,22 @@ describe("production network admission", () => {
     expect(mock.record).toHaveBeenCalledOnce();
   });
 });
+
+describe("persistent admission limits", () => {
+  it("prevents the fifth hourly attempt", async () => {
+    mock.count.mockImplementation(({ where }: { where: { action: string } }) =>
+      Promise.resolve(where.action === "PINTEREST_GLOBAL_API_REQUEST_RESERVED" ? 4 : 0));
+    await expect(reservePinterestGlobalAttempt()).rejects.toMatchObject({
+      code: "GLOBAL_QUOTA_EXHAUSTED",
+    });
+    expect(mock.record).not.toHaveBeenCalled();
+  });
+  it("honors an existing provider cooldown across process invocations", async () => {
+    mock.count.mockImplementation(({ where }: { where: { action: string } }) =>
+      Promise.resolve(where.action === "PINTEREST_GLOBAL_API_COOLDOWN" ? 1 : 0));
+    await expect(reservePinterestGlobalAttempt()).rejects.toMatchObject({
+      code: "PROVIDER_COOLDOWN",
+    });
+    expect(mock.record).not.toHaveBeenCalled();
+  });
+});
