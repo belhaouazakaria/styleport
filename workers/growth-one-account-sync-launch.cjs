@@ -3,6 +3,7 @@
 const fs = require("node:fs");
 const os = require("node:os");
 const { spawnSync } = require("node:child_process");
+const { loadEnvConfig } = require("@next/env");
 const { validatedDatabaseUrl } = require("./growth-lease-watchdog-launch.cjs");
 const APP = "/home/saytwist/htdocs/saytwist.com";
 const NODE_DIR = "/home/saytwist/.nvm/versions/node/v24.20.0/bin";
@@ -11,6 +12,11 @@ const PM2 = "/home/saytwist/.npm/_npx/5f7878ce38f1eb13/node_modules/pm2/bin/pm2"
 const SERVICE = "saytwist-growth-lease-watchdog.service";
 const TIMER = "saytwist-growth-lease-watchdog.timer";
 const ALERT = "saytwist-growth-lease-watchdog-alert.service";
+const PINTEREST_ENV_NAMES = [
+  "PINTEREST_APP_ID", "PINTEREST_APP_SECRET", "PINTEREST_REDIRECT_URI",
+  "PINTEREST_API_ENVIRONMENT", "GROWTH_CREDENTIAL_ENCRYPTION_KEY",
+];
+const PINTEREST_REDIRECT = "https://saytwist.com/api/admin/growth/pinterest/oauth/callback";
 const EXPECTED_LINES = [
   "GROWTH_ONE_ACCOUNT_SYNC=PASSED",
   "GROWTH_ONE_ACCOUNT_SYNC_JOB=SUCCEEDED",
@@ -22,6 +28,31 @@ const EXPECTED_LINES = [
   "GROWTH_ONE_ACCOUNT_SYNC_AI_CALLS=0",
   "GROWTH_ONE_ACCOUNT_SYNC_TELEGRAM=0",
 ];
+
+/**
+ * The web app and regular Growth worker read production credentials from
+ * Next.js env files. PM2 intentionally does not need to carry those secrets.
+ * Only these five values cross into the strictly scoped one-shot child.
+ */
+function loadPinterestRuntimeEnv(projectDir = APP) {
+  loadEnvConfig(projectDir, false);
+  const result = {};
+  for (const key of PINTEREST_ENV_NAMES) {
+    const value = process.env[key];
+    if (typeof value !== "string" || !value.trim()) throw Error("PIN_ENV_MISSING");
+    result[key] = value;
+  }
+  const encodedKey = result.GROWTH_CREDENTIAL_ENCRYPTION_KEY;
+  const decodedKey = Buffer.from(encodedKey, "base64");
+  if (result.PINTEREST_API_ENVIRONMENT !== "production" ||
+      result.PINTEREST_REDIRECT_URI !== PINTEREST_REDIRECT ||
+      decodedKey.length !== 32 ||
+      decodedKey.toString("base64").replace(/=+$/, "") !==
+        encodedKey.trim().replace(/=+$/, "")) {
+    throw Error("PIN_ENV_INVALID");
+  }
+  return result;
+}
 
 function run() {
   const sha = process.env.EXPECTED_RELEASE || "";
@@ -69,13 +100,7 @@ function run() {
     GROWTH_PINTEREST_ONE_SYNC_ENTRYPOINT: "true",
     GROWTH_WORKER_RUN_ENABLED: "false", GROWTH_ROLLOUT_MODE: "OFF",
   };
-  for (const key of ["PINTEREST_APP_ID", "PINTEREST_APP_SECRET",
-    "PINTEREST_REDIRECT_URI", "PINTEREST_API_ENVIRONMENT",
-    "GROWTH_CREDENTIAL_ENCRYPTION_KEY"]) {
-    const v = value(key);
-    if (typeof v !== "string" || !v) throw Error("PIN_ENV_MISSING");
-    childEnv[key] = v;
-  }
+  Object.assign(childEnv, loadPinterestRuntimeEnv(APP));
   const child = spawnSync(NODE,
     ["node_modules/tsx/dist/cli.mjs", "workers/growth-one-account-sync.ts"], {
       cwd: APP, env: childEnv, encoding: "utf8",
@@ -93,4 +118,4 @@ if (require.main === module) {
     process.exitCode = 1;
   }
 }
-module.exports = { run };
+module.exports = { run, loadPinterestRuntimeEnv };
