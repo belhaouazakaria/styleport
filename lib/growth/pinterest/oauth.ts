@@ -3,6 +3,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { GrowthPinterestPublicationRole } from "@prisma/client";
 
 import { PINTEREST_OAUTH_SCOPES, PINTEREST_OAUTH_STATE_TTL_MS, requirePinterestConfiguration } from "@/lib/growth/pinterest/config";
+import { budgetedPinterestFetch } from "@/lib/growth/pinterest/global-budget";
 import { PinterestTokenRequestError } from "@/lib/growth/errors";
 import { pinterestTokenResponseSchema, type PinterestTokenResponse } from "@/lib/growth/pinterest/schemas";
 import { prisma } from "@/lib/prisma";
@@ -52,7 +53,7 @@ async function parseTokenResponse(response: Response): Promise<PinterestTokenRes
 export async function exchangePinterestAuthorizationCode(code: string, fetchImpl: typeof fetch = fetch) {
   const config = requirePinterestConfiguration();
   const body = new URLSearchParams({ grant_type: "authorization_code", code, redirect_uri: config.redirectUri });
-  const response = await fetchImpl(`${config.apiBaseUrl}/oauth/token`, {
+  const response = await budgetedPinterestFetch(`${config.apiBaseUrl}/oauth/token`, {
     method: "POST",
     headers: {
       Authorization: `Basic ${Buffer.from(`${config.appId}:${config.appSecret}`).toString("base64")}`,
@@ -60,13 +61,13 @@ export async function exchangePinterestAuthorizationCode(code: string, fetchImpl
     },
     body,
     signal: AbortSignal.timeout(10_000),
-  });
+  }, fetchImpl);
   return parseTokenResponse(response);
 }
 
 export async function refreshPinterestToken(refreshToken: string, fetchImpl: typeof fetch = fetch) {
   const config = requirePinterestConfiguration();
-  const response = await fetchImpl(`${config.apiBaseUrl}/oauth/token`, {
+  const response = await budgetedPinterestFetch(`${config.apiBaseUrl}/oauth/token`, {
     method: "POST",
     headers: {
       Authorization: `Basic ${Buffer.from(`${config.appId}:${config.appSecret}`).toString("base64")}`,
@@ -74,7 +75,7 @@ export async function refreshPinterestToken(refreshToken: string, fetchImpl: typ
     },
     body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: refreshToken }),
     signal: AbortSignal.timeout(10_000),
-  });
+  }, fetchImpl);
   return parseTokenResponse(response);
 }
 

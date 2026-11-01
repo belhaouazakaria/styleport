@@ -5,6 +5,7 @@ import { GrowthPinterestApiEnvironment, GrowthPinterestConnectionStatus } from "
 import { decryptPinterestCredentials } from "@/lib/growth/pinterest/credentials";
 import { requirePinterestConfiguration } from "@/lib/growth/pinterest/config";
 import { PinterestOneGetBudget } from "@/lib/growth/pinterest/one-get-budget";
+import { budgetedPinterestFetch } from "@/lib/growth/pinterest/global-budget";
 import { prisma } from "@/lib/prisma";
 
 export type QuotaProbeCode =
@@ -138,11 +139,11 @@ export async function runPinterestQuotaProbe(fetchImpl: typeof fetch = fetch) {
   localBudget.claim();
   let response: Response;
   try {
-    response = await fetchImpl("https://api.pinterest.com/v5/user_account", {
+    response = await budgetedPinterestFetch("https://api.pinterest.com/v5/user_account", {
       method: "GET", redirect: "error",
       headers: { Authorization: `Bearer ${creds.accessToken}`, Accept: "application/json" },
       signal: AbortSignal.timeout(10_000),
-    });
+    }, fetchImpl);
   } catch { return block("PINTEREST_HTTP_FAILURE"); }
   try { localBudget.observe(response.status); }
   catch { return block(response.status === 429 ? "PINTEREST_RATE_LIMITED" : "PINTEREST_HTTP_FAILURE"); }
@@ -156,6 +157,6 @@ export async function runPinterestQuotaProbe(fetchImpl: typeof fetch = fetch) {
     limit: quota.limit, remaining: quota.remaining, resetSeconds: quota.resetSeconds,
     limitGrammar: quota.limitGrammar, recurringAuthorized: quota.recurringAuthorized,
     localRequestsReserved: localBudget.requestsReserved,
-    providerCalls: 1, providerWrites: 0, databaseWrites: 0, telegramMessages: 0, aiCalls: 0,
+    providerCalls: 1, providerWrites: 0, databaseWrites: process.env.NODE_ENV === "production" ? 1 : 0, telegramMessages: 0, aiCalls: 0,
   };
 }
