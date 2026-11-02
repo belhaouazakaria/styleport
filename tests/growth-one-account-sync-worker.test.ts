@@ -115,6 +115,19 @@ describe("One controlled Pinterest worker job", () => {
     expect(m.revoke).toHaveBeenCalledTimes(1);
     expect(process.env.GROWTH_PINTEREST_ONE_SYNC_JOB_ID).toBeUndefined();
   });
+  it("uses one UTC-day idempotency key for bounded scheduled OBSERVE", async () => {
+    const day = new Date().toISOString().slice(0, 10);
+    await expect(runOneAccountSync(sha, { dailyUtcDate: day })).resolves.toMatchObject({
+      job: "SUCCEEDED", growth: "OFF", lease: "NONE", activeQueue: 0, providerGets: 1,
+    });
+    expect(m.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        idempotencyKey: "growth-daily-observe:" + day, maxAttempts: 1,
+      }),
+    }));
+    expect(m.revoke).toHaveBeenCalledOnce();
+    expect(process.env.GROWTH_PINTEREST_ONE_SYNC_JOB_ID).toBeUndefined();
+  });
   it("blocks unexpected queue state without activating the worker", async () => {
     active = 1;
     await expect(runOneAccountSync(sha)).rejects.toThrow("ADMISSION_NOT_IDLE");
