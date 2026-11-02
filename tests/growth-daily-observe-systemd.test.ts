@@ -1,8 +1,10 @@
 import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 
 const installer = readFileSync("workers/install-growth-daily-observe-systemd.sh", "utf8");
 const rotator = readFileSync("workers/rotate-growth-daily-observe-systemd.sh", "utf8");
+const existingAlertInstaller = readFileSync("workers/install-growth-daily-observe-alert-existing.sh", "utf8");
 const launcher = readFileSync("workers/growth-daily-observe-launch.cjs", "utf8");
 const workflow = readFileSync(".github/workflows/growth-daily-observe-trial.yml", "utf8");
 
@@ -24,6 +26,12 @@ describe("Phase14G disabled-by-default timer and owner trial", () => {
     expect(rotator).toContain("systemctl daemon-reload");
     expect(rotator).toContain("OnCalendar=*-*-* 23:50:00 UTC");
     expect(rotator).toContain("DAILY_OBSERVE_TIMER=INACTIVE");
+    expect(rotator).toContain("OnFailure=saytwist-growth-daily-observe-alert.service");
+    execFileSync("bash", ["-n", "workers/rotate-growth-daily-observe-systemd.sh"]);
+    execFileSync("bash", ["-n", "workers/install-growth-daily-observe-alert-existing.sh"]);
+    expect(existingAlertInstaller).toContain("systemd-analyze verify");
+    expect(existingAlertInstaller).toContain("OnFailure=saytwist-growth-daily-observe-alert.service");
+    expect(existingAlertInstaller).toContain("DAILY_OBSERVE_TIMER=DISABLED");
     expect(rotator).not.toContain("systemctl enable");
     expect(rotator).not.toContain("systemctl start");
   });
