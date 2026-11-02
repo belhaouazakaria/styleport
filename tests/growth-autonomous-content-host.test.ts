@@ -31,6 +31,6 @@ describe("bounded automated content generation host", () => {
     expect(runner).toContain("maxAttempts: 1");
     expect(runner).toContain("revokeGrowthWorkerActivation(deadline)");
     expect(runner).toContain("GROWTH_AUTONOMOUS_PUBLICATIONS=0");
-    expect(runner).not.toContain("GrowthJobType.PINTEREST_PIN_PUBLISH");
+    // It may mention the publisher type to exclude pending approved publications\n    // from blocking local content work, but must never enqueue one.\n    expect(runner).not.toContain("type: GrowthJobType.PINTEREST_PIN_PUBLISH");
   });
 });
