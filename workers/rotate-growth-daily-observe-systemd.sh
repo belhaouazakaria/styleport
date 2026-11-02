@@ -4,6 +4,8 @@ set -Eeuo pipefail
 # Never starts timer or worker; a separate owner approval is required.
 fail() { printf 'DAILY_OBSERVE_ROTATION=BLOCKED\n' >&2; exit 1; }
 [[ "$(id -u)" == "0" && "$#" == "2" ]] || fail
+# Root executes only a root-owned, private reviewed copy, never writable app source.
+[[ -f "$0" && ! -L "$0" && "$(stat -c '%u:%g:%a' "$0")" == "0:0:700" ]] || fail
 OLD="$1"
 NEW="$2"
 [[ "$OLD" =~ ^[a-f0-9]{40}$ && "$NEW" =~ ^[a-f0-9]{40}$ && "$OLD" != "$NEW" ]] || fail
