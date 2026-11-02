@@ -378,3 +378,49 @@ enabled by a code merge. The owner must approve its timer separately
 after verifying the recipient and an actual one-time receipt, as well as
 the live production analysis cycle. The private report must not misstate
 reservation-based AI spend as verified provider billing.
+
+### Phase14I automatic content preparation and selected Pin publication (review build)
+
+A separately opted-in `PREPARE` worker mode is allowlisted for
+Translator/Ideas decision and execution and deterministic Creative Lab
+candidate generation only. The `workers/growth-autonomous-content.ts`
+runner verifies today's local strategy/opportunity/learning jobs succeeded,
+then selects at most **one high-evidence Translator and one distinct
+high-evidence Ideas opportunity per UTC day** from the same current
+Opportunity Intelligence v2 analysis. Thresholds are 75/80 for Translator
+and 70/75 for Ideas. Missing or partial/stale evidence selects nothing.
+Each decision/action/creative uses an independently scoped job and a
+240-second time-limited DB activation lease. Existing application handlers
+enforce authoring quotas, similarity/quality/reuse rules, revision rollback
+and hard AI-cost reservations. Unknown or failed paid calls are never
+replayed automatically. Creative generation uses a deterministic
+MINIMAL_STATEMENT asset, with the paid AI-image switch explicitly OFF.
+Candidate creation does **not** imply Pin approval.
+
+The standalone launch checks production identity, SHA, watchdog, daily
+analysis success, an independent Growth OpenAI project key (unequal to
+the site's normal key), the global OFF switches and the 06:30-06:49 UTC
+window. The opt-in root-owned systemd one-shot/timer/private-alert
+installer never enables or starts the timer. This is code implementation,
+**not proof of a paid production acceptance run**. Before activation,
+the operator must verify the separate AI project hard billing cap and
+fresh budget ledger, approved content review/rollback, persistent image
+storage, and one bounded live content generation with no existing queue.
+
+A separate `APPROVED_PUBLISH` worker mode is allowlisted for **only**
+`PINTEREST_PIN_PUBLISH` after two independent process gates. The
+`workers/growth-approved-pin-tick.ts` selector considers only due,
+previously persisted publications linked to an individually ADMIN-APPROVED
+Pin and its original delayed publication job. Each 15-minute tick processes
+at most **one exact job ID** under a 120-second lease and the same
+independent watchdog; it cannot create an approval. The existing
+`publishApprovedPin` revalidates immutable candidate revision, asset
+checksum, metadata, destination, account, board, schedule and original
+approval before using official Pinterest API v5. Global provider limits,
+retry classification and ambiguous result reconciliation continue to
+apply. Reconciliation-required outcomes result in operator alert, never
+a second blind Pin POST. A separate root-owned timer/private alert is
+installed but disabled by default. Live activation requires reviewed
+per-Pin acceptance, a valid provider quota, a matched deployed release
+and explicit separate owner approval. No general AUTOPILOT mode is
+enabled; bulk unapproved publishing remains prohibited.
