@@ -36,10 +36,10 @@ export function assertDailyObserveRuntime(
   if (env.GROWTH_DAILY_OBSERVE_APPROVAL !== expectedApproval) {
     throw Error("APPROVAL_INVALID");
   }
-  // Scheduled runs can only start in this 20-minute UTC window.
+  // Scheduled runs can only start in this 10-minute UTC window.
   // Manual trials are separately GitHub owner-approved and may run anytime.
   if (mode === "SCHEDULED" &&
-      !(now.getUTCHours() === 13 && now.getUTCMinutes() < 20)) {
+      !(now.getUTCHours() === 23 && now.getUTCMinutes() >= 50)) {
     throw Error("OUTSIDE_SCHEDULED_WINDOW");
   }
   let target: URL;
