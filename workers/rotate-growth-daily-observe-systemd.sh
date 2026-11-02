@@ -43,7 +43,12 @@ fi
 TMP_S="$(mktemp "$UNIT_DIR/.rotate-observe-s.XXXXXX")"
 TMP_T="$(mktemp "$UNIT_DIR/.rotate-observe-t.XXXXXX")"
 trap 'rm -f "$TMP_S" "$TMP_T"' EXIT
-sed "s/Environment=EXPECTED_RELEASE=$OLD/Environment=EXPECTED_RELEASE=$NEW/" "$SP" > "$TMP_S"
+if grep -Fqx 'OnFailure=saytwist-growth-daily-observe-alert.service' "$SP"; then
+  sed "s/Environment=EXPECTED_RELEASE=$OLD/Environment=EXPECTED_RELEASE=$NEW/" "$SP" > "$TMP_S"
+else
+  sed -e "s/Environment=EXPECTED_RELEASE=$OLD/Environment=EXPECTED_RELEASE=$NEW/" \
+    -e '/^Wants=network-online.target$/a OnFailure=saytwist-growth-daily-observe-alert.service' "$SP" > "$TMP_S"
+fi
 sed -e 's/daily OBSERVE 13:00 UTC/daily OBSERVE 23:50 UTC/' \
   -e 's/OnCalendar=\*-\*-\* 13:00:00 UTC/OnCalendar=*-*-* 23:50:00 UTC/' \
   -e 's/AccuracySec=1min/AccuracySec=1s/' "$TP" > "$TMP_T"
@@ -54,6 +59,7 @@ mv "$TMP_T" "$TP"
 systemctl daemon-reload
 systemd-analyze verify "$SP" "$TP" || fail
 [[ "$(grep -Fxc "Environment=EXPECTED_RELEASE=$NEW" "$SP")" == "1" ]] || fail
+[[ "$(grep -Fxc "OnFailure=saytwist-growth-daily-observe-alert.service" "$SP")" == "1" ]] || fail
 [[ "$(grep -Fxc 'OnCalendar=*-*-* 23:50:00 UTC' "$TP")" == "1" ]] || fail
 [[ "$(systemctl is-enabled "$TIMER" 2>/dev/null || true)" != "enabled" ]] || fail
 [[ "$(systemctl is-active "$TIMER" 2>/dev/null || true)" != "active" ]] || fail
