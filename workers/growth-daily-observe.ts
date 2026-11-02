@@ -74,9 +74,13 @@ async function main() {
     console.log("GROWTH_DAILY_OBSERVE_PROVIDER_WRITES=" + result.providerWrites);
     console.log("GROWTH_DAILY_OBSERVE_AI_CALLS=" + result.aiCalls);
     console.log("GROWTH_DAILY_OBSERVE_TELEGRAM=" + result.telegram);
-  } catch {
-    // No tokens, account ID, PM2 JSON, DB URL or untrusted response in logs.
+  } catch (error) {
+    // Classify only a literal known safety rejection. Never log raw exceptions.
+    const reason = error instanceof Error &&
+      error.message === "PINTEREST_ONE_SYNC_24H_BUDGET_EXHAUSTED"
+      ? "24H_RESERVATION" : "OTHER";
     console.error("GROWTH_DAILY_OBSERVE=BLOCKED");
+    console.error("GROWTH_DAILY_OBSERVE_REASON=" + reason);
     console.error("GROWTH_DAILY_OBSERVE_STAGE=" + stage);
     process.exitCode = 1;
   } finally {
