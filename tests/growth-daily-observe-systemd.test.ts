@@ -8,7 +8,8 @@ const workflow = readFileSync(".github/workflows/growth-daily-observe-trial.yml"
 describe("Phase14G disabled-by-default timer and owner trial", () => {
   it("never starts or enables the timer during installation", () => {
     expect(installer).toContain("Persistent=false");
-    expect(installer).toContain("OnCalendar=*-*-* 13:00:00 UTC");
+    expect(installer).toContain("AccuracySec=1s");
+    expect(installer).toContain("OnCalendar=*-*-* 23:50:00 UTC");
     expect(installer).toContain("User=saytwist");
     expect(installer).toContain("GROWTH_DAILY_OBSERVE_MODE=SCHEDULED");
     expect(installer).toContain("systemd-analyze verify");
