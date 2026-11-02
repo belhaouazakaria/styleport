@@ -333,3 +333,63 @@ disposable PostgreSQL concurrent-admission tests, exact-SHA owner release,
 watchdog rotation and read-only preflight. Only then authorize one monitored,
 bounded OBSERVE scheduling trial. Do not publish Pins or enable paid AI
 without their separate existing safeguards.
+
+
+## Phase 14G: daily bounded OBSERVE (implementation only; OFF)
+
+Phase14F was safely deployed as SHA `65b3bd347e8b55a4f5b77171081371b72236e3d2`.
+Root-owned watchdog pin and timer were verified. The exact-SHA owner
+preflight issue #93, run #41469060923 passed: PM2 online, one valid
+production Pinterest connection, zero runnable jobs and all Growth,
+attribution, Telegram and scheduling flags OFF.
+
+Phase14G adds a **single daily account metadata** OBSERVE entrypoint,
+owner-gated one-time trial workflow, and optional **disabled-by-default**
+root-owned systemd timer installer. This does not activate Growth.
+
+- Scheduled window: 13:00 to 13:19 UTC; systemd timer fires at 13:00
+  UTC with `Persistent=false`, so missed windows are skipped rather
+  than caught up. One run per current UTC day, even if release SHA
+  changes. One metadata GET max, no pagination, OAuth refresh, Pin
+  writes, AI, translation changes or Telegram.
+- Preconditions: correct deployed SHA, trusted saytwist runtime and
+  PM2 production DB, watchdog timer healthy with matching SHA and alert,
+  Growth OFF, attribution OFF, all process schedules OFF, idle queue and
+  NULL DB lease, one connected Pinterest account with >=15 minutes
+  token validity. Two-minute activation lease and the independent
+  one-minute expiry watchdog remain mandatory.
+- The daily `growth-daily-observe:YYYY-MM-DD` key is unique, and the
+  existing same-account 24-hour durable one-GET reservation, global
+  4/hour + 16/day shared provider request ledger and cooldown remain
+  independent protections. Normal completion revokes the lease and
+  verifies Growth OFF, no active queue, and successful account sync.
+  Errors must stop without a retry or replacement job.
+- Owner trial requires a separate exact-SHA open issue titled
+  `SayTwist Growth daily OBSERVE trial <SHA>`, body
+  `DAILY_OBSERVE_TRIAL_SHA=<SHA>` followed by
+  `DAILY_OBSERVE_TRIAL_TARGET=saytwist.com`, and the owner's exact
+  comment `RUN SAYTWIST GROWTH DAILY OBSERVE TRIAL <SHA>`. The
+  workflow `growth-daily-observe-trial.yml` invokes the
+  minimal-environment launcher once as `saytwist`. The issue alone
+  does not authorize this or recurring work.
+- The separate root-only systemd installer accepts the **exact
+  deployed SHA** only after a successful protected release and watchdog
+  rotation. It installs files in /etc/systemd/system and verifies
+  them but **never starts or enables the timer**. Owner approval is
+  required both for installing units and for later enabling the
+  recurring timer. The timer must be disabled and inspected immediately
+  if Growth, the watchdog, the provider budget or quota evidence is
+  unsafe. After each future code deployment the pinned service SHA
+  must be deliberately rotated with the watchdog before recurrence.
+- Mandatory before enabling the daily timer: CI lint/types/tests/build,
+  disposable PG18 concurrent-admission acceptance, independent
+  review of code and secrets boundaries, owner-approved protected
+  deploy and watchdog SHA update, fresh owner-approved read-only
+  preflight, successful **one owner-approved live trial**, sanitized
+  postconditions, and explicit owner-approved root timer activation.
+  No paid AI, Pin publishing or Telegram automation is authorized here.
+
+Next step after safe daily OBSERVE: separately scoped local-only
+RECOMMEND scheduler and privately approved Telegram daily reports;
+Pin publishing always requires approval per Pin. SEO and AdSense after
+safe Growth activation.
