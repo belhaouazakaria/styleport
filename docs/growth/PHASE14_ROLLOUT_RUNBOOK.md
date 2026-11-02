@@ -478,3 +478,16 @@ live trial, fresh preflight, validation and inspection of updated units.
 Phase14G exact-SHA trial approval has been exercised or deliberately
 invalidated.** A merge advances `main`, invalidating old exact-SHA
 issue approvals and requiring a new protected deploy and watchdog rotation.
+
+### Existing daily timer alert upgrade
+
+For the already-installed Phase14G daily OBSERVE units, the post-deploy
+root-owned 0700 `rotate-growth-daily-observe-systemd.sh OLD NEW`
+attaches the dedicated `OnFailure` unit and moves the disabled calendar to
+23:50 UTC. After rotation, a separately checksum-reviewed root-owned 0700
+copy of `install-growth-daily-observe-alert-existing.sh NEW` installs the
+missing private alert service. Both scripts reject enabled or active timers.
+Do not enable recurrence until the alert unit and watchdog service pass
+`systemd-analyze verify` and the operator inspects `OnFailure` and timer
+state. The root installer reuses existing `/etc/saytwist-growth-watchdog-alert.env`
+without exposing the credentials. This step is currently code-only.
