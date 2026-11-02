@@ -108,7 +108,7 @@ function run() {
       : "SAYTWIST_DAILY_OBSERVE_SCHEDULED:" + sha,
     GROWTH_DAILY_OBSERVE_DATE: now.toISOString().slice(0, 10),
     GROWTH_DAILY_OBSERVE_MODE: mode,
-    GROWTH_PINTEREST_ONE_SYNC_ENTRYPOINT: "true",
+    GROWTH_DAILY_OBSERVE_ENTRYPOINT: "true",
     GROWTH_WORKER_RUN_ENABLED: "false", GROWTH_ROLLOUT_MODE: "OFF",
   };
   Object.assign(childEnv, loadPinterestRuntimeEnv(APP));
