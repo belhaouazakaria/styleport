@@ -234,7 +234,6 @@ export async function runAutonomousPreparation(day: string) {
           targetId,
           archetype: GrowthCreativeArchetype.MINIMAL_STATEMENT,
           creativeModelVersion: CREATIVE_LAB_VERSION,
-          useAiExample: "false",
         },
       });
       candidates++;
