@@ -18,8 +18,8 @@ const ROLLOUT = {
   GROWTH_APPROVED_PUBLISH_SCOPE: "true",
 };
 const ACTIVE = [GrowthJobStatus.CLAIMED, GrowthJobStatus.RUNNING];
-const READY = [GrowthJobStatus.PENDING, GrowthJobStatus.FAILED_RETRYABLE];
-const ELIGIBLE = [GrowthPublicationStatus.SCHEDULED, GrowthPublicationStatus.FAILED_RETRYABLE];
+const READY: GrowthJobStatus[] = [GrowthJobStatus.PENDING, GrowthJobStatus.FAILED_RETRYABLE];
+const ELIGIBLE: GrowthPublicationStatus[] = [GrowthPublicationStatus.SCHEDULED, GrowthPublicationStatus.FAILED_RETRYABLE];
 
 export function assertApprovedPublishRuntime(
   env: Record<string, string | undefined>, deployedSha: string,
@@ -149,9 +149,10 @@ export async function runOneApprovedPublication(now = new Date()) {
     prisma.growthPinPublication.findUnique({ where: { id: selected.id },
       select: { status: true } }),
   ]);
+  const finished: GrowthPublicationStatus[] = [GrowthPublicationStatus.RECONCILED,
+    GrowthPublicationStatus.RECONCILING, GrowthPublicationStatus.PUBLISHED];
   if (job?.status !== GrowthJobStatus.SUCCEEDED || !publication ||
-      ![GrowthPublicationStatus.RECONCILED, GrowthPublicationStatus.RECONCILING,
-        GrowthPublicationStatus.PUBLISHED].includes(publication.status)) {
+      !finished.includes(publication.status)) {
     throw Error("PUBLISH_OUTCOME_REQUIRES_REVIEW");
   }
   return { status: "ONE_JOB_COMPLETED" as const, publication: publication.status };
