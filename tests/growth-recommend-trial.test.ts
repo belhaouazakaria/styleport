@@ -63,7 +63,7 @@ describe("Phase14H single RECOMMEND trial runtime gate", () => {
       "GROWTH_WORKER_RUN_ENABLED", "GROWTH_DAILY_REPORT_SCHEDULE_ENABLED",
       "TELEGRAM_REPORTS_ENABLED", "GROWTH_ATTRIBUTION_COLLECTION_ENABLED",
     ]) expect(() => assertRecommendTrialRuntime({ ...env, [flag]: "true" }, sha, identity)).toThrow();
-    expect(() => assertRecommendTrialRuntime({ ...env, GROWTH_ROLLOUT_MODE: "RECOMMEND" }, sha, identity)).toThrow();
+    expect(() => assertRecommendTrialRuntime({ ...env, GROWTH_ROLLOUT_MODE: "OBSERVE" }, sha, identity)).toThrow();
     expect(() => assertRecommendTrialRuntime({ ...env, GROWTH_ROLLOUT_MODE: "RECOMMEND" }, sha, identity)).toThrow();
   });
 });
@@ -114,7 +114,7 @@ describe("Phase14H one-job lease admission and rollback", () => {
     mock.audit.mockResolvedValue({});
   });
 
-  it("executes exactly the specified no-op job and closes the activation lease", async () => {
+  it("executes exactly the specified local strategy job and closes the activation lease", async () => {
     await expect(runRecommendTrial(sha)).resolves.toEqual({
       job: "SUCCEEDED", growth: "OFF", lease: "NONE", activeQueue: 0,
     });
