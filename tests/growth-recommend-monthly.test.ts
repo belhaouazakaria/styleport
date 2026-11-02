@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { assertMonthlyRecommendationRuntime } from "@/workers/growth-recommend-monthly";
 
 const sha = "a".repeat(40);
@@ -19,6 +21,19 @@ const identity = { username: "saytwist", uid: 1001, cwd: "/home/saytwist/htdocs/
 const at = (d: string) => new Date(d);
 
 describe("bounded monthly deterministic RECOMMEND execution", () => {
+  it("installs an opt-in timer and checks systemd and runner syntax", () => {
+    const installer = readFileSync("workers/install-growth-monthly-recommend-systemd.sh", "utf8");
+    const launcher = readFileSync("workers/growth-recommend-monthly-launch.cjs", "utf8");
+    execFileSync("bash", ["-n", "workers/install-growth-monthly-recommend-systemd.sh"]);
+    execFileSync("node", ["--check", "workers/growth-recommend-monthly-launch.cjs"]);
+    expect(installer).toContain("OnCalendar=*-*-01 15:00:00 UTC");
+    expect(installer).toContain("Persistent=false");
+    expect(installer).not.toContain("systemctl enable --now");
+    expect(installer).not.toContain("systemctl start");
+    expect(launcher).toContain("WATCHDOG_EXPECTED_RELEASE_SHA=");
+    expect(launcher).toContain("validatedDatabaseUrl(rows)");
+    expect(launcher).toContain("GROWTH_MONTHLY_RECOMMEND_LAUNCH=BLOCKED");
+  });
   it("admits correct host, SHA and first-day 15:00 UTC", () => {
     expect(assertMonthlyRecommendationRuntime(base, sha, identity, at("2026-12-01T15:05:00Z"))).toBe(sha);
   });
