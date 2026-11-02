@@ -54,7 +54,7 @@ export function assertRecommendTrialRuntime(
  * operator wrapper independently retries that CAS on every ordinary exit.
  * A hard kill is covered by the separately installed expiry watchdog.
  */
-export async function runRecommendTrial(sha: string) {
+export async function runRecommendTrial(sha: string, monthlySchedule = false) {
   if (!/^[a-f0-9]{40}$/.test(sha)) throw Error("RELEASE_INVALID");
   const before = await prisma.growthSettings.findUnique({
     where: { id: "global" },
@@ -73,6 +73,7 @@ export async function runRecommendTrial(sha: string) {
     now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1,
   )).toISOString().slice(0, 10);
   const deadline = new Date(Date.now() + LEASE_MS);
+  const key = monthlySchedule ? "growth-recommend-monthly:" + reviewMonth : "growth-recommend-trial:" + sha;
   let admitted = false;
   let jobId: string | undefined;
   try {
@@ -100,7 +101,7 @@ export async function runRecommendTrial(sha: string) {
       const job = await tx.growthJob.create({
         data: {
           type: GrowthJobType.ACCOUNT_STRATEGY_REVIEW,
-          idempotencyKey: "growth-recommend-trial:" + sha,
+          idempotencyKey: key,
           // Deterministic DB-only monthly strategy, no Pinterest/API/AI calls.
           payload: { reviewMonth, evidenceWindowEnd, modelVersion: "account_strategy_v1" },
           maxAttempts: 1,
@@ -112,15 +113,15 @@ export async function runRecommendTrial(sha: string) {
         entityType: "GrowthSettings", entityId: "global",
         action: "WORKER_ACTIVATION_ONE_SHOT",
         fromState: "DISABLED", toState: "ENABLED",
-        summary: { mode: "OBSERVE", jobType: "ACCOUNT_STRATEGY_REVIEW", deadline },
-        correlationKey: "growth-recommend-trial:" + sha,
+        summary: { mode: "RECOMMEND", jobType: "ACCOUNT_STRATEGY_REVIEW", deadline },
+        correlationKey: key,
       }, tx);
       await recordGrowthActivity({
         actorKind: GrowthActivityActorKind.SYSTEM,
         entityType: "GrowthJob", entityId: job.id,
         action: "JOB_CREATED", toState: "PENDING",
         summary: { type: "ACCOUNT_STRATEGY_REVIEW", maxAttempts: 1 },
-        correlationKey: "growth-recommend-trial:" + sha,
+        correlationKey: key,
       }, tx);
       return job.id;
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10_000 });
@@ -128,7 +129,7 @@ export async function runRecommendTrial(sha: string) {
     admitted = true;
     const outcome = await runGrowthWorker({
       onlyJobId: jobId, batchSize: 1,
-      workerId: "phase14h-recommend-trial",
+      workerId: monthlySchedule ? "phase14i-recommend-monthly" : "phase14h-recommend-trial",
       rolloutConfig: ROLLOUT,
     });
     if (outcome.status !== "COMPLETED" || outcome.claimed !== 1 ||

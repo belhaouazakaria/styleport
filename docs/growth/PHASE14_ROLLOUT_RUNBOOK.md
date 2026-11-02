@@ -491,3 +491,22 @@ Do not enable recurrence until the alert unit and watchdog service pass
 `systemd-analyze verify` and the operator inspects `OnFailure` and timer
 state. The root installer reuses existing `/etc/saytwist-growth-watchdog-alert.env`
 without exposing the credentials. This step is currently code-only.
+
+## Phase14I controlled monthly RECOMMEND schedule (not live)
+
+The local-only Phase14H strategy job was live-qualified on 2026-11-02 in
+GitHub run #41530570661. Phase14I reuses that exact short-lease job path
+for one `growth-recommend-monthly:YYYY-MM` key per UTC month. The entrypoint
+accepts only the first UTC calendar day between 15:00 and 15:14, the exact
+release SHA, trusted `saytwist` runtime and production loopback DB. The
+systemd installer verifies watchdog health and installs a 15:00 UTC first-day
+calendar with `Persistent=false`, but never enables or starts anything.
+
+**No automatic monthly schedule is deployed or enabled.** Activation needs
+passing CI, independent safety review, owner-approved protected deployment,
+watchdog SHA rotation, fresh read-only production preflight, checks for
+source/date identity and an owner-approved root installation/activation.
+The new runner deliberately does not call Pinterest, OpenAI, Telegram or
+publication APIs. Additional schedule paths for creative review, publishing
+and Telegram reporting remain separate deliverables and require their
+existing opt-in security, cost and per-Pin approval gates.
