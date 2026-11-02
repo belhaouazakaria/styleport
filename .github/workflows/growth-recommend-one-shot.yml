@@ -18,7 +18,7 @@ jobs:
     timeout-minutes: 10
     environment: production
     concurrency:
-      group: saytwist-phase14c-one-shot-recommend
+      group: saytwist-phase14h-one-shot-recommend
       cancel-in-progress: false
     steps:
       - name: Checkout trusted main
@@ -74,7 +74,9 @@ jobs:
               });
               if (systemctl(["is-active", "--quiet", timer]).status !== 0 ||
                   systemctl(["show", "-P", "Result", service]).stdout.trim() !== "success" ||
-                  systemctl(["show", "-P", "OnFailure", service]).stdout.trim() !== alert) {
+                  systemctl(["show", "-P", "OnFailure", service]).stdout.trim() !== alert ||
+                  !systemctl(["show", "-P", "Environment", service]).stdout.includes(
+                    "WATCHDOG_EXPECTED_RELEASE_SHA=" + sha)) {
                 throw Error();
               }
               stage = "PM2";
@@ -94,7 +96,7 @@ jobs:
                 "GROWTH_WORKER_RUN_ENABLED", "GROWTH_DAILY_REPORT_SCHEDULE_ENABLED",
                 "TELEGRAM_REPORTS_ENABLED", "GROWTH_ATTRIBUTION_COLLECTION_ENABLED",
               ]) if (value(flag) === "true") throw Error();
-              if (["RECOMMEND", "RECOMMEND"].includes(value("GROWTH_ROLLOUT_MODE"))) throw Error();
+              if (["OBSERVE", "RECOMMEND"].includes(value("GROWTH_ROLLOUT_MODE"))) throw Error();
               stage = "ONE_SHOT";
               if (!fs.existsSync("workers/growth-recommend-trial.ts") ||
                   !fs.existsSync("node_modules/tsx/dist/cli.mjs")) throw Error();
