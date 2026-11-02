@@ -40,8 +40,8 @@ function actionWhere(action: string, since: Date) {
  * processes. This is NOT a global Redis lock or an in-memory mutex.
  * The transaction must commit before a provider call starts.
  */
-export async function reservePinterestGlobalAttempt() {
-  return prisma.$transaction(async (tx) => {
+export async function reservePinterestGlobalAttempt(db = prisma) {
+  return db.$transaction(async (tx) => {
     const locked = await tx.$queryRaw<Array<{ id: string }>>`
       SELECT "id" FROM "GrowthSettings" WHERE "id" = 'global' FOR UPDATE
     `;
