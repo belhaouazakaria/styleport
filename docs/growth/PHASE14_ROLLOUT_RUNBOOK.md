@@ -347,7 +347,7 @@ Phase14G adds a **single daily account metadata** OBSERVE entrypoint,
 owner-gated one-time trial workflow, and optional **disabled-by-default**
 root-owned systemd timer installer. This does not activate Growth.
 
-- Scheduled window: 13:00 to 13:19 UTC; systemd timer fires at 13:00
+- Scheduled window on release after Phase14H: 23:50 to 23:59 UTC; systemd timer fires at 23:50
   UTC with `Persistent=false`, so missed windows are skipped rather
   than caught up. One run per current UTC day, even if release SHA
   changes. One metadata GET max, no pagination, OAuth refresh, Pin
@@ -393,3 +393,101 @@ Next step after safe daily OBSERVE: separately scoped local-only
 RECOMMEND scheduler and privately approved Telegram daily reports;
 Pin publishing always requires approval per Pin. SEO and AdSense after
 safe Growth activation.
+
+
+## Phase 14H: local-only RECOMMEND one-shot, code-only checkpoint (2026-11-02)
+
+Phase14G production is SHA `2805b72b02209843eab953d45d8214278cdf677f`;
+watchdog SHA rotation succeeded, and the exact-SHA read-only preflight
+#41489055525 showed Growth and attribution OFF with no active Growth jobs.
+The owner's daily OBSERVE trial #41488481743 was safely blocked before
+a job was inserted. The latest live single-account API reservation can
+be retried **no earlier** than `2026-11-02T22:46:03.338Z`. This
+is a hard per-account rolling 24-hour limit, not permission to
+reissue early calls. Trial cause is inferred, not conclusively shown
+by the sanitized launcher output. Phase14G recurring timer is NOT enabled.
+
+This Phase14H patch introduces a separate **deterministic, DB-only**
+ACCOUNT_STRATEGY_REVIEW qualification job in RECOMMEND mode. The review
+is built from stored Pinterest account, board and analytics evidence.
+It has no Pinterest API transport, no OAuth refresh, no OpenAI call,
+no Pin publishing and no Telegram delivery.
+
+After independently reviewed tests/CI, protected exact-SHA deployment,
+root watchdog SHA rotation and fresh owner-approved production read-only
+preflight, an owner may authorize **exactly one** local strategy job by
+creating an open issue with exact title
+`SayTwist Growth RECOMMEND one-shot <SHA>` and exact two-line body
+`RECOMMEND_TRIAL_SHA=<SHA>` + newline +
+`RECOMMEND_TRIAL_TARGET=saytwist.com`, and then posting the distinct
+exact comment `RUN SAYTWIST GROWTH RECOMMEND ONE SHOT <SHA>`.
+The `growth-recommend-one-shot.yml` workflow enforces owner identity,
+trusted main SHA and release marker, independent watchdog/timer health,
+production PM2 identity, four process automation switches OFF, rollout
+OFF and loopback database target. It runs one maxAttempts=1 job with
+unique `growth-recommend-trial:<SHA>` idempotency key, 120-second
+activation lease, one-only job worker scope and RECOMMEND allowlist.
+On normal exit, CAS revokes the lease; the one-minute root-owned
+watchdog handles crashed child expiry. Postconditions require the one
+account-strategy job SUCCEEDED, Growth OFF, no active queue and lease
+NULL. Sanitized fixed output only.
+
+This **does not** install recurring RECOMMEND, enable attribution,
+authorize creative generation, publication, AI expenses or private
+Telegram schedules. Treat the resulting strategic recommendations as
+drafts for human review. Future recurring RECOMMEND and Pin publication
+require separate proof and approvals.
+
+**Release ordering:** this Phase14H branch/PR must not be merged or
+deployed while a same-SHA Phase14G live trial is being qualified; doing
+so would advance trusted main, invalidate current authorization and
+require another coordinated root-owned watchdog release rotation.
+
+## Phase14H daily OBSERVE timer correction (source only, not deployed)
+
+After Phase14G live trial on `2026-11-02` was blocked before job creation,
+read-only preflight proved Growth OFF, null lease, zero active jobs, and the
+last successful account GET was `2026-11-01T22:46:03.777Z`. Owner's local
+reservation audit gave earliest legal retry
+`2026-11-02T22:46:03.338Z`. The existing installed but **disabled**
+root units still point at the Phase14G SHA and 13:00 UTC window.
+The historical 13:00 UTC calendar would fire less than 24 hours after a
+new owner trial at 22:50 UTC. A false failure would result.
+
+The reviewed follow-up release changes the scheduled window to **23:50 to
+23:59 UTC**, with an actual 23:50 UTC timer, `AccuracySec=1s` and
+`Persistent=false`. This is one hour later than tonight's intended trial,
+not permission to evade the rolling **24-hour** reservation check. The
+reservation and global budget still fail closed if provider timing or other
+calls make a proposed run unsafe. There are **no automatic retries**.
+
+The installation-only script uses 23:50 UTC for new installations. Hosts
+already installed on Phase14G must run the separately reviewed
+`workers/rotate-growth-daily-observe-systemd.sh OLD_SHA NEW_SHA`, as root,
+**only after** a protected release and independent watchdog SHA rotation.
+It must first be copied into a root-owned 0700 file after verifying the
+reviewed release content/checksum; direct execution from the application
+user-writable path is refused. It requires the daily timer and service both
+disabled/inactive and verifies root-owned files and exact old/new SHA, then rewrites the service SHA and
+previous 13:00 calendar as **still disabled**. Never run the script against
+an enabled timer and never silently change its release pin. An explicit
+separate owner-approved activation gate remains mandatory after a successful
+live trial, fresh preflight, validation and inspection of updated units.
+
+**Do not merge or deploy Phase14H / timer correction until the current
+Phase14G exact-SHA trial approval has been exercised or deliberately
+invalidated.** A merge advances `main`, invalidating old exact-SHA
+issue approvals and requiring a new protected deploy and watchdog rotation.
+
+### Existing daily timer alert upgrade
+
+For the already-installed Phase14G daily OBSERVE units, the post-deploy
+root-owned 0700 `rotate-growth-daily-observe-systemd.sh OLD NEW`
+attaches the dedicated `OnFailure` unit and moves the disabled calendar to
+23:50 UTC. After rotation, a separately checksum-reviewed root-owned 0700
+copy of `install-growth-daily-observe-alert-existing.sh NEW` installs the
+missing private alert service. Both scripts reject enabled or active timers.
+Do not enable recurrence until the alert unit and watchdog service pass
+`systemd-analyze verify` and the operator inspects `OnFailure` and timer
+state. The root installer reuses existing `/etc/saytwist-growth-watchdog-alert.env`
+without exposing the credentials. This step is currently code-only.

@@ -36,10 +36,10 @@ export function assertDailyObserveRuntime(
   if (env.GROWTH_DAILY_OBSERVE_APPROVAL !== expectedApproval) {
     throw Error("APPROVAL_INVALID");
   }
-  // Scheduled runs can only start in this 20-minute UTC window.
+  // Scheduled runs can only start in this 10-minute UTC window.
   // Manual trials are separately GitHub owner-approved and may run anytime.
   if (mode === "SCHEDULED" &&
-      !(now.getUTCHours() === 13 && now.getUTCMinutes() < 20)) {
+      !(now.getUTCHours() === 23 && now.getUTCMinutes() >= 50)) {
     throw Error("OUTSIDE_SCHEDULED_WINDOW");
   }
   let target: URL;
@@ -74,9 +74,13 @@ async function main() {
     console.log("GROWTH_DAILY_OBSERVE_PROVIDER_WRITES=" + result.providerWrites);
     console.log("GROWTH_DAILY_OBSERVE_AI_CALLS=" + result.aiCalls);
     console.log("GROWTH_DAILY_OBSERVE_TELEGRAM=" + result.telegram);
-  } catch {
-    // No tokens, account ID, PM2 JSON, DB URL or untrusted response in logs.
+  } catch (error) {
+    // Classify only a literal known safety rejection. Never log raw exceptions.
+    const reason = error instanceof Error &&
+      error.message === "PINTEREST_ONE_SYNC_24H_BUDGET_EXHAUSTED"
+      ? "24H_RESERVATION" : "OTHER";
     console.error("GROWTH_DAILY_OBSERVE=BLOCKED");
+    console.error("GROWTH_DAILY_OBSERVE_REASON=" + reason);
     console.error("GROWTH_DAILY_OBSERVE_STAGE=" + stage);
     process.exitCode = 1;
   } finally {
