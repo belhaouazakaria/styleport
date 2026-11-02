@@ -24,8 +24,8 @@ describe("Phase14G disabled-by-default timer and owner trial", () => {
     expect(rotator).toContain("systemctl daemon-reload");
     expect(rotator).toContain("OnCalendar=*-*-* 23:50:00 UTC");
     expect(rotator).toContain("DAILY_OBSERVE_TIMER=INACTIVE");
-    expect(rotator).not.toMatch(/systemctl\\s+enable\\s+--now/);
-    expect(rotator).not.toMatch(/systemctl\\s+start\\s+.*daily-observe/);
+    expect(rotator).not.toContain("systemctl enable");
+    expect(rotator).not.toContain("systemctl start");
   });
   it("rejects missing watchdog and untrusted PM2 runtime before loading secrets", () => {
     expect(launcher).toContain("WATCHDOG_EXPECTED_RELEASE_SHA=");
