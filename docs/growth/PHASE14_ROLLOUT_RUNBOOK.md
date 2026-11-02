@@ -465,8 +465,10 @@ The installation-only script uses 23:50 UTC for new installations. Hosts
 already installed on Phase14G must run the separately reviewed
 `workers/rotate-growth-daily-observe-systemd.sh OLD_SHA NEW_SHA`, as root,
 **only after** a protected release and independent watchdog SHA rotation.
-It requires the daily timer and service both disabled/inactive and verifies
-root-owned files and exact old/new SHA, then rewrites the service SHA and
+It must first be copied into a root-owned 0700 file after verifying the
+reviewed release content/checksum; direct execution from the application
+user-writable path is refused. It requires the daily timer and service both
+disabled/inactive and verifies root-owned files and exact old/new SHA, then rewrites the service SHA and
 previous 13:00 calendar as **still disabled**. Never run the script against
 an enabled timer and never silently change its release pin. An explicit
 separate owner-approved activation gate remains mandatory after a successful
