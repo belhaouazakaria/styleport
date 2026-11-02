@@ -169,6 +169,11 @@ async function main() {
     console.log("GROWTH_APPROVED_PUBLISH=" + result.status);
     if (result.status === "ONE_JOB_COMPLETED") {
       console.log("GROWTH_APPROVED_PUBLICATION_STATE=" + result.publication);
+      // Create-Pin ambiguity is NEVER a successful scheduled cycle. Alert the
+      // owner for reconciliation; do not issue a second publication request.
+      if (result.publication !== GrowthPublicationStatus.RECONCILED) {
+        throw Error("PIN_OUTCOME_REQUIRES_RECONCILIATION");
+      }
     }
   } catch {
     console.error("GROWTH_APPROVED_PUBLISH=BLOCKED");
