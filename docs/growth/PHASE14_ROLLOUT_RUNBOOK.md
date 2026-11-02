@@ -393,3 +393,52 @@ Next step after safe daily OBSERVE: separately scoped local-only
 RECOMMEND scheduler and privately approved Telegram daily reports;
 Pin publishing always requires approval per Pin. SEO and AdSense after
 safe Growth activation.
+
+
+## Phase 14H: local-only RECOMMEND one-shot, code-only checkpoint (2026-11-02)
+
+Phase14G production is SHA `2805b72b02209843eab953d45d8214278cdf677f`;
+watchdog SHA rotation succeeded, and the exact-SHA read-only preflight
+#41489055525 showed Growth and attribution OFF with no active Growth jobs.
+The owner's daily OBSERVE trial #41488481743 was safely blocked before
+a job was inserted. The latest live single-account API reservation can
+be retried **no earlier** than `2026-11-02T22:46:03.338Z`. This
+is a hard per-account rolling 24-hour limit, not permission to
+reissue early calls. Trial cause is inferred, not conclusively shown
+by the sanitized launcher output. Phase14G recurring timer is NOT enabled.
+
+This Phase14H patch introduces a separate **deterministic, DB-only**
+ACCOUNT_STRATEGY_REVIEW qualification job in RECOMMEND mode. The review
+is built from stored Pinterest account, board and analytics evidence.
+It has no Pinterest API transport, no OAuth refresh, no OpenAI call,
+no Pin publishing and no Telegram delivery.
+
+After independently reviewed tests/CI, protected exact-SHA deployment,
+root watchdog SHA rotation and fresh owner-approved production read-only
+preflight, an owner may authorize **exactly one** local strategy job by
+creating an open issue with exact title
+`SayTwist Growth RECOMMEND one-shot <SHA>` and exact two-line body
+`RECOMMEND_TRIAL_SHA=<SHA>` + newline +
+`RECOMMEND_TRIAL_TARGET=saytwist.com`, and then posting the distinct
+exact comment `RUN SAYTWIST GROWTH RECOMMEND ONE SHOT <SHA>`.
+The `growth-recommend-one-shot.yml` workflow enforces owner identity,
+trusted main SHA and release marker, independent watchdog/timer health,
+production PM2 identity, four process automation switches OFF, rollout
+OFF and loopback database target. It runs one maxAttempts=1 job with
+unique `growth-recommend-trial:<SHA>` idempotency key, 120-second
+activation lease, one-only job worker scope and RECOMMEND allowlist.
+On normal exit, CAS revokes the lease; the one-minute root-owned
+watchdog handles crashed child expiry. Postconditions require the one
+account-strategy job SUCCEEDED, Growth OFF, no active queue and lease
+NULL. Sanitized fixed output only.
+
+This **does not** install recurring RECOMMEND, enable attribution,
+authorize creative generation, publication, AI expenses or private
+Telegram schedules. Treat the resulting strategic recommendations as
+drafts for human review. Future recurring RECOMMEND and Pin publication
+require separate proof and approvals.
+
+**Release ordering:** this Phase14H branch/PR must not be merged or
+deployed while a same-SHA Phase14G live trial is being qualified; doing
+so would advance trusted main, invalidate current authorization and
+require another coordinated root-owned watchdog release rotation.
