@@ -29,7 +29,7 @@ trap 'rm -f "$tmp_service" "$tmp_timer"' EXIT
 cat > "$tmp_service" <<EOF
 [Unit]
 Description=SayTwist one-account daily OBSERVE (owner-gated, disabled by default)
-After=network-online.target postgresql.service
+After=network-online.target
 Wants=network-online.target
 ConditionPathExists=$APP/workers/growth-daily-observe-launch.cjs
 
