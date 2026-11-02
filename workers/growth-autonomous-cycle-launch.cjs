@@ -81,7 +81,7 @@ function run() {
   const lines = (child.stdout || "").trim().split("\n");
   const completed = lines.find(x => x.startsWith("GROWTH_AUTONOMOUS_JOBS_COMPLETED="));
   const reused = lines.find(x => x.startsWith("GROWTH_AUTONOMOUS_JOBS_REUSED="));
-  if (child.status !== 0 || child.error || lines.length !== 9 ||
+  if (child.status !== 0 || child.error || lines.length !== 8 ||
       !REPORTS.every(x => lines.includes(x)) ||
       !/^GROWTH_AUTONOMOUS_JOBS_COMPLETED=[0-3]$/.test(completed || "") ||
       !/^GROWTH_AUTONOMOUS_JOBS_REUSED=[0-3]$/.test(reused || "") ||
