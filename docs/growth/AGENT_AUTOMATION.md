@@ -319,3 +319,40 @@ Migration `20261007010000_growth_translator_autopilot` is deployed. Live validat
 ## Phase 12 learning job
 
 `EVERGREEN_LEARNING_ANALYSIS` accepts only a UTC analysis date and the application-controlled current version (`growth_learning_v2`; v1 remains immutable history); a daily/model key converges concurrent ADMIN requests while permitting same-day version coexistence. The bounded worker computes recommendations and retained findings from local evidence only. Its v2 adapter reads legacy Pins without mutating them, caps before aggregation, accepts only exact active Translator URL matches, deduplicates Pinterest IDs, and counts only `READY` metrics. Disabled Growth prevents execution. The explicit preparation action requires a current `REVIVE` proposal and literal confirmation, rejects evidence older than 48 hours, resolves destination/archetype server-side, and queues the existing Creative Lab job. It never creates approval, publication, board action, recurrence, cron, or a permanent worker.
+
+## Phase 14I: bounded recurring local intelligence (code only)
+
+The new `workers/growth-autonomous-cycle.ts` is a guarded daily **local-only**
+analyzer, not a permission to create/publish content. At 04:30 UTC, only when
+a separately approved systemd timer is enabled, it attempts three jobs in
+order: monthly Account Strategy Review, daily Opportunity Intelligence v2 and
+Evergreen Learning v2. The analysis evidence window ends on the prior complete
+UTC day, and a plan version and UTC date anchor each job idempotency key.
+Previously succeeded steps can be reused; prior failed/uncertain steps
+block rather than replay. No follow-up jobs or retries are issued automatically.
+
+Each new job requires a zero-active-queue global preflight, disabled Growth
+settings, disabled attribution, null worker lease and a serializable admission
+transaction. A 120-second global worker lease is issued for one ID-scoped job,
+then revoked using the established compare-and-swap helper. The independently
+installed one-minute lease watchdog handles crashes. After every step the
+runner requires the job to have SUCCEEDED, Growth OFF, lease NULL and no
+active queue. It does not invoke Pinterest, OpenAI, publishing or Telegram,
+and passes no such credentials to the child.
+
+`workers/growth-autonomous-cycle-launch.cjs` additionally checks exact
+release and app identity, PM2 production DB, healthy same-SHA independent
+watchdog, **active healthy daily OBSERVE**, all global automation flags OFF,
+and the 04:30-04:49 UTC window before bootstrapping the run. Its systemd
+installer provisions root-owned oneshot/timer/private failure-alert units in
+an **inactive and disabled state**, never enabling them. Explicit owner
+authorization, reviewed code, post-deploy root SHA rotation and production
+read-only qualification are necessary before enabling recurrence.
+The autonomous cycle is meant to run after the prior 23:50 UTC OBSERVE,
+not during its 24-hour metadata quota window. The cycle is DB-only and
+cannot compensate for stale or absent Pinterest analytics.
+
+This is one part of the intended full agent. Automatic content generation,
+private Telegram scheduling and scheduling of **already individually approved**
+Pins must each preserve separate consent/budget/approval/reconciliation
+and live-qualification gates. No ordinary Growth rollout mode is broadened.
