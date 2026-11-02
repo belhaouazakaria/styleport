@@ -347,7 +347,7 @@ Phase14G adds a **single daily account metadata** OBSERVE entrypoint,
 owner-gated one-time trial workflow, and optional **disabled-by-default**
 root-owned systemd timer installer. This does not activate Growth.
 
-- Scheduled window: 13:00 to 13:19 UTC; systemd timer fires at 13:00
+- Scheduled window on release after Phase14H: 23:50 to 23:59 UTC; systemd timer fires at 23:50
   UTC with `Persistent=false`, so missed windows are skipped rather
   than caught up. One run per current UTC day, even if release SHA
   changes. One metadata GET max, no pagination, OAuth refresh, Pin
@@ -442,3 +442,37 @@ require separate proof and approvals.
 deployed while a same-SHA Phase14G live trial is being qualified; doing
 so would advance trusted main, invalidate current authorization and
 require another coordinated root-owned watchdog release rotation.
+
+## Phase14H daily OBSERVE timer correction (source only, not deployed)
+
+After Phase14G live trial on `2026-11-02` was blocked before job creation,
+read-only preflight proved Growth OFF, null lease, zero active jobs, and the
+last successful account GET was `2026-11-01T22:46:03.777Z`. Owner's local
+reservation audit gave earliest legal retry
+`2026-11-02T22:46:03.338Z`. The existing installed but **disabled**
+root units still point at the Phase14G SHA and 13:00 UTC window.
+The historical 13:00 UTC calendar would fire less than 24 hours after a
+new owner trial at 22:50 UTC. A false failure would result.
+
+The reviewed follow-up release changes the scheduled window to **23:50 to
+23:59 UTC**, with an actual 23:50 UTC timer, `AccuracySec=1s` and
+`Persistent=false`. This is one hour later than tonight's intended trial,
+not permission to evade the rolling **24-hour** reservation check. The
+reservation and global budget still fail closed if provider timing or other
+calls make a proposed run unsafe. There are **no automatic retries**.
+
+The installation-only script uses 23:50 UTC for new installations. Hosts
+already installed on Phase14G must run the separately reviewed
+`workers/rotate-growth-daily-observe-systemd.sh OLD_SHA NEW_SHA`, as root,
+**only after** a protected release and independent watchdog SHA rotation.
+It requires the daily timer and service both disabled/inactive and verifies
+root-owned files and exact old/new SHA, then rewrites the service SHA and
+previous 13:00 calendar as **still disabled**. Never run the script against
+an enabled timer and never silently change its release pin. An explicit
+separate owner-approved activation gate remains mandatory after a successful
+live trial, fresh preflight, validation and inspection of updated units.
+
+**Do not merge or deploy Phase14H / timer correction until the current
+Phase14G exact-SHA trial approval has been exercised or deliberately
+invalidated.** A merge advances `main`, invalidating old exact-SHA
+issue approvals and requiring a new protected deploy and watchdog rotation.
