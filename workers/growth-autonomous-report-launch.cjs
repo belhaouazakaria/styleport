@@ -66,6 +66,7 @@ function run() {
         NODE_ENV: "production", HOME: "/home/saytwist",
         PATH: NODEDIR + ":/usr/local/bin:/usr/bin:/bin", DATABASE_URL: db,
         GROWTH_DAILY_REPORT_SCHEDULE_ENABLED: "true", TELEGRAM_REPORTS_ENABLED: "true",
+        GROWTH_AUTONOMOUS_REQUIRE_FRESH_CYCLE: "true",
         TELEGRAM_BOT_TOKEN: botToken, TELEGRAM_REPORT_CHAT_ID: chatId,
       },
     });
