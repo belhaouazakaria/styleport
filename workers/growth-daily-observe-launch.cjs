@@ -119,6 +119,9 @@ function run() {
     });
   if (child.status !== 0 || child.error ||
       (child.stdout || "").trim() !== EXPECTED_LINES.join("\n")) {
+    if ((child.stderr || "").includes("GROWTH_DAILY_OBSERVE_REASON=24H_RESERVATION")) {
+      process.stderr.write("GROWTH_DAILY_OBSERVE_REASON=24H_RESERVATION\n");
+    }
     throw Error("BOUNDED_SYNC_FAILED");
   }
   process.stdout.write(EXPECTED_LINES.join("\n") + "\n");
