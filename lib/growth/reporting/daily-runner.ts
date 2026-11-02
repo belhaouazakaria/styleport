@@ -1,3 +1,5 @@
+import { GrowthJobStatus } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 import { archiveGrowthDailyReport } from "@/lib/growth/reporting/archive";
 import { GrowthReportDeliveryBlocked, submitArchivedDailyReport } from "@/lib/growth/reporting/delivery";
 import { getTelegramReportSettings } from "@/lib/growth/reporting/telegram";
@@ -11,6 +13,22 @@ export function dueGrowthReportDate(now: Date): string | null {
   if (now.getUTCHours() < 4) return null;
   const yesterday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1));
   return yesterday.toISOString().slice(0, 10);
+}
+
+/** Require today's three bounded local analysis jobs before an automated digest. */
+export async function requireFreshGrowthCycle(now: Date) {
+  const today = now.toISOString().slice(0, 10);
+  const expected = ["strategy", "opportunity", "learning"]
+    .map(stage => "growth-cycle-v1:" + today + ":" + stage);
+  const jobs = await prisma.growthJob.findMany({
+    where: { idempotencyKey: { in: expected } },
+    select: { idempotencyKey: true, status: true },
+  });
+  if (jobs.length !== expected.length ||
+      jobs.some(job => !expected.includes(job.idempotencyKey) ||
+        job.status !== GrowthJobStatus.SUCCEEDED)) {
+    throw Error("AUTONOMOUS_ANALYSIS_NOT_VERIFIED");
+  }
 }
 
 /**
@@ -29,6 +47,9 @@ export async function runScheduledGrowthDailyReport(
     return { status: "DISABLED" as const };
   const date = dueGrowthReportDate(now);
   if (!date) return { status: "NOT_DUE" as const };
+  if (config.GROWTH_AUTONOMOUS_REQUIRE_FRESH_CYCLE === "true") {
+    await requireFreshGrowthCycle(now);
+  }
   const { report, reused } = await archiveGrowthDailyReport(date);
   // submitArchivedDailyReport atomically claims one immutable archive report.
   // A second invocation refuses any attempted delivery, even when uncertain.
