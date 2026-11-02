@@ -1,4 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { PrismaClient } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
   budgetedPinterestFetch,
@@ -42,9 +43,17 @@ afterAll(async () => { if (enabled) { await clean(); await prisma.$disconnect();
 
 suite("Phase14F disposable PostgreSQL 18 shared Pinterest admission", () => {
   it("admits only four of twelve simultaneous transactions across the shared database row lock", async () => {
-    const results = await Promise.allSettled(
-      Array.from({ length: 12 }, () => reservePinterestGlobalAttempt()),
-    );
+    const clientA = new PrismaClient();
+    const clientB = new PrismaClient();
+    let results: PromiseSettledResult<void>[];
+    try {
+      results = await Promise.allSettled(
+        Array.from({ length: 12 }, (_, i) =>
+          reservePinterestGlobalAttempt(i % 2 === 0 ? clientA : clientB)),
+      );
+    } finally {
+      await Promise.all([clientA.$disconnect(), clientB.$disconnect()]);
+    }
     expect(results.filter(x => x.status === "fulfilled")).toHaveLength(PINTEREST_GLOBAL_HOURLY_CEILING);
     expect(results.filter(x => x.status === "rejected")).toHaveLength(8);
     expect(await prisma.growthActivity.count({
