@@ -319,3 +319,108 @@ Migration `20261007010000_growth_translator_autopilot` is deployed. Live validat
 ## Phase 12 learning job
 
 `EVERGREEN_LEARNING_ANALYSIS` accepts only a UTC analysis date and the application-controlled current version (`growth_learning_v2`; v1 remains immutable history); a daily/model key converges concurrent ADMIN requests while permitting same-day version coexistence. The bounded worker computes recommendations and retained findings from local evidence only. Its v2 adapter reads legacy Pins without mutating them, caps before aggregation, accepts only exact active Translator URL matches, deduplicates Pinterest IDs, and counts only `READY` metrics. Disabled Growth prevents execution. The explicit preparation action requires a current `REVIVE` proposal and literal confirmation, rejects evidence older than 48 hours, resolves destination/archetype server-side, and queues the existing Creative Lab job. It never creates approval, publication, board action, recurrence, cron, or a permanent worker.
+
+## Phase 14I: bounded recurring local intelligence (code only)
+
+The new `workers/growth-autonomous-cycle.ts` is a guarded daily **local-only**
+analyzer, not a permission to create/publish content. At 04:30 UTC, only when
+a separately approved systemd timer is enabled, it attempts three jobs in
+order: monthly Account Strategy Review, daily Opportunity Intelligence v2 and
+Evergreen Learning v2. The analysis evidence window ends on the prior complete
+UTC day, and a plan version and UTC date anchor each job idempotency key.
+Previously succeeded steps can be reused; prior failed/uncertain steps
+block rather than replay. No follow-up jobs or retries are issued automatically.
+
+Each new job requires a zero-active-queue global preflight, disabled Growth
+settings, disabled attribution, null worker lease and a serializable admission
+transaction. A 120-second global worker lease is issued for one ID-scoped job,
+then revoked using the established compare-and-swap helper. The independently
+installed one-minute lease watchdog handles crashes. After every step the
+runner requires the job to have SUCCEEDED, Growth OFF, lease NULL and no
+active queue. It does not invoke Pinterest, OpenAI, publishing or Telegram,
+and passes no such credentials to the child.
+
+`workers/growth-autonomous-cycle-launch.cjs` additionally checks exact
+release and app identity, PM2 production DB, healthy same-SHA independent
+watchdog, **active healthy daily OBSERVE**, all global automation flags OFF,
+and the 04:30-04:49 UTC window before bootstrapping the run. Its systemd
+installer provisions root-owned oneshot/timer/private failure-alert units in
+an **inactive and disabled state**, never enabling them. Explicit owner
+authorization, reviewed code, post-deploy root SHA rotation and production
+read-only qualification are necessary before enabling recurrence.
+The autonomous cycle is meant to run after the prior 23:50 UTC OBSERVE,
+not during its 24-hour metadata quota window. The cycle is DB-only and
+cannot compensate for stale or absent Pinterest analytics.
+
+This is one part of the intended full agent. Automatic content generation,
+private Telegram scheduling and scheduling of **already individually approved**
+Pins must each preserve separate consent/budget/approval/reconciliation
+and live-qualification gates. No ordinary Growth rollout mode is broadened.
+
+### Phase 14I private recurring Telegram digest (implementation only)
+
+A separate opt-in 05:30 UTC systemd one-shot reporter runs only after the
+04:30 UTC autonomous analysis service succeeds. It uses the existing
+`workers/growth-report-runner.ts` and immutable report archive /
+once-only delivery service; the report covers the last complete UTC day.
+`workers/growth-autonomous-report-launch.cjs` verifies exact deployed SHA,
+production app identity, watchdog, recently successful analysis service,
+PM2 production DB, process-level Growth OFF, private numeric Telegram chat
+configuration, and a strict 05:30-05:49 UTC execution window. It passes only
+the two Telegram credentials and the two reporting gates to a scoped child.
+No content or PM2 environment is logged. The Telegram transport verifies
+the response chat type is PRIVATE, and durable SENDING/OUTCOME_UNKNOWN
+never cause automatic resends or duplicate digest delivery.
+
+The root-owned installation script provisions service/timer/private
+failure-alert units, **disabled by default**. Automatic reporting is not
+enabled by a code merge. The owner must approve its timer separately
+after verifying the recipient and an actual one-time receipt, as well as
+the live production analysis cycle. The private report must not misstate
+reservation-based AI spend as verified provider billing.
+
+### Phase14I automatic content preparation and selected Pin publication (review build)
+
+A separately opted-in `PREPARE` worker mode is allowlisted for
+Translator/Ideas decision and execution and deterministic Creative Lab
+candidate generation only. The `workers/growth-autonomous-content.ts`
+runner verifies today's local strategy/opportunity/learning jobs succeeded,
+then selects at most **one high-evidence Translator and one distinct
+high-evidence Ideas opportunity per UTC day** from the same current
+Opportunity Intelligence v2 analysis. Thresholds are 75/80 for Translator
+and 70/75 for Ideas. Missing or partial/stale evidence selects nothing.
+Each decision/action/creative uses an independently scoped job and a
+240-second time-limited DB activation lease. Existing application handlers
+enforce authoring quotas, similarity/quality/reuse rules, revision rollback
+and hard AI-cost reservations. Unknown or failed paid calls are never
+replayed automatically. Creative generation uses a deterministic
+MINIMAL_STATEMENT asset, with the paid AI-image switch explicitly OFF.
+Candidate creation does **not** imply Pin approval.
+
+The standalone launch checks production identity, SHA, watchdog, daily
+analysis success, an independent Growth OpenAI project key (unequal to
+the site's normal key), the global OFF switches and the 06:30-06:49 UTC
+window. The opt-in root-owned systemd one-shot/timer/private-alert
+installer never enables or starts the timer. This is code implementation,
+**not proof of a paid production acceptance run**. Before activation,
+the operator must verify the separate AI project hard billing cap and
+fresh budget ledger, approved content review/rollback, persistent image
+storage, and one bounded live content generation with no existing queue.
+
+A separate `APPROVED_PUBLISH` worker mode is allowlisted for **only**
+`PINTEREST_PIN_PUBLISH` after two independent process gates. The
+`workers/growth-approved-pin-tick.ts` selector considers only due,
+previously persisted publications linked to an individually ADMIN-APPROVED
+Pin and its original delayed publication job. Each 15-minute tick processes
+at most **one exact job ID** under a 120-second lease and the same
+independent watchdog; it cannot create an approval. The existing
+`publishApprovedPin` revalidates immutable candidate revision, asset
+checksum, metadata, destination, account, board, schedule and original
+approval before using official Pinterest API v5. Global provider limits,
+retry classification and ambiguous result reconciliation continue to
+apply. Reconciliation-required outcomes result in operator alert, never
+a second blind Pin POST. A separate root-owned timer/private alert is
+installed but disabled by default. Live activation requires reviewed
+per-Pin acceptance, a valid provider quota, a matched deployed release
+and explicit separate owner approval. No general AUTOPILOT mode is
+enabled; bulk unapproved publishing remains prohibited.

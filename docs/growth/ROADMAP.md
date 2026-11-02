@@ -443,3 +443,24 @@ Read-only preflight `40887966490` PASSED on `4ae22c6dd6b72990d0fe9978acea8530b8a
 ### Phase 14C watchdog host integration checkpoint (2026-10-30)
 
 The protected production migration, matching application deployment and exact-SHA read-only production preflight have passed (GitHub Actions runs 41121788837 and 41123387091). Production retains Growth/attribution/worker/Telegram OFF with zero active/pending jobs. The operator's disabled-mode watchdog startup check passed; Hostinger has systemd 255, degraded system state, user linger disabled, no app .env, no installed watchdog timer. Review branch `feat/phase14c-watchdog-systemd` adds a restricted PM2-derived DB launcher, root-owned system-timer installer executed under user `saytwist`, and regression tests. **Not installed, not scheduled, not live-tested for recovery, and not approved for OBSERVE.** Before activation: review/merge/deploy code safely, clone-crash qualification, manual installation approval, timer persistence, independent failure alert testing, and post-install read-only audit. Continue to prohibit scheduled Growth worker execution, paid AI, attribution, unsanctioned Telegram messages and automatic Pin publishing.
+
+### Phase 14I code review: standalone recurring intelligence and private report (2026-11-02)
+
+The owner-approved 14H exact-SHA release `7760232c696112d958b5f24c3cf45933ff308a48`
+is deployed and watchdog-pinned. Read-only production preflight
+#41530347486 and one local RECOMMEND job #41530570661 passed. The next
+daily OBSERVE live trial is still gated by its 24-hour Pinterest reservation;
+its recurring timer is installed and disabled pending validation.
+
+This branch implements **not-yet-deployed** disabled-by-default 04:30 UTC
+strategy/opportunity/learning cycle and separate 05:30 UTC private daily
+Telegram report timer. Both require explicit approved systemd activation,
+matching release pins, root-only reviewed installer, watchdog health and
+strict producer/recipient authorization. Three deterministic local analysis
+jobs have separate single-job leases, no API/AI/publishing; the private
+report uses the existing immutable archive and no-retry delivery contract.
+
+**Not full autonomous yet:** content/creative generation and publisher
+schedulers are not enabled; manual Pin approval remains mandatory and AI
+provider budget/project isolation require separate end-to-end qualification.
+Do not claim official production activation from passing CI on this branch.
