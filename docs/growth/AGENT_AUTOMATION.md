@@ -356,3 +356,25 @@ This is one part of the intended full agent. Automatic content generation,
 private Telegram scheduling and scheduling of **already individually approved**
 Pins must each preserve separate consent/budget/approval/reconciliation
 and live-qualification gates. No ordinary Growth rollout mode is broadened.
+
+### Phase 14I private recurring Telegram digest (implementation only)
+
+A separate opt-in 05:30 UTC systemd one-shot reporter runs only after the
+04:30 UTC autonomous analysis service succeeds. It uses the existing
+`workers/growth-report-runner.ts` and immutable report archive /
+once-only delivery service; the report covers the last complete UTC day.
+`workers/growth-autonomous-report-launch.cjs` verifies exact deployed SHA,
+production app identity, watchdog, recently successful analysis service,
+PM2 production DB, process-level Growth OFF, private numeric Telegram chat
+configuration, and a strict 05:30-05:49 UTC execution window. It passes only
+the two Telegram credentials and the two reporting gates to a scoped child.
+No content or PM2 environment is logged. The Telegram transport verifies
+the response chat type is PRIVATE, and durable SENDING/OUTCOME_UNKNOWN
+never cause automatic resends or duplicate digest delivery.
+
+The root-owned installation script provisions service/timer/private
+failure-alert units, **disabled by default**. Automatic reporting is not
+enabled by a code merge. The owner must approve its timer separately
+after verifying the recipient and an actual one-time receipt, as well as
+the live production analysis cycle. The private report must not misstate
+reservation-based AI spend as verified provider billing.
