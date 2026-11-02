@@ -117,8 +117,8 @@ export async function budgetedPinterestFetch(
     const remaining = response.headers.get("x-ratelimit-remaining");
     const reset = response.headers.get("x-ratelimit-reset");
     const limit = response.headers.get("x-ratelimit-limit");
-    if (!limit || !/^(?:0|[1-9]\\d{0,7})$/.test(remaining || "") ||
-        !/^(?:0|[1-9]\\d{0,7})$/.test(reset || "") ||
+    if (!limit || !/^(?:0|[1-9]\d{0,7})$/.test(remaining || "") ||
+        !/^(?:0|[1-9]\d{0,7})$/.test(reset || "") ||
         Number(remaining) <= 5 || Number(reset) > 86_400) {
       await recordPinterestGlobalCooldown("UNKNOWN_QUOTA");
       throw new PinterestGlobalBudgetBlocked("PROVIDER_QUOTA_UNKNOWN");
