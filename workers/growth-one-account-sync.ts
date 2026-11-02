@@ -44,11 +44,18 @@ export function assertOneSyncRuntime(
   return sha;
 }
 
-export async function runOneAccountSync(sha: string) {
+export async function runOneAccountSync(sha: string, options: { dailyUtcDate?: string } = {}) {
   if (!/^[a-f0-9]{40}$/.test(sha)) throw Error("RELEASE_INVALID");
   const now = new Date();
+  if (options.dailyUtcDate !== undefined &&
+      (!/^\d{4}-\d{2}-\d{2}$/.test(options.dailyUtcDate) ||
+        options.dailyUtcDate !== now.toISOString().slice(0, 10))) {
+    throw Error("DAILY_OBSERVE_DATE_INVALID");
+  }
   const expiry = new Date(now.getTime() + LEASE_MS);
-  const key = "growth-one-account-sync:" + sha;
+  const key = options.dailyUtcDate
+    ? "growth-daily-observe:" + options.dailyUtcDate
+    : "growth-one-account-sync:" + sha;
   let admitted = false;
   let jobId: string | undefined;
   let accountId: string | undefined;
