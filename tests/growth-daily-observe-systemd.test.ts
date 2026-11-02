@@ -27,6 +27,6 @@ describe("Phase14G disabled-by-default timer and owner trial", () => {
     expect(workflow).toContain("github.event.comment.user.login == 'belhaouazakaria'");
     expect(workflow).toContain("validate-growth-daily-observe-request.mjs");
     expect(workflow).toContain("GROWTH_DAILY_OBSERVE_MODE=TRIAL");
-    expect(workflow).toContain("workflow");
+    expect(workflow).toContain("concurrency:");
   });
 });
