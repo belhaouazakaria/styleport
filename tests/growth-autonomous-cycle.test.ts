@@ -51,6 +51,26 @@ describe("Phase14I daily offline Growth analysis", () => {
     expect(() => assertAutonomousCycleRuntime({ ...config,
       GROWTH_AUTONOMOUS_CYCLE_DATE: "2026-11-03" }, sha, identity, now)).toThrow();
   });
+  it("permits only exact owner-approved one-shot mode outside the daily calendar", () => {
+    const at = new Date("2026-11-03T20:30:00Z");
+    const trial = {
+      ...config,
+      GROWTH_AUTONOMOUS_CYCLE_DATE: "2026-11-03",
+      GROWTH_AUTONOMOUS_CYCLE_MODE: "TRIAL",
+      GROWTH_AUTONOMOUS_CYCLE_APPROVAL: "RUN SAYTWIST GROWTH CYCLE TRIAL " + sha,
+    };
+    expect(assertAutonomousCycleRuntime(trial, sha, identity, at))
+      .toEqual({ sha, day: "2026-11-03" });
+    expect(() => assertAutonomousCycleRuntime({ ...trial,
+      GROWTH_AUTONOMOUS_CYCLE_APPROVAL: "SAYTWIST_GROWTH_CYCLE_SCHEDULED:" + sha,
+    }, sha, identity, at)).toThrow();
+    expect(() => assertAutonomousCycleRuntime({ ...trial,
+      GROWTH_AUTONOMOUS_CYCLE_MODE: "TRIAL-UNSAFE",
+    }, sha, identity, at)).toThrow();
+    expect(() => assertAutonomousCycleRuntime({ ...config,
+      GROWTH_AUTONOMOUS_CYCLE_DATE: "2026-11-03",
+    }, sha, identity, at)).toThrow();
+  });
   it("rejects any simultaneous content, billing or reporting automation", () => {
     for (const key of ["GROWTH_WORKER_RUN_ENABLED",
       "GROWTH_DAILY_REPORT_SCHEDULE_ENABLED", "TELEGRAM_REPORTS_ENABLED",
