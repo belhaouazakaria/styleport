@@ -21,6 +21,12 @@ on:
       - "workers/install-growth-lease-watchdog-systemd.sh"
       - "tests/growth-watchdog-systemd.test.ts"
       - "lib/growth/rollout.ts"
+      - "workers/growth-autonomous-cycle.ts"
+      - "workers/growth-autonomous-cycle-launch.cjs"
+      - "workers/growth-autonomous-cycle-alert.cjs"
+      - "workers/install-growth-autonomous-cycle-systemd.sh"
+      - "tests/growth-autonomous-cycle.test.ts"
+      - "tests/growth-autonomous-cycle-host.test.ts"
       - "tests/growth-persistence.integration.test.ts"
       - ".github/workflows/growth-phase14-db.yml"
   workflow_dispatch:

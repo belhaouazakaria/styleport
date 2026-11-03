@@ -60,7 +60,7 @@ function run() {
   if (mode !== "TRIAL" && mode !== "SCHEDULED") throw Error("MODE_INVALID");
   const now = new Date();
   if (mode === "SCHEDULED" &&
-      !(now.getUTCHours() === 23 && now.getUTCMinutes() >= 50)) {
+      !(now.getUTCHours() === 13 && now.getUTCMinutes() < 10)) {
     throw Error("SCHEDULE_WINDOW_INVALID");
   }
   if (!/^[a-f0-9]{40}$/.test(sha) ||

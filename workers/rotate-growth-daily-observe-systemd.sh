@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-# Phase 14H: rotate ONLY already installed, disabled daily OBSERVE units.
+# Phase 14I: rotate ONLY already installed, disabled daily OBSERVE units to 13:00 UTC.
 # Never starts timer or worker; a separate owner approval is required.
 fail() { printf 'DAILY_OBSERVE_ROTATION=BLOCKED\n' >&2; exit 1; }
 [[ "$(id -u)" == "0" && "$#" == "2" ]] || fail
@@ -49,8 +49,8 @@ else
   sed -e "s/Environment=EXPECTED_RELEASE=$OLD/Environment=EXPECTED_RELEASE=$NEW/" \
     -e '/^Wants=network-online.target$/a OnFailure=saytwist-growth-daily-observe-alert.service' "$SP" > "$TMP_S"
 fi
-sed -e 's/daily OBSERVE 13:00 UTC/daily OBSERVE 23:50 UTC/' \
-  -e 's/OnCalendar=\*-\*-\* 13:00:00 UTC/OnCalendar=*-*-* 23:50:00 UTC/' \
+sed -e 's/daily OBSERVE 23:50 UTC/daily OBSERVE 13:00 UTC/' \
+  -e 's/OnCalendar=\*-\*-\* 23:50:00 UTC/OnCalendar=*-*-* 13:00:00 UTC/' \
   -e 's/AccuracySec=1min/AccuracySec=1s/' "$TP" > "$TMP_T"
 chown root:root "$TMP_S" "$TMP_T"
 chmod 644 "$TMP_S" "$TMP_T"
@@ -60,7 +60,7 @@ systemctl daemon-reload
 systemd-analyze verify "$SP" "$TP" || fail
 [[ "$(grep -Fxc "Environment=EXPECTED_RELEASE=$NEW" "$SP")" == "1" ]] || fail
 [[ "$(grep -Fxc "OnFailure=saytwist-growth-daily-observe-alert.service" "$SP")" == "1" ]] || fail
-[[ "$(grep -Fxc 'OnCalendar=*-*-* 23:50:00 UTC' "$TP")" == "1" ]] || fail
+[[ "$(grep -Fxc 'OnCalendar=*-*-* 13:00:00 UTC' "$TP")" == "1" ]] || fail
 [[ "$(systemctl is-enabled "$TIMER" 2>/dev/null || true)" != "enabled" ]] || fail
 [[ "$(systemctl is-active "$TIMER" 2>/dev/null || true)" != "active" ]] || fail
 printf 'DAILY_OBSERVE_ROTATION=READY_DISABLED\n'

@@ -39,7 +39,7 @@ export function assertDailyObserveRuntime(
   // Scheduled runs can only start in this 10-minute UTC window.
   // Manual trials are separately GitHub owner-approved and may run anytime.
   if (mode === "SCHEDULED" &&
-      !(now.getUTCHours() === 23 && now.getUTCMinutes() >= 50)) {
+      !(now.getUTCHours() === 13 && now.getUTCMinutes() < 10)) {
     throw Error("OUTSIDE_SCHEDULED_WINDOW");
   }
   let target: URL;

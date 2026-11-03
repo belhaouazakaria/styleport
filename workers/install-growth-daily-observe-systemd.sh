@@ -57,10 +57,10 @@ EOF
 
 cat > "$tmp_timer" <<EOF
 [Unit]
-Description=SayTwist daily OBSERVE 23:50 UTC (opt-in)
+Description=SayTwist daily OBSERVE 13:00 UTC (opt-in)
 
 [Timer]
-OnCalendar=*-*-* 23:50:00 UTC
+OnCalendar=*-*-* 13:00:00 UTC
 Persistent=false
 AccuracySec=1s
 RandomizedDelaySec=0
