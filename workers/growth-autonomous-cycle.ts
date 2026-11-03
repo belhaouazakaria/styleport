@@ -54,15 +54,23 @@ export function assertAutonomousCycleRuntime(
 ) {
   const sha = env.EXPECTED_RELEASE || "";
   const day = env.GROWTH_AUTONOMOUS_CYCLE_DATE || "";
+  const mode = env.GROWTH_AUTONOMOUS_CYCLE_MODE || "SCHEDULED";
+  const approval = mode === "TRIAL"
+    ? "RUN SAYTWIST GROWTH CYCLE TRIAL " + sha
+    : "SAYTWIST_GROWTH_CYCLE_SCHEDULED:" + sha;
   if (!/^[a-f0-9]{40}$/.test(sha) || sha !== release ||
       env.NODE_ENV !== "production" || day !== now.toISOString().slice(0, 10) ||
+      !["TRIAL", "SCHEDULED"].includes(mode) ||
       env.GROWTH_AUTONOMOUS_CYCLE_ENABLED !== "true" ||
-      env.GROWTH_AUTONOMOUS_CYCLE_APPROVAL !== "SAYTWIST_GROWTH_CYCLE_SCHEDULED:" + sha) {
+      env.GROWTH_AUTONOMOUS_CYCLE_APPROVAL !== approval) {
     throw Error("RELEASE_OR_APPROVAL");
   }
   if (identity.username !== "saytwist" || identity.uid === 0 ||
       identity.cwd !== APP || identity.node !== NODE) throw Error("IDENTITY");
-  if (!(now.getUTCHours() === 4 && now.getUTCMinutes() >= 30 && now.getUTCMinutes() < 50)) {
+  // Only a separately authenticated owner-triggered one-shot may bypass
+  // the normal calendar window. This does not lift the job/lease/kill switches.
+  if (mode === "SCHEDULED" &&
+      !(now.getUTCHours() === 4 && now.getUTCMinutes() >= 30 && now.getUTCMinutes() < 50)) {
     throw Error("WINDOW_INVALID");
   }
   for (const flag of ["GROWTH_WORKER_RUN_ENABLED",
