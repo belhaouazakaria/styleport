@@ -5,7 +5,7 @@ import { runOneAccountSync } from "@/workers/growth-one-account-sync";
 const sha = "a".repeat(40);
 const day = "2026-11-04";
 const trialTime = new Date("2026-11-04T21:15:00Z");
-const scheduledTime = new Date("2026-11-04T23:55:00Z");
+const scheduledTime = new Date("2026-11-04T13:05:00Z");
 const identity = {
   username: "saytwist", uid: 1001,
   cwd: "/home/saytwist/htdocs/saytwist.com",
@@ -48,15 +48,15 @@ describe("Phase14G exact daily OBSERVE runtime", () => {
       }, sha, identity, trialTime)).toThrow();
     }
   });
-  it("permits scheduled mode only in the fixed 23:50-24:00 UTC window", () => {
+  it("permits scheduled mode only in the fixed 13:00-13:10 UTC window", () => {
     const schedule = { ...config,
       GROWTH_DAILY_OBSERVE_MODE: "SCHEDULED",
       GROWTH_DAILY_OBSERVE_APPROVAL: "SAYTWIST_DAILY_OBSERVE_SCHEDULED:" + sha,
     };
     expect(assertDailyObserveRuntime(schedule, sha, identity, scheduledTime).mode).toBe("SCHEDULED");
     expect(() => assertDailyObserveRuntime(schedule, sha, identity, trialTime)).toThrow();
-    expect(() => assertDailyObserveRuntime(schedule, sha, identity, new Date("2026-11-04T23:49:59Z"))).toThrow();
-    expect(() => assertDailyObserveRuntime(schedule, sha, identity, new Date("2026-11-05T00:00:00Z"))).toThrow();
+    expect(() => assertDailyObserveRuntime(schedule, sha, identity, new Date("2026-11-04T12:59:59Z"))).toThrow();
+    expect(() => assertDailyObserveRuntime(schedule, sha, identity, new Date("2026-11-04T13:10:00Z"))).toThrow();
   });
   it("rejects an old daily key before querying the production database", async () => {
     await expect(runOneAccountSync(sha, { dailyUtcDate: "2000-01-01" }))
