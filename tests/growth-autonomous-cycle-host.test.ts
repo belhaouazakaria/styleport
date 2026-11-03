@@ -37,6 +37,7 @@ describe("autonomous Growth cycle host boundary", () => {
     expect(runner).not.toContain("GrowthJobType.PINTEREST_PIN_PUBLISH");
     expect(runner).not.toContain("GrowthJobType.CREATIVE_LAB_GENERATE");
     expect(alert).toContain("GROWTH_AUTONOMOUS_CYCLE_ALERT_ENABLED");
+    expect(alert).toContain("saytwist-growth-autonomous-cycle.service");
     expect(alert).toContain("COOLDOWN_MS = 24 * 60 * 60 * 1000");
   });
 });
