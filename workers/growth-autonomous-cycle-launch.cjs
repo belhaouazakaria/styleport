@@ -24,9 +24,12 @@ const REPORTS = [
 function run() {
   const sha = process.env.EXPECTED_RELEASE || "";
   const now = new Date();
+  const mode = process.env.GROWTH_AUTONOMOUS_CYCLE_MODE || "SCHEDULED";
   if (!/^[a-f0-9]{40}$/.test(sha) ||
       process.env.GROWTH_AUTONOMOUS_CYCLE_LAUNCH !== "true" ||
-      !(now.getUTCHours() === 4 && now.getUTCMinutes() >= 30 && now.getUTCMinutes() < 50) ||
+      !["TRIAL", "SCHEDULED"].includes(mode) ||
+      (mode === "SCHEDULED" &&
+       !(now.getUTCHours() === 4 && now.getUTCMinutes() >= 30 && now.getUTCMinutes() < 50)) ||
       fs.readFileSync(APP + "/.deployed-release", "utf8").trim() !== sha ||
       process.cwd() !== APP || os.userInfo().username !== "saytwist" ||
       process.getuid?.() === 0 || process.execPath !== NODE) throw Error("HOST_INVALID");
@@ -73,7 +76,10 @@ function run() {
         DATABASE_URL: db, EXPECTED_RELEASE: sha,
         GROWTH_AUTONOMOUS_CYCLE_DATE: now.toISOString().slice(0, 10),
         GROWTH_AUTONOMOUS_CYCLE_ENABLED: "true",
-        GROWTH_AUTONOMOUS_CYCLE_APPROVAL: "SAYTWIST_GROWTH_CYCLE_SCHEDULED:" + sha,
+        GROWTH_AUTONOMOUS_CYCLE_MODE: mode,
+        GROWTH_AUTONOMOUS_CYCLE_APPROVAL: mode === "TRIAL"
+          ? "RUN SAYTWIST GROWTH CYCLE TRIAL " + sha
+          : "SAYTWIST_GROWTH_CYCLE_SCHEDULED:" + sha,
         GROWTH_AUTONOMOUS_CYCLE_ENTRYPOINT: "true",
         GROWTH_WORKER_RUN_ENABLED: "false", GROWTH_ROLLOUT_MODE: "OFF",
       },
