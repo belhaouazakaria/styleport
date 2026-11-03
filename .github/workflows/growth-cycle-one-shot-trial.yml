@@ -59,7 +59,6 @@ jobs:
               grep -Fq "WATCHDOG_EXPECTED_RELEASE_SHA=$EXPECTED_RELEASE"
             test "$(systemctl is-active saytwist-growth-daily-observe.timer)" = "active"
             test "$(systemctl show -P Result saytwist-growth-daily-observe.service)" = "success"
-            test "$(systemctl show -P OnFailure saytwist-growth-autonomous-cycle.service 2>/dev/null || true)" != "unexpected"
             EXPECTED_RELEASE="$EXPECTED_RELEASE" \
             GROWTH_AUTONOMOUS_CYCLE_LAUNCH=true \
             GROWTH_AUTONOMOUS_CYCLE_MODE=TRIAL \
