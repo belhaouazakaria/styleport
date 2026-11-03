@@ -12,7 +12,7 @@ describe("Phase14G disabled-by-default timer and owner trial", () => {
   it("never starts or enables the timer during installation", () => {
     expect(installer).toContain("Persistent=false");
     expect(installer).toContain("AccuracySec=1s");
-    expect(installer).toContain("OnCalendar=*-*-* 23:50:00 UTC");
+    expect(installer).toContain("OnCalendar=*-*-* 13:00:00 UTC");
     expect(installer).toContain("User=saytwist");
     expect(installer).toContain("GROWTH_DAILY_OBSERVE_MODE=SCHEDULED");
     expect(installer).toContain("systemd-analyze verify");
@@ -24,7 +24,7 @@ describe("Phase14G disabled-by-default timer and owner trial", () => {
     expect(rotator).toContain("Environment=EXPECTED_RELEASE=$OLD");
     expect(rotator).toContain("0:0:644");
     expect(rotator).toContain("systemctl daemon-reload");
-    expect(rotator).toContain("OnCalendar=*-*-* 23:50:00 UTC");
+    expect(rotator).toContain("OnCalendar=*-*-* 13:00:00 UTC");
     expect(rotator).toContain("DAILY_OBSERVE_TIMER=INACTIVE");
     expect(rotator).toContain("OnFailure=saytwist-growth-daily-observe-alert.service");
     execFileSync("bash", ["-n", "workers/rotate-growth-daily-observe-systemd.sh"]);
