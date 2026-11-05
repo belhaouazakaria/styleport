@@ -49,7 +49,8 @@ const DAY_MS = 24 * 60 * 60 * 1_000;
 
 async function reserveDailyMarketGet() {
   return prisma.$transaction(async tx => {
-    await tx.$queryRaw`SELECT "id" FROM "GrowthSettings" WHERE "id" = 'global' FOR UPDATE`;
+    const locked = await tx.$queryRaw<Array<{ id: string }>>`SELECT "id" FROM "GrowthSettings" WHERE "id" = 'global' FOR UPDATE`;
+    if (locked.length !== 1) throw new MarketResearchUnavailable("PROVIDER_ERROR");
     const existing = await tx.growthActivity.count({
       where: {
         entityType: RESERVATION_TYPE, entityId: "US:growing",
