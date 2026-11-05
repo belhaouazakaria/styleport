@@ -61,7 +61,7 @@ export type CadenceDecision = {
   additionalPlanned: number;
   alreadyCommitted: number;
   mode: CadenceChannelPolicy["mode"];
-  status: "READY" | "LIMITED" | "PAUSED" | "BLOCKED";
+  status: "READY" | "LIMITED" | "PAUSED" | "BLOCKED" | "SATISFIED";
   reasons: string[];
 };
 
@@ -106,9 +106,9 @@ export function decideDailyChannelCadence(
   if (!resources.operationallyReady) reasons.push("OPERATION_NOT_READY");
   if (resources.eligibleOpportunities === 0) reasons.push("NO_QUALIFIED_OPPORTUNITIES");
   if (resources.performance === "UNKNOWN") reasons.push("PERFORMANCE_UNVERIFIED");
-  if (resources.budgetedAdditionalCapacity === 0) reasons.push("BUDGET_OR_PROVIDER_CAP");
-  if (committed >= resources.authorizedDailyLimit) reasons.push("AUTHORIZED_DAILY_CAP");
   const desiredAdditional = Math.max(0, requested - committed);
+  if (desiredAdditional > 0 && resources.budgetedAdditionalCapacity === 0) reasons.push("BUDGET_OR_PROVIDER_CAP");
+  if (desiredAdditional > 0 && committed >= resources.authorizedDailyLimit) reasons.push("AUTHORIZED_DAILY_CAP");
   const additional = resources.operationallyReady &&
     resources.performance !== "UNKNOWN" ?
     Math.min(desiredAdditional, resources.eligibleOpportunities,
@@ -120,7 +120,8 @@ export function decideDailyChannelCadence(
     additionalPlanned: additional,
     alreadyCommitted: committed,
     mode: policy.mode,
-    status: additional === 0 ? "BLOCKED" :
+    status: desiredAdditional === 0 ? "SATISFIED" :
+      additional === 0 ? "BLOCKED" :
       additional < desiredAdditional ? "LIMITED" : "READY",
     reasons: [...new Set(reasons)],
   };
