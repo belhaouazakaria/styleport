@@ -1,0 +1,59 @@
+name: SayTwist Phase14K Isolated Cadence Constraint Qualification
+
+on:
+  pull_request:
+    paths:
+      - 'prisma/schema.prisma'
+      - 'prisma/migrations/20261105150000_growth_daily_cadence_controls/**'
+      - 'scripts/qualify-growth-cadence-sql.sh'
+      - 'lib/growth/portfolio/**'
+      - 'tests/growth-daily-cadence.test.ts'
+      - '.github/workflows/growth-phase14k-cadence-db.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cadence-postgres18:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: growthcadence
+          POSTGRES_PASSWORD: dev-only
+          POSTGRES_DB: saytwist_growth_phase14k_cadence_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U growthcadence -d saytwist_growth_phase14k_cadence_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout review source only
+        uses: actions/checkout@v5
+      - name: Ensure PostgreSQL client availability
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if ! command -v psql >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq postgresql-client
+          fi
+      - name: Check wrapper syntax and fixed DB identity
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          bash -n scripts/qualify-growth-cadence-sql.sh
+          grep -Fq 'saytwist_growth_phase14k_cadence_test' scripts/qualify-growth-cadence-sql.sh
+          ! grep -Fq 'saytwist.com' scripts/qualify-growth-cadence-sql.sh
+      - name: Verify additive migration CHECK constraints in isolated PostgreSQL 18
+        shell: bash
+        env:
+          DATABASE_URL: postgresql://growthcadence:dev-only@127.0.0.1:5432/saytwist_growth_phase14k_cadence_test
+        run: |
+          set -Eeuo pipefail
+          bash scripts/qualify-growth-cadence-sql.sh

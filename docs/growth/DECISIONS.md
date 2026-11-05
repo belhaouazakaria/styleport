@@ -403,3 +403,23 @@ The owner verified in a non-secret PM2 read that `BREVO_API_KEY`, `EMAIL_FROM` a
 ### 2026-10-31 — Root-only Python provisioner replaces privileged Node
 
 The Hostinger root inspection found no trusted root-owned Node executable. The previous root Node-based credential provisioner was therefore blocked: executing a user-owned NVM runtime as root is unsafe. Replace it with `workers/provision-growth-lease-watchdog-alert-env.py`, requiring a root-owned Python interpreter in isolated mode (`/usr/bin/python3 -I`) and a reviewed root-owned mode-0700 script outside the writable app. It uses `/usr/sbin/runuser -u saytwist` to run user-owned Node only as the unprivileged application user. The Python parent validates and atomically persists exactly three Brevo settings in a root-owned mode-0600 systemd EnvironmentFile after its own exact-SHA owner approval. No alert sends, no installation, and no Growth activation are authorized by this code-only change.
+
+## D-14K-001 — distinct account creative identity and bounded creative cadence (proposed, not activated)
+
+**Status:** Phase 14K design candidate; advisory code-only implementation, owner confirmation required before live activation.
+
+SayTwist main remains UTILITY, SayTwist Ideas is editorial INSPIRATION, SayTwist Playground is humorous/interactive PLAYGROUND. A creative must be original to the intended audience, and a shared subject requires a materially different editorial angle, format and destination value. Do not republish nearly identical creative to multiple accounts merely for reach.
+
+Initial proposal: no more than **four candidate drafts/day across portfolio**, currently **two Ideas + two Playground**, **zero incremental main-account drafts** in that experiment; all counts represent maximums, not guaranteed output. When more eligible accounts are connected, the global and per-account caps must be explicitly reallocated rather than silently increased. Existing hard app caps for paid images, Translator creates/updates, Ideas and monetary reservation budgets remain unchanged. No autonomous Pin publish, content mutation, paid model invocation, account creation or board deletion is authorized by this decision.
+
+New account profiles may be recommended from sustained distinct portfolio evidence, but are never created by the agent; account creation, OAuth linking and editorial purpose remain owner-managed. A real fourth managed Pinterest account requires follow-up Prisma/admin integration because legacy `GrowthPinterestPublicationRole` has only three values. The Phase14K pure planning module is advisory and has no scheduler, writes, or provider calls.
+
+## D-14K-002 — adaptive owner-controlled daily volume supersedes fixed four-draft proposal (2026-11-05)
+
+**Status:** Owner requirement accepted; PR #113 implementation remains draft, NOT deployed. Supersedes the proposed fixed 2+2 daily creative allocation in D-14K-001.
+
+The agent selects a **positive desired daily output** for original Pin creatives and new Translator drafts using opportunity quality and performance. Configurable per-channel controls are `AUTO` (agent selects within `minimum..maximum`), `FIXED` (specific owner target within range), and `PAUSED` (explicit owner stop); initial planning preference is `AUTO 1..10` for each channel. These are **targets**, not quotas that justify low-quality content. Unknown evidence, disconnected accounts, absent original ideas, exhausted budget, existing in-flight counts or disabled production flags may legitimately produce zero additional output and must explain why. A desired minimum does not waive any safety rule.
+
+**Separate limits remain authoritative.** Existing Translator creation limit is 1/day until separately changed/approved; AI images are capped at 3/day and growth AI spend at $2/day/$30/month. Up to ten creative candidates can include deterministic, non-paid renderers, but the number of actual paid images cannot exceed three. Number of **published Pinterest Pins** is distinct from candidates: each Pin needs exact owner approval, and zero are published without approvals. Creating a Translator draft is not the same as making it publicly active; a separate quality/publish gate must be implemented/validated before claiming autonomous live Translator publication.
+
+A new dedicated admin cadence page persists preference changes with authenticated same-origin authorization, a versioned `GrowthActivity` record and PostgreSQL CHECK constraints. The cadence planner is still isolated and **not wired to live worker scheduling or Pin publication**, and no migration/production deployment is authorized by this decision.
