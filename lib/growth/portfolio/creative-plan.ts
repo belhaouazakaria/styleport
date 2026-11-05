@@ -66,7 +66,7 @@ export const INITIAL_CREATIVE_PORTFOLIO = [
     intent: "UTILITY",
     angle: "TOOL_DEMONSTRATION",
     visualStyleKey: "utility-demonstration-v1",
-    dailyCandidateCap: 0,
+    dailyCandidateCap: 10,
     connectedAccountId: null,
     connectionHealthy: false,
     preparationEnabled: false,
@@ -77,7 +77,7 @@ export const INITIAL_CREATIVE_PORTFOLIO = [
     intent: "INSPIRATION",
     angle: "SAVEABLE_EDITORIAL",
     visualStyleKey: "warm-editorial-v1",
-    dailyCandidateCap: 2,
+    dailyCandidateCap: 10,
     connectedAccountId: null,
     connectionHealthy: false,
     preparationEnabled: false,
@@ -88,14 +88,14 @@ export const INITIAL_CREATIVE_PORTFOLIO = [
     intent: "PLAYGROUND",
     angle: "PLAYFUL_INTERACTION",
     visualStyleKey: "playful-bold-v1",
-    dailyCandidateCap: 2,
+    dailyCandidateCap: 10,
     connectedAccountId: null,
     connectionHealthy: false,
     preparationEnabled: false,
   },
 ] as const satisfies readonly AccountCreativeProfile[];
 
-export const DEFAULT_DAILY_CANDIDATE_CAP = 4;
+export const DEFAULT_DAILY_CANDIDATE_CAP = 10;
 // Existing owner-approved hard ceilings are enforced by separate runtime
 // provider/content quota modules. This planner must never loosen them.
 export const EXISTING_DAILY_AI_IMAGE_CAP = 3;
@@ -183,51 +183,57 @@ export function planAccountCreativeCandidates(input: {
   const proposals: CandidatePreparationProposal[] = [];
   const alreadyProposed = new Set<string>();
   const visualIdentityUsed = new Set<string>();
+  const usedByAccount = new Map<string, number>();
   for (const profile of profiles) {
-    if (!profile.preparationEnabled || !profile.connectionHealthy ||
-        !profile.connectedAccountId || remainingGlobal === 0) continue;
-    const used = budget.createdByAccount[profile.key] ?? 0;
-    const remaining = Math.min(
-      Math.max(0, profile.dailyCandidateCap - used),
-      remainingGlobal - proposals.length,
-    );
-    let count = 0;
-    for (const opportunity of ordered) {
-      if (count >= remaining) break;
-      if (opportunity.intent !== profile.intent ||
-          opportunity.evidenceState !== "KNOWN" ||
-          opportunity.confidence < 80 || opportunity.score < 70 ||
-          !opportunity.original) continue;
-      if (profile.intent === "UTILITY" &&
-          opportunity.targetKind !== "TRANSLATOR") continue;
-      if (profile.intent === "INSPIRATION" &&
-          opportunity.targetKind !== "IDEA") continue;
-
-      const key = profile.key + ":" + opportunity.targetKind + ":" +
-        opportunity.targetId + ":" + normalKey(opportunity.editorialAngleKey);
-      // A topic may be reused across publications only with a genuinely
-      // distinct editorial angle, not a superficial recolor/repost.
-      const identity = opportunity.topicKey + ":" +
-        normalKey(opportunity.editorialAngleKey);
-      if (alreadyProposed.has(key) || visualIdentityUsed.has(identity)) continue;
-      alreadyProposed.add(key);
-      visualIdentityUsed.add(identity);
-      proposals.push({
-        accountId: profile.connectedAccountId,
-        accountKey: profile.key,
-        opportunityId: opportunity.id,
-        targetKind: opportunity.targetKind,
-        targetId: opportunity.targetId,
-        angle: profile.angle,
-        visualStyleKey: profile.visualStyleKey,
-        intent: profile.intent,
-        topicKey: opportunity.topicKey,
-        editorialAngleKey: opportunity.editorialAngleKey,
-        state: "PLANNED_FOR_REVIEW",
-        requiresExactPinApproval: true,
-      });
-      count++;
+    usedByAccount.set(profile.key, budget.createdByAccount[profile.key] ?? 0);
+  }
+  // Fair deterministic allocation across connected, eligible publications.
+  // A single account must not consume the full global budget by profile order.
+  while (proposals.length < remainingGlobal) {
+    let addedThisRound = 0;
+    for (const profile of profiles) {
+      if (proposals.length >= remainingGlobal) break;
+      if (!profile.preparationEnabled || !profile.connectionHealthy ||
+          !profile.connectedAccountId) continue;
+      const accountUsed = usedByAccount.get(profile.key) ?? 0;
+      if (accountUsed >= profile.dailyCandidateCap) continue;
+      for (const opportunity of ordered) {
+        if (opportunity.intent !== profile.intent ||
+            opportunity.evidenceState !== "KNOWN" ||
+            opportunity.confidence < 80 || opportunity.score < 70 ||
+            !opportunity.original) continue;
+        if (profile.intent === "UTILITY" &&
+            opportunity.targetKind !== "TRANSLATOR") continue;
+        if (profile.intent === "INSPIRATION" &&
+            opportunity.targetKind !== "IDEA") continue;
+        const key = profile.key + ":" + opportunity.targetKind + ":" +
+          opportunity.targetId + ":" + normalKey(opportunity.editorialAngleKey);
+        // A repeated topic must have a genuinely different editorial angle.
+        const identity = opportunity.topicKey + ":" +
+          normalKey(opportunity.editorialAngleKey);
+        if (alreadyProposed.has(key) || visualIdentityUsed.has(identity)) continue;
+        alreadyProposed.add(key);
+        visualIdentityUsed.add(identity);
+        proposals.push({
+          accountId: profile.connectedAccountId,
+          accountKey: profile.key,
+          opportunityId: opportunity.id,
+          targetKind: opportunity.targetKind,
+          targetId: opportunity.targetId,
+          angle: profile.angle,
+          visualStyleKey: profile.visualStyleKey,
+          intent: profile.intent,
+          topicKey: opportunity.topicKey,
+          editorialAngleKey: opportunity.editorialAngleKey,
+          state: "PLANNED_FOR_REVIEW",
+          requiresExactPinApproval: true,
+        });
+        usedByAccount.set(profile.key, accountUsed + 1);
+        addedThisRound++;
+        break;
+      }
     }
+    if (addedThisRound === 0) break;
   }
   return proposals;
 }
