@@ -189,7 +189,7 @@ describe("Hostinger production migration contract", () => {
     expect(workflow).toContain("if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'");
     expect(workflow).toContain('EXPECTED_RELEASE_SHA: ${{ inputs.expected_release_sha }}');
     expect(workflow).toContain('[ "$EXPECTED_RELEASE_SHA" != "$GITHUB_SHA" ]');
-    expect(workflow).toContain("  push:");
+    expect(workflow).not.toContain("  push:");
     expect(workflow).toContain("name: hostinger-release-${{ github.sha }}");
   });
 
