@@ -22,7 +22,7 @@ CREATE TABLE "GrowthDailyCadencePreference" (
     AND "pinMaximum" BETWEEN 1 AND 10
     AND "pinMinimum" <= "pinMaximum"
     AND (
-      ("pinMode" = 'FIXED' AND "pinFixed" BETWEEN "pinMinimum" AND "pinMaximum")
+      ("pinMode" = 'FIXED' AND "pinFixed" IS NOT NULL AND "pinFixed" BETWEEN "pinMinimum" AND "pinMaximum")
       OR ("pinMode" <> 'FIXED' AND "pinFixed" IS NULL)
     )
   ),
@@ -32,7 +32,7 @@ CREATE TABLE "GrowthDailyCadencePreference" (
     AND "translatorMaximum" BETWEEN 1 AND 10
     AND "translatorMinimum" <= "translatorMaximum"
     AND (
-      ("translatorMode" = 'FIXED' AND "translatorFixed" BETWEEN
+      ("translatorMode" = 'FIXED' AND "translatorFixed" IS NOT NULL AND "translatorFixed" BETWEEN
         "translatorMinimum" AND "translatorMaximum")
       OR ("translatorMode" <> 'FIXED' AND "translatorFixed" IS NULL)
     )
