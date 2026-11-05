@@ -180,3 +180,15 @@ Phase 12.1 v2 subsequently ran successfully in production but remained `PARTIAL`
 ## Phase 14K account creative portfolio planner (advisory code only, 2026-11-05)
 
 `lib/growth/portfolio/creative-plan.ts` owns the pure independent account creative plan model, existing intent-role defaults and flexible future profile input. `tests/growth-creative-portfolio-plan.test.ts` validates account-specific opportunity selection, distinct editorial-angle identity across accounts, zero when no live connection/strong evidence, existing daily creative ceilings and no auto-creation account proposal outcomes. The new module is NOT connected to `workers/growth-autonomous-cycle.ts`, `CREATIVE_LAB_GENERATE`, Prisma, OAuth, the admin or the production scheduler. New-account activation still needs a reviewed schema migration and secure admin/OAuth integration.
+
+## Phase14K adaptive cadence implementation map, draft PR #113
+
+- `lib/growth/portfolio/daily-cadence.ts`: strict pure AUTO/FIXED/PAUSED schema, desired minimum/maximum, evidence-based adaptive request, pending/completed count deduction and fail-closed authorized hard ceilings; advisory distinction between creative drafts, separately approved Pin publications, Translator creation and separately gated Translator public activation.
+- `lib/growth/portfolio/creative-plan.ts`: three editorial/visual identities; fair cross-account eligible proposal selection; global and per-account bounds; future dynamic account input. No providers/workers or DB writes.
+- `prisma/schema.prisma` and `prisma/migrations/20261105150000_growth_daily_cadence_controls/migration.sql`: bounded owner preferences with DB CHECKs; migration pending independent PostgreSQL qualification.
+- `lib/growth/portfolio/cadence-settings.ts`: read preference and audited transactional update, no changes to Growth enabled, leases, spend, or jobs.
+- `app/api/admin/growth/cadence/route.ts`: administrator-only same-origin validated PUT.
+- `app/(admin)/admin/growth/cadence/page.tsx` and `components/admin/growth-daily-cadence-form.tsx`: owner GUI with current hard-cap visibility; no live generation controls.
+- `tests/growth-daily-cadence.test.ts`, `tests/growth-cadence-settings-security.test.ts`, `tests/growth-creative-portfolio-plan.test.ts`: decision logic, hard cap, quality floor, publication boundary and DB/audit contracts.
+
+**Integration not done:** database count/lease admission, applying preferences in scheduled jobs, dynamic fourth-account OAuth/admin role migration, account override UI, AI/job cost reservations for scaled work and autonomous Translator publication. This PR is not a production launch.
