@@ -508,3 +508,11 @@ The **proposed new daily Pinterest OBSERVE calendar** is 13:00 UTC (**14:00 Alge
 7. The daily 04:30 UTC RECOMMEND timer and alert are install-only and disabled by default. Installation requires a separately reviewed root-owned 0700 installer and explicit owner approval; recurring enablement requires a second explicit owner approval after monitored local trial acceptance.
 
 **Do not merge broader PR #105 or monthly PR #106 as a shortcut.** AI preparation, publication, attribution and Telegram recurrence remain separate future authorization and validation tracks. This branch alone does not constitute full Growth autopilot activation.
+
+## Phase A release gate refresh (2026-11-05, source-only)
+
+The November 5 real scheduled intelligence run succeeded three jobs with zero provider/AI/Pin calls. The real 13:00 UTC OBSERVE run succeeded with one Pinterest GET, zero writes and all three timers active; global Growth stayed OFF. There is **no authorization to update the deployed SHA yet**.
+
+The new review-only release preparation removes the automatic `push: main` Hostinger deploy trigger so integration merges cannot restart the app with stale systemd pins. It adds an owner-created exact-SHA private GitHub clone-source staging workflow, a fresh populated PostgreSQL clone-only Prisma migration rehearsal, a post-rehearsal verifier, and a dedicated `20261105150000_growth_daily_cadence_controls` production migrator that works with the trusted PM2 runtime and independent verified backup. All operations are opt-in and default inactive.
+
+**Authoritative release order and operator identities:** `PHASE14A_CADENCE_RELEASE_PLAN.md`. PR #111 fixes GitHub one-shot SSH; PR #112 adds the third root SHA rotator; PR #113 adds audited owner cadence settings + one additive migration; PR #114 stacks external market-discovery code with provider flags OFF. No PR merge, database change, timer interruption or provider request is implied by these source-only files. Do not use the historical two-timer release instructions after the third daily intelligence timer was activated.
