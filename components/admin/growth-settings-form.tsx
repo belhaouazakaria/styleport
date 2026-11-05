@@ -166,7 +166,23 @@ export function GrowthSettingsForm({ initial }: GrowthSettingsFormProps) {
       </label>
       <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm">
         <p className="font-bold text-ink">Approved Phase 13 operating limits — configuration only</p>
-        <p className="mt-1 text-muted-ink">These values are persisted, but billing reservations and enforced spend/volume gates are NOT implemented yet. Do not enable autonomous paid work based on this panel.</p>
+        <p className="mt-1 text-muted-ink">Existing hard limits are separate from the new 1–10 daily planning targets. Budgeted AI paths and content mutations must pass their independent spend/volume gates before execution. Saving a limit does not start Growth.</p>
+        <label className="mt-4 block space-y-2 text-sm font-semibold text-ink">
+          <span>Hard maximum new Translators per day (0–10)</span>
+          <input type="number" min={0} max={10} step={1}
+            value={settings.translatorCreatesPerDayCap}
+            onChange={(event) => setSettings((current) => ({
+              ...current,
+              translatorCreatesPerDayCap: Number(event.target.value),
+            }))}
+            className="min-h-11 w-full rounded-xl border border-border bg-white px-3"
+          />
+          <span className="block font-normal leading-5 text-muted-ink">
+            Default is 1. This independent hard cap can reduce an AUTO target of
+            1–10. Increasing it is an explicit owner action and never raises
+            the AI spending limit or publishes Translators automatically.
+          </span>
+        </label>
         <dl className="mt-3 grid grid-cols-2 gap-3">
           <div><dt>Daily AI cap</dt><dd className="font-bold">${(settings.aiDailyBudgetCents / 100).toFixed(2)}</dd></div>
           <div><dt>Monthly AI cap</dt><dd className="font-bold">${(settings.aiMonthlyBudgetCents / 100).toFixed(2)}</dd></div>
