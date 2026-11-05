@@ -40,8 +40,9 @@ export default async function GrowthMarketResearchPage() {
           ) : (
             <div className="mt-3 space-y-3">
               {previous.map(x => {
-                const summary = x.summary && typeof x.summary === "object" &&
-                  !Array.isArray(x.summary) ? x.summary : {};
+                const summary: Record<string, unknown> = x.summary &&
+                  typeof x.summary === "object" && !Array.isArray(x.summary)
+                  ? x.summary as Record<string, unknown> : {};
                 return (
                   <div key={x.id} className="rounded-lg border border-border p-3">
                     <p className="text-sm font-semibold text-ink">
