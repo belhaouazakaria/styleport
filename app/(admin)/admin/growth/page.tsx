@@ -32,6 +32,9 @@ export default async function AdminGrowthPage() {
       />
       <main className="space-y-6 p-4 sm:p-6">
         <div className="flex flex-wrap justify-end gap-3">
+          <Link href="/admin/growth/market-research" className={cn(buttonVariants({ variant: "outline" }))}>
+            External market discovery
+          </Link>
           <Link href="/admin/growth/cadence" className={cn(buttonVariants({ variant: "outline" }))}>
             Daily creative &amp; translator targets
           </Link>
