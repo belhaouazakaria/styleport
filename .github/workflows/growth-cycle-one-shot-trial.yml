@@ -55,12 +55,8 @@ jobs:
             test "$(cat .deployed-release)" = "$EXPECTED_RELEASE"
             test "$(systemctl is-active saytwist-growth-lease-watchdog.timer)" = "active"
             test "$(systemctl show -P Result saytwist-growth-lease-watchdog.service)" = "success"
-            systemctl show -P Environment saytwist-growth-lease-watchdog.service |
-              grep -Fq "WATCHDOG_EXPECTED_RELEASE_SHA=$EXPECTED_RELEASE"
+            systemctl show -P Environment saytwist-growth-lease-watchdog.service | grep -Fq "WATCHDOG_EXPECTED_RELEASE_SHA=$EXPECTED_RELEASE"
             test "$(systemctl is-active saytwist-growth-daily-observe.timer)" = "active"
             test "$(systemctl show -P Result saytwist-growth-daily-observe.service)" = "success"
-            EXPECTED_RELEASE="$EXPECTED_RELEASE" \
-            GROWTH_AUTONOMOUS_CYCLE_LAUNCH=true \
-            GROWTH_AUTONOMOUS_CYCLE_MODE=TRIAL \
-            /home/saytwist/.nvm/versions/node/v24.20.0/bin/node \
-              workers/growth-autonomous-cycle-launch.cjs
+            echo 'GROWTH_CYCLE_TRIAL_HOST_PREFLIGHT=PASSED'
+            env EXPECTED_RELEASE="$EXPECTED_RELEASE" GROWTH_AUTONOMOUS_CYCLE_LAUNCH=true GROWTH_AUTONOMOUS_CYCLE_MODE=TRIAL /home/saytwist/.nvm/versions/node/v24.20.0/bin/node workers/growth-autonomous-cycle-launch.cjs
