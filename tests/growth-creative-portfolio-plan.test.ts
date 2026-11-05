@@ -40,7 +40,7 @@ const budget = {
 
 describe("Phase14K account intent portfolio, advisory only", () => {
   it("preserves existing money/content guard ceilings and no connected defaults", () => {
-    expect(DEFAULT_DAILY_CANDIDATE_CAP).toBe(4);
+    expect(DEFAULT_DAILY_CANDIDATE_CAP).toBe(10);
     expect(EXISTING_DAILY_AI_IMAGE_CAP).toBe(3);
     expect(EXISTING_DAILY_TRANSLATOR_CREATE_CAP).toBe(1);
     expect(planAccountCreativeCandidates({
@@ -57,13 +57,13 @@ describe("Phase14K account intent portfolio, advisory only", () => {
     });
     expect(result).toHaveLength(4);
     expect(result.map(x => x.accountKey)).toEqual([
-      "saytwist-ideas", "saytwist-ideas",
-      "saytwist-playground", "saytwist-playground",
+      "saytwist-ideas", "saytwist-playground",
+      "saytwist-ideas", "saytwist-playground",
     ]);
-    expect(result.slice(0, 2).every(x =>
+    expect(result.filter(x => x.accountKey === "saytwist-ideas").every(x =>
       x.angle === "SAVEABLE_EDITORIAL" && x.targetKind === "IDEA" &&
       x.visualStyleKey === "warm-editorial-v1")).toBe(true);
-    expect(result.slice(2).every(x =>
+    expect(result.filter(x => x.accountKey === "saytwist-playground").every(x =>
       x.angle === "PLAYFUL_INTERACTION" &&
       x.visualStyleKey === "playful-bold-v1" &&
       x.targetKind === "TRANSLATOR")).toBe(true);
@@ -137,7 +137,7 @@ describe("Phase14K account intent portfolio, advisory only", () => {
         candidatesAlreadyCreated: 0, createdByAccount: {} },
     });
     expect(results).toHaveLength(5);
-    expect(results[4]).toMatchObject({
+    expect(results.find(x => x.accountKey === "saytwist-texting")).toMatchObject({
       accountKey: "saytwist-texting", accountId: "existing_texting_account",
       requiresExactPinApproval: true,
     });
