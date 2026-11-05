@@ -32,13 +32,14 @@ export async function POST(request: Request) {
     if (error instanceof MarketResearchUnavailable) {
       const code = error.reason;
       if (code === "DISABLED" || code === "PROVIDER_ACCESS_NOT_CONFIRMED") {
-        return apiError(409, code,
+        return apiError(409, "CONFLICT",
           "Market discovery is not enabled or Pinterest Trends access has not been approved.");
       }
-      return apiError(code === "ALREADY_RESEARCHED" ? 429 : 503, code,
+      return apiError(code === "ALREADY_RESEARCHED" ? 429 : 503,
+        code === "ALREADY_RESEARCHED" ? "RATE_LIMITED" : "UPSTREAM_ERROR",
         "Research source unavailable. Existing intelligence remains active.");
     }
-    return apiError(503, "MARKET_RESEARCH_UNAVAILABLE",
+    return apiError(503, "UPSTREAM_ERROR",
       "Research source unavailable. No content was published.");
   }
 }
