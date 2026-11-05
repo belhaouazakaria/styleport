@@ -18,6 +18,7 @@ export type AccountCreativeProfile = {
   label: string;
   intent: PortfolioIntent;
   angle: CreativeAngle;
+  visualStyleKey: string;
   dailyCandidateCap: number;
   connectedAccountId: string | null;
   connectionHealthy: boolean;
@@ -44,6 +45,7 @@ export type CandidatePreparationProposal = {
   targetKind: DestinationKind;
   targetId: string;
   angle: CreativeAngle;
+  visualStyleKey: string;
   intent: PortfolioIntent;
   topicKey: string;
   editorialAngleKey: string;
@@ -63,6 +65,7 @@ export const INITIAL_CREATIVE_PORTFOLIO = [
     label: "SayTwist",
     intent: "UTILITY",
     angle: "TOOL_DEMONSTRATION",
+    visualStyleKey: "utility-demonstration-v1",
     dailyCandidateCap: 0,
     connectedAccountId: null,
     connectionHealthy: false,
@@ -73,6 +76,7 @@ export const INITIAL_CREATIVE_PORTFOLIO = [
     label: "SayTwist Ideas",
     intent: "INSPIRATION",
     angle: "SAVEABLE_EDITORIAL",
+    visualStyleKey: "warm-editorial-v1",
     dailyCandidateCap: 2,
     connectedAccountId: null,
     connectionHealthy: false,
@@ -83,6 +87,7 @@ export const INITIAL_CREATIVE_PORTFOLIO = [
     label: "SayTwist Playground",
     intent: "PLAYGROUND",
     angle: "PLAYFUL_INTERACTION",
+    visualStyleKey: "playful-bold-v1",
     dailyCandidateCap: 2,
     connectedAccountId: null,
     connectionHealthy: false,
@@ -131,14 +136,17 @@ export function planAccountCreativeCandidates(input: {
   }
   const seenProfileKeys = new Set<string>();
   const seenConnectedIds = new Set<string>();
+  const seenVisualStyleKeys = new Set<string>();
   for (const profile of profiles) {
     if (!validKey(profile.key) || seenProfileKeys.has(profile.key) ||
+        !validKey(profile.visualStyleKey) || seenVisualStyleKeys.has(profile.visualStyleKey) ||
         profile.label.trim().length < 2 || profile.label.length > 80 ||
         !boundedInteger(profile.dailyCandidateCap, 20) ||
         !angleAllowed(profile.intent, profile.angle)) {
       throw Error("PORTFOLIO_PROFILE_INVALID");
     }
     seenProfileKeys.add(profile.key);
+    seenVisualStyleKeys.add(profile.visualStyleKey);
     if (profile.connectedAccountId !== null) {
       if (!/^[a-zA-Z0-9_-]{1,64}$/.test(profile.connectedAccountId) ||
           seenConnectedIds.has(profile.connectedAccountId)) {
@@ -211,6 +219,7 @@ export function planAccountCreativeCandidates(input: {
         targetKind: opportunity.targetKind,
         targetId: opportunity.targetId,
         angle: profile.angle,
+        visualStyleKey: profile.visualStyleKey,
         intent: profile.intent,
         topicKey: opportunity.topicKey,
         editorialAngleKey: opportunity.editorialAngleKey,
