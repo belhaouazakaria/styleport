@@ -192,3 +192,7 @@ Phase 12.1 v2 subsequently ran successfully in production but remained `PARTIAL`
 - `tests/growth-daily-cadence.test.ts`, `tests/growth-cadence-settings-security.test.ts`, `tests/growth-creative-portfolio-plan.test.ts`: decision logic, hard cap, quality floor, publication boundary and DB/audit contracts.
 
 **Integration not done:** database count/lease admission, applying preferences in scheduled jobs, dynamic fourth-account OAuth/admin role migration, account override UI, AI/job cost reservations for scaled work and autonomous Translator publication. This PR is not a production launch.
+
+## Phase14L market research files (draft, stacked PR)
+
+`lib/growth/market-research/pinterest-trends.ts` is the explicit owner-approved official trends GET adapter reusing global Pinterest quota + one daily research reservation. `gaps.ts` reads existing Translator/Idea catalog for conservative novelty and appends a bounded review event; `cadence.ts` chooses 24-hour shortage and 72-hour proactive scan timing as a pure function. `app/api/admin/growth/market-research/route.ts` and `app/(admin)/admin/growth/market-research/page.tsx` plus `components/admin/market-research-panel.tsx` surface an administrator-only manual opt-in scan and cached source summary. `tests/growth-market-research.test.ts` covers core novelty/staleness and proactive trigger. No schema migration or recurring systemd modification. See `MARKET_RESEARCH.md`.
