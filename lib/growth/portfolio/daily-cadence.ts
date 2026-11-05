@@ -131,9 +131,11 @@ export type DailyCadenceEvidence = {
   translatorCreates: CadenceResources;
   /** Independently approved, due Pin publications; never generated from target. */
   individuallyApprovedPinsDue: number;
+  publishedPinsToday: number;
   /** Published Translator pages require a separate reviewed activation path. */
   translatorPublishGateEnabled: boolean;
   qualityApprovedTranslatorsReady: number;
+  publishedTranslatorsToday: number;
 };
 
 export type DailyCadencePlan = {
@@ -154,7 +156,9 @@ export function planDailyGrowthCadence(
   const config = dailyCadencePolicySchema.parse(policy);
   for (const value of [
     evidence.individuallyApprovedPinsDue,
+    evidence.publishedPinsToday,
     evidence.qualityApprovedTranslatorsReady,
+    evidence.publishedTranslatorsToday,
   ]) if (!positiveInt(value)) throw Error("CADENCE_PUBLICATION_INVALID");
 
   const pinCreativePlanning = decideDailyChannelCadence(
@@ -170,12 +174,12 @@ export function planDailyGrowthCadence(
     eligiblePinPublications: config.pinCreatives.mode === "PAUSED" ? 0 :
       Math.min(evidence.individuallyApprovedPinsDue,
         Math.max(0, config.pinCreatives.maximum -
-          evidence.pinCreatives.completedToday)),
+          evidence.publishedPinsToday)),
     eligibleTranslatorPublications: !evidence.translatorPublishGateEnabled ||
       config.translatorCreates.mode === "PAUSED" ? 0 :
       Math.min(evidence.qualityApprovedTranslatorsReady,
         Math.max(0, config.translatorCreates.maximum -
-          evidence.translatorCreates.completedToday)),
+          evidence.publishedTranslatorsToday)),
     publishingAutomaticallyAuthorizesPins: false,
     productionExecutionAuthorized: false,
   };
