@@ -403,3 +403,13 @@ The owner verified in a non-secret PM2 read that `BREVO_API_KEY`, `EMAIL_FROM` a
 ### 2026-10-31 — Root-only Python provisioner replaces privileged Node
 
 The Hostinger root inspection found no trusted root-owned Node executable. The previous root Node-based credential provisioner was therefore blocked: executing a user-owned NVM runtime as root is unsafe. Replace it with `workers/provision-growth-lease-watchdog-alert-env.py`, requiring a root-owned Python interpreter in isolated mode (`/usr/bin/python3 -I`) and a reviewed root-owned mode-0700 script outside the writable app. It uses `/usr/sbin/runuser -u saytwist` to run user-owned Node only as the unprivileged application user. The Python parent validates and atomically persists exactly three Brevo settings in a root-owned mode-0600 systemd EnvironmentFile after its own exact-SHA owner approval. No alert sends, no installation, and no Growth activation are authorized by this code-only change.
+
+## D-14K-001 — distinct account creative identity and bounded creative cadence (proposed, not activated)
+
+**Status:** Phase 14K design candidate; advisory code-only implementation, owner confirmation required before live activation.
+
+SayTwist main remains UTILITY, SayTwist Ideas is editorial INSPIRATION, SayTwist Playground is humorous/interactive PLAYGROUND. A creative must be original to the intended audience, and a shared subject requires a materially different editorial angle, format and destination value. Do not republish nearly identical creative to multiple accounts merely for reach.
+
+Initial proposal: no more than **four candidate drafts/day across portfolio**, currently **two Ideas + two Playground**, **zero incremental main-account drafts** in that experiment; all counts represent maximums, not guaranteed output. When more eligible accounts are connected, the global and per-account caps must be explicitly reallocated rather than silently increased. Existing hard app caps for paid images, Translator creates/updates, Ideas and monetary reservation budgets remain unchanged. No autonomous Pin publish, content mutation, paid model invocation, account creation or board deletion is authorized by this decision.
+
+New account profiles may be recommended from sustained distinct portfolio evidence, but are never created by the agent; account creation, OAuth linking and editorial purpose remain owner-managed. A real fourth managed Pinterest account requires follow-up Prisma/admin integration because legacy `GrowthPinterestPublicationRole` has only three values. The Phase14K pure planning module is advisory and has no scheduler, writes, or provider calls.
