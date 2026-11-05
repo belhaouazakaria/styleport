@@ -508,3 +508,18 @@ The **proposed new daily Pinterest OBSERVE calendar** is 13:00 UTC (**14:00 Alge
 7. The daily 04:30 UTC RECOMMEND timer and alert are install-only and disabled by default. Installation requires a separately reviewed root-owned 0700 installer and explicit owner approval; recurring enablement requires a second explicit owner approval after monitored local trial acceptance.
 
 **Do not merge broader PR #105 or monthly PR #106 as a shortcut.** AI preparation, publication, attribution and Telegram recurrence remain separate future authorization and validation tracks. This branch alone does not constitute full Growth autopilot activation.
+
+## Phase 14J: release pin rotation for the now-live daily intelligence timer (review only, 2026-11-05)
+
+The first production `saytwist-growth-autonomous-cycle.timer` execution completed on 2026-11-05 at 04:30 UTC with service result `success`, 3/3 deterministic jobs succeeded, Growth OFF, NULL lease, zero provider/AI/Pin calls and all three timers active. The current installed service is pinned to `45d390ddc97e9103b9b66c2d7652bba3e7989ede`. A later merge/deployment changes the deployed release SHA and would cause this service's runtime identity guard to fail until its root-owned systemd pin is rotated.
+
+The separately reviewed `workers/rotate-growth-autonomous-cycle-systemd.sh OLD_SHA NEW_SHA` handles **only** the existing root-owned service SHA pin and leaves its timer **disabled/inactive**. It accepts only a checksum-verified, root-owned 0700 operator copy, refuses drop-ins and changed root unit ownership/modes, requires an exactly deployed NEW SHA, a healthy matching watchdog, the already rotated but still disabled OBSERVE service, idle disabled intelligence/OBSERVE timers, intact independent failure alert, 04:30 UTC calendar and no missed-run catch-up. It changes one exact line in the intelligence unit, reloads/validates systemd, and proves the effective SHA and disabled state without running workers or scheduling another job.
+
+**Coordinated future release sequence (not yet authorized):**
+1. Before deploying a new main SHA: verify no active intelligence or OBSERVE execution, Growth OFF and an idle queue; as SSH user `root`, disable/stop **both** daily OBSERVE and intelligence timers, then stop (but do not disable) the enabled minute watchdog timer. Keep worker automation OFF for the entire release window.
+2. Perform the separately owner-approved protected exact-SHA Hostinger deployment with independent DB backup and migration guard.
+3. Inspect all release-related systemd drop-ins, including watchdog override `10-release-sha.conf`; apply an owner-reviewed correction if stale. Verify current deployed SHA and safely restore the watchdog pin/service/timer on NEW SHA.
+4. Run the existing OBSERVE rotator OLD to NEW while OBSERVE remains disabled. Run the new daily intelligence rotator OLD to NEW while both daily timers remain disabled, using checksum-verified root-owned 0700 copies of reviewed release source, never app-owned sources executed as root.
+5. Run a fresh exact-SHA owner-approved read-only production audit and verify all systemd calendars, alerts, effective SHA pins and global OFF flags. Independently authorize re-enabling each daily timer. Do not manually start the intelligence service outside its schedule or bypass Pinterest's 24-hour request admission.
+
+This PR is code-only, does not rotate the currently live SHA and does not merge or deploy anything. Real root systemd integration for the rotator still needs a protected host qualification before a new release.
