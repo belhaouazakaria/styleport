@@ -61,9 +61,11 @@ describe("Phase14K account intent portfolio, advisory only", () => {
       "saytwist-playground", "saytwist-playground",
     ]);
     expect(result.slice(0, 2).every(x =>
-      x.angle === "SAVEABLE_EDITORIAL" && x.targetKind === "IDEA")).toBe(true);
+      x.angle === "SAVEABLE_EDITORIAL" && x.targetKind === "IDEA" &&
+      x.visualStyleKey === "warm-editorial-v1")).toBe(true);
     expect(result.slice(2).every(x =>
       x.angle === "PLAYFUL_INTERACTION" &&
+      x.visualStyleKey === "playful-bold-v1" &&
       x.targetKind === "TRANSLATOR")).toBe(true);
     expect(result.every(x =>
       x.requiresExactPinApproval && x.state === "PLANNED_FOR_REVIEW")).toBe(true);
@@ -120,6 +122,7 @@ describe("Phase14K account intent portfolio, advisory only", () => {
     const specialist: AccountCreativeProfile = {
       key: "saytwist-texting", label: "SayTwist Texting",
       intent: "SPECIALIST", angle: "SPECIALIST_EXPLAINER",
+      visualStyleKey: "texting-explainer-v1",
       dailyCandidateCap: 1, connectedAccountId: "existing_texting_account",
       connectionHealthy: true, preparationEnabled: true,
     };
@@ -142,7 +145,8 @@ describe("Phase14K account intent portfolio, advisory only", () => {
 
   it("rejects duplicate account bindings and malformed counts", () => {
     expect(() => planAccountCreativeCandidates({
-      profiles: [...connected, { ...connected[0], key: "duplicate" }],
+      profiles: [...connected, { ...connected[0], key: "duplicate",
+        visualStyleKey: "duplicate-style" }],
       opportunities: evidence, budget,
     })).toThrow("PORTFOLIO_ACCOUNT_DUPLICATE");
     expect(() => planAccountCreativeCandidates({
