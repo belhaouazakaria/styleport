@@ -6,14 +6,14 @@ import { GrowthActivityActorKind, GrowthJobStatus, GrowthJobType,
 import { recordGrowthActivity } from "@/lib/growth/activity";
 import { reserveOneAccountSyncRequest } from "@/lib/growth/pinterest/one-sync-guard";
 import { prisma } from "@/lib/prisma";
+import { countBlockingGrowthJobs } from "@/lib/growth/operations/approved-publication-queue";
 import { revokeGrowthWorkerActivation } from "@/lib/growth/settings";
 import { runGrowthWorker } from "@/lib/growth/worker";
 
 const APP = "/home/saytwist/htdocs/saytwist.com";
 const NODE = "/home/saytwist/.nvm/versions/node/v24.20.0/bin/node";
 const LEASE_MS = 120_000;
-const ACTIVE = [GrowthJobStatus.PENDING, GrowthJobStatus.CLAIMED,
-  GrowthJobStatus.RUNNING, GrowthJobStatus.FAILED_RETRYABLE];
+
 const ROLLOUT = { GROWTH_WORKER_RUN_ENABLED: "true", GROWTH_ROLLOUT_MODE: "OBSERVE" };
 
 export function assertOneSyncRuntime(
@@ -64,7 +64,7 @@ export async function runOneAccountSync(sha: string, options: { dailyUtcDate?: s
       const [settings, activeCount, accounts] = await Promise.all([
         tx.growthSettings.findUnique({ where: { id: "global" },
           select: { enabled: true, attributionEnabled: true, workerActivationExpiresAt: true } }),
-        tx.growthJob.count({ where: { status: { in: ACTIVE } } }),
+        countBlockingGrowthJobs(tx),
         tx.growthPinterestAccount.findMany({ where: {
           apiEnvironment: GrowthPinterestApiEnvironment.PRODUCTION,
           connectionStatus: GrowthPinterestConnectionStatus.CONNECTED,
@@ -127,7 +127,7 @@ export async function runOneAccountSync(sha: string, options: { dailyUtcDate?: s
     prisma.growthJob.findUnique({ where: { id: jobId! }, select: { type: true, status: true } }),
     prisma.growthPinterestAccount.findUnique({ where: { id: accountId! },
       select: { lastAccountSyncAt: true, lastSuccessfulApiCallAt: true } }),
-    prisma.growthJob.count({ where: { status: { in: ACTIVE } } }),
+    countBlockingGrowthJobs(prisma),
   ]);
   if (!settings || settings.enabled || settings.attributionEnabled ||
       settings.workerActivationExpiresAt !== null ||
