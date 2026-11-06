@@ -187,7 +187,14 @@ export async function getPinterestPinsPage(accountId: string, bookmark?: string,
   });
 }
 
-export async function createPinterestPin(params: { accountId: string; boardId: string; title: string; description: string; link: string; imageUrl: string; fetchImpl?: typeof fetch }) {
+export async function createPinterestPin(params: { accountId: string; boardId: string; title: string; description: string; link: string; imageUrl: string; imageBase64?: string; fetchImpl?: typeof fetch }) {
+  // Direct media avoids provider-side remote image retrieval failures (HTTP 400 / 2786).
+  // The caller must validate PNG bytes against the exact approved asset checksum.
+  if (params.imageBase64 !== undefined &&
+      (!/^[A-Za-z0-9+/]+={0,2}$/.test(params.imageBase64) ||
+        params.imageBase64.length > 14_000_000)) {
+    throw new NonRetryableGrowthJobError("Pinterest media payload is invalid.");
+  }
   const config = requirePinterestConfiguration();
   const accessToken = await getValidPinterestAccessToken(params.accountId, params.fetchImpl);
   let response: Response;
@@ -195,7 +202,11 @@ export async function createPinterestPin(params: { accountId: string; boardId: s
     response = await budgetedPinterestFetch(`${config.apiBaseUrl}/pins`, {
       method: "POST",
       headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json", "content-type": "application/json" },
-      body: JSON.stringify({ board_id: params.boardId, title: params.title, description: params.description, link: params.link, media_source: { source_type: "image_url", url: params.imageUrl, is_standard: true } }),
+      body: JSON.stringify({ board_id: params.boardId, title: params.title, description: params.description, link: params.link,
+        media_source: params.imageBase64 === undefined
+          ? { source_type: "image_url", url: params.imageUrl, is_standard: true }
+          : { source_type: "image_base64", content_type: "image/png", data: params.imageBase64, is_standard: true },
+      }),
       signal: AbortSignal.timeout(15_000),
     }, params.fetchImpl || fetch);
   } catch (error) {
@@ -218,7 +229,12 @@ export async function createPinterestPin(params: { accountId: string; boardId: s
     }
     if (response.status === 429) throw new PinterestRateLimitError("Pinterest rate limit reached.", Number.isFinite(retryAfter) ? retryAfter * 1000 : undefined, metadata);
     if (response.status >= 500) throw new PinterestCreateAmbiguousError(`Pinterest Create Pin returned HTTP ${response.status}.`, metadata);
-    throw new NonRetryableGrowthJobError(`Pinterest Create Pin was rejected with HTTP ${response.status}.`);
+    const evidence = safePinterestProviderError(raw);
+    throw new NonRetryableGrowthJobError(
+      [`Pinterest Create Pin was rejected with HTTP ${response.status}.`,
+        evidence.providerCode ? `Provider code: ${evidence.providerCode}.` : null,
+        evidence.providerMessage].filter(Boolean).join(" ").slice(0, 500),
+    );
   }
   const parsed = pinterestCreatePinResponseSchema.safeParse(raw);
   if (!parsed.success) throw new PinterestCreateAmbiguousError("Pinterest Create Pin returned an invalid potentially successful response.", metadata);
