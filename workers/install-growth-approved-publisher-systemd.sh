@@ -36,8 +36,7 @@ for timer in \
   systemctl is-enabled --quiet "$timer" || fail
 done
 [[ "$(systemctl show -P Result "$WATCHDOG")" == "success" ]] || fail
-[[ "$(systemctl show -P OnFailure "$WATCHDOG")" ==
-  "saytwist-growth-lease-watchdog-alert.service" ]] || fail
+[[ "$(systemctl show -P OnFailure "$WATCHDOG")" == "saytwist-growth-lease-watchdog-alert.service" ]] || fail
 systemctl show -P Environment "$WATCHDOG" |
   grep -Fq "WATCHDOG_EXPECTED_RELEASE_SHA=$SHA" || fail
 
