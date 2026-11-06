@@ -75,6 +75,30 @@ jobs:
           target: /home/saytwist/htdocs/saytwist.com/.growth-pin-base64/${{ github.sha }}
           overwrite: false
 
+      - name: Respect approved times and existing global Pinterest hourly quota
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          # The already-recorded provider requests at 21:15 and 21:32 UTC
+          # require a fresh two-write hourly budget. Never override the cap.
+          target="$(date -u -d '2026-11-06 22:17:00 UTC' +%s)"
+          now="$(date -u +%s)"
+          if (( now > target + 3600 )); then
+            echo "PIN_BASE64_WINDOW=STALE"
+            exit 1
+          fi
+          if (( now < target )); then
+            delay=$(( target - now ))
+            if (( delay > 600 )); then
+              echo "PIN_BASE64_WINDOW=OUTSIDE_MAX_BOUND"
+              exit 1
+            fi
+            sleep "$delay"
+          fi
+          echo "PIN_BASE64_WINDOW=ELIGIBLE"
+          # The one-shot checks live hourly/daily quota again before each
+          # admitted API call and refuses if there is an active cooldown.
+
       - name: Execute exactly two due reapproved Pins through base64 transport
         uses: appleboy/ssh-action@v1.2.0
         env:
