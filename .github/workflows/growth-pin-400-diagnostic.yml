@@ -1,0 +1,185 @@
+name: SayTwist Pinterest HTTP400 Exact Diagnostic
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+
+jobs:
+  verify-and-process-only-approved-pins:
+    if: >-
+      github.event.issue.pull_request == null &&
+      github.event.sender.login == 'belhaouazakaria' &&
+      github.event.comment.user.login == 'belhaouazakaria' &&
+      startsWith(github.event.comment.body, 'RUN SAYTWIST PIN 400 DIAGNOSTIC ')
+    runs-on: ubuntu-latest
+    timeout-minutes: 17
+    environment: production
+    concurrency:
+      group: saytwist-pin-400-recovery-20261106
+      cancel-in-progress: false
+    steps:
+      - name: Checkout trusted main
+        uses: actions/checkout@v5
+
+      - name: Verify exact owner source and approved Pins
+        env:
+          PIN_400_EVENT_PATH: ${{ github.event_path }}
+        run: node scripts/validate-pin-400-diagnostic-request.mjs
+
+      - name: Recheck main and checksum the exact reviewed source
+        id: reviewed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '.commit.sha')" = "$GITHUB_SHA"
+          node --check scripts/validate-pin-400-diagnostic-request.mjs
+          test -s scripts/growth-pin-400-investigation.ts
+          echo "sha256=$(sha256sum scripts/growth-pin-400-investigation.ts | cut -d ' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Reserve independent private source directory
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.HOSTINGER_SSH_HOST || vars.HOSTINGER_SSH_HOST }}
+          username: ${{ secrets.HOSTINGER_SSH_USER || vars.HOSTINGER_SSH_USER }}
+          key: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
+          port: ${{ secrets.HOSTINGER_SSH_PORT || vars.HOSTINGER_SSH_PORT }}
+          script_stop: false
+          command_timeout: 1m
+          script: |
+            set -eu
+            test "$(id -un)" = saytwist
+            APP=/home/saytwist/htdocs/saytwist.com
+            ROOT="$APP/.growth-pin-400"
+            DIR="$ROOT/${{ github.sha }}"
+            test "$(cat "$APP/.deployed-release")" = "1f7f0560661a86947c3ce7c49c7a4669d41736f2"
+            umask 077
+            install -d -m 700 "$ROOT"
+            test ! -e "$DIR"
+            install -d -m 700 "$DIR"
+            printf '%s\n' "${{ github.sha }}" > "$DIR/.source-sha"
+            chmod 600 "$DIR/.source-sha"
+
+      - name: Transfer only the reviewed diagnostic runner
+        uses: appleboy/scp-action@v1.0.0
+        with:
+          host: ${{ secrets.HOSTINGER_SSH_HOST || vars.HOSTINGER_SSH_HOST }}
+          username: ${{ secrets.HOSTINGER_SSH_USER || vars.HOSTINGER_SSH_USER }}
+          key: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
+          port: ${{ secrets.HOSTINGER_SSH_PORT || vars.HOSTINGER_SSH_PORT }}
+          source: scripts/growth-pin-400-investigation.ts
+          target: /home/saytwist/htdocs/saytwist.com/.growth-pin-400/${{ github.sha }}
+          overwrite: false
+
+      - name: Repair terminal mismatch and diagnose only due approved Pins
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          PIN_400_SOURCE_SHA: ${{ github.sha }}
+          PIN_400_RELEASE_SHA: 1f7f0560661a86947c3ce7c49c7a4669d41736f2
+          PIN_400_SCRIPT_SHA256: ${{ steps.reviewed.outputs.sha256 }}
+        with:
+          host: ${{ secrets.HOSTINGER_SSH_HOST || vars.HOSTINGER_SSH_HOST }}
+          username: ${{ secrets.HOSTINGER_SSH_USER || vars.HOSTINGER_SSH_USER }}
+          key: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
+          port: ${{ secrets.HOSTINGER_SSH_PORT || vars.HOSTINGER_SSH_PORT }}
+          envs: PIN_400_SOURCE_SHA,PIN_400_RELEASE_SHA,PIN_400_SCRIPT_SHA256
+          script_stop: false
+          command_timeout: 6m
+          script: |
+            set -eu
+            test "$(id -un)" = saytwist
+            cd /home/saytwist/htdocs/saytwist.com
+            test "$(cat .deployed-release)" = "$PIN_400_RELEASE_SHA"
+            test "$(cat .growth-pin-400/$PIN_400_SOURCE_SHA/.source-sha)" = "$PIN_400_SOURCE_SHA"
+            echo "$PIN_400_SCRIPT_SHA256  .growth-pin-400/$PIN_400_SOURCE_SHA/scripts/growth-pin-400-investigation.ts" | sha256sum --check --status
+            /home/saytwist/.nvm/versions/node/v24.20.0/bin/node <<'NODE'
+            "use strict";
+            const { spawnSync } = require("node:child_process");
+            const { validatedDatabaseUrl } =
+              require("./workers/growth-lease-watchdog-launch.cjs");
+            const { loadPinterestRuntimeEnv } =
+              require("./workers/growth-one-account-sync-launch.cjs");
+            const APP = "/home/saytwist/htdocs/saytwist.com";
+            const NODEDIR = "/home/saytwist/.nvm/versions/node/v24.20.0/bin";
+            const NODE = NODEDIR + "/node";
+            const PM2 = "/home/saytwist/.npm/_npx/5f7878ce38f1eb13/node_modules/pm2/bin/pm2";
+            const src = process.env.PIN_400_SOURCE_SHA || "";
+            const rel = process.env.PIN_400_RELEASE_SHA || "";
+            let stage = "HOST_PREFLIGHT";
+            try {
+              if (!/^[a-f0-9]{40}$/.test(src) ||
+                  rel !== "1f7f0560661a86947c3ce7c49c7a4669d41736f2" ||
+                  process.cwd() !== APP) throw Error();
+              const system = args => spawnSync("/usr/bin/systemctl", args,
+                { encoding: "utf8", timeout: 5000, maxBuffer: 4096 });
+              for (const timer of [
+                "saytwist-growth-lease-watchdog.timer",
+                "saytwist-growth-daily-observe.timer",
+                "saytwist-growth-autonomous-cycle.timer",
+              ]) if (system(["is-active", "--quiet", timer]).status !== 0) throw Error();
+              const watchdog = "saytwist-growth-lease-watchdog.service";
+              if (system(["show", "-P", "Result", watchdog]).stdout.trim() !== "success" ||
+                  !system(["show", "-P", "Environment", watchdog]).stdout.includes(
+                    "WATCHDOG_EXPECTED_RELEASE_SHA=" + rel)) throw Error();
+
+              const listing = spawnSync(PM2, ["jlist"], {
+                encoding: "utf8", timeout: 10000, maxBuffer: 16 * 1024 * 1024,
+                env: { ...process.env, PM2_HOME: "/home/saytwist/.pm2",
+                  PATH: NODEDIR + ":/usr/local/bin:/usr/bin:/bin" },
+              });
+              if (listing.status !== 0 || listing.error) throw Error();
+              const apps = JSON.parse(listing.stdout);
+              const db = validatedDatabaseUrl(apps);
+              const env = apps.find(app => app.name === "saytwist").pm2_env;
+              const flag = name => env[name] ?? env.env?.[name];
+              for (const name of ["GROWTH_WORKER_RUN_ENABLED",
+                "GROWTH_DAILY_REPORT_SCHEDULE_ENABLED",
+                "TELEGRAM_REPORTS_ENABLED",
+                "GROWTH_ATTRIBUTION_COLLECTION_ENABLED"]) {
+                if (flag(name) === "true") throw Error();
+              }
+              if (["OBSERVE", "RECOMMEND"].includes(flag("GROWTH_ROLLOUT_MODE"))) {
+                throw Error();
+              }
+              stage = "PIN_400_DIAGNOSTIC";
+              const childEnv = {
+                NODE_ENV: "production", HOME: "/home/saytwist",
+                PATH: NODEDIR + ":/usr/local/bin:/usr/bin:/bin",
+                DATABASE_URL: db,
+                PIN_400_SOURCE_SHA: src,
+                PIN_400_RELEASE_SHA: rel,
+                PIN_400_OWNER_APPROVAL: "RUN SAYTWIST PIN 400 DIAGNOSTIC " + src + ":" + rel,
+                PIN_400_ENTRYPOINT: "true",
+                APP_BASE_URL: "https://saytwist.com",
+                GROWTH_WORKER_RUN_ENABLED: "false",
+                GROWTH_ROLLOUT_MODE: "OFF",
+                GROWTH_AI_IMAGE_ENABLED: "false",
+                GROWTH_ATTRIBUTION_COLLECTION_ENABLED: "false",
+              };
+              Object.assign(childEnv, loadPinterestRuntimeEnv(APP));
+              const child = spawnSync(NODE, [
+                "node_modules/tsx/dist/cli.mjs",
+                ".growth-pin-400/" + src + "/scripts/growth-pin-400-investigation.ts",
+              ], {
+                cwd: APP, encoding: "utf8", timeout: 300000,
+                maxBuffer: 65536, env: childEnv,
+              });
+              const safe = (child.stdout || "").trim().split("\n")
+                .filter(line => /^PIN_400_(PREFLIGHT|ORPHAN_JOB|PUBLISHED|APPROVED_PAIR|PUBLISHED_COUNT|AI_CALLS|PROVIDER_HTTP|PROVIDER_CODE|PROVIDER_MESSAGE)=/.test(line));
+              for (const line of safe) console.log(line.slice(0, 280));
+              if (child.error || child.status !== 0 ||
+                  !safe.includes("PIN_400_APPROVED_PAIR=PASSED") ||
+                  !safe.includes("PIN_400_PUBLISHED_COUNT=2") ||
+                  !safe.includes("PIN_400_AI_CALLS=0") ||
+                  safe.filter(line => line.startsWith("PIN_400_PUBLISHED=")).length !== 2) throw Error();
+              console.log("PIN_400_ONE_SHOT=PASSED");
+            } catch {
+              console.error("PIN_400_ONE_SHOT=BLOCKED");
+              console.error("PIN_400_FAILURE_STAGE=" + stage);
+              process.exitCode = 1;
+            }
+            NODE
