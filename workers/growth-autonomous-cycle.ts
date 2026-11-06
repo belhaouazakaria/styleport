@@ -4,6 +4,7 @@ import { GrowthActivityActorKind, GrowthJobStatus, GrowthJobType, Prisma } from 
 
 import { recordGrowthActivity } from "@/lib/growth/activity";
 import { prisma } from "@/lib/prisma";
+import { countBlockingGrowthJobs } from "@/lib/growth/operations/approved-publication-queue";
 import { revokeGrowthWorkerActivation } from "@/lib/growth/settings";
 import { runGrowthWorker } from "@/lib/growth/worker";
 import { OPPORTUNITY_INTELLIGENCE_VERSION } from "@/lib/growth/opportunity/constants";
@@ -13,9 +14,6 @@ const APP = "/home/saytwist/htdocs/saytwist.com";
 const NODE = "/home/saytwist/.nvm/versions/node/v24.20.0/bin/node";
 const LEASE_MS = 120_000;
 const ROLLOUT = { GROWTH_WORKER_RUN_ENABLED: "true", GROWTH_ROLLOUT_MODE: "RECOMMEND" };
-const ACTIVE = [GrowthJobStatus.PENDING, GrowthJobStatus.CLAIMED,
-  GrowthJobStatus.RUNNING, GrowthJobStatus.FAILED_RETRYABLE];
-
 /**
  * Three local-only, one-at-a-time daily analysis jobs. No Pinterest transport,
  * paid AI, content modification, publication, Telegram or attribution. Each
@@ -95,7 +93,7 @@ async function requireStopped() {
     where: { id: "global" },
     select: { enabled: true, attributionEnabled: true, workerActivationExpiresAt: true },
   });
-  const activeCount = await prisma.growthJob.count({ where: { status: { in: ACTIVE } } });
+  const activeCount = await countBlockingGrowthJobs(prisma);
   if (!settings || settings.enabled || settings.attributionEnabled ||
       settings.workerActivationExpiresAt !== null || activeCount !== 0) {
     throw Error("CYCLE_NOT_IDLE");
@@ -132,7 +130,7 @@ export async function executeAutonomousGrowthCycle(day: string) {
         });
         if (!settings || settings.enabled || settings.attributionEnabled ||
             settings.workerActivationExpiresAt !== null ||
-            await tx.growthJob.count({ where: { status: { in: ACTIVE } } }) !== 0) {
+            await countBlockingGrowthJobs(tx) !== 0) {
           throw Error("CYCLE_TRANSACTION_NOT_IDLE");
         }
         const updated = await tx.growthSettings.updateMany({
@@ -172,7 +170,7 @@ export async function executeAutonomousGrowthCycle(day: string) {
         select: { type: true, status: true } }),
       prisma.growthSettings.findUnique({ where: { id: "global" },
         select: { enabled: true, workerActivationExpiresAt: true } }),
-      prisma.growthJob.count({ where: { status: { in: ACTIVE } } }),
+      countBlockingGrowthJobs(prisma),
     ]);
     if (job?.type !== spec.type || job.status !== GrowthJobStatus.SUCCEEDED ||
         !settings || settings.enabled || settings.workerActivationExpiresAt !== null ||

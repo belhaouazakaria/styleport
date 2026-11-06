@@ -6,6 +6,7 @@ const m = vi.hoisted(() => ({
   transaction: vi.fn(), settings: vi.fn(), jobs: vi.fn(), accounts: vi.fn(),
   update: vi.fn(), create: vi.fn(), jobRead: vi.fn(), accountRead: vi.fn(),
   revoke: vi.fn(), run: vi.fn(),
+  jobList: vi.fn(), publicationList: vi.fn(),
 }));
 vi.mock("@/lib/growth/activity", () => ({ recordGrowthActivity: m.audit }));
 vi.mock("@/lib/growth/settings", () => ({ revokeGrowthWorkerActivation: m.revoke }));
@@ -13,7 +14,8 @@ vi.mock("@/lib/growth/worker", () => ({ runGrowthWorker: m.run }));
 vi.mock("@/lib/prisma", () => ({ prisma: {
   $transaction: m.transaction,
   growthSettings: { findUnique: m.settings },
-  growthJob: { findUnique: m.jobRead, count: m.jobs },
+  growthJob: { findUnique: m.jobRead, count: m.jobs, findMany: m.jobList },
+  growthPinPublication: { findMany: m.publicationList },
   growthPinterestAccount: { findUnique: m.accountRead },
 } }));
 
@@ -71,6 +73,13 @@ describe("One controlled Pinterest worker job", () => {
       enabled, attributionEnabled: false, workerActivationExpiresAt: lease,
     }));
     m.jobs.mockImplementation(async () => active);
+    m.jobList.mockImplementation(async () => active ? [{
+      id: "unrelated-job",
+      status: GrowthJobStatus.PENDING,
+      type: GrowthJobType.CREATIVE_LAB_GENERATE,
+      attemptCount: 0, runAfter: new Date(),
+    }] : []);
+    m.publicationList.mockResolvedValue([]);
     m.accounts.mockImplementation(async () => [{
       id: "account123", encryptedCredentials: "opaque",
       grantedScopes: ["user_accounts:read"],
@@ -84,7 +93,8 @@ describe("One controlled Pinterest worker job", () => {
     m.create.mockImplementation(async () => { active = 1; return { id: "job123" }; });
     m.transaction.mockImplementation(async (cb: (tx: unknown) => Promise<unknown>) => cb({
       growthSettings: { findUnique: m.settings, updateMany: m.update },
-      growthJob: { count: m.jobs, create: m.create },
+      growthJob: { count: m.jobs, create: m.create, findMany: m.jobList },
+      growthPinPublication: { findMany: m.publicationList },
       growthPinterestAccount: { findMany: m.accounts },
       growthActivity: { count: m.count },
       $queryRaw: m.lock,
