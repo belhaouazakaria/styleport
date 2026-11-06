@@ -519,6 +519,7 @@ model User {
   editorialJobs         TranslatorEditorialJob[]    @relation("TranslatorEditorialJobRequester")
   editorialDraftReviews TranslatorEditorialDraft[]  @relation("TranslatorEditorialDraftReviewer")
   growthSettingsUpdates GrowthSettings[]            @relation("GrowthSettingsUpdater")
+  growthCadenceUpdates GrowthDailyCadencePreference[] @relation("GrowthCadenceUpdater")
   growthActivities      GrowthActivity[]            @relation("GrowthActivityUser")
   growthPinterestStates GrowthPinterestOAuthState[] @relation("GrowthPinterestOAuthStateAdmin")
   growthIdeaVersions    GrowthIdeaVersion[]         @relation("GrowthIdeaVersionAuthor")
@@ -972,6 +973,25 @@ model GrowthSettings {
   createdAt                       DateTime        @default(now())
   updatedAt                       DateTime        @updatedAt
   updatedBy                       User?           @relation("GrowthSettingsUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@index([updatedAt])
+}
+
+model GrowthDailyCadencePreference {
+  id                String   @id @default("global")
+  pinMode           String   @default("AUTO") @db.VarChar(10)
+  pinMinimum        Int      @default(1)
+  pinMaximum        Int      @default(10)
+  pinFixed          Int?
+  translatorMode    String   @default("AUTO") @db.VarChar(10)
+  translatorMinimum Int      @default(1)
+  translatorMaximum Int      @default(10)
+  translatorFixed   Int?
+  configVersion     Int      @default(1)
+  updatedById       String?
+  updatedBy         User?    @relation("GrowthCadenceUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   @@index([updatedAt])
 }
