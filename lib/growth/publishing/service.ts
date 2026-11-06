@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import {
   GrowthActivityActorKind,
   GrowthAssetState,
@@ -12,6 +13,7 @@ import {
 } from "@prisma/client";
 
 import { recordGrowthActivity } from "@/lib/growth/activity";
+import { creativeAssetChecksum, resolveCreativeAssetFile, validateCreativePng } from "@/lib/growth/creative/storage";
 import { generateAttributionPublicRef } from "@/lib/growth/attribution/refs";
 import { buildAttributionUrl, normalizeAttributionDestinationPath } from "@/lib/growth/attribution/urls";
 import { NonRetryableGrowthJobError, RetryableGrowthJobError } from "@/lib/growth/errors";
@@ -193,7 +195,32 @@ export async function publishApprovedPin(publicationId: string, fetchImpl?: type
   const snapshot = parseSnapshot(publication.approval.snapshot);
   let created;
   try {
-    created = await createPinterestPin({ accountId: publication.accountId, boardId: publication.board.pinterestBoardId, title: snapshot.title, description: snapshot.description, link: snapshot.destinationUrl, imageUrl: snapshot.assetPublicUrl, fetchImpl });
+    // When running in production, send the exact approved PNG bytes directly.
+    // Pinterest's image_url proxy intermittently rejects reachable public image
+    // URLs with provider code 2786. This avoids that fetch dependency while
+    // retaining the pre-approved asset, its SHA-256, and the unchanged link.
+    let imageBase64: string | undefined;
+    if (process.env.NODE_ENV === "production") {
+      const filename = publication.candidate.asset.publicPath.split("/").at(-1) || "";
+      const filePath = resolveCreativeAssetFile(filename);
+      if (!filePath) throw new NonRetryableGrowthJobError("Approved image path is invalid.");
+      const bytes = await readFile(filePath);
+      validateCreativePng(bytes);
+      if (creativeAssetChecksum(bytes) !== snapshot.assetChecksum) {
+        throw new NonRetryableGrowthJobError("Approved image checksum mismatch.");
+      }
+      imageBase64 = bytes.toString("base64");
+    }
+    created = await createPinterestPin({
+      accountId: publication.accountId,
+      boardId: publication.board.pinterestBoardId,
+      title: snapshot.title,
+      description: snapshot.description,
+      link: snapshot.destinationUrl,
+      imageUrl: snapshot.assetPublicUrl,
+      ...(imageBase64 === undefined ? {} : { imageBase64 }),
+      fetchImpl,
+    });
   } catch (error) {
     if (error instanceof PinterestCreateAmbiguousError) {
       await markPublicationAmbiguous(publication.id, "CREATE_OUTCOME_AMBIGUOUS", error.message, error.rateLimit);
