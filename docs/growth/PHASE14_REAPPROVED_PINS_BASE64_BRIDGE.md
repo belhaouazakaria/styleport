@@ -21,3 +21,7 @@ Global per-hour/per-day Pinterest provider budgets are checked before entry and 
 Both new Pin publications must become `RECONCILED` with Pinterest Pin IDs and jobs SUCCEEDED; no other candidates/jobs can be claimed. Growth and Attribution remain OFF, activation lease cleared, normal watchdog/observe/local-intelligence systemd timers unaffected, no AI calls. If one fails, inspect persisted status and provider evidence. New owner approval and separate branch/source authorization required for recovery. Persistent release and a narrow publishing schedule are separate tasks.
 
 The direct-media fix is merged in GitHub PR #127, but the old deployed production app may still be pinned to its prior SHA. The one-shot does **not** pretend the website's permanent publisher has been redeployed.
+
+## Exact rolling quota window for November 6
+
+After the 21:15 UTC rejected write and the 21:32 UTC approved/rejected writes, a two-write recovery must not begin before **22:17 UTC** on November 6. The owner-authorized workflow has a bounded UTC clock gate before executing the production script. It refuses overly early or stale attempts instead of overriding the existing 4/hour and 16/day global quotas. The production one-shot independently reads current reservation/cooldown evidence before provider access and each request still passes the normal centralized admission checks. The user selected the new approved publication times; the gate cannot run either before its individually selected due time. This step does not enable automatic recurring publishing.
