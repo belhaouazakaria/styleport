@@ -1,0 +1,178 @@
+name: SayTwist Fresh Creative Candidates One-Shot
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+
+jobs:
+  owner-approved-fresh-creatives:
+    if: >-
+      github.event.issue.pull_request == null &&
+      github.event.sender.login == 'belhaouazakaria' &&
+      github.event.comment.user.login == 'belhaouazakaria' &&
+      startsWith(github.event.comment.body, 'RUN SAYTWIST FRESH CREATIVES ')
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    environment: production
+    concurrency:
+      group: saytwist-fresh-creatives-owner-once
+      cancel-in-progress: false
+    steps:
+      - name: Checkout trusted main
+        uses: actions/checkout@v5
+
+      - name: Verify exact owner issue, comment, source and deployed SHA
+        env:
+          FRESH_CREATIVE_EVENT_PATH: ${{ github.event_path }}
+        run: node scripts/validate-growth-fresh-creatives-request.mjs
+
+      - name: Verify main immutability and package reviewed generator
+        id: verified
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '.commit.sha')" = "$GITHUB_SHA"
+          node --check scripts/validate-growth-fresh-creatives-request.mjs
+          test -s scripts/growth-fresh-creatives-one-shot.ts
+          echo "sha256=$(sha256sum scripts/growth-fresh-creatives-one-shot.ts | cut -d ' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Reserve private one-shot source directory
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.HOSTINGER_SSH_HOST || vars.HOSTINGER_SSH_HOST }}
+          username: ${{ secrets.HOSTINGER_SSH_USER || vars.HOSTINGER_SSH_USER }}
+          key: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
+          port: ${{ secrets.HOSTINGER_SSH_PORT || vars.HOSTINGER_SSH_PORT }}
+          script_stop: true
+          command_timeout: 1m
+          script: |
+            set -eu
+            test "$(id -un)" = "saytwist"
+            APP=/home/saytwist/htdocs/saytwist.com
+            ROOT="$APP/.growth-fresh-creatives"
+            DIR="$ROOT/${{ github.sha }}"
+            test "$(cat "$APP/.deployed-release")" = "1f7f0560661a86947c3ce7c49c7a4669d41736f2"
+            umask 077
+            install -d -m 700 "$ROOT"
+            test ! -e "$DIR"
+            install -d -m 700 "$DIR"
+            printf '%s\n' "${{ github.sha }}" > "$DIR/.source-sha"
+            chmod 600 "$DIR/.source-sha"
+
+      - name: Transfer one reviewed TypeScript script only
+        uses: appleboy/scp-action@v1.0.0
+        with:
+          host: ${{ secrets.HOSTINGER_SSH_HOST || vars.HOSTINGER_SSH_HOST }}
+          username: ${{ secrets.HOSTINGER_SSH_USER || vars.HOSTINGER_SSH_USER }}
+          key: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
+          port: ${{ secrets.HOSTINGER_SSH_PORT || vars.HOSTINGER_SSH_PORT }}
+          source: scripts/growth-fresh-creatives-one-shot.ts
+          target: /home/saytwist/htdocs/saytwist.com/.growth-fresh-creatives/${{ github.sha }}
+          overwrite: false
+
+      - name: Execute three bounded deterministic drafts under separate lease
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          FRESH_CREATIVE_SOURCE_SHA: ${{ github.sha }}
+          FRESH_CREATIVE_DEPLOYED_SHA: 1f7f0560661a86947c3ce7c49c7a4669d41736f2
+          FRESH_CREATIVE_SCRIPT_SHA256: ${{ steps.verified.outputs.sha256 }}
+        with:
+          host: ${{ secrets.HOSTINGER_SSH_HOST || vars.HOSTINGER_SSH_HOST }}
+          username: ${{ secrets.HOSTINGER_SSH_USER || vars.HOSTINGER_SSH_USER }}
+          key: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
+          port: ${{ secrets.HOSTINGER_SSH_PORT || vars.HOSTINGER_SSH_PORT }}
+          envs: FRESH_CREATIVE_SOURCE_SHA,FRESH_CREATIVE_DEPLOYED_SHA,FRESH_CREATIVE_SCRIPT_SHA256
+          script_stop: false
+          command_timeout: 10m
+          script: |
+            set -eu
+            test "$(id -un)" = "saytwist"
+            cd /home/saytwist/htdocs/saytwist.com
+            test "$(cat .deployed-release)" = "$FRESH_CREATIVE_DEPLOYED_SHA"
+            test "$(cat .growth-fresh-creatives/$FRESH_CREATIVE_SOURCE_SHA/.source-sha)" = "$FRESH_CREATIVE_SOURCE_SHA"
+            echo "$FRESH_CREATIVE_SCRIPT_SHA256  .growth-fresh-creatives/$FRESH_CREATIVE_SOURCE_SHA/scripts/growth-fresh-creatives-one-shot.ts" | sha256sum --check --status
+            node_bin=/home/saytwist/.nvm/versions/node/v24.20.0/bin/node
+            "$node_bin" <<'NODE'
+            "use strict";
+            const { spawnSync } = require("node:child_process");
+            const { validatedDatabaseUrl } =
+              require("./workers/growth-lease-watchdog-launch.cjs");
+            const APP = "/home/saytwist/htdocs/saytwist.com";
+            const NODEDIR = "/home/saytwist/.nvm/versions/node/v24.20.0/bin";
+            const NODE = NODEDIR + "/node";
+            const PM2 = "/home/saytwist/.npm/_npx/5f7878ce38f1eb13/node_modules/pm2/bin/pm2";
+            const source = process.env.FRESH_CREATIVE_SOURCE_SHA || "";
+            const deployed = process.env.FRESH_CREATIVE_DEPLOYED_SHA || "";
+            let stage = "PREFLIGHT";
+            try {
+              if (!/^[a-f0-9]{40}$/.test(source) ||
+                  deployed !== "1f7f0560661a86947c3ce7c49c7a4669d41736f2" ||
+                  process.cwd() !== APP) throw Error();
+              const system = (args) => spawnSync("/usr/bin/systemctl", args,
+                { encoding: "utf8", timeout: 5000, maxBuffer: 4096 });
+              for (const timer of [
+                "saytwist-growth-lease-watchdog.timer",
+                "saytwist-growth-daily-observe.timer",
+                "saytwist-growth-autonomous-cycle.timer",
+              ]) if (system(["is-active", "--quiet", timer]).status !== 0) throw Error();
+              const watchdog = "saytwist-growth-lease-watchdog.service";
+              if (system(["show", "-P", "Result", watchdog]).stdout.trim() !== "success" ||
+                  !system(["show", "-P", "Environment", watchdog]).stdout.includes(
+                    "WATCHDOG_EXPECTED_RELEASE_SHA=" + deployed)) throw Error();
+              const listing = spawnSync(PM2, ["jlist"], {
+                encoding: "utf8", timeout: 10000, maxBuffer: 16 * 1024 * 1024,
+                env: { ...process.env, PM2_HOME: "/home/saytwist/.pm2",
+                  PATH: NODEDIR + ":/usr/local/bin:/usr/bin:/bin" },
+              });
+              if (listing.status !== 0 || listing.error) throw Error();
+              const apps = JSON.parse(listing.stdout);
+              const db = validatedDatabaseUrl(apps);
+              const live = apps.find(app => app.name === "saytwist")?.pm2_env;
+              if (!live) throw Error();
+              const getFlag = key => live[key] ?? live.env?.[key];
+              for (const flag of [
+                "GROWTH_WORKER_RUN_ENABLED",
+                "GROWTH_DAILY_REPORT_SCHEDULE_ENABLED",
+                "TELEGRAM_REPORTS_ENABLED",
+                "GROWTH_ATTRIBUTION_COLLECTION_ENABLED",
+              ]) if (getFlag(flag) === "true") throw Error();
+              if (["OBSERVE", "RECOMMEND"].includes(getFlag("GROWTH_ROLLOUT_MODE"))) throw Error();
+              stage = "GENERATE";
+              const child = spawnSync(NODE, [
+                "node_modules/tsx/dist/cli.mjs",
+                ".growth-fresh-creatives/" + source + "/scripts/growth-fresh-creatives-one-shot.ts",
+              ], {
+                cwd: APP, encoding: "utf8", timeout: 420000, maxBuffer: 65536,
+                env: {
+                  NODE_ENV: "production", HOME: "/home/saytwist",
+                  PATH: NODEDIR + ":/usr/local/bin:/usr/bin:/bin",
+                  DATABASE_URL: db,
+                  FRESH_CREATIVE_SOURCE_SHA: source,
+                  FRESH_CREATIVE_DEPLOYED_SHA: deployed,
+                  FRESH_CREATIVE_APPROVAL: "RUN SAYTWIST FRESH CREATIVES " + source + ":" + deployed,
+                  FRESH_CREATIVE_ENTRYPOINT: "true",
+                  GROWTH_WORKER_RUN_ENABLED: "false",
+                  GROWTH_ROLLOUT_MODE: "OFF",
+                  GROWTH_AI_IMAGE_ENABLED: "false",
+                },
+              });
+              const safe = (child.stdout || "").trim().split("\n")
+                .filter(line => /^FRESH_CREATIVE_(READY|BATCH|COUNT|PROVIDER_CALLS|AI_CALLS|PIN_PUBLICATIONS)=/.test(line));
+              for (const line of safe) console.log(line.slice(0, 256));
+              if (child.error || child.status !== 0 ||
+                  !safe.includes("FRESH_CREATIVE_BATCH=PASSED") ||
+                  !safe.includes("FRESH_CREATIVE_PROVIDER_CALLS=0") ||
+                  !safe.includes("FRESH_CREATIVE_AI_CALLS=0") ||
+                  !safe.includes("FRESH_CREATIVE_PIN_PUBLICATIONS=0")) throw Error();
+              console.log("FRESH_CREATIVE_ONE_SHOT=PASSED");
+            } catch {
+              console.error("FRESH_CREATIVE_ONE_SHOT=BLOCKED");
+              console.error("FRESH_CREATIVE_FAILURE_STAGE=" + stage);
+              process.exitCode = 1;
+            }
+            NODE
