@@ -16,6 +16,51 @@ describe("Pinterest publishing adapter", () => {
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ board_id: input.boardId, title: input.title, description: input.description, link: input.link, media_source: { source_type: "image_url", url: input.imageUrl, is_standard: true } });
     expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe("Bearer secret-token");
   });
+  it("uses image_base64 PNG when approved bytes are supplied", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      id: "pin-base64", board_id: input.boardId,
+    }), { status: 201 }));
+    const imageBase64 = Buffer.from("sample-test-media").toString("base64");
+    await expect(createPinterestPin({
+      ...input, imageBase64, fetchImpl: fetchMock,
+    })).resolves.toMatchObject({ data: { id: "pin-base64" } });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      board_id: input.boardId,
+      title: input.title,
+      description: input.description,
+      link: input.link,
+      media_source: {
+        source_type: "image_base64",
+        content_type: "image/png",
+        data: imageBase64,
+        is_standard: true,
+      },
+    });
+  });
+
+  it("rejects malformed base64 without a Pinterest API call", async () => {
+    const fetchMock = vi.fn();
+    await expect(createPinterestPin({
+      ...input, imageBase64: "<unsafe>", fetchImpl: fetchMock,
+    })).rejects.toBeInstanceOf(NonRetryableGrowthJobError);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("retains only sanitized Pinterest 400 code and message", async () => {
+    const response = new Response(JSON.stringify({
+      code: 2786,
+      message: "Unable to reach the URL. access_token=private-token-value",
+    }), { status: 400 });
+    const error = await createPinterestPin({
+      ...input, fetchImpl: vi.fn().mockResolvedValue(response),
+    }).catch((value) => value);
+    expect(error).toBeInstanceOf(NonRetryableGrowthJobError);
+    expect(error.message).toContain("Provider code: 2786");
+    expect(error.message).toContain("Unable to reach the URL");
+    expect(error.message).not.toContain("private-token-value");
+  });
+
   it("classifies rate limits, auth, validation, and ambiguous outcomes safely", async () => {
     await expect(createPinterestPin({ ...input, fetchImpl: vi.fn().mockResolvedValue(new Response("{}", { status: 429, headers: { "retry-after": "12" } })) })).rejects.toMatchObject<RetryableGrowthJobError>({ retryAfterMs: 12_000 });
     const invalidCredential = await createPinterestPin({ ...input, fetchImpl: vi.fn().mockResolvedValue(new Response(JSON.stringify({ code: 8, message: "Invalid access token." }), { status: 401 })) }).catch((error) => error);
