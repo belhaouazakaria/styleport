@@ -1,0 +1,13 @@
+# Phase 14: Private Telegram daily reporting host scheduler
+
+**Status: code-only review. Not installed, enabled, deployed, or live tested.** This is an independent follow-up to the verified owner-received one-time Telegram report. It does not change or retry historical `growth-20261024`.
+
+The existing `runScheduledGrowthDailyReport` and archive/delivery implementations already provide two independent opt-in gates, yesterday's fully elapsed UTC date, immutable archive creation, and single-attempt submission. The new host adapter provides the missing disabled-by-default timer installation and process isolation.
+
+- `workers/install-growth-private-report-systemd.sh` requires a separately reviewed root-owned 0700 copy, exact deployed release SHA, and a root-owned 0600 `/etc/saytwist-growth-private-report.env` containing **exactly** `TELEGRAM_BOT_TOKEN`, `TELEGRAM_REPORT_CHAT_ID`, `TELEGRAM_REPORTS_ENABLED=true` and `GROWTH_DAILY_REPORT_SCHEDULE_ENABLED=true`. No values may appear in logs or Git.
+- Installer creates only disabled root-owned systemd service/timer units. The proposed calendar is 05:05 UTC, after the existing 04:00 UTC minimum report cutoff. `Persistent=false` avoids catch-up sends on a restarted host.
+- The launcher requires an exact deployed SHA, the app user and Node executable, a short UTC clock window, a private recipient ID and bot token, and an isolated PM2-derived production DB connection. It refuses a web process that has reporting, attribution, or generic Growth enabled. It forwards only the two Telegram credentials and necessary report gates to a bounded child. It never forwards Pinterest, OpenAI or web session secrets.
+- The child calls the existing archive/delivery runner. Only `SUBMITTED` and `ALREADY_SENT` are accepted; ambiguous sends fail without retry. Child stdout/stderr and provider error messages are suppressed; the launcher emits fixed status codes only.
+- The installer **does not enable the timer**. There is no installation, secret provisioning, production authorization, or live message send in this PR.
+
+Before a future single coordinated release: review tests and privacy posture, add the timer to the exact-SHA release rotation inventory, verify the separate bot's group-join restriction and private recipient, establish a protected credential provisioning procedure, approve installing the disabled timer, then approve one controlled run and post-run read-only archive/delivery audit. Only afterward may the owner separately opt into recurrence. If the private bot configuration or evidence is unavailable, leave the timer disabled. Never claim an HTTP acceptance equals a Telegram delivery receipt.
