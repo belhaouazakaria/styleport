@@ -36,7 +36,9 @@ describe("Phase14M daily isolated AI creative production safety", () => {
   });
   it("selects only distinct active translators with useful saved examples", () => {
     expect(worker).toContain("isActive: true, archivedAt: null");
-    expect(worker).toContain("examples: { some: {} }");
+    expect(worker).toContain("editorialExamples: { some: {} }");
+    expect(worker).toContain("target.editorialExamples[0]?.originalText.trim().length");
+    expect(worker).toContain("target.editorialExamples[0]?.transformedText.trim().length");
     expect(worker).toContain("growthPinCandidates: { none: {} }");
     expect(worker).toContain("MIN_DESCRIPTION_LENGTH = 40");
     expect(worker).toContain("GrowthCreativeArchetype.BEFORE_AFTER");
