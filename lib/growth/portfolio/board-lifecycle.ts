@@ -68,7 +68,10 @@ export function adviseBoardLifecycle(input: {
   }
   for (const d of demand) {
     if (!key(d.topicKey) || topics.has(d.topicKey) ||
-        !Number.isSafeInteger(d.eligibleContentCount) || d.eligibleContentCount < 0 ||\n        d.eligibleContentCount > 1_000_000_000 ||\n        !Number.isSafeInteger(d.distinctConceptCount) || d.distinctConceptCount < 0 ||\n        d.distinctConceptCount > 1_000_000_000 ||
+        !Number.isSafeInteger(d.eligibleContentCount) || d.eligibleContentCount < 0 ||
+        d.eligibleContentCount > 1_000_000_000 ||
+        !Number.isSafeInteger(d.distinctConceptCount) || d.distinctConceptCount < 0 ||
+        d.distinctConceptCount > 1_000_000_000 ||
         !count(d.qualifiedConversions)) throw Error("BOARD_ADVISOR_INVALID_DEMAND");
     topics.add(d.topicKey);
   }
