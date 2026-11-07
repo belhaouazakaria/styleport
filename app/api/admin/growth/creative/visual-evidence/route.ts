@@ -28,6 +28,6 @@ export async function GET(request: Request) {
     return apiOk({ candidateId: id, evidence });
   } catch {
     // Never return local storage paths, filesystem exceptions or image bytes.
-    return apiError(409, "ASSET_UNAVAILABLE", "Stored creative image cannot be verified.");
+    return apiError(409, "CONFLICT", "Stored creative image cannot be verified.");
   }
 }
