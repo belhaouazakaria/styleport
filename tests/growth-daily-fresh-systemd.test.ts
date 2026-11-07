@@ -36,7 +36,7 @@ describe("Phase14M daily isolated AI creative production safety", () => {
     expect(rotate).toContain("saytwist-growth-approved-publisher.timer");
     expect(rotate).toContain("GROWTH_DAILY_FRESH_ROTATION=READY_DISABLED");
     expect(rotate).toContain("GROWTH_DAILY_FRESH_TIMER=INACTIVE");
-    expect(rotate).not.toMatch(/\\bsystemctl\\s+(?:enable|start|restart)\\s+[^\\n]*daily-fresh/);
+    expect(rotate).not.toMatch(/\bsystemctl\s+(?:enable|start|restart)\s+[^\n]*daily-fresh/);
   });
   it("uses existing watchdog, publisher and only the isolated Growth AI project", () => {
     expect(launch).toContain("validatedDatabaseUrl");
