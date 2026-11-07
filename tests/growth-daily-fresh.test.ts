@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { planDailyFreshCreatives } from "@/lib/growth/operations/daily-fresh-creative-plan";
-import { assertDailyFreshRuntime } from "@/workers/growth-daily-fresh-creatives";
+import { assertDailyFreshRuntime, selectDailyFreshTargetsForMode } from "@/workers/growth-daily-fresh-creatives";
 
 const sha = "a".repeat(40);
 const identity = {
@@ -30,6 +30,13 @@ const env = {
 };
 
 describe("Phase14M daily budgeted AI Pinterest drafts", () => {
+  it("limits an owner-approved TRIAL to one image even when daily policy permits three", () => {
+    const targets = ["translator-1", "translator-2", "translator-3"];
+    expect(selectDailyFreshTargetsForMode(targets, "TRIAL")).toEqual(["translator-1"]);
+    expect(selectDailyFreshTargetsForMode(targets, "SCHEDULED")).toEqual(targets);
+    expect(selectDailyFreshTargetsForMode([], "TRIAL")).toEqual([]);
+    expect(() => selectDailyFreshTargetsForMode(targets, "unknown")).toThrow("FRESH_MODE_INVALID");
+  });
   it("prepares only one original candidate when performance evidence is unknown", () => {
     expect(planDailyFreshCreatives({
       policy, alreadyCreatedToday: 0,
