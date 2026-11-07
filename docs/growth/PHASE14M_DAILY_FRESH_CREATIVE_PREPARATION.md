@@ -37,6 +37,14 @@ This revision needs a new exact-SHA production release. **Four** currently live 
 6. Owner reviews the image in Creative Lab and approves an exact future time, account and board. Verify the live Phase14L five-minute publisher creates **one** Pin with an authoritative Pin ID and reconciled status, no duplicate POST, no stray job, and the 4/hour 16/day Pinterest ceiling.
 7. Only after the Pin acceptance, separately authorize recurring paid work and enable the Phase14M daily-fresh timer. Audit the next run against content quality, daily cap, budgets, provider effects and private alert. Fail closed and stop new timer on anomaly.
 
+## Consolidated post-deploy restoration (development, not live proof)
+
+`workers/restore-growth-release-timers-systemd.sh` combines the already audited root-owned release SHA rotations, in their required order, into one operator-controlled root command. It checks the live app's exact release marker, HTTPS readiness, the global OFF/lease-null Growth state, all five timer baselines, and immutable Git blob checksums for all five existing rotator scripts before executing separately root-owned 0700 copies.
+
+On success, it starts only the four previously owner-approved timers (watchdog, OBSERVE, local intelligence and individually approved Pin publisher), then rotates the newly installed AI creative service to the new SHA **while keeping its daily timer disabled**. It never requests OpenAI images, never turns on the generic Growth worker or attribution, and never grants per-Pin publication approval. On a partial failure, it disables the three periodic operational timers and records the failed stage; the watchdog remains available to clean up expiring leases.
+
+This script itself must be code-reviewed and deployed before use, and the operator must verify its exact Git blob and execute a private root-owned 0700 copy. The previous release's timer pins do not update automatically during GitHub deployment. A GitHub Actions SSH session with application-user privileges is **not** equivalent to authorized root access. A successful script run proves timer restoration, not live paid-creative quality or completed full Growth.
+
 ## Full-live distinction
 
 The Phase14L + Phase14M loop is approval-based organic Pinterest automation. Full Growth also needs automatic provider reconciliation, first-party attribution with consent, daily private Telegram reports, paid content intelligence, autonomous Translator/Idea editorial controls and Pinterest board lifecycle management. Those remain independent launch gates.
