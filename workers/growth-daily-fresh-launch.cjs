@@ -4,7 +4,6 @@
 const fs = require("node:fs");
 const os = require("node:os");
 const { spawnSync } = require("node:child_process");
-const { loadEnvConfig } = require("@next/env");
 const { validatedDatabaseUrl } = require("./growth-lease-watchdog-launch.cjs");
 
 const APP = "/home/saytwist/htdocs/saytwist.com";
@@ -76,7 +75,6 @@ function run() {
 
   // Reuse only the existing isolated Growth OpenAI project credentials.
   // Never forward the public site's OpenAI key, Pinterest secrets or PM2 environment.
-  loadEnvConfig(APP, false);
   const growthKey = process.env.GROWTH_OPENAI_API_KEY || "";
   const growthProject = process.env.GROWTH_OPENAI_PROJECT_ID || "";
   if (!/^sk-[A-Za-z0-9_-]{12,}$/.test(growthKey) ||
