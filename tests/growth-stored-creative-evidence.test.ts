@@ -22,7 +22,7 @@ describe("stored Creative Lab image evidence is read-only and admin-scoped", () 
   it("authenticates before DB lookup and never allows writes or publication approval", () => {
     expect(route.indexOf("await adminRouteGuard()")).toBeLessThan(route.indexOf("prisma.growthPinCandidate.findUnique"));
     expect(route).toContain("inspectStoredCreativeAsset");
-    expect(route).toContain("ASSET_UNAVAILABLE");
+    expect(route).toContain('apiError(409, "CONFLICT", "Stored creative image cannot be verified.")');
     expect(route).not.toContain("approvePinCandidate");
     expect(route).not.toContain("submitTelegram");
     expect(route).not.toContain("PINTEREST_PIN_PUBLISH");
