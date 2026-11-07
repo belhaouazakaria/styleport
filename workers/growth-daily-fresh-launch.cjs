@@ -21,9 +21,14 @@ const ALLOWED = new Set([
 function run() {
   const sha = process.env.EXPECTED_RELEASE || "";
   const now = new Date();
+  const trial = process.env.GROWTH_DAILY_FRESH_MODE === "TRIAL";
   if (!/^[a-f0-9]{40}$/.test(sha) ||
       process.env.GROWTH_DAILY_FRESH_LAUNCH !== "true" ||
-      !(now.getUTCHours() === 7 && now.getUTCMinutes() >= 2 && now.getUTCMinutes() < 15) ||
+      (trial
+        ? process.env.GROWTH_DAILY_FRESH_TRIAL_APPROVAL !== "RUN SAYTWIST DAILY FRESH TRIAL " + sha
+        : (process.env.GROWTH_DAILY_FRESH_MODE &&
+           process.env.GROWTH_DAILY_FRESH_MODE !== "SCHEDULED") ||
+          !(now.getUTCHours() === 7 && now.getUTCMinutes() >= 2 && now.getUTCMinutes() < 15)) ||
       !fs.existsSync(APP + "/workers/growth-daily-fresh-creatives.ts") ||
       !fs.existsSync(APP + "/node_modules/tsx/dist/cli.mjs") ||
       fs.readFileSync(APP + "/.deployed-release", "utf8").trim() !== sha ||
@@ -91,8 +96,10 @@ function run() {
       EXPECTED_RELEASE: sha,
       GROWTH_DAILY_FRESH_ENABLED: "true",
       GROWTH_DAILY_FRESH_DAY: now.toISOString().slice(0, 10),
-      GROWTH_DAILY_FRESH_MODE: "SCHEDULED",
-      GROWTH_DAILY_FRESH_APPROVAL: "SAYTWIST_DAILY_FRESH_SCHEDULED:" + sha,
+      GROWTH_DAILY_FRESH_MODE: trial ? "TRIAL" : "SCHEDULED",
+      GROWTH_DAILY_FRESH_APPROVAL: trial
+        ? "RUN SAYTWIST DAILY FRESH TRIAL " + sha
+        : "SAYTWIST_DAILY_FRESH_SCHEDULED:" + sha,
       GROWTH_DAILY_FRESH_ENTRYPOINT: "true",
       GROWTH_WORKER_RUN_ENABLED: "false",
       GROWTH_DAILY_REPORT_SCHEDULE_ENABLED: "false",
