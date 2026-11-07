@@ -11,7 +11,7 @@ The original image is 1024x1536, normalized to a validated 1000x1500 PNG. The ca
 ## Selection and budgets
 
 - Exactly one connected production Pinterest account with four read/write scopes and an active board. No Pinterest calls or Pinterest credentials during AI generation.
-- Active, unarchived Translators with a saved example, a nontrivial description of at least 40 characters, and zero prior Pin candidates. Never recycle the old gallery.
+- Active, unarchived Translators with a meaningful first TranslatorEditorialExample before/after pair (not merely a TranslatorExample entry), a nontrivial description of at least 40 characters, and zero prior Pin candidates. Never recycle the old gallery.
 - Existing owner PAUSED/FIXED/AUTO controls. In AUTO, one original daily creative when performance evidence is uncertain, increasing to at most three only when local intelligence has recent KNOWN opportunities. Hard maximum three candidates/images per UTC day; other candidates created that day count toward the total.
 - Fixed model gpt-image-2, quality medium, 1024x1536, one attempt per exact job, no SDK retries, provider timeout 180 seconds. Existing price admission conservatively reserves **$0.30** per image before a request; approximate published output price for this shape is $0.041 plus text input. Reservation is not actual billed spend. Unknown prices, models and repeated attempts fail closed.
 - Shared GrowthSettings hard caps, default **$2/day, $30/month and 3 images/day**, enforced using the immutable budget reservation ledger. Production settings may be different and must be read before live approval. No fallback to site-wide OpenAI credentials; require separately scoped Growth API key and project.
