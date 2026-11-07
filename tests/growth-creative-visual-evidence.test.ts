@@ -30,6 +30,7 @@ describe("offline creative visual evidence", () => {
     const image = await png();
     const evidence = await inspectCreativeVisualEvidence(image);
     expect(evidence.status).toBe("REVIEW_REQUIRED");
+    expect(evidence.opaque).toBe(true);
     expect(evidence.flags).toContain("NEAR_UNIFORM");
     expect(evidence.flags).toContain("LOW_DETAIL");
     expect(evidence.width).toBe(1000);
