@@ -4,6 +4,7 @@
 const fs = require("node:fs");
 const os = require("node:os");
 const { spawnSync } = require("node:child_process");
+const { loadEnvConfig } = require("@next/env");
 const { validatedDatabaseUrl } = require("./growth-lease-watchdog-launch.cjs");
 
 const APP = "/home/saytwist/htdocs/saytwist.com";
@@ -68,13 +69,21 @@ function run() {
     throw Error("FRESH_ROLLOUT_NOT_OFF");
   }
 
-  // No OpenAI or Pinterest secrets passed to this process. It may generate
-  // deterministic, no-cost PNG candidates for separate admin review only.
+  // Reuse only the existing isolated Growth OpenAI project credentials.
+  // Never forward the public site's OpenAI key, Pinterest secrets or PM2 environment.
+  loadEnvConfig(APP, false);
+  const growthKey = process.env.GROWTH_OPENAI_API_KEY || "";
+  const growthProject = process.env.GROWTH_OPENAI_PROJECT_ID || "";
+  if (!/^sk-[A-Za-z0-9_-]{12,}$/.test(growthKey) ||
+      !/^proj_[A-Za-z0-9_-]{3,128}$/.test(growthProject) ||
+      growthKey === process.env.OPENAI_API_KEY) {
+    throw Error("FRESH_GROWTH_OPENAI_PROJECT_MISSING");
+  }
   const child = spawnSync(NODE, [
     "node_modules/tsx/dist/cli.mjs",
     "workers/growth-daily-fresh-creatives.ts",
   ], {
-    cwd: APP, encoding: "utf8", timeout: 420_000, maxBuffer: 4096,
+    cwd: APP, encoding: "utf8", timeout: 810_000, maxBuffer: 4096,
     env: {
       NODE_ENV: "production", HOME: "/home/saytwist",
       PATH: NODEDIR + ":/usr/local/bin:/usr/bin:/bin",
@@ -89,7 +98,10 @@ function run() {
       GROWTH_DAILY_REPORT_SCHEDULE_ENABLED: "false",
       TELEGRAM_REPORTS_ENABLED: "false",
       GROWTH_ATTRIBUTION_COLLECTION_ENABLED: "false",
-      GROWTH_AI_IMAGE_ENABLED: "false",
+      GROWTH_AI_IMAGE_ENABLED: "true",
+      GROWTH_OPENAI_API_KEY: growthKey,
+      GROWTH_OPENAI_PROJECT_ID: growthProject,
+      GROWTH_OPENAI_IMAGE_MODEL: "gpt-image-2",
       GROWTH_ROLLOUT_MODE: "OFF",
     },
   });
@@ -97,7 +109,7 @@ function run() {
   if (child.error || child.status !== 0 ||
       lines.length !== 5 || !ALLOWED.has(lines[0]) ||
       !/^GROWTH_DAILY_FRESH_CREATED=[0-3]$/.test(lines[1]) ||
-      lines[2] !== "GROWTH_DAILY_FRESH_AI_CALLS=0" ||
+      lines[2] !== lines[1].replace("GROWTH_DAILY_FRESH_CREATED=", "GROWTH_DAILY_FRESH_AI_CALLS=") ||
       lines[3] !== "GROWTH_DAILY_FRESH_PINS_PUBLISHED=0" ||
       lines[4] !== "GROWTH_DAILY_FRESH_GROWTH=OFF" ||
       (lines[0] !== "GROWTH_DAILY_FRESH=PASSED" &&
