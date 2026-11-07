@@ -50,7 +50,7 @@ Read these before changing the Growth system:
 - `AI_CONTEXT.md`
 - `PHASE13_RELEASE_QUALIFICATION.md` (historical release qualification and remaining admin/billing signoff gates)
 - `PHASE13_REPORTING_FOLLOWUP.md` (post-live-report findings, content evidence rules and Phase 13 follow-up acceptance)
-- `PHASE13_PRODUCTION_NO_STAGING.md` (operator's backup-first production-only decision and required guards)
+- `PHASE14_PRIVATE_REPORT_SCHEDULER.md` (code-only, disabled private daily Telegram timer; not installed)\n- `PHASE13_PRODUCTION_NO_STAGING.md` (operator's backup-first production-only decision and required guards)
 - `PRODUCT.md`
 - `ACCOUNT_STRATEGY.md`
 - `AGENT_AUTOMATION.md`
