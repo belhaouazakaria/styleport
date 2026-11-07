@@ -110,20 +110,29 @@ async function buildBatch(day: string, now = new Date()) {
     prisma.translator.findMany({
       where: {
         isActive: true, archivedAt: null,
-        examples: { some: {} },
+        editorialExamples: { some: {} },
         growthPinCandidates: { none: {} },
       },
       select: { id: true, slug: true, shortDescription: true,
-        isFeatured: true, sortOrder: true },
+        isFeatured: true, sortOrder: true,
+        editorialExamples: {
+          select: { originalText: true, transformedText: true },
+          orderBy: { sortOrder: "asc" }, take: 1,
+        },
+      },
       orderBy: [
         { isFeatured: "desc" }, { sortOrder: "asc" }, { slug: "asc" },
       ],
-      take: 90,
+      take: 150,
     }),
   ]);
   if (accounts.length !== 1) throw Error("FRESH_ACCOUNT_NOT_QUALIFIED");
+  // The full-image renderer uses TranslatorEditorialExample, not TranslatorExample.
+  // Its first saved before/after pair must be meaningful before spending anything.
   const qualified = available.filter(target =>
-    target.shortDescription.trim().length >= MIN_DESCRIPTION_LENGTH);
+    target.shortDescription.trim().length >= MIN_DESCRIPTION_LENGTH &&
+    (target.editorialExamples[0]?.originalText.trim().length ?? 0) >= 8 &&
+    (target.editorialExamples[0]?.transformedText.trim().length ?? 0) >= 8);
   const parsedPolicy = policy
     ? { mode: policy.pinMode, minimum: policy.pinMinimum,
       maximum: policy.pinMaximum, fixed: policy.pinFixed }
