@@ -22,11 +22,14 @@ const env = {
   GROWTH_DAILY_REPORT_SCHEDULE_ENABLED: "false",
   TELEGRAM_REPORTS_ENABLED: "false",
   GROWTH_ATTRIBUTION_COLLECTION_ENABLED: "false",
-  GROWTH_AI_IMAGE_ENABLED: "false",
+  GROWTH_AI_IMAGE_ENABLED: "true",
+  GROWTH_OPENAI_IMAGE_MODEL: "gpt-image-2",
+  GROWTH_OPENAI_API_KEY: "sk-test_growth_project_123456",
+  GROWTH_OPENAI_PROJECT_ID: "proj_test_123456",
   GROWTH_ROLLOUT_MODE: "OFF",
 };
 
-describe("Phase14M daily deterministic Pinterest drafts", () => {
+describe("Phase14M daily budgeted AI Pinterest drafts", () => {
   it("prepares only one original candidate when performance evidence is unknown", () => {
     expect(planDailyFreshCreatives({
       policy, alreadyCreatedToday: 0,
@@ -105,16 +108,23 @@ describe("Phase14M daily deterministic Pinterest drafts", () => {
       ...trial, GROWTH_DAILY_FRESH_APPROVAL: "UNAUTHORIZED",
     }, sha, identity, new Date("2026-11-07T17:00:00Z"))).toThrow();
   });
-  it("refuses all broader Growth, AI, attribution and reporting switches", () => {
+  it("refuses all broader Growth, attribution and reporting switches", () => {
     for (const key of [
       "GROWTH_WORKER_RUN_ENABLED", "GROWTH_DAILY_REPORT_SCHEDULE_ENABLED",
       "TELEGRAM_REPORTS_ENABLED", "GROWTH_ATTRIBUTION_COLLECTION_ENABLED",
-      "GROWTH_AI_IMAGE_ENABLED",
     ]) {
       expect(() => assertDailyFreshRuntime({
         ...env, [key]: "true",
       }, sha, identity, new Date("2026-11-07T07:03:00Z"))).toThrow();
     }
+    for (const delta of [
+      { GROWTH_AI_IMAGE_ENABLED: "false" },
+      { GROWTH_OPENAI_IMAGE_MODEL: "unverified-model" },
+      { GROWTH_OPENAI_API_KEY: "" },
+      { GROWTH_OPENAI_PROJECT_ID: "" },
+    ]) expect(() => assertDailyFreshRuntime({
+      ...env, ...delta,
+    }, sha, identity, new Date("2026-11-07T07:03:00Z"))).toThrow();
     expect(() => assertDailyFreshRuntime({
       ...env, GROWTH_ROLLOUT_MODE: "RECOMMEND",
     }, sha, identity, new Date("2026-11-07T07:03:00Z"))).toThrow();
