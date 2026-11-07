@@ -40,3 +40,9 @@ This revision needs a new exact-SHA production release. **Four** currently live 
 ## Full-live distinction
 
 The Phase14L + Phase14M loop is approval-based organic Pinterest automation. Full Growth also needs automatic provider reconciliation, first-party attribution with consent, daily private Telegram reports, paid content intelligence, autonomous Translator/Idea editorial controls and Pinterest board lifecycle management. Those remain independent launch gates.
+
+## Offline creative visual evidence preflight (code-only, not yet wired)
+
+The pure `inspectCreativeVisualEvidence` utility in `lib/growth/creative/visual-evidence.ts` accepts an already generated image buffer and returns bounded, deterministic evidence. It rejects invalid/oversized/non-PNG assets, wrong 1000x1500 dimensions, and alpha transparency. It computes a SHA-256 checksum and a 64x64 luminance histogram with entropy and near-uniform warnings, without any network call, OCR, model call, database write, provider credentials, or additional spending. A minimal poster can legitimately be low detail, so low-detail flags **never** grant approval or automatically block an otherwise valid asset. No provider claim is made about visual aesthetics or copy correctness.
+
+Every result remains either `REJECTED` or `REVIEW_REQUIRED`, **never approved**. The mandatory owner checks explicitly cover exact text/spelling, mobile readability, destination/brand, originality, board/account and individual Pin approval. The utility is deliberately not connected to the publication path or persistence yet; its existence is not evidence that production creative quality is checked. A later integration must validate the actual stored asset, bind the checksum to an immutable candidate revision and surface human review evidence in the admin UI before any publication approval.
