@@ -68,7 +68,7 @@ export function adviseBoardLifecycle(input: {
   }
   for (const d of demand) {
     if (!key(d.topicKey) || topics.has(d.topicKey) ||
-        !count(d.eligibleContentCount) || !count(d.distinctConceptCount) ||
+        !Number.isSafeInteger(d.eligibleContentCount) || d.eligibleContentCount < 0 ||\n        d.eligibleContentCount > 1_000_000_000 ||\n        !Number.isSafeInteger(d.distinctConceptCount) || d.distinctConceptCount < 0 ||\n        d.distinctConceptCount > 1_000_000_000 ||
         !count(d.qualifiedConversions)) throw Error("BOARD_ADVISOR_INVALID_DEMAND");
     topics.add(d.topicKey);
   }
@@ -130,5 +130,5 @@ export function adviseBoardLifecycle(input: {
   return result.sort((a, b) =>
     a.action.localeCompare(b.action) ||
     a.boardIds.join(",").localeCompare(b.boardIds.join(",")) ||
-    (a.topicKey ?? "").localeCompare(b.topicKey ?? ""));
+    (a.topicKey ?? "").localeCompare(b.topicKey ?? "")).slice(0, 100);
 }
