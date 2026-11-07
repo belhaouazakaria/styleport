@@ -74,7 +74,15 @@ export async function inspectCreativeVisualEvidence(
     evidence.checksum = createHash("sha256").update(input).digest("hex");
     if (metadata.width !== CREATIVE_WIDTH || metadata.height !== CREATIVE_HEIGHT)
       flags.push("UNEXPECTED_DIMENSIONS");
-    evidence.opaque = metadata.hasAlpha !== true;
+    // A PNG may contain an alpha channel whose every pixel is fully opaque.
+    // Channel presence alone does not prove transparency.
+    if (metadata.hasAlpha) {
+      const stats = await image.clone().stats();
+      const alpha = stats.channels[3];
+      evidence.opaque = Boolean(alpha && alpha.min === 255);
+    } else {
+      evidence.opaque = true;
+    }
     if (!evidence.opaque) flags.push("TRANSPARENCY");
     // A bounded 64x64 downsample measures composition variety, not text legibility.
     const { data, info } = await image.clone().flatten({ background: "#ffffff" })
