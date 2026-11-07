@@ -13,6 +13,10 @@ describe("Phase14M daily isolated AI creative production safety", () => {
       .not.toThrow();
     expect(install).toContain("0:0:700");
     expect(install).toContain("0:0:600");
+    expect(install).toContain("AI_ENV=/etc/saytwist-growth-ai.env");
+    expect(install).toContain("EnvironmentFile=$AI_ENV");
+    expect(install).toContain("GROWTH_OPENAI_API_KEY=sk-");
+    expect(install).toContain("GROWTH_OPENAI_PROJECT_ID=proj_");
     expect(install).toContain("OnCalendar=*-*-* 07:02:00 UTC");
     expect(install).toContain("Persistent=false");
     expect(install).toContain("User=saytwist");
@@ -30,6 +34,7 @@ describe("Phase14M daily isolated AI creative production safety", () => {
     expect(launch).toContain('GROWTH_OPENAI_IMAGE_MODEL: "gpt-image-2"');
     expect(launch).toContain("GROWTH_OPENAI_PROJECT_ID");
     expect(launch).toContain("growthKey === process.env.OPENAI_API_KEY");
+    expect(launch).not.toContain("loadEnvConfig(APP");
     expect(launch).toContain('GROWTH_WORKER_RUN_ENABLED: "false"');
     expect(launch).toContain('GROWTH_DAILY_FRESH_PINS_PUBLISHED=0');
     expect(launch).not.toContain("PINTEREST_APP_SECRET");

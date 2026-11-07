@@ -1,6 +1,6 @@
 # Phase 14M: daily AI-generated Pinterest creative preparation
 
-**Status (November 7, 2026):** Updated on feature branch feat/phase14m-ai-image-creatives; NOT merged, deployed, tested live or enabled. Production SHA 12b62c4969685a5ffc052aa6d97170fa578374e1 has the Phase14L five-minute publisher active, but its older deterministic Phase14M generator has never been installed or enabled. The owner specifically requires **original fully AI-generated creatives**, not static template posters.
+**Status (November 7, 2026):** PR #135 has merged to source `f7ceeb99473a58ec99679f7bcda88f2af3bbc35c`; the last operator-verified deployed SHA is `12b62c4969685a5ffc052aa6d97170fa578374e1`. The new AI image workflow is NOT deployed, live-tested or enabled. The existing Phase14L publisher remains SHA-pinned. The owner requires original AI-generated imagery, not template posters.
 
 ## Scope and quality
 
@@ -20,6 +20,8 @@ The original image is 1024x1536, normalized to a validated 1000x1500 PNG. The ca
 ## Runtime safety
 
 The private root-owned 0700 install-growth-daily-fresh-systemd.sh installs a 07:02 UTC one-shot service, calendar timer and private throttled failure alert, all disabled by default. Its child gets only private loopback DB, dedicated Growth API key/project and a fixed image model, never Pinterest secrets. The runner prints only safe bounded status codes. Batch ceiling is three sequential AI calls; systemd service limit 900 seconds.
+
+**Private credential provisioning (separate owner action):** The root-owned `/etc/saytwist-growth-ai.env` must exist before installing the disabled timer, with ownership `root:root`, mode `0600`, no symlink and exactly two assignments, `GROWTH_OPENAI_API_KEY=sk-...` and `GROWTH_OPENAI_PROJECT_ID=proj_...`. The AI service loads it using systemd `EnvironmentFile`; the launcher never falls back to `.env`, `.env.local`, PM2's regular site OpenAI key or a public API route. The secret file must never be copied into the deployment artifact, GitHub, backups destined for the app/web root or chat. Installer validation prints only BLOCKED or sanitized installation markers and does not activate paid work. The OpenAI project and provider spend cap are separately owner-provisioned and should be verified by the owner, not assumed from the project's existence.
 
 The launcher is allowed in SCHEDULED mode between 07:02 and 07:15 UTC. A separate owner-authorized TRIAL outside that window requires an exact SHA-bound approval string RUN SAYTWIST DAILY FRESH TRIAL followed by the deployed SHA. Trial generates and bills for a real image, it is not a free dry-run. Never rerun an ambiguous provider call without financial evidence.
 

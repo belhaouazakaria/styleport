@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-# Install ONLY a root-owned, disabled, daily deterministic-creative timer.
+# Install ONLY a root-owned, disabled, daily AI-creative timer.
 # Never enable or start it or a generic Growth worker.
 fail() { echo "GROWTH_DAILY_FRESH_INSTALL=BLOCKED" >&2; exit 1; }
 
@@ -15,6 +15,7 @@ SERVICE=saytwist-growth-daily-fresh.service
 TIMER=saytwist-growth-daily-fresh.timer
 ALERT=saytwist-growth-daily-fresh-alert.service
 ENV=/etc/saytwist-growth-watchdog-alert.env
+AI_ENV=/etc/saytwist-growth-ai.env
 WATCHDOG=saytwist-growth-lease-watchdog.service
 
 [[ "$(cat "$APP/.deployed-release")" == "$SHA" ]] || fail
@@ -27,6 +28,12 @@ done
 [[ -f "$APP/node_modules/tsx/dist/cli.mjs" ]] || fail
 [[ -f "$ENV" && ! -L "$ENV" &&
   "$(stat -c '%u:%g:%a' "$ENV")" == "0:0:600" ]] || fail
+[[ -f "$AI_ENV" && ! -L "$AI_ENV" &&
+  "$(stat -c '%u:%g:%a' "$AI_ENV")" == "0:0:600" ]] || fail
+# Only the two dedicated project variables are permitted in this service-only file.
+[[ "$(wc -l < "$AI_ENV")" -eq 2 ]] || fail
+grep -Eq '^GROWTH_OPENAI_API_KEY=sk-[A-Za-z0-9_-]{12,}$' "$AI_ENV" || fail
+grep -Eq '^GROWTH_OPENAI_PROJECT_ID=proj_[A-Za-z0-9_-]{3,128}$' "$AI_ENV" || fail
 
 for timer in \
   saytwist-growth-lease-watchdog.timer \
@@ -64,6 +71,7 @@ Group=saytwist
 WorkingDirectory=$APP
 Environment=EXPECTED_RELEASE=$SHA
 Environment=GROWTH_DAILY_FRESH_LAUNCH=true
+EnvironmentFile=$AI_ENV
 ExecStart=/home/saytwist/.nvm/versions/node/v24.20.0/bin/node $APP/workers/growth-daily-fresh-launch.cjs
 TimeoutStartSec=900
 NoNewPrivileges=true
