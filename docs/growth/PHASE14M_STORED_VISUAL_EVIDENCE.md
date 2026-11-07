@@ -1,0 +1,7 @@
+# Phase 14M: on-demand stored Creative Lab image evidence
+
+This increment depends on PR #144's offline pixel inspection and does not introduce a schema migration. It adds an authenticated, read-only GET at `/api/admin/growth/creative/visual-evidence?candidateId=<id>`. The endpoint retrieves one candidate's managed asset path and expected checksum from the database, validates its strict content-addressed filename, reads a bounded local PNG, verifies its SHA-256 and returns only the deterministic visual preflight. It does not return image bytes or local paths, approve a Pin, change candidate state or call Pinterest, OpenAI or Telegram.
+
+The visual preflight can flag invalid PNG, unexpected dimensions, actual transparency, and low visual detail. It does **not** verify spelling, mobile readability, account fit, destination accuracy or originality. Those checks and **specific end-user approval of each Pin** remain mandatory. The endpoint is for deliberate on-demand inspection, not for scanning all assets during public page rendering or for granting automatic approval.
+
+This is a stacked feature branch based on PR #144. Merge PR #144 first, then retarget this PR to main and requalify its CI before coordinated release. No production activation is authorized. A future admin UI can fetch this endpoint only when an administrator opens a candidate review; do not render 50 full PNG inspections in the page loader.
