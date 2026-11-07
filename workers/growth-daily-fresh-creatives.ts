@@ -227,14 +227,21 @@ async function createOne(target: { id: string; slug: string }, day: string, acco
   }
 }
 
-export async function executeDailyFreshCreativeCycle(day: string) {
+export function selectDailyFreshTargetsForMode<T>(targets: T[], mode: string): T[] {
+  if (mode === "TRIAL") return targets.slice(0, 1);
+  if (mode === "SCHEDULED") return targets;
+  throw Error("FRESH_MODE_INVALID");
+}
+
+export async function executeDailyFreshCreativeCycle(day: string, mode: string) {
   const { planned, targets, accountId } = await buildBatch(day);
   if (planned.additional === 0) {
     await requireIdle();
     return { status: planned.status, created: 0, aiCalls: 0, pinsPublished: 0 };
   }
+  const selectedTargets = selectDailyFreshTargetsForMode(targets, mode);
   let created = 0;
-  for (const target of targets) {
+  for (const target of selectedTargets) {
     await createOne(target, day, accountId);
     created++;
   }
@@ -245,7 +252,7 @@ export async function executeDailyFreshCreativeCycle(day: string) {
 async function main() {
   let stage = "RUNTIME";
   try {
-    const { day } = assertDailyFreshRuntime(
+    const { day, mode } = assertDailyFreshRuntime(
       process.env,
       readFileSync(APP + "/.deployed-release", "utf8").trim(),
       { username: os.userInfo().username,
@@ -253,7 +260,7 @@ async function main() {
         node: process.execPath },
     );
     stage = "GENERATE";
-    const result = await executeDailyFreshCreativeCycle(day);
+    const result = await executeDailyFreshCreativeCycle(day, mode);
     console.log("GROWTH_DAILY_FRESH=" + result.status);
     console.log("GROWTH_DAILY_FRESH_CREATED=" + result.created);
     console.log("GROWTH_DAILY_FRESH_AI_CALLS=" + result.aiCalls);

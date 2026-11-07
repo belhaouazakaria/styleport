@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const install = readFileSync("workers/install-growth-daily-fresh-systemd.sh", "utf8");
+const rotate = readFileSync("workers/rotate-growth-daily-fresh-release-systemd.sh", "utf8");
 const launch = readFileSync("workers/growth-daily-fresh-launch.cjs", "utf8");
 const worker = readFileSync("workers/growth-daily-fresh-creatives.ts", "utf8");
 const alert = readFileSync("workers/growth-daily-fresh-alert.cjs", "utf8");
@@ -24,6 +25,18 @@ describe("Phase14M daily isolated AI creative production safety", () => {
     expect(install).toContain("OnFailure=$ALERT");
     expect(install).toContain("GROWTH_DAILY_FRESH_INSTALL=INSTALLED_DISABLED");
     expect(install).not.toMatch(/\bsystemctl\s+(?:enable|start|restart)\s+[^\n]*daily-fresh/);
+  });
+  it("rotates the installed AI timer to a new SHA only while disabled", () => {
+    expect(() => execFileSync("bash", ["-n", "workers/rotate-growth-daily-fresh-release-systemd.sh"]))
+      .not.toThrow();
+    expect(rotate).toContain("0:0:700");
+    expect(rotate).toContain("0:0:600");
+    expect(rotate).toContain('EnvironmentFile=$AI_ENV');
+    expect(rotate).toContain("WATCHDOG_EXPECTED_RELEASE_SHA=$NEW");
+    expect(rotate).toContain("saytwist-growth-approved-publisher.timer");
+    expect(rotate).toContain("GROWTH_DAILY_FRESH_ROTATION=READY_DISABLED");
+    expect(rotate).toContain("GROWTH_DAILY_FRESH_TIMER=INACTIVE");
+    expect(rotate).not.toMatch(/\bsystemctl\s+(?:enable|start|restart)\s+[^\n]*daily-fresh/);
   });
   it("uses existing watchdog, publisher and only the isolated Growth AI project", () => {
     expect(launch).toContain("validatedDatabaseUrl");
