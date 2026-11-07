@@ -131,7 +131,7 @@ export class OpenAICreativeImageProvider implements CreativeAiImageProvider {
     const reservationId = await reserveGrowthImageAttempt({
       jobId: this.jobId, model, prompt, size: "1024x1536", quality: "medium",
     });
-    const client = new OpenAI({ ...credentials, maxRetries: 0 });
+    const client = new OpenAI({ ...credentials, maxRetries: 0, timeout: 180_000 });
     let response: Awaited<ReturnType<typeof client.images.generate>>;
     try {
       response = await client.images.generate({
