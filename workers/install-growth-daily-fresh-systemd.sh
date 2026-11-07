@@ -52,7 +52,7 @@ trap 'rm -rf "$TEMP"' EXIT
 
 cat > "$TEMP/$SERVICE" <<EOF
 [Unit]
-Description=SayTwist daily fresh creative preparation (exact approved release)
+Description=SayTwist daily AI Pinterest creative preparation (exact approved release)
 After=network-online.target
 Wants=network-online.target
 OnFailure=$ALERT
@@ -65,14 +65,14 @@ WorkingDirectory=$APP
 Environment=EXPECTED_RELEASE=$SHA
 Environment=GROWTH_DAILY_FRESH_LAUNCH=true
 ExecStart=/home/saytwist/.nvm/versions/node/v24.20.0/bin/node $APP/workers/growth-daily-fresh-launch.cjs
-TimeoutStartSec=450
+TimeoutStartSec=900
 NoNewPrivileges=true
 UMask=0077
 EOF
 
 cat > "$TEMP/$TIMER" <<EOF
 [Unit]
-Description=SayTwist fresh Pinterest draft generation 07:02 UTC (owner opt-in)
+Description=SayTwist AI Pinterest draft generation 07:02 UTC (owner opt-in)
 
 [Timer]
 OnCalendar=*-*-* 07:02:00 UTC

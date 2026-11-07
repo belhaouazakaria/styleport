@@ -21,7 +21,7 @@ import { revokeGrowthWorkerActivation } from "@/lib/growth/settings";
 
 const APP = "/home/saytwist/htdocs/saytwist.com";
 const NODE = "/home/saytwist/.nvm/versions/node/v24.20.0/bin/node";
-const LEASE_MS = 120_000;
+const LEASE_MS = 270_000; // Under the watchdog 5-minute maximum; one paid image per lease.
 const MIN_DESCRIPTION_LENGTH = 40;
 
 export function assertDailyFreshRuntime(
@@ -51,10 +51,14 @@ export function assertDailyFreshRuntime(
   for (const flag of [
     "GROWTH_WORKER_RUN_ENABLED", "GROWTH_DAILY_REPORT_SCHEDULE_ENABLED",
     "TELEGRAM_REPORTS_ENABLED", "GROWTH_ATTRIBUTION_COLLECTION_ENABLED",
-    "GROWTH_AI_IMAGE_ENABLED",
   ]) if (env[flag] !== "false") throw Error("FRESH_OTHER_AUTOMATION_ENABLED");
-  if (env.GROWTH_ROLLOUT_MODE !== "OFF" ||
-      env.APP_BASE_URL !== "https://saytwist.com") throw Error("FRESH_ENV_INVALID");
+  // Only a separately scoped, priced GPT Image 2 job is authorized here.
+  if (env.GROWTH_AI_IMAGE_ENABLED !== "true" ||
+      env.GROWTH_OPENAI_IMAGE_MODEL !== "gpt-image-2" ||
+      !/^sk-[A-Za-z0-9_-]{12,}$/.test(env.GROWTH_OPENAI_API_KEY || "") ||
+      !/^proj_[A-Za-z0-9_-]{3,128}$/.test(env.GROWTH_OPENAI_PROJECT_ID || "") ||
+      env.GROWTH_ROLLOUT_MODE !== "OFF" ||
+      env.APP_BASE_URL !== "https://saytwist.com") throw Error("FRESH_AI_SCOPE_INVALID");
   const db = new URL(env.DATABASE_URL || "");
   if (!["postgres:", "postgresql:"].includes(db.protocol) ||
       db.hostname !== "127.0.0.1" || db.port !== "5433" ||
@@ -100,26 +104,35 @@ async function buildBatch(day: string, now = new Date()) {
     prisma.growthPinterestAccount.findMany({
       where: { apiEnvironment: "PRODUCTION", connectionStatus: "CONNECTED",
         encryptedCredentials: { not: null }, boards: { some: { isActive: true } },
-        grantedScopes: { hasEvery: ["pins:write", "boards:write"] } },
+        grantedScopes: { hasEvery: ["pins:read", "pins:write", "boards:read", "boards:write"] } },
       select: { id: true }, take: 2,
     }),
     prisma.translator.findMany({
       where: {
         isActive: true, archivedAt: null,
-        examples: { some: {} },
+        editorialExamples: { some: {} },
         growthPinCandidates: { none: {} },
       },
       select: { id: true, slug: true, shortDescription: true,
-        isFeatured: true, sortOrder: true },
+        isFeatured: true, sortOrder: true,
+        editorialExamples: {
+          select: { originalText: true, transformedText: true },
+          orderBy: { sortOrder: "asc" }, take: 1,
+        },
+      },
       orderBy: [
         { isFeatured: "desc" }, { sortOrder: "asc" }, { slug: "asc" },
       ],
-      take: 90,
+      take: 150,
     }),
   ]);
   if (accounts.length !== 1) throw Error("FRESH_ACCOUNT_NOT_QUALIFIED");
+  // The full-image renderer uses TranslatorEditorialExample, not TranslatorExample.
+  // Its first saved before/after pair must be meaningful before spending anything.
   const qualified = available.filter(target =>
-    target.shortDescription.trim().length >= MIN_DESCRIPTION_LENGTH);
+    target.shortDescription.trim().length >= MIN_DESCRIPTION_LENGTH &&
+    (target.editorialExamples[0]?.originalText.trim().length ?? 0) >= 8 &&
+    (target.editorialExamples[0]?.transformedText.trim().length ?? 0) >= 8);
   const parsedPolicy = policy
     ? { mode: policy.pinMode, minimum: policy.pinMinimum,
       maximum: policy.pinMaximum, fixed: policy.pinFixed }
@@ -130,21 +143,22 @@ async function buildBatch(day: string, now = new Date()) {
     eligibleDistinctTargets: qualified.length,
     verifiedRecentOpportunityEvidence: Boolean(recentEvidence),
   });
-  return { planned, targets: qualified.slice(0, planned.additional) };
+  return { planned, targets: qualified.slice(0, planned.additional), accountId: accounts[0].id };
 }
 
-async function createOne(target: { id: string; slug: string }, day: string) {
+async function createOne(target: { id: string; slug: string }, day: string, accountId: string) {
   await requireIdle();
   const request = {
     targetKind: GrowthCreativeDestinationKind.TRANSLATOR,
     targetId: target.id,
-    archetype: GrowthCreativeArchetype.MINIMAL_STATEMENT,
-    useAiExample: false,
+    archetype: GrowthCreativeArchetype.BEFORE_AFTER,
+    useAiExample: false, // Reuse verified saved before/after copy. Image is fully AI-generated.
+    accountId,
     creativeModelVersion: CREATIVE_LAB_VERSION,
   };
   const queued = await enqueueCreativeGeneration(request, {
     runAfter: new Date(Date.now() - 1000),
-    idempotencyScope: "daily-fresh-v1:" + day + ":" + target.slug,
+    idempotencyScope: "daily-ai-fresh-v2:" + day + ":" + target.slug,
   });
   if (!queued.created || queued.job.status !== GrowthJobStatus.PENDING ||
       queued.job.type !== GrowthJobType.CREATIVE_LAB_GENERATE) {
@@ -198,12 +212,15 @@ async function createOne(target: { id: string; slug: string }, day: string) {
       status: true, translatorId: true,
       asset: { select: {
         generationKind: true, width: true, height: true, mimeType: true,
+        aiProvider: true, aiModel: true,
       } },
     },
   });
   if (!candidate || candidate.status !== GrowthPinCandidateStatus.READY ||
       candidate.translatorId !== target.id ||
-      candidate.asset.generationKind !== GrowthAssetGenerationKind.DETERMINISTIC ||
+      candidate.asset.generationKind !== GrowthAssetGenerationKind.AI ||
+      candidate.asset.aiProvider !== "OPENAI" ||
+      candidate.asset.aiModel !== "gpt-image-2" ||
       candidate.asset.mimeType !== "image/png" ||
       candidate.asset.width !== 1000 || candidate.asset.height !== 1500) {
     throw Error("FRESH_CREATED_NOT_APPROVABLE");
@@ -211,18 +228,18 @@ async function createOne(target: { id: string; slug: string }, day: string) {
 }
 
 export async function executeDailyFreshCreativeCycle(day: string) {
-  const { planned, targets } = await buildBatch(day);
+  const { planned, targets, accountId } = await buildBatch(day);
   if (planned.additional === 0) {
     await requireIdle();
     return { status: planned.status, created: 0, aiCalls: 0, pinsPublished: 0 };
   }
   let created = 0;
   for (const target of targets) {
-    await createOne(target, day);
+    await createOne(target, day, accountId);
     created++;
   }
   await requireIdle();
-  return { status: "PASSED" as const, created, aiCalls: 0, pinsPublished: 0 };
+  return { status: "PASSED" as const, created, aiCalls: created, pinsPublished: 0 };
 }
 
 async function main() {
