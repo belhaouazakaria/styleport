@@ -8,7 +8,7 @@ const runner = readFileSync("workers/growth-autonomous-content.ts", "utf8");
 const alert = readFileSync("workers/growth-autonomous-content-alert.cjs", "utf8");
 
 describe("bounded automated content generation host", () => {
-  it("installs a disabled schedule and private alert", () => {
+  it("installs one disabled owner-controlled schedule and private alert", () => {
     execFileSync("bash", ["-n", "workers/install-growth-autonomous-content-systemd.sh"]);
     execFileSync("node", ["--check", "workers/growth-autonomous-content-launch.cjs"]);
     execFileSync("node", ["--check", "workers/growth-autonomous-content-alert.cjs"]);
@@ -17,11 +17,20 @@ describe("bounded automated content generation host", () => {
     expect(installer).toContain("EnvironmentFile=$AI_ENV");
     expect(installer).toContain("0:0:600");
     expect(installer).toContain("GROWTH_CONTENT_INSTALL=INSTALLED_DISABLED");
+    expect((installer.match(/GROWTH_CONTENT_INSTALL=INSTALLED_DISABLED/g) || [])).toHaveLength(1);
+    expect((installer.match(/STAGE.*SERVICE.*EOF/g) || [])).toHaveLength(1);
+    expect(installer).toContain("GROWTH_OPENAI_API_KEY=sk-");
+    expect(installer).toContain("GROWTH_OPENAI_PROJECT_ID=proj_");
+    expect(installer).toContain("saytwist-growth-private-report");
+    expect(installer).toContain("saytwist-growth-daily-fresh");
+    expect(installer).toContain("WATCHDOG_EXPECTED_RELEASE_SHA=");
+    expect(installer).toContain("EXPECTED_RELEASE=");
     expect(installer).not.toContain("systemctl enable");
     expect(installer).not.toContain("systemctl start");
     expect(alert).toContain("GROWTH_AUTONOMOUS_CONTENT_ALERT_ENABLED");
   });
-  it("refuses the ordinary OpenAI key, requires isolated project and no automatic publish", () => {
+
+  it("keeps dedicated AI credentials isolated and never publishes a Pin", () => {
     expect(launcher).toContain("GROWTH_OPENAI_API_KEY");
     expect(launcher).toContain("GROWTH_OPENAI_PROJECT_ID");
     expect(launcher).toContain("key === normalKey");
@@ -35,6 +44,6 @@ describe("bounded automated content generation host", () => {
     expect(runner).toContain("maxAttempts: 1");
     expect(runner).toContain("revokeGrowthWorkerActivation(deadline)");
     expect(runner).toContain("GROWTH_AUTONOMOUS_PUBLICATIONS=0");
-    // It may mention the publisher type to exclude pending approved publications\n    // from blocking local content work, but must never enqueue one.\n    expect(runner).not.toContain("type: GrowthJobType.PINTEREST_PIN_PUBLISH");
+    expect(runner).not.toContain("type: GrowthJobType.PINTEREST_PIN_PUBLISH");
   });
 });
