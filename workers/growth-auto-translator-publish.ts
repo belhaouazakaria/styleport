@@ -93,7 +93,8 @@ export async function activateOneQualifiedGrowthTranslator(day: string, now = ne
     // activation lease. No broad worker activation or external calls.
     await tx.$queryRaw`SELECT "id" FROM "GrowthSettings"
       WHERE "id" = 'global' FOR UPDATE`;
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext('growth-translator-create-v1'))`;
+    await tx.$queryRaw`SELECT 1::int AS "locked"
+      FROM (SELECT pg_advisory_xact_lock(hashtext('growth-translator-create-v1'))) AS "acquired"`;
     const [settings, blockers, publishedToday] = await Promise.all([
       tx.growthSettings.findUnique({ where: { id: "global" },
         select: { enabled: true, attributionEnabled: true,
