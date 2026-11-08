@@ -3,7 +3,7 @@ import { GrowthJobType } from "@prisma/client";
 /** The Phase 14 observer and recommendation worker is opt-in and process-gated.
  * No current mode permits generative AI, content mutation or Pinterest publishing.
  */
-export type GrowthRolloutMode = "OFF" | "OBSERVE" | "RECOMMEND" | "PREPARE";
+export type GrowthRolloutMode = "OFF" | "OBSERVE" | "RECOMMEND" | "PREPARE" | "ANALYTICS";
 
 const OBSERVE: GrowthJobType[] = [
   GrowthJobType.FOUNDATION_NOOP,
@@ -23,6 +23,14 @@ export function resolveGrowthRollout(
   env: Record<string, string | undefined> = process.env,
 ): { mode: GrowthRolloutMode; allowedTypes: GrowthJobType[] } {
   if (env.GROWTH_WORKER_RUN_ENABLED !== "true") return { mode: "OFF", allowedTypes: [] };
+  // Isolated one-account daily analytics snapshot, no inventory fan-out,
+  // Pin publication, content mutations, or generic worker sweep.
+  if (env.GROWTH_ROLLOUT_MODE === "ANALYTICS" &&
+      env.GROWTH_DAILY_ANALYTICS_SCOPE === "true") {
+    return { mode: "ANALYTICS", allowedTypes: [
+      GrowthJobType.PINTEREST_ACCOUNT_ANALYTICS_SYNC,
+    ] };
+  }
   if (env.GROWTH_ROLLOUT_MODE === "OBSERVE") return { mode: "OBSERVE", allowedTypes: [...OBSERVE] };
   // The dedicated, SHA-pinned preparation runner can claim only one exact
   // content job. Generic worker scans MUST NOT activate in PREPARE mode.
