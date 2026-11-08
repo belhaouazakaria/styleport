@@ -486,3 +486,8 @@ An isolated `ANALYTICS` rollout scope and opt-in 04:20 UTC systemd schedule now 
 ## 2026-11-08: New Translator page auto-publication (source only)
 
 Separate opt-in local website activation selects at most one fresh, quality-verified, origin-proven inactive Growth-created Translator and activates it only if original immutable snapshot, SEO/editorial thresholds, side effects, unique concept and current categories all pass. Timer runs 06:57 UTC disabled-by-default, before daily 07:02 UTC AI creatives. Does not approve/publish Pinterest Pins. Requires production release coordination and owner acceptance, currently **not deployed**.
+
+
+## New production release requirement: preserve six active timers
+
+After the owner successfully activated daily original AI generation and private Telegram reporting on production SHA `b4a9903b3fa70ece0b7a418caa0ff9f73796ca07`, the historical five-timer coordinator became inapplicable. Source now includes the six-schedule root-only v2 coordinator and private Telegram SHA/approval rotator. This code is not deployed. The next release must be owner-authorized and performed in a quiet UTC window with the hold/restore runbook in `TESTING_SECURITY_ROLLOUT.md`, preserving the currently approved six timers, and leaving all three new autonomous/data-collection timers disabled until live acceptance.
