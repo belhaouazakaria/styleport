@@ -84,7 +84,7 @@ export function formatGrowthDailyDigest(data: GrowthDigestData): string {
     `Next: ${data.nextAction ? textLine(data.nextAction, 180) : "Review data availability before proposing action"}`,
   ];
   if (data.previousDay) {
-    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(data.previousDay) ||
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(data.previousDay) ||
         !Number.isFinite(new Date(data.previousDay + "T00:00:00Z").getTime())) {
       throw new Error("Invalid previous Growth report date");
     }
