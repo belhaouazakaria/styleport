@@ -434,3 +434,8 @@ Agent must seek external market evidence when internal eligible content falls be
 ## Future AI Pin branding: text-only SayTwist wordmark (2026-11-08)
 
 The owner approved the original William Afton design and the newer Regal Rewrite creative. For future full-image AI generated Pinterest designs, the top brand treatment should be an expressive, legible **SayTwist** wordmark composed exclusively of lettering: no abstract logo icon or emblem beside/inside the word. Keep strong color contrast, mobile readability, existing before/after creative layout freedom and accurate displayed copy. This modifies only the creative prompt, not stored historical assets. It does not authorize a provider request, Pin approval/publication, or production deployment. See issue #147.
+
+
+## 2026-11-08: Isolated content preparation, no automatic external publication
+
+Continue developing bounded Translator/Idea creation from verified first-party opportunities. Allow paid text generation only under the existing Growth AI reservation cap and dedicated Growth project credentials (never the public site's key), using one exact-job scoped expiring lease and the independent watchdog. Default systemd timer stays disabled through development, and prepared new Translator/Idea pages remain unpublished until their own quality/SEO gate. Individual Pinterest Pin selection is required under the current official developer guidelines. The existing production AI image and private Telegram timers are not changed by this source PR.
