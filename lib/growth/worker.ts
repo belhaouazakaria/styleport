@@ -34,6 +34,11 @@ export async function runGrowthWorker(options: {
     throw new Error("Invalid scoped Growth worker job ID.");
   }
   const rollout = resolveGrowthRollout(options.rolloutConfig);
+  // PREPARE is never a broad worker mode, even if an operator accidentally
+  // enables the flags. A single explicit persisted job ID is compulsory.
+  if (rollout.mode === "PREPARE" && !options.onlyJobId) {
+    return { status: "DISABLED", claimed: 0, succeeded: 0, failed: 0 };
+  }
   if (rollout.mode === "OFF") return { status: "DISABLED", claimed: 0, succeeded: 0, failed: 0 };
   const settings = await getGrowthSettings();
   if (!isGrowthWorkerActivationValid(settings)) {
