@@ -1,7 +1,9 @@
 import { readFileSync } from "node:fs";
 import os from "node:os";
 import {
-
+  GrowthActivityActorKind, GrowthDecisionStatus, GrowthJobStatus,
+  GrowthJobType, GrowthOpportunityDestinationKind,
+  GrowthOpportunityEvidenceQuality, GrowthOpportunityStatus, Prisma,
 } from "@prisma/client";
 
 import { recordGrowthActivity } from "@/lib/growth/activity";
