@@ -41,6 +41,22 @@ describe("autonomous content only from qualified original opportunities", () => 
     ])).toEqual([]);
   });
 
+  it("enforces owner cadence selection limits without loosening the content caps", () => {
+    const rows = Array.from({ length: 12 }, (_, i) => ({
+      id: "translator-" + i, score: 95 - i, confidence: 90,
+      targetDestinationKind: Destination.TRANSLATOR,
+    }));
+    expect(planContentOpportunities(rows, { translator: 0, idea: 1 })).toEqual([]);
+    expect(planContentOpportunities(rows, { translator: 3, idea: 0 }))
+      .toEqual([0, 1, 2].map(i => ({ id: "translator-" + i, kind: "TRANSLATOR" })));
+    expect(planContentOpportunities(rows, { translator: 10, idea: 0 }))
+      .toHaveLength(10);
+    expect(() => planContentOpportunities(rows, { translator: 11, idea: 0 }))
+      .toThrow("CONTENT_CADENCE_LIMIT_INVALID");
+    expect(() => planContentOpportunities(rows, { translator: -1, idea: 0 }))
+      .toThrow("CONTENT_CADENCE_LIMIT_INVALID");
+  });
+
   it("refuses unauthorized paid work or a wrong runtime/release/date", () => {
     const now = new Date("2026-11-04T06:30:15Z");
     expect(assertAutonomousContentRuntime(env, sha, identity, now))

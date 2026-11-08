@@ -11,6 +11,8 @@ import { countBlockingGrowthJobs } from "@/lib/growth/operations/approved-public
 import { IDEA_AUTOPILOT_VERSION } from "@/lib/growth/ideas/constants";
 import { OPPORTUNITY_INTELLIGENCE_VERSION } from "@/lib/growth/opportunity/constants";
 import { revokeGrowthWorkerActivation } from "@/lib/growth/settings";
+import { getGrowthCadencePolicy } from "@/lib/growth/portfolio/cadence-settings";
+import { decideDailyChannelCadence } from "@/lib/growth/portfolio/daily-cadence";
 import { TRANSLATOR_AUTOPILOT_VERSION } from "@/lib/growth/translator/constants";
 import { runGrowthWorker } from "@/lib/growth/worker";
 import { prisma } from "@/lib/prisma";
@@ -58,17 +60,22 @@ export function assertAutonomousContentRuntime(
 export function planContentOpportunities(rows: Array<{
   id: string; score: number; confidence: number;
   targetDestinationKind: GrowthOpportunityDestinationKind | null;
-}>) {
+}>, limits: { translator: number; idea: number } = { translator: 1, idea: 1 }) {
+  if (![limits.translator, limits.idea].every(n =>
+      Number.isSafeInteger(n) && n >= 0 && n <= 10)) throw Error("CONTENT_CADENCE_LIMIT_INVALID");
   const ordered = [...rows].sort((a,b) =>
     b.score - a.score || b.confidence - a.confidence || a.id.localeCompare(b.id));
-  const translator = ordered.find(r => r.score >= 75 && r.confidence >= 80 &&
-    r.targetDestinationKind === GrowthOpportunityDestinationKind.TRANSLATOR);
-  const idea = ordered.find(r => r.id !== translator?.id &&
+  const translators = ordered.filter(r => r.score >= 75 && r.confidence >= 80 &&
+    r.targetDestinationKind === GrowthOpportunityDestinationKind.TRANSLATOR)
+    .slice(0, limits.translator);
+  const translatorIds = new Set(translators.map(r => r.id));
+  const ideas = ordered.filter(r => !translatorIds.has(r.id) &&
     r.score >= 70 && r.confidence >= 75 &&
-    r.targetDestinationKind === GrowthOpportunityDestinationKind.FUTURE_IDEAS);
+    r.targetDestinationKind === GrowthOpportunityDestinationKind.FUTURE_IDEAS)
+    .slice(0, limits.idea);
   return [
-    ...(translator ? [{ id: translator.id, kind: "TRANSLATOR" as const }] : []),
-    ...(idea ? [{ id: idea.id, kind: "IDEA" as const }] : []),
+    ...translators.map(r => ({ id: r.id, kind: "TRANSLATOR" as const })),
+    ...ideas.map(r => ({ id: r.id, kind: "IDEA" as const })),
   ];
 }
 
@@ -186,7 +193,52 @@ export async function runAutonomousPreparation(day: string) {
     orderBy: [{ score: "desc" }, { confidence: "desc" }, { id: "asc" }],
     take: 30,
   });
-  const selected = planContentOpportunities(opportunities);
+  // Owner cadence is a target, not an exemption from the existing
+  // transactional content caps or separately reserved OpenAI budget.
+  // Recheck persisted content counts before creating any paid jobs.
+  const [policy, settings, translatorsCreatedToday, ideasCreatedThisWeek] =
+    await Promise.all([
+      getGrowthCadencePolicy(),
+      prisma.growthSettings.findUnique({ where: { id: "global" },
+        select: { translatorCreatesPerDayCap: true, ideaCreatesPerWeekCap: true,
+          aiDailyBudgetCents: true, aiMonthlyBudgetCents: true } }),
+      prisma.growthContentVersion.count({ where: {
+        action: "CREATE", createdAt: { gte: at,
+          lt: new Date(at.getTime() + 86_400_000) },
+      } }),
+      prisma.growthIdeaVersion.count({ where: {
+        action: "CREATE",
+        createdAt: { gte: new Date(at.getTime() -
+          ((at.getUTCDay() + 6) % 7) * 86_400_000),
+          lt: new Date(at.getTime() + 86_400_000) },
+      } }),
+    ]);
+  if (!settings) throw Error("CONTENT_CADENCE_SETTINGS_MISSING");
+  const remainingTranslatorCap = Math.max(0,
+    Math.min(10, settings.translatorCreatesPerDayCap) - translatorsCreatedToday);
+  const qualifiedTranslators = opportunities.filter(r =>
+    r.score >= 75 && r.confidence >= 80 &&
+    r.targetDestinationKind === GrowthOpportunityDestinationKind.TRANSLATOR);
+  // Opportunity scoring uses evidence-qualified real Pinterest signals.
+  // Never infer STRONG from a missing or partial opportunity.
+  const performance = qualifiedTranslators.length === 0 ? "UNKNOWN" :
+    qualifiedTranslators.some(r => r.score >= 90 && r.confidence >= 90) ?
+      "STRONG" : qualifiedTranslators.every(r => r.score < 80) ? "WEAK" : "NORMAL";
+  const plannedTranslator = decideDailyChannelCadence(policy.translatorCreates, {
+    eligibleOpportunities: qualifiedTranslators.length, performance,
+    authorizedDailyLimit: Math.min(10, settings.translatorCreatesPerDayCap),
+    completedToday: translatorsCreatedToday, pendingToday: 0,
+    // This is only a planning ceiling. Each paid attempt still needs
+    // the independent, atomic Growth AI budget reservation.
+    budgetedAdditionalCapacity: settings.aiDailyBudgetCents > 0 &&
+      settings.aiMonthlyBudgetCents > 0 ? remainingTranslatorCap : 0,
+    operationallyReady: true,
+  });
+  const selected = planContentOpportunities(opportunities, {
+    translator: plannedTranslator.additionalPlanned,
+    idea: Math.max(0, Math.min(1,
+      settings.ideaCreatesPerWeekCap - ideasCreatedThisWeek)),
+  });
   let prepared = 0;
   for (const item of selected) {
     const isTranslator = item.kind === "TRANSLATOR";
