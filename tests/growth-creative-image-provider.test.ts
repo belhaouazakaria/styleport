@@ -42,6 +42,9 @@ describe("Creative Lab OpenAI image provider", () => {
     expect(prompt).toContain(JSON.stringify(fullCreativeInput.cta));
     expect(prompt).toContain(JSON.stringify(fullCreativeInput.domain));
     expect(prompt).toContain("Render every required string exactly as supplied");
+    expect(prompt).toContain("text-only typographic wordmark");
+    expect(prompt).toContain("No icon, emblem, abstract speech mark");
+    expect(prompt).toContain("exact capitalization and spelling");
     expect(prompt).toContain("any extra visible text");
     expect(prompt.toLowerCase()).not.toContain("no text");
     expect(readPngDimensions(result.bytes)).toEqual({ width: 1000, height: 1500 });
