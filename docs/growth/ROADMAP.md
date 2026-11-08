@@ -469,3 +469,10 @@ A separate auditable `GrowthDailyCadencePreference` table, SQL CHECK constraints
 ## Phase 14L: source-vetted proactive external market discovery (2026-11-05; draft PR)
 
 The agent should not stop when SayTwist's own Pinterest/Translator/Ideas inventory has no eligible opportunities. The owner additionally requires **proactive market discovery even while internal opportunities remain**. Implementation is stacked on Phase14K: `lib/growth/market-research/*` now contains a real, official Pinterest Trends v5 source (conditional on enterprise/partner access), a once-per-24-hour DB-locked reservation plus existing global provider quota, source-recency validation, relevance + catalog novelty detection, role-specific suggestions and an independent 72-hour proactive/shortfall planning policy. Private admin endpoint and market-gap review page added. No live timer or paid/provider request has been approved; both source flags default OFF and Pinterest Trends permission must be independently verified. Content plans are editorial suggestions only; current daily local intelligence remains three database-only jobs. See `MARKET_RESEARCH.md`.
+
+
+## November 8, 2026 development status: Phase 14 content preparation
+
+An incremental exact-job-only daily autonomous Translator/Idea **preparation** runner is under CI in its own feature branch. The systemd service is disabled by default and its one-shot subprocess receives only the Growth OpenAI key/project. It prepares unpublished content from qualified opportunities. The existing approved-Pin publisher and daily creative timer remain unchanged. **Not deployed, not live tested, not an automatic page-publishing workflow.**
+
+Independent remaining gates: verified content publication quality/SEO readiness, complete Pinterest analytics coverage, privacy-reviewed attribution, official Pinterest per-Pin approval, cost provenance, and live test/operator authorization.
