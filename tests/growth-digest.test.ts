@@ -67,6 +67,34 @@ describe("Provider-independent daily Growth digest", () => {
     });
     expect(text).toContain("Pinterest analytics coverage: Unavailable accounts READY; Unavailable eligible Pins READY");
   });
+  it("reports audited execution totals and signed daily deltas without inventing missing figures", () => {
+    const text = formatGrowthDailyDigest({
+      ...data,
+      previousDay: "2026-10-17",
+      previousPinsPublished: 1,
+      previousAiDraftsReady: 4,
+      previousNewTranslators: 0,
+      previousNewIdeas: 1,
+      aiDraftsReady: 2,
+      aiTextAttempts: 3,
+      jobsSucceeded: 8,
+      jobsFailed: 1,
+    });
+    expect(text).toContain("Growth jobs created: 8 succeeded / 1 failed");
+    expect(text).toContain("Growth AI text attempts reserved: 3");
+    expect(text).toContain("Day-over-day vs 2026-10-17 (local records): Pins +1; AI drafts -2; Translators 0; Ideas -1");
+    expect(text).not.toContain("Growth AI spend: $0");
+    expect(text.length).toBeLessThan(3500);
+  });
+  it("never presents invalid comparison values as factual deltas", () => {
+    expect(formatGrowthDailyDigest({
+      ...data, previousDay: "2026-10-17",
+      previousPinsPublished: -1,
+    })).toContain("Day-over-day vs 2026-10-17 (local records): Pins Unavailable;");
+    expect(() => formatGrowthDailyDigest({
+      ...data, previousDay: "../etc",
+    })).toThrow();
+  });
   it("bounds long warning lists while signaling omissions", () => {
     const text = formatGrowthDailyDigest({
       ...data, warnings: Array.from({ length: 8 }, (_, i) => `Warning ${i + 1}`),
