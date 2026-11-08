@@ -444,3 +444,8 @@ Continue developing bounded Translator/Idea creation from verified first-party o
 ## 2026-11-08: Separate account analytics refresh from identity OBSERVE
 
 The live daily OBSERVE timer performs only one account identity GET and cannot support actual daily Pinterest KPI reporting. Develop a separate disabled-by-default scoped `ANALYTICS` timer for one production account at 04:20 UTC, refreshing the last seven completed UTC dates via the existing official read-only analytics endpoints under the shared global 4/hour, 16/day request budget. No automatic retry, broad queue execution, creation, approval or Pinterest posting. `PROCESSING` and missing per-Pin data remain unavailable. Keep production inactive pending coordinated owner go-live.
+
+
+## 2026-11-08: Website publishing after strict QA, Pinterest remains per-Pin selection
+
+The owner asked that newly generated Translators become publicly visible without routine per-page approval once the agent goes live. Distinguish this website-only operation from Pinterest's external publication restrictions. Implement a separately opted-in daily site-side publisher (one new Translator/day) requiring completed Growth CREATE provenance, immutable unchanged snapshot, valid SEO/editorial, active categories, uniqueness and append-only audit. No other AI or Pinterest calls. Fail closed if the item is incomplete. Keep timer disabled in production until final activation review. User must continue specifically selecting each Pinterest Pin under current official developer guidelines.
