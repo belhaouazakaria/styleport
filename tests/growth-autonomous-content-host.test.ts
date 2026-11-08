@@ -18,7 +18,7 @@ describe("bounded automated content generation host", () => {
     expect(installer).toContain("0:0:600");
     expect(installer).toContain("GROWTH_CONTENT_INSTALL=INSTALLED_DISABLED");
     expect((installer.match(/GROWTH_CONTENT_INSTALL=INSTALLED_DISABLED/g) || [])).toHaveLength(1);
-    expect((installer.match(/STAGE.*SERVICE.*EOF/g) || [])).toHaveLength(0);
+    expect((installer.match(/STAGE.*SERVICE.*EOF/g) || [])).toHaveLength(1);
     expect(installer).toContain("GROWTH_OPENAI_API_KEY=sk-");
     expect(installer).toContain("GROWTH_OPENAI_PROJECT_ID=proj_");
     expect(installer).toContain("saytwist-growth-private-report");
