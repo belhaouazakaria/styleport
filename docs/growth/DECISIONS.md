@@ -439,3 +439,8 @@ The owner approved the original William Afton design and the newer Regal Rewrite
 ## 2026-11-08: Isolated content preparation, no automatic external publication
 
 Continue developing bounded Translator/Idea creation from verified first-party opportunities. Allow paid text generation only under the existing Growth AI reservation cap and dedicated Growth project credentials (never the public site's key), using one exact-job scoped expiring lease and the independent watchdog. Default systemd timer stays disabled through development, and prepared new Translator/Idea pages remain unpublished until their own quality/SEO gate. Individual Pinterest Pin selection is required under the current official developer guidelines. The existing production AI image and private Telegram timers are not changed by this source PR.
+
+
+## 2026-11-08: Separate account analytics refresh from identity OBSERVE
+
+The live daily OBSERVE timer performs only one account identity GET and cannot support actual daily Pinterest KPI reporting. Develop a separate disabled-by-default scoped `ANALYTICS` timer for one production account at 04:20 UTC, refreshing the last seven completed UTC dates via the existing official read-only analytics endpoints under the shared global 4/hour, 16/day request budget. No automatic retry, broad queue execution, creation, approval or Pinterest posting. `PROCESSING` and missing per-Pin data remain unavailable. Keep production inactive pending coordinated owner go-live.
