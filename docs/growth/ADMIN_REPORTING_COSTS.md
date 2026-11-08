@@ -430,3 +430,12 @@ The owner can configure independent Pin creative draft and new Translator draft 
 - Retain the distinction between AI **reserved ceilings** and **provider-billed spend**. Local image attempts are not spend. Attribution disabled remains `Unavailable`, never zero.
 - Pinterest Pin-level breakout and performance recommendations remain gated on all required complete metrics. New operational counts are diagnostics, not evidence of reach, traffic, conversion or paid billing.
 - This increment is reporting-only: no provider calls, no Pinterest mutation, no AI generation, no scheduler changes, no prod release.
+
+
+## Daily report v4: local job outcomes and verified day-over-day comparisons (development)
+
+- Preserve all historical v1/v2/v3 archives and prior Telegram delivery rows unchanged, as required by append-only report immutability. Only newly built reports carry `growth_daily_v4`.
+- Add count of Growth TEXT AI reservations (attempts, never actual billed cost), number of Growth jobs created on the UTC reporting date whose latest status is SUCCEEDED or FAILED_TERMINAL/FAILED_RETRYABLE, and signed comparison against the immediately preceding full UTC day for published Growth Pins, successfully prepared AI image drafts, Growth-created Translators and Ideas.
+- Comparisons are generated from durable local records, not a Pinterest API forecast. They are clearly identified as local evidence, and invalid or missing values are shown as `Unavailable`, never fabricated zero.
+- The existing Pinterest analytics coverage, attribution availability, incomplete Pin-level breakout checks, immutable budget ceiling and distinction between actual billed spend and provider usage estimates remain unchanged. Zero Growth AI reservations does **not** imply zero billed provider cost.
+- This source update does not query Pinterest/OpenAI, enable a worker, publish any asset, alter a timer, or rewrite a sent Telegram report. Future live reports need the next protected owner-authorized release.

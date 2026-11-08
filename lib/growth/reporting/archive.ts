@@ -5,7 +5,7 @@ import { formatGrowthDailyDigest, type GrowthDigestData } from "@/lib/growth/rep
 import { deriveDailyGrowthInsights } from "@/lib/growth/reporting/insights";
 import { prisma } from "@/lib/prisma";
 
-export const GROWTH_REPORT_VERSION = "growth_daily_v3";
+export const GROWTH_REPORT_VERSION = "growth_daily_v4";
 
 export function growthReportWindow(date: string, now = new Date()) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Invalid UTC report date");
@@ -20,11 +20,14 @@ export function growthReportWindow(date: string, now = new Date()) {
 
 export async function archiveGrowthDailyReport(date: string) {
   const { start, end } = growthReportWindow(date);
+  const previousStart = new Date(start.getTime() - 86_400_000);
   const reportId = `growth-${date.replaceAll("-", "")}`;
   const existing = await prisma.growthDailyReport.findUnique({ where: { reportDate: start } });
   if (existing) return { report: existing, reused: true };
 
-  const [collection, accounts, totalMetrics, readyMetrics, metrics, attribution, pinCount, translatorCount, ideaCount, reservations, aiDraftsReady, aiImageAttempts, eligiblePins, completePinRows] =
+  const [collection, accounts, totalMetrics, readyMetrics, metrics, attribution, pinCount, translatorCount, ideaCount, reservations, aiDraftsReady, aiImageAttempts, eligiblePins, completePinRows,
+    aiTextAttempts, jobsSucceeded, jobsFailed, previousPinsPublished,
+    previousAiDraftsReady, previousTranslatorsCreated, previousIdeasCreated] =
     await Promise.all([
       getAttributionCollectionStatus({ readSettingWhenServerDisabled: true }),
       prisma.growthPinterestAccount.count({ where: { connectionStatus: { not: "DISCONNECTED" } } }),
@@ -74,6 +77,32 @@ export async function archiveGrowthDailyReport(date: string) {
           pin: { isActive: true, analyticsEligible: true,
             account: { connectionStatus: { not: "DISCONNECTED" } } },
         },
+      }),
+      prisma.growthAiBudgetReservation.count({
+        where: { createdAt: { gte: start, lt: end }, kind: GrowthAiOperationKind.TEXT },
+      }),
+      prisma.growthJob.count({
+        where: { createdAt: { gte: start, lt: end }, status: "SUCCEEDED" },
+      }),
+      prisma.growthJob.count({
+        where: { createdAt: { gte: start, lt: end },
+          status: { in: ["FAILED_TERMINAL", "FAILED_RETRYABLE"] } },
+      }),
+      prisma.growthPinPublication.count({
+        where: { publishedAt: { gte: previousStart, lt: start },
+          status: { in: ["PUBLISHED", "RECONCILING", "RECONCILED"] } },
+      }),
+      prisma.growthPinCandidate.count({
+        where: { createdAt: { gte: previousStart, lt: start },
+          status: "READY", asset: { is: { generationKind: "AI" } } },
+      }),
+      prisma.growthContentVersion.count({
+        where: { createdAt: { gte: previousStart, lt: start },
+          action: GrowthContentVersionAction.CREATE },
+      }),
+      prisma.growthIdeaVersion.count({
+        where: { createdAt: { gte: previousStart, lt: start },
+          action: GrowthIdeaVersionAction.CREATE },
       }),
     ]);
 
@@ -145,6 +174,14 @@ export async function archiveGrowthDailyReport(date: string) {
     aiReservedCents: safeReservedCents,
     aiDraftsReady,
     aiImageAttempts,
+    aiTextAttempts,
+    jobsSucceeded,
+    jobsFailed,
+    previousDay: previousStart.toISOString().slice(0, 10),
+    previousPinsPublished,
+    previousAiDraftsReady,
+    previousNewTranslators: previousTranslatorsCreated,
+    previousNewIdeas: previousIdeasCreated,
     analyticsAccountsReady: readyMetrics,
     analyticsAccountsTotal: accounts,
     analyticsPinsReady: completePinRows,
