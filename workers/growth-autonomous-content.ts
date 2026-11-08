@@ -218,9 +218,14 @@ export async function runAutonomousPreparation(day: string) {
     Math.min(10, settings.translatorCreatesPerDayCap) - translatorsCreatedToday);
   const qualifiedTranslators = opportunities.filter(r =>
     r.score >= 75 && r.confidence >= 80 &&
-    r.targetDestinationKind === GrowthOpportunityDestinationKind.TRANSLATOR).length;
+    r.targetDestinationKind === GrowthOpportunityDestinationKind.TRANSLATOR);
+  // Opportunity scoring uses evidence-qualified real Pinterest signals.
+  // Never infer STRONG from a missing or partial opportunity.
+  const performance = qualifiedTranslators.length === 0 ? "UNKNOWN" :
+    qualifiedTranslators.some(r => r.score >= 90 && r.confidence >= 90) ?
+      "STRONG" : qualifiedTranslators.every(r => r.score < 80) ? "WEAK" : "NORMAL";
   const plannedTranslator = decideDailyChannelCadence(policy.translatorCreates, {
-    eligibleOpportunities: qualifiedTranslators, performance: "NORMAL",
+    eligibleOpportunities: qualifiedTranslators.length, performance,
     authorizedDailyLimit: Math.min(10, settings.translatorCreatesPerDayCap),
     completedToday: translatorsCreatedToday, pendingToday: 0,
     // This is only a planning ceiling. Each paid attempt still needs
