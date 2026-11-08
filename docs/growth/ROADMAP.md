@@ -476,3 +476,8 @@ The agent should not stop when SayTwist's own Pinterest/Translator/Ideas invento
 An incremental exact-job-only daily autonomous Translator/Idea **preparation** runner is under CI in its own feature branch. The systemd service is disabled by default and its one-shot subprocess receives only the Growth OpenAI key/project. It prepares unpublished content from qualified opportunities. The existing approved-Pin publisher and daily creative timer remain unchanged. **Not deployed, not live tested, not an automatic page-publishing workflow.**
 
 Independent remaining gates: verified content publication quality/SEO readiness, complete Pinterest analytics coverage, privacy-reviewed attribution, official Pinterest per-Pin approval, cost provenance, and live test/operator authorization.
+
+
+## November 8, 2026: Daily Pinterest account analytics refresh (source-only)
+
+An isolated `ANALYTICS` rollout scope and opt-in 04:20 UTC systemd schedule now address the gap between the live daily identity OBSERVE tick and actual Pinterest metrics. The handler refreshes account-level READY/PROCESSING evidence for the last 7 completed UTC dates using global API quotas and a single exact per-day job. It is **not** deployed or enabled. Historical Pin-level gaps and privacy-reviewed attribution remain separate work. Daily Telegram reports must continue exposing partial data rather than inventing zeros.
