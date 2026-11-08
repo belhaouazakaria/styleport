@@ -86,7 +86,8 @@ export async function runScheduledMarketResearch(now = new Date()) {
     now, lastCompletedScanAt: last?.createdAt || null,
     internalEligibleOpportunities: qualified,
     desiredDailyCandidateMinimum: Math.max(
-      cadence.pinCreatives.minimum, cadence.translatorCreates.minimum),
+      cadence.pinCreatives.mode === "PAUSED" ? 0 : cadence.pinCreatives.minimum,
+      cadence.translatorCreates.mode === "PAUSED" ? 0 : cadence.translatorCreates.minimum),
     // Permission and admission are also independently enforced by the
     // network adapter and the rolling 24h DB reservation.
     approvedSourceAvailable: true,
