@@ -101,5 +101,5 @@ systemctl daemon-reload
 [[ "$(systemctl is-enabled "$TIMER" 2>/dev/null || true)" != enabled ]] || fail
 ! systemctl is-active --quiet "$TIMER" || fail
 echo "GROWTH_AUTO_TRANSLATOR_PUBLISH_INSTALL=INSTALLED_DISABLED"
-echo "GROWTH_DAILY_ACCOUNT_ANALYTICS_TIMER=INACTIVE"
-echo "GROWTH_DAILY_ACCOUNT_ANALYTICS_RELEASE=$SHA"
+echo "GROWTH_AUTO_TRANSLATOR_PUBLISH_TIMER=INACTIVE"
+echo "GROWTH_AUTO_TRANSLATOR_PUBLISH_RELEASE=$SHA"
