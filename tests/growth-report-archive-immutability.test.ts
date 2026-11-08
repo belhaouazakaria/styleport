@@ -15,9 +15,10 @@ vi.mock("@/lib/prisma", () => ({
     growthPinterestAccountMetricDaily: { count: mocks.count, aggregate: mocks.aggregate },
     growthAttributionDailyAggregate: { aggregate: mocks.aggregate, count: mocks.count },
     growthPinPublication: { count: mocks.count },
+    growthPinCandidate: { count: mocks.count },
     growthContentVersion: { count: mocks.count },
     growthIdeaVersion: { count: mocks.count },
-    growthAiBudgetReservation: { aggregate: mocks.aggregate },
+    growthAiBudgetReservation: { aggregate: mocks.aggregate, count: mocks.count },
     growthPinterestPin: { count: mocks.eligiblePinCount },
     growthPinterestPinMetricDaily: { count: mocks.readyPinCount, findFirst: mocks.topPin },
   },
@@ -54,12 +55,15 @@ describe("Insert-only daily report archive under immutable PostgreSQL trigger", 
     expect(mocks.winner).not.toHaveBeenCalled();
     const created = mocks.insert.mock.calls[0][0].data;
     expect(created.reportDate).toEqual(archived.reportDate);
-    expect(created.version).toBe("growth_daily_v2");
+    expect(created.version).toBe("growth_daily_v3");
     expect(created.digestText).toContain("Growth AI spend: Unavailable");
     expect(created.digestText).toContain("Growth AI actual spending not fully priced");
     expect(created.digestText).toContain("Review Pinterest analytics coverage");
     expect(created.snapshot.aiSpendUsd).toBeNull();
     expect(created.digestText).toContain("Growth AI reserved ceiling: $0.00 USD (not billed spend)");
+    expect(created.digestText).toContain("Pinterest analytics coverage: 0/0 accounts READY; 0/0 eligible Pins READY");
+    expect(created.digestText).toContain("AI image drafts READY: 0");
+    expect(created.digestText).toContain("Growth AI image attempts reserved: 0 (attempts, not billed spend)");
   });
   it("identifies the top measured Pin only with complete eligible daily coverage", async () => {
     mocks.count.mockResolvedValue(1);

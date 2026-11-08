@@ -41,6 +41,32 @@ describe("Provider-independent daily Growth digest", () => {
     expect(text).not.toContain("No action recommended");
     expect(text.length).toBeLessThan(3500);
   });
+  it("shows independently verified operational signals despite missing provider metrics", () => {
+    const text = formatGrowthDailyDigest({
+      ...data,
+      outboundClicks: null,
+      pinterestLandingSessions: null,
+      aiDraftsReady: 1,
+      aiImageAttempts: 1,
+      analyticsAccountsReady: 0,
+      analyticsAccountsTotal: 1,
+      analyticsPinsReady: 18,
+      analyticsPinsEligible: 221,
+    });
+    expect(text).toContain("AI image drafts READY: 1");
+    expect(text).toContain("Growth AI image attempts reserved: 1");
+    expect(text).toContain("Pinterest analytics coverage: 0/1 accounts READY; 18/221 eligible Pins READY");
+    expect(text).toContain("Pinterest outbound clicks: Unavailable");
+    expect(text).toContain("Pinterest landings: Unavailable");
+    expect(text).not.toContain("Growth AI spend: $0.00");
+  });
+  it("never formats inconsistent coverage as trustworthy", () => {
+    const text = formatGrowthDailyDigest({
+      ...data, analyticsAccountsReady: 2, analyticsAccountsTotal: 1,
+      analyticsPinsReady: -1, analyticsPinsEligible: 200,
+    });
+    expect(text).toContain("Pinterest analytics coverage: Unavailable accounts READY; Unavailable eligible Pins READY");
+  });
   it("bounds long warning lists while signaling omissions", () => {
     const text = formatGrowthDailyDigest({
       ...data, warnings: Array.from({ length: 8 }, (_, i) => `Warning ${i + 1}`),

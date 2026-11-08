@@ -421,3 +421,12 @@ Provider project totals support aggregate isolation once provider configuration 
 ## Phase14K daily cadence preferences (draft, not yet deployed)
 
 The owner can configure independent Pin creative draft and new Translator draft `AUTO`, `FIXED` or `PAUSED` daily planning modes in `/admin/growth/cadence`, each bounded between 1 and 10 desired units per UTC day (PAUSED deliberately outputs 0). This is a preference-only page using private admin auth, same-origin mutation guards, strict validation, append-only `GrowthActivity` audit and PostgreSQL CHECKs. It displays the separate effective production hard caps (Translator creations/day, AI images/day, daily/monthly monetary limits); a higher preferred maximum never overrides those limits. Existing per-Pin approval is mandatory. The dedicated SQL migration must be rehearsed and approved before deploying this UI. The screen cannot enqueue work or enable Growth, and no runtime agent is consuming preferences yet.
+
+
+## Daily report v3: explicit operational counts and provider coverage (development, not deployed)
+
+- Preserve archived v1/v2 reports and once-only Telegram delivery records unchanged. A new archive must be explicitly versioned `growth_daily_v3`; never backfill or overwrite a sent digest.
+- For the fully elapsed UTC day, include numbers from local database evidence even when Pinterest metrics/attribution are unavailable: AI-generated READY candidate count, IMAGE budget reservation attempts, and READY account/eligible Pin analytics coverage (ready/total). Missing/invalid coverage remains unavailable.
+- Retain the distinction between AI **reserved ceilings** and **provider-billed spend**. Local image attempts are not spend. Attribution disabled remains `Unavailable`, never zero.
+- Pinterest Pin-level breakout and performance recommendations remain gated on all required complete metrics. New operational counts are diagnostics, not evidence of reach, traffic, conversion or paid billing.
+- This increment is reporting-only: no provider calls, no Pinterest mutation, no AI generation, no scheduler changes, no prod release.

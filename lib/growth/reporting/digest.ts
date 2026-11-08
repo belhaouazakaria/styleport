@@ -9,6 +9,12 @@ export interface GrowthDigestData {
   newIdeas: number | null;
   aiSpendUsd: number | null;
   aiReservedCents?: number | null;
+  aiDraftsReady?: number | null;
+  aiImageAttempts?: number | null;
+  analyticsAccountsReady?: number | null;
+  analyticsAccountsTotal?: number | null;
+  analyticsPinsReady?: number | null;
+  analyticsPinsEligible?: number | null;
   breakout: string | null;
   warnings: string[];
   nextAction: string | null;
@@ -19,6 +25,13 @@ function value(n: number | null): string {
   return n === null || !Number.isFinite(n) || n < 0
     ? "Unavailable"
     : n.toLocaleString("en-US", { maximumFractionDigits: 0 });
+}
+
+function coverage(ready: number | null | undefined, total: number | null | undefined): string {
+  if (ready === null || ready === undefined || total === null || total === undefined ||
+      !Number.isSafeInteger(ready) || !Number.isSafeInteger(total) ||
+      ready < 0 || total < 0 || ready > total) return "Unavailable";
+  return `${ready}/${total}`;
 }
 
 function textLine(value: string, maximum: number): string {
@@ -38,6 +51,9 @@ export function formatGrowthDailyDigest(data: GrowthDigestData): string {
     `Pinterest landings: ${value(data.pinterestLandingSessions)}`,
     `Qualified translations: ${value(data.qualifiedConversions)}`,
     `Pinterest outbound clicks: ${value(data.outboundClicks)}`,
+    `Pinterest analytics coverage: ${coverage(data.analyticsAccountsReady, data.analyticsAccountsTotal)} accounts READY; ${coverage(data.analyticsPinsReady, data.analyticsPinsEligible)} eligible Pins READY`,
+    `AI image drafts READY: ${value(data.aiDraftsReady ?? null)}`,
+    `Growth AI image attempts reserved: ${value(data.aiImageAttempts ?? null)} (attempts, not billed spend)`,
     `Growth-managed Pins published: ${value(data.pinsPublished)}`,
     `Growth-created Translators / Ideas: ${value(data.newTranslators)} / ${value(data.newIdeas)}`,
     `Growth AI spend: ${spend === "Unavailable" ? "Unavailable (billing not reconciled)" : spend}`,

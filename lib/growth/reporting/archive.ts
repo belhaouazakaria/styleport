@@ -1,11 +1,11 @@
-import { GrowthContentVersionAction, GrowthIdeaVersionAction, Prisma } from "@prisma/client";
+import { GrowthAiOperationKind, GrowthContentVersionAction, GrowthIdeaVersionAction, Prisma } from "@prisma/client";
 import { ATTRIBUTION_MODEL_VERSION } from "@/lib/growth/attribution/constants";
 import { getAttributionCollectionStatus } from "@/lib/growth/attribution/config";
 import { formatGrowthDailyDigest, type GrowthDigestData } from "@/lib/growth/reporting/digest";
 import { deriveDailyGrowthInsights } from "@/lib/growth/reporting/insights";
 import { prisma } from "@/lib/prisma";
 
-export const GROWTH_REPORT_VERSION = "growth_daily_v2";
+export const GROWTH_REPORT_VERSION = "growth_daily_v3";
 
 export function growthReportWindow(date: string, now = new Date()) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Invalid UTC report date");
@@ -24,7 +24,7 @@ export async function archiveGrowthDailyReport(date: string) {
   const existing = await prisma.growthDailyReport.findUnique({ where: { reportDate: start } });
   if (existing) return { report: existing, reused: true };
 
-  const [collection, accounts, totalMetrics, readyMetrics, metrics, attribution, pinCount, translatorCount, ideaCount, reservations] =
+  const [collection, accounts, totalMetrics, readyMetrics, metrics, attribution, pinCount, translatorCount, ideaCount, reservations, aiDraftsReady, aiImageAttempts, eligiblePins, completePinRows] =
     await Promise.all([
       getAttributionCollectionStatus({ readSettingWhenServerDisabled: true }),
       prisma.growthPinterestAccount.count({ where: { connectionStatus: { not: "DISCONNECTED" } } }),
@@ -52,6 +52,29 @@ export async function archiveGrowthDailyReport(date: string) {
         where: { createdAt: { gte: start, lt: end } },
         _sum: { reservedCents: true },
       }),
+      prisma.growthPinCandidate.count({
+        where: {
+          createdAt: { gte: start, lt: end },
+          status: "READY",
+          asset: { is: { generationKind: "AI" } },
+        },
+      }),
+      prisma.growthAiBudgetReservation.count({
+        where: { createdAt: { gte: start, lt: end }, kind: GrowthAiOperationKind.IMAGE },
+      }),
+      prisma.growthPinterestPin.count({
+        where: { isActive: true, analyticsEligible: true,
+          account: { connectionStatus: { not: "DISCONNECTED" } } },
+      }),
+      prisma.growthPinterestPinMetricDaily.count({
+        where: {
+          metricDate: { gte: start, lt: end },
+          dataStatus: "READY",
+          outboundClicks: { not: null },
+          pin: { isActive: true, analyticsEligible: true,
+            account: { connectionStatus: { not: "DISCONNECTED" } } },
+        },
+      }),
     ]);
 
   const fullyReadyPinterest = accounts > 0 && totalMetrics === accounts && readyMetrics === accounts;
@@ -70,19 +93,8 @@ export async function archiveGrowthDailyReport(date: string) {
   // rank lists must not be promoted to a breakout or recommendation.
   let topPin: { title: string; outboundClicks: number } | null = null;
   if (fullyReadyPinterest) {
-    const eligiblePins = await prisma.growthPinterestPin.count({
-      where: { isActive: true, analyticsEligible: true, account: { connectionStatus: { not: "DISCONNECTED" } } },
-    });
     if (eligiblePins > 0) {
-      const completeRows = await prisma.growthPinterestPinMetricDaily.count({
-        where: {
-          metricDate: { gte: start, lt: end },
-          dataStatus: "READY",
-          outboundClicks: { not: null },
-          pin: { isActive: true, analyticsEligible: true, account: { connectionStatus: { not: "DISCONNECTED" } } },
-        },
-      });
-      if (completeRows === eligiblePins) {
+      if (completePinRows === eligiblePins) {
         const top = await prisma.growthPinterestPinMetricDaily.findFirst({
           where: {
             metricDate: { gte: start, lt: end },
@@ -131,6 +143,12 @@ export async function archiveGrowthDailyReport(date: string) {
     // zero reservation balance does not establish zero real-world expenditure.
     aiSpendUsd: null,
     aiReservedCents: safeReservedCents,
+    aiDraftsReady,
+    aiImageAttempts,
+    analyticsAccountsReady: readyMetrics,
+    analyticsAccountsTotal: accounts,
+    analyticsPinsReady: completePinRows,
+    analyticsPinsEligible: eligiblePins,
     breakout: insights.breakout,
     warnings,
     nextAction: insights.nextAction,
