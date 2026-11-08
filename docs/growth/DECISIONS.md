@@ -449,3 +449,8 @@ The live daily OBSERVE timer performs only one account identity GET and cannot s
 ## 2026-11-08: Website publishing after strict QA, Pinterest remains per-Pin selection
 
 The owner asked that newly generated Translators become publicly visible without routine per-page approval once the agent goes live. Distinguish this website-only operation from Pinterest's external publication restrictions. Implement a separately opted-in daily site-side publisher (one new Translator/day) requiring completed Growth CREATE provenance, immutable unchanged snapshot, valid SEO/editorial, active categories, uniqueness and append-only audit. No other AI or Pinterest calls. Fail closed if the item is incomplete. Keep timer disabled in production until final activation review. User must continue specifically selecting each Pinterest Pin under current official developer guidelines.
+
+
+## 2026-11-08: No silent regression of live AI and private Telegram on deploy
+
+Preserve the six owner-authorized, SHA-pinned production timers during the next coordinated protected release. A new dedicated v2 coordinator is necessary because the original five-timer flow rotated AI only while disabled and did not account for the now-active private Telegram schedule. Restore both AI and Telegram only to their already-authorized active state, with no direct billable or messaging calls and fail-closed partial recovery. New autonomy/analytics/website publication services remain independently disabled until explicitly accepted live.
