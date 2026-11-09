@@ -99,8 +99,11 @@ function safeDb(url) {
 function timerHold() {
   for (const n of TIMERS) {
     const unit = "saytwist-growth-" + n;
-    check(command("/usr/bin/systemctl",["is-enabled",unit+".timer"],
-      { PATH:"/usr/bin:/bin" }) === "disabled");
+    const enabled = spawnSync("/usr/bin/systemctl",["is-enabled",unit+".timer"], {
+      env:{PATH:"/usr/bin:/bin"}, encoding:"utf8",timeout:5000,
+    });
+    // systemctl returns exit code 1 for a correctly disabled timer.
+    check(!enabled.error && enabled.stdout.trim() === "disabled");
     // is-active returns a nonzero exit code when an existing unit is inactive.
     for (const suffix of [".timer",".service"]) {
       const r = spawnSync("/usr/bin/systemctl",["is-active","--quiet",unit+suffix],
