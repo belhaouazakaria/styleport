@@ -1,0 +1,116 @@
+name: SayTwist Nine-Timer Release Source Staging
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: "Exact current main SHA, source staging ONLY"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  source-only:
+    if: >-
+      github.actor == 'belhaouazakaria' &&
+      github.ref == 'refs/heads/main' &&
+      github.event_name == 'workflow_dispatch' &&
+      inputs.release_sha == github.sha
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    environment: production
+    concurrency:
+      group: saytwist-growth-nine-release-stage
+      cancel-in-progress: false
+    steps:
+      - name: Checkout approved current main
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Verify current main, exact two migrations, and syntax
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_SHA: ${{ inputs.release_sha }}
+        run: |
+          set -Eeuo pipefail
+          [[ "$GITHUB_ACTOR" == "belhaouazakaria" &&
+            "$GITHUB_REF" == "refs/heads/main" &&
+            "$INPUT_SHA" =~ ^[a-f0-9]{40}$ &&
+            "$INPUT_SHA" == "$GITHUB_SHA" ]] || exit 1
+          [[ "$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '.commit.sha')" == "$INPUT_SHA" ]] || exit 1
+          test "$(find prisma/migrations -mindepth 1 -maxdepth 1 -type d | wc -l)" -eq 35
+          test -f prisma/migrations/20261109180000_growth_viral_intelligence_foundation/migration.sql
+          test -f prisma/migrations/20261109190000_growth_viral_pin_approval/migration.sql
+          bash -n workers/coordinate-growth-nine-timer-release.sh
+          node --check scripts/growth-viral-production-migration.cjs
+
+      - name: Package reviewed migration and coordinator sources only
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          printf '%s\n' "$GITHUB_SHA" > .release-sha
+          tar -czf growth-nine-release-source.tar.gz \
+            .release-sha prisma/schema.prisma prisma/migrations \
+            scripts/growth-viral-production-migration.cjs \
+            workers/coordinate-growth-nine-timer-release.sh
+          tar -tzf growth-nine-release-source.tar.gz >/dev/null
+
+      - name: Reserve exact-SHA private source directory
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.HOSTINGER_SSH_HOST || vars.HOSTINGER_SSH_HOST }}
+          username: ${{ secrets.HOSTINGER_SSH_USER || vars.HOSTINGER_SSH_USER }}
+          key: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
+          port: ${{ secrets.HOSTINGER_SSH_PORT || vars.HOSTINGER_SSH_PORT }}
+          script_stop: true
+          command_timeout: 1m
+          script: |
+            set -eu
+            test "$(id -un)" = saytwist
+            umask 077
+            BASE=/home/saytwist/.local/share/saytwist/viral-nine-release-source
+            DIR="$BASE/${{ github.sha }}"
+            install -d -m 700 "$BASE"
+            test ! -e "$DIR"
+            install -d -m 700 "$DIR"
+
+      - name: Upload source bundle outside the live application
+        uses: appleboy/scp-action@v1.0.0
+        with:
+          host: ${{ secrets.HOSTINGER_SSH_HOST || vars.HOSTINGER_SSH_HOST }}
+          username: ${{ secrets.HOSTINGER_SSH_USER || vars.HOSTINGER_SSH_USER }}
+          key: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
+          port: ${{ secrets.HOSTINGER_SSH_PORT || vars.HOSTINGER_SSH_PORT }}
+          source: growth-nine-release-source.tar.gz
+          target: /home/saytwist/.local/share/saytwist/viral-nine-release-source/${{ github.sha }}
+          overwrite: false
+
+      - name: Extract source only and verify SHA
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.HOSTINGER_SSH_HOST || vars.HOSTINGER_SSH_HOST }}
+          username: ${{ secrets.HOSTINGER_SSH_USER || vars.HOSTINGER_SSH_USER }}
+          key: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
+          port: ${{ secrets.HOSTINGER_SSH_PORT || vars.HOSTINGER_SSH_PORT }}
+          script_stop: true
+          command_timeout: 1m
+          script: |
+            set -eu
+            test "$(id -un)" = saytwist
+            umask 077
+            DIR=/home/saytwist/.local/share/saytwist/viral-nine-release-source/${{ github.sha }}
+            test -f "$DIR/growth-nine-release-source.tar.gz"
+            tar -tzf "$DIR/growth-nine-release-source.tar.gz" >/dev/null
+            tar -xzf "$DIR/growth-nine-release-source.tar.gz" -C "$DIR"
+            test "$(cat "$DIR/.release-sha")" = "${{ github.sha }}"
+            cd "$DIR"
+            bash -n workers/coordinate-growth-nine-timer-release.sh
+            /home/saytwist/.nvm/versions/node/v24.20.0/bin/node --check \
+              scripts/growth-viral-production-migration.cjs
+            echo GROWTH_NINE_RELEASE_SOURCE_STAGED=true
+            echo GROWTH_NINE_LIVE_PROCESSES_UNCHANGED=true
