@@ -77,3 +77,8 @@ BEGIN
   RETURN NEW;
 END;
 $$;
+
+CREATE UNIQUE INDEX "GrowthViralPinTest_one_open_source_concept_idx"
+  ON "GrowthViralPinTest"("conceptId")
+  WHERE "channel" = 'SOURCE' AND
+    "status" IN ('PLANNED','APPROVED','PUBLISHING','OUTCOME_UNKNOWN','PUBLISHED');
