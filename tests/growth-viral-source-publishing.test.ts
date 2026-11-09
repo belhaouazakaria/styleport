@@ -51,6 +51,7 @@ describe("Individually approved source publishing, separate from existing publis
     expect(service).toContain("pg_advisory_xact_lock(hashtext(${" + shared + "}))");
     expect(ownedPublisher).toContain("pg_advisory_xact_lock(hashtext(${" + shared + "}))");
     expect(service).not.toContain("growth-viral-source-approval-v1");
+    expect(service).toContain("Prisma.TransactionIsolationLevel.ReadCommitted");
     expect(service).not.toContain("$queryRawUnsafe");
     expect(ownedPublisher).not.toContain('$queryRawUnsafe("SELECT pg_advisory_xact_lock');
   });
