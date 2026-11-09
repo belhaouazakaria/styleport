@@ -45,7 +45,7 @@ safe_db() {
   [[ "$(db saytwist 'SELECT CASE WHEN count(*)=1 AND bool_and(NOT "enabled" AND NOT "attributionEnabled" AND "workerActivationExpiresAt" IS NULL) THEN 1 ELSE 0 END FROM "GrowthSettings" WHERE id='\''global'\'';')" == 1 ]] || fail
   [[ "$(db saytwist "SELECT count(*) FROM \"GrowthJob\" WHERE status IN ('PENDING','CLAIMED','RUNNING','FAILED_RETRYABLE');")" == 0 ]] || fail
   # A no-migration application hotfix must never activate Viral source publishing.
-  [[ "$(db saytwist 'SELECT CASE WHEN count(*)=1 AND bool_and(mode='''PAUSED''') THEN 1 ELSE 0 END FROM "GrowthViralProgramSettings" WHERE id='''global''';')" == 1 ]] || fail
+  [[ "$(db saytwist "SELECT CASE WHEN count(*)=1 AND bool_and(mode='PAUSED') THEN 1 ELSE 0 END FROM \"GrowthViralProgramSettings\" WHERE id='global';")" == 1 ]] || fail
 }
 count_migrations() {
   db "$1" 'SELECT count(*) FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL;'
