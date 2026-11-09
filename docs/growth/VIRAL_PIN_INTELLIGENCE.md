@@ -78,6 +78,33 @@ Owner anecdotes are not provider-verified analytics.
 - Complete other outstanding Growth work: market research entitlement,
   multi-account learning and actual provider cost reconciliation.
 
+## November 9 protected populated-clone rehearsal
+
+Operator verified a new PostgreSQL 18 custom-format backup and restored
+`saytwist_growth_viral_rehearsal_20261109`, owned by `saytwist_app`, from
+production with **33 already applied migrations** and no production changes.
+Production release remains
+`a73ed6a4d4a5d3244fe5735bd7f027aa8a6d81ff`, with all nine preexisting
+Growth timers reported enabled/active.
+
+The new owner-only manual workflow
+`.github/workflows/growth-viral-clone-stage.yml` requires the exact current
+main SHA. Its staged, SHA-verified source executes
+`scripts/growth-viral-clone-rehearsal.cjs` under the `saytwist` SSH user.
+It refuses mismatched production SHA, migration history or checksum, unsafe
+PM2 database identity, active Growth jobs, or already migrated source tables.
+It applies only `20261109180000_growth_viral_intelligence_foundation` and
+`20261109190000_growth_viral_pin_approval` to the fixed cloned database.
+It verifies 35 migrations, immutable trigger/constraint installation,
+preserved Growth history, PAUSED policy and unchanged production schema.
+The workflow never changes timers, web runtime, production DB or Pinterest.
+
+This is **not** authorization for production migration, deployment, source
+publication or budget spending. Do not stop nine live timers for this rehearsal.
+Any real rollout still requires explicit production backup/migration approval,
+a separate tested **nine-timer** coordinated hold/restore, and a separate
+owner-approved, source-Pin launch.
+
 ## Future coordinated activation (requires owner authorization)
 
 Before production migration/deployment, perform source CI, PostgreSQL 18
