@@ -33,7 +33,7 @@ describe("Viral review-mode no-migration protected release", () => {
     expect(text).toContain('"workerId" IS NULL');
     expect(text).toContain("count(*) <= 2");
     expect(text).toContain("2026-11-09 22:47:00");
-    expect(text).not.toContain("UPDATE \\"GrowthJob\\"");
+    expect(text).not.toContain('UPDATE "GrowthJob"');
     expect(text).not.toContain("DELETE FROM");
     expect(text).toContain("OnCalendar=");
     expect(text).toContain("Persistent=$persist");
