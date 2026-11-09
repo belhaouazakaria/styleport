@@ -104,7 +104,7 @@ export async function approveOriginalSourcePin(
   return prisma.$transaction(async tx => {
     // Serialize all channels against the SAME daily portfolio quota lock.
     // A separate SOURCE-only lock permits concurrent cross-channel overbooking.
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${VIRAL_PORTFOLIO_APPROVAL_LOCK}))`;
+    await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${VIRAL_PORTFOLIO_APPROVAL_LOCK}))`);
     const [policy, settings, draft, account, board, otherApprovedSaytwist,
       otherSource] = await Promise.all([
       tx.growthViralProgramSettings.findUnique({ where: { id: "global" } }),
