@@ -52,6 +52,7 @@ describe("Protected nine-timer release", () => {
     expect(migrate).toContain("prod.length === 33 && clone.length === 35");
     expect(migrate).toContain("same(prod,clone.slice(0,33))");
     expect(migrate).toContain("backup(url,sha)");
+    expect(migrate).toContain("process.umask(0o077)");
     expect(migrate).toContain('"migrate","deploy"');
     expect(migrate).toContain("VIRAL_PRODUCTION_TWO_MIGRATIONS_APPLIED=true");
     expect(migrate).not.toContain("systemctl enable");
