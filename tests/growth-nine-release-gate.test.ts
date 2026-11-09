@@ -33,6 +33,9 @@ describe("Protected nine-timer release", () => {
     expect(hold).toContain("systemctl start saytwist-growth-lease-watchdog.service");
     expect(hold).toContain("systemctl enable --now saytwist-growth-lease-watchdog.timer");
     expect(hold).toContain('systemctl enable --now "${OTHERS[@]}"');
+    expect(hold).toContain("PARTIAL_RECOVERY_OPERATOR_REQUIRED");
+    expect(hold).toContain("RECOVER_STARTED=1");
+    expect(hold).toContain("RECOVER_STARTED=0");
     expect(hold).toContain("systemd-analyze verify");
     expect(hold).toContain("GROWTH_NINE_RESTORE=PASSED");
     expect(hold).toContain('"$(count_migrations saytwist)" == 33');
