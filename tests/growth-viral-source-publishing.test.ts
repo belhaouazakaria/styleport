@@ -78,6 +78,8 @@ describe("Individually approved source publishing, separate from existing publis
     expect(worker).toContain("await createPinterestPin(");
     expect(worker).toContain("revokeGrowthWorkerActivation(deadline)");
     expect(worker).toContain("countBlockingGrowthJobs");
+    expect(service).toContain("hasPinterestScopes(account.grantedScopes, PINTEREST_CREATE_PIN_SCOPES)");
+    expect(worker).toContain("hasPinterestScopes(account.grantedScopes, PINTEREST_CREATE_PIN_SCOPES)");
     expect(worker).toContain("creativeAssetChecksum(bytes)");
     expect(worker).toContain('status = providerNotAttempted ? "FAILED" : "OUTCOME_UNKNOWN"');
     expect(worker).not.toContain("updatePinterestPin");
