@@ -7,6 +7,7 @@ import { canonicalSourceTranslatorUrl } from "@/lib/growth/viral/catalog";
 import { createOriginalSourceAsset } from "@/lib/growth/viral/source-creative";
 import { planViralPortfolio } from "@/lib/growth/viral/portfolio";
 import { VIRAL_PORTFOLIO_APPROVAL_LOCK } from "@/lib/growth/viral/portfolio-admission";
+import { hasPinterestScopes, PINTEREST_CREATE_PIN_SCOPES } from "@/lib/growth/pinterest/config";
 
 const DAY = 86400000;
 const AUTHORIZED_SOURCE_CAP = 3;
@@ -145,10 +146,9 @@ export async function approveOriginalSourcePin(
         canonicalSourceTranslatorUrl(draft.destinationUrl) !== draft.concept.sourceUrl) {
       throw Error("SOURCE_APPROVAL_DRAFT_INVALID");
     }
-    const scopes = ["pins:read", "pins:write", "boards:read"];
     if (!account || account.connectionStatus !== "CONNECTED" ||
         account.apiEnvironment !== "PRODUCTION" || !account.encryptedCredentials ||
-        !scopes.every(x => account.grantedScopes.includes(x)) ||
+        !hasPinterestScopes(account.grantedScopes, PINTEREST_CREATE_PIN_SCOPES) ||
         !board?.isActive || board.accountId !== input.accountId) {
       throw Error("SOURCE_APPROVAL_ACCOUNT_UNAVAILABLE");
     }
