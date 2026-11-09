@@ -996,6 +996,100 @@ model GrowthDailyCadencePreference {
   @@index([updatedAt])
 }
 
+/// Independently opt-in viral translator intelligence. No changes to existing
+/// Growth job/admission state until an owner-approved production release.
+model GrowthViralProgramSettings {
+  id                 String   @id @default("global")
+  mode               String   @default("PAUSED") @db.VarChar(10)
+  sourceSharePercent Int      @default(50)
+  maxPinsPerDay      Int      @default(3)
+  configVersion      Int      @default(1)
+  updatedById        String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([updatedAt])
+}
+
+model GrowthViralConcept {
+  id                 String                    @id @default(cuid())
+  title              String                    @db.VarChar(100)
+  normalizedKey      String                    @unique @db.VarChar(160)
+  sourceUrl          String                    @unique @db.VarChar(512)
+  sourceHost         String                    @default("anythingtranslate.com") @db.VarChar(80)
+  rightsVerified     Boolean                   @default(false)
+  status             String                    @default("DISCOVERED") @db.VarChar(20)
+  linkedTranslatorId String?
+  firstSeenAt        DateTime                  @default(now())
+  lastSeenAt         DateTime                  @default(now())
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
+  pinTests           GrowthViralPinTest[]
+  relatedProposals   GrowthViralNicheProposal[]
+
+  @@index([status, lastSeenAt])
+  @@index([linkedTranslatorId])
+}
+
+/// One immutable Pin destination per experiment. A new SayTwist variant is a
+/// separate Pin test rather than an edit to a third-party destination.
+model GrowthViralPinTest {
+  id                    String                         @id @default(cuid())
+  conceptId             String
+  channel               String                         @db.VarChar(10)
+  destinationUrl        String                         @db.VarChar(512)
+  assetChecksum         String?                        @db.VarChar(64)
+  rightsVerified        Boolean                        @default(false)
+  status                String                         @default("PLANNED") @db.VarChar(24)
+  pinterestPinId        String?                        @unique @db.VarChar(191)
+  approvedById          String?
+  approvedAt            DateTime?
+  publishedAt           DateTime?
+  createdAt             DateTime                       @default(now())
+  updatedAt             DateTime                       @updatedAt
+  concept               GrowthViralConcept             @relation(fields: [conceptId], references: [id], onDelete: Restrict)
+  observations          GrowthViralMetricObservation[]
+
+  @@index([channel, status, createdAt])
+  @@index([conceptId, createdAt])
+}
+
+/// Provider observations are append-only. Missing evidence is not zero.
+model GrowthViralMetricObservation {
+  id                   String             @id @default(cuid())
+  pinTestId            String
+  observedAt           DateTime
+  pinterestDataStatus  String             @db.VarChar(12)
+  impressions          BigInt?
+  saves                BigInt?
+  outboundClicks       BigInt?
+  baselineSaveRate     Float?
+  baselineOutboundRate Float?
+  createdAt            DateTime           @default(now())
+  pinTest              GrowthViralPinTest @relation(fields: [pinTestId], references: [id], onDelete: Restrict)
+
+  @@unique([pinTestId, observedAt])
+  @@index([pinTestId, observedAt])
+}
+
+model GrowthViralNicheProposal {
+  id                 String             @id @default(cuid())
+  conceptId          String
+  normalizedKey      String             @db.VarChar(160)
+  title              String             @db.VarChar(100)
+  intent             String             @db.VarChar(280)
+  relationship       String             @db.VarChar(24)
+  evidence           String             @db.VarChar(280)
+  status             String             @default("PROPOSED") @db.VarChar(20)
+  linkedTranslatorId String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  concept            GrowthViralConcept @relation(fields: [conceptId], references: [id], onDelete: Restrict)
+
+  @@unique([conceptId, normalizedKey])
+  @@index([status, createdAt])
+}
+
 model GrowthDailyReport {
   id         String                @id @default(cuid())
   reportDate DateTime              @unique @db.Date
