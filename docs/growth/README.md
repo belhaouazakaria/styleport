@@ -1,6 +1,6 @@
 # SayTwist Growth Agent
 
-**Status (2026-11-08, source verification + owner-reported production evidence):** Phase 14 controlled Growth is partly operational: the owner reported six SHA-pinned live schedules (lease watchdog, Pinterest identity OBSERVE, local intelligence, individually approved Pin publisher, paid AI creative drafts and private Telegram reporting) on production release `b4a9903b3fa70ece0b7a418caa0ff9f73796ca07`. Exact current VPS timer state needs a fresh read-only check. Source code now also includes immutable Telegram report v4 (PR #157) and adaptive Translator preparation plus opt-in Pinterest Trends research (PR #158), but **these changes are not deployed/activated**. Existing additional content-preparation, daily Pinterest metrics refresh, website Translator activation and new Trends research timers remain disabled until a coordinated, owner-approved release and separate go-live gates. First-party attribution remains OFF pending privacy consent; Pinterest publication requires per-Pin selection. This header supersedes the historical October 28 status, while older sections below remain as the implementation record.
+**Status (2026-11-09, read-only GitHub verification):** Phase 14 Growth is partly operational. The operator reports NINE previously approved production systemd timers, but their exact current runtime state has not been revalidated through VPS SSH. GitHub's latest successful guarded Hostinger deployment is `a73ed6a4d4a5d3244fe5735bd7f027aa8a6d81ff` (November 8), not the current source HEAD. Viral Intelligence PR #163 is merged into `main`; PR #164 adds separately approved original source-linked Pin publishing but remains source-only until its database migration is independently approved and applied. No new viral scheduler, original-source Pin, provider spend or link rewrite is activated by a merge. The existing nine approved timers must be held and restored around any new exact-SHA deployment. Attribution remains OFF unless separately consented; Pinterest publication still needs explicit selection of each Pin.
 **Scope:** Pinterest-first autonomous growth system inside SayTwist  
 **Primary admin surface:** `/admin/growth`  
 **Primary public expansion:** `/ideas`  
@@ -8,7 +8,7 @@
 
 ## Current development: Viral Pin Intelligence
 
-New source-only, PAUSED-by-default design (PR #163, not deployed):
+Source-only, PAUSED-by-default foundation (PR #163 merged) plus reviewed independent original source publisher (PR #164, not yet deployed):
 [controlled dual-channel experiment and niche expansion](VIRAL_PIN_INTELLIGENCE.md).
 The existing production nine-timer schedule is unaffected by source development;
 new migrations require independent protected database acceptance.

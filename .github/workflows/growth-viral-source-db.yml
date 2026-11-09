@@ -1,0 +1,56 @@
+name: SayTwist Viral Source Isolated PostgreSQL 18 Qualification
+
+on:
+  pull_request:
+    paths:
+      - 'prisma/schema.prisma'
+      - 'prisma/migrations/20261109190000_growth_viral_pin_approval/**'
+      - 'scripts/qualify-growth-viral-source-migration.sh'
+      - 'lib/growth/viral/**'
+      - 'lib/growth/publishing/service.ts'
+      - 'workers/install-growth-viral-source-systemd.sh'
+      - '.github/workflows/growth-viral-source-db.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  viral-source-postgres18:
+    name: Populated PostgreSQL 18 Prisma migration and immutable source Pin
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: viralci
+          POSTGRES_PASSWORD: dev-only
+          POSTGRES_DB: saytwist_growth_viral_ci_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U viralci -d saytwist_growth_viral_ci_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      DATABASE_URL: postgresql://viralci:dev-only@127.0.0.1:5432/saytwist_growth_viral_ci_test
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20.20.2
+          cache: npm
+      - name: Install dependencies and Prisma
+        run: npm ci --no-audit --no-fund
+      - name: Verify isolated target and shell
+        run: |
+          set -Eeuo pipefail
+          bash -n scripts/qualify-growth-viral-source-migration.sh
+          if ! command -v psql >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq postgresql-client
+          fi
+      - name: Qualify source Pin schema over populated pre-upgrade DB
+        run: bash scripts/qualify-growth-viral-source-migration.sh

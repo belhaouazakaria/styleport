@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 export default async function ViralGrowthPage() {
   await requireAdminRoute();
-  const [settings, concepts, pinTests, proposals] = await Promise.all([
+  const [settings, concepts, pinTests, proposals, sourceDrafts, accounts, boards] = await Promise.all([
     prisma.growthViralProgramSettings.findUnique({ where: { id: "global" } }),
     prisma.growthViralConcept.findMany({
       orderBy: { lastSeenAt: "desc" }, take: 40,
@@ -18,6 +18,19 @@ export default async function ViralGrowthPage() {
     }),
     prisma.growthViralPinTest.count(),
     prisma.growthViralNicheProposal.count(),
+    prisma.growthViralPinTest.findMany({
+      where: { channel: "SOURCE" }, orderBy: { createdAt: "desc" },
+      take: 20, select: { id: true, title: true, status: true,
+        assetPublicPath: true, destinationUrl: true, scheduledAt: true },
+    }),
+    prisma.growthPinterestAccount.findMany({
+      where: { connectionStatus: "CONNECTED", apiEnvironment: "PRODUCTION" },
+      select: { id: true, username: true }, take: 20,
+    }),
+    prisma.growthPinterestBoard.findMany({
+      where: { isActive: true },
+      select: { id: true, accountId: true, name: true }, take: 100,
+    }),
   ]);
   const policy = settings ? {
     mode: settings.mode as "PAUSED" | "REVIEW" | "ACTIVE",
@@ -33,7 +46,11 @@ export default async function ViralGrowthPage() {
           Back to Growth
         </Link>
         <GrowthViralIntelligencePanel initialPolicy={policy}
-          concepts={concepts.map(x => ({ id: x.id, title: x.title }))}/>
+          concepts={concepts.map(x => ({ id: x.id, title: x.title }))}
+          drafts={sourceDrafts.map(x => ({ id: x.id, title: x.title ?? "",
+            status: x.status, assetPublicPath: x.assetPublicPath,
+            destinationUrl: x.destinationUrl, scheduledAt: x.scheduledAt?.toISOString() ?? null }))}
+          accounts={accounts} boards={boards}/>
         <section className="rounded-2xl border border-border bg-white p-5">
           <h2 className="font-display text-xl font-bold text-ink">
             Public-source translator concepts

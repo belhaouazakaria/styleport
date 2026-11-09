@@ -6,6 +6,8 @@ import {
   scanViralSourceCatalog, updateViralProgramSettings,
 } from "@/lib/growth/viral/store";
 import { prisma } from "@/lib/prisma";
+import { z } from "zod";
+import { approveOriginalSourcePin, prepareOriginalSourcePinDraft } from "@/lib/growth/viral/source-publishing";
 import { evaluateTrackedViralPins, prepareNicheProposals, trackOwnedViralPin } from "@/lib/growth/viral/analytics";
 
 export async function GET() {
@@ -112,6 +114,42 @@ export async function POST(request: Request) {
     } catch {
       return apiError(409, "CONFLICT",
         "The Pin does not match the source or an active SayTwist translator.");
+    }
+  }
+  if (action === "PREPARE_SOURCE_PIN" &&
+      fields.join(",") === "action,conceptId" && typeof input.conceptId === "string") {
+    try {
+      const result = await prepareOriginalSourcePinDraft(input.conceptId, session.user.id);
+      return apiOk({ result, imageSource: "ORIGINAL_SAYTWIST_DESIGN",
+        pinterestWrites: 0, paidAiCalls: 0 });
+    } catch {
+      return apiError(409, "CONFLICT", "Original source draft not eligible.");
+    }
+  }
+  const approvalSchema = z.object({
+    action: z.literal("APPROVE_SOURCE_PIN"),
+    draftId: z.string().min(10).max(191),
+    accountId: z.string().min(1).max(191),
+    boardId: z.string().min(1).max(191),
+    scheduledAt: z.iso.datetime({ offset: true }),
+    confirmation: z.literal(true),
+  }).strict();
+  if (action === "APPROVE_SOURCE_PIN") {
+    const parsed = approvalSchema.safeParse(input);
+    if (!parsed.success) {
+      return apiError(400, "VALIDATION_ERROR", "Invalid approval.");
+    }
+    try {
+      const result = await approveOriginalSourcePin({
+        draftId: parsed.data.draftId, accountId: parsed.data.accountId,
+        boardId: parsed.data.boardId, scheduledAt: parsed.data.scheduledAt,
+        confirmation: true,
+      }, session.user.id);
+      return apiOk({ result, publishedImmediately: false,
+        perPinOwnerApprovalRecorded: true });
+    } catch {
+      return apiError(409, "CONFLICT",
+        "Pin approval blocked by quota, account, timing or safety checks.");
     }
   }
   if (action === "PREPARE_NICHE" &&
