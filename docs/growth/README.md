@@ -6,6 +6,13 @@
 **Primary public expansion:** `/ideas`  
 **Roadmap size:** 14 implementation phases
 
+## Current development: Viral Pin Intelligence
+
+New source-only, PAUSED-by-default design (PR #163, not deployed):
+[controlled dual-channel experiment and niche expansion](VIRAL_PIN_INTELLIGENCE.md).
+The existing production nine-timer schedule is unaffected by source development;
+new migrations require independent protected database acceptance.
+
 ## Feature brief
 
 The SayTwist Growth Agent is a Pinterest-first growth system that continuously learns what content brings qualified traffic to SayTwist, expands winning niches into new translators and editorial content, prepares Pinterest creatives, schedules approved Pins at data-driven times, revives evergreen content, measures results, tracks AI spend, and produces a concise daily executive report.
