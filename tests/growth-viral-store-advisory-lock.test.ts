@@ -67,6 +67,7 @@ describe("Viral Intelligence policy and catalog advisory-lock regression", () =>
     );
     expect(result).toMatchObject({ mode: "REVIEW", configVersion: 2 });
     expect(mocks.executeRaw).toHaveBeenCalledOnce();
+    expect(JSON.stringify(mocks.executeRaw.mock.calls[0]?.[0])).toContain("growth-viral-settings-v1");
     expect(mocks.queryRawUnsafe).not.toHaveBeenCalled();
     expect(mocks.settingsUpdate).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: "global" },
@@ -84,6 +85,7 @@ describe("Viral Intelligence policy and catalog advisory-lock regression", () =>
     const result = await scanViralSourceCatalog(new Date("2026-11-09T22:00:00Z"));
     expect(result).toMatchObject({ inspected: 1, created: 1, pinsPublished: 0, linksChanged: 0 });
     expect(mocks.executeRaw).toHaveBeenCalledOnce();
+    expect(JSON.stringify(mocks.executeRaw.mock.calls[0]?.[0])).toContain("growth-viral-catalog-v1");
     expect(mocks.queryRawUnsafe).not.toHaveBeenCalled();
     expect(mocks.activityCreate).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ action: "CATALOG_SCAN_RESERVED",
