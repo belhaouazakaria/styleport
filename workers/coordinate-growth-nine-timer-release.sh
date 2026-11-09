@@ -110,6 +110,10 @@ on_exit() {
     systemctl disable --now "${OTHERS[@]}" >/dev/null 2>&1 || :
     echo 'GROWTH_NINE_RELEASE=PARTIAL_RESTORE_OPERATOR_REQUIRED' >&2
   fi
+  if [[ "$code" != 0 && "$MODE" == recover && "${RECOVER_STARTED:-0}" == 1 ]]; then
+    systemctl disable --now "${TIMERS[@]}" >/dev/null 2>&1 || :
+    echo 'GROWTH_NINE_RELEASE=PARTIAL_RECOVERY_OPERATOR_REQUIRED' >&2
+  fi
 }
 trap on_exit EXIT
 
@@ -150,12 +154,14 @@ if [[ "$MODE" == recover ]]; then
   safe_db
   check_files "$OLD"
   check_timers disabled
+  RECOVER_STARTED=1
   systemctl start saytwist-growth-lease-watchdog.service || fail
   [[ "$(systemctl show -P Result saytwist-growth-lease-watchdog.service)" == success ]] || fail
   systemctl enable --now saytwist-growth-lease-watchdog.timer >/dev/null || fail
   systemctl enable --now "${OTHERS[@]}" >/dev/null || fail
   check_files "$OLD"
   write_state RECOVERED
+  RECOVER_STARTED=0
   echo 'GROWTH_NINE_RECOVER_OLD=PASSED'
   exit 0
 fi
