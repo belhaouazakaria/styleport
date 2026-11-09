@@ -13,11 +13,11 @@ import {
   creativeAssetChecksum, resolveCreativeAssetFile, validateCreativePng,
 } from "@/lib/growth/creative/storage";
 import { canonicalSourceTranslatorUrl } from "@/lib/growth/viral/catalog";
+import { hasPinterestScopes, PINTEREST_CREATE_PIN_SCOPES } from "@/lib/growth/pinterest/config";
 import { countBlockingGrowthJobs } from "@/lib/growth/operations/approved-publication-queue";
 import { revokeGrowthWorkerActivation } from "@/lib/growth/settings";
 
 const ONE_DAY = 86400000;
-const REQUIRED_SCOPES = ["pins:read", "pins:write", "boards:read"];
 
 /** Called only from a separately owner-approved, SHA-pinned isolated service.
  * Claim is persisted before any provider attempt; ambiguous results are NEVER
@@ -73,7 +73,7 @@ export async function publishOneApprovedSourcePin(
   ]);
   if (!account || account.connectionStatus !== GrowthPinterestConnectionStatus.CONNECTED ||
       account.apiEnvironment !== "PRODUCTION" || !account.encryptedCredentials ||
-      !REQUIRED_SCOPES.every(scope => account.grantedScopes.includes(scope)) ||
+      !hasPinterestScopes(account.grantedScopes, PINTEREST_CREATE_PIN_SCOPES) ||
       !board || !board.isActive || board.accountId !== account.id) {
     throw Error("VIRAL_SOURCE_PUBLISH_ACCOUNT_UNSAFE");
   }
