@@ -1039,6 +1039,15 @@ model GrowthViralPinTest {
   channel               String                         @db.VarChar(10)
   destinationUrl        String                         @db.VarChar(512)
   assetChecksum         String?                        @db.VarChar(64)
+  assetPublicPath       String?                        @db.VarChar(512)
+  title                 String?                        @db.VarChar(100)
+  description           String?                        @db.VarChar(500)
+  accountId             String?
+  boardId               String?
+  scheduledAt           DateTime?
+  publicationAttemptKey String?                        @unique @db.VarChar(191)
+  publishClaimAt        DateTime?
+  lastErrorCode         String?                        @db.VarChar(80)
   rightsVerified        Boolean                        @default(false)
   status                String                         @default("PLANNED") @db.VarChar(24)
   pinterestPinId        String?                        @unique @db.VarChar(191)
@@ -1051,6 +1060,7 @@ model GrowthViralPinTest {
   observations          GrowthViralMetricObservation[]
 
   @@index([channel, status, createdAt])
+  @@index([status, scheduledAt])
   @@index([conceptId, createdAt])
 }
 
