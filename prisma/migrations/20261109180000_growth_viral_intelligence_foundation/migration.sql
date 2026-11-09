@@ -65,7 +65,7 @@ CREATE TABLE "GrowthViralPinTest" (
   CONSTRAINT "GrowthViralPinTest_pinterestPinId_key" UNIQUE ("pinterestPinId"),
   CONSTRAINT "GrowthViralPinTest_channel_destination_check" CHECK (
     "channel" IN ('SOURCE','SAYTWIST')
-    AND "status" IN ('PLANNED','APPROVED','PUBLISHED','CANCELLED','FAILED')
+    AND "status" IN ('PLANNED','APPROVED','PUBLISHED','TRACKED','CANCELLED','FAILED')
     AND (
       ("channel" = 'SOURCE' AND "destinationUrl" LIKE 'https://anythingtranslate.com/translators/%')
       OR ("channel" = 'SAYTWIST' AND "destinationUrl" LIKE 'https://saytwist.com/translators/%')
@@ -74,7 +74,7 @@ CREATE TABLE "GrowthViralPinTest" (
       "channel" <> 'SOURCE' OR "status" NOT IN ('APPROVED','PUBLISHED')
       OR "rightsVerified" = true
     )
-    AND ("status" <> 'PUBLISHED' OR ("pinterestPinId" IS NOT NULL AND "publishedAt" IS NOT NULL))
+    AND ("status" NOT IN ('PUBLISHED','TRACKED') OR ("pinterestPinId" IS NOT NULL AND "publishedAt" IS NOT NULL))
   ),
   CONSTRAINT "GrowthViralPinTest_conceptId_fkey"
     FOREIGN KEY ("conceptId") REFERENCES "GrowthViralConcept"("id") ON DELETE RESTRICT ON UPDATE CASCADE
