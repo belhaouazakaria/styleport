@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { canonicalSourceTranslatorUrl } from "@/lib/growth/viral/catalog";
 import { createOriginalSourceAsset } from "@/lib/growth/viral/source-creative";
 import { planViralPortfolio } from "@/lib/growth/viral/portfolio";
+import { VIRAL_PORTFOLIO_APPROVAL_LOCK } from "@/lib/growth/viral/portfolio-admission";
 
 const DAY = 86400000;
 const AUTHORIZED_SOURCE_CAP = 3;
@@ -101,9 +102,9 @@ export async function approveOriginalSourcePin(
   }
   const { start, end } = utcDayInterval(scheduled);
   return prisma.$transaction(async tx => {
-    // Serialize against another approval from this new viral publisher.
-    await tx.$queryRawUnsafe(
-      "SELECT pg_advisory_xact_lock(hashtext('growth-viral-source-approval-v1'))");
+    // Serialize all channels against the SAME daily portfolio quota lock.
+    // A separate SOURCE-only lock permits concurrent cross-channel overbooking.
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${VIRAL_PORTFOLIO_APPROVAL_LOCK}))`;
     const [policy, settings, draft, account, board, otherApprovedSaytwist,
       otherSource] = await Promise.all([
       tx.growthViralProgramSettings.findUnique({ where: { id: "global" } }),
