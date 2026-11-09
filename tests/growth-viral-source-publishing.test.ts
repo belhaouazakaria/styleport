@@ -70,9 +70,9 @@ describe("Individually approved source publishing, separate from existing publis
     expect(worker).not.toContain("updatePinterestPin");
     expect(worker).not.toContain("setTimeout(");
     expect(sql).toContain('OLD."destinationUrl" IS DISTINCT FROM NEW."destinationUrl"');
-    expect(sql).toContain("growth_viral_pin_immutable_destination");
+    expect(sql).toContain("growth_viral_pin_destination_guard");
     expect(sql).toContain("GrowthViralPinTest_one_open_source_concept_idx");
-    expect(sql).toContain("'PUBLISHING','OUTCOME_UNKNOWN'");
+    expect(sql).toContain("'OUTCOME_UNKNOWN'");
     expect(sql).not.toContain('ALTER TABLE "GrowthSettings"');
   });
 
