@@ -54,12 +54,12 @@ export function planViralPortfolio(raw: ViralPortfolioPolicy, e: ViralPortfolioE
 
   const committed = e.saytwistCommitted + e.sourceCommitted;
   const total = Math.min(policy.maxPinsPerDay, e.hardDailyPinCap);
-  const sourceFraction = total * policy.sourceSharePercent / 100;
-  // Fair deterministic 50:50 allocation for odd quotas across consecutive UTC days.
-  const lower = Math.floor(sourceFraction);
-  const fraction = sourceFraction - lower;
-  const dayIndex = Math.floor(date.getTime() / 86400000);
-  const source = lower + (fraction > 0 && (dayIndex % 2 === 0 ? fraction >= 0.5 : fraction > 0.5) ? 1 : 0);
+  // Fractional daily quotas are distributed fairly over a repeating 100-day
+  // sequence, including a 50:50 split when the real hard cap is three Pins.
+  const dayIndex = Math.floor(date.getTime() / 86400000) % 100;
+  const quotaUnits = total * policy.sourceSharePercent;
+  const source = Math.floor((dayIndex + 1) * quotaUnits / 100) -
+    Math.floor(dayIndex * quotaUnits / 100);
   const saytwist = total - source;
   const target = { saytwist, source };
   const base: ViralPortfolioPlan = {
