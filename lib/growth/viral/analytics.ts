@@ -102,14 +102,14 @@ export async function evaluateTrackedViralPins(now = new Date()) {
     const pin = await prisma.growthPinterestPin.findUnique({
       where: { pinterestPinId: test.pinterestPinId! },
       select: { accountId: true, isActive: true, destinationUrl: true,
-        analyticsEligible: true, publishedAt: true,
+        publishedAt: true,
         summaryFetchedAt: true, summaryEndDate: true,
         summaryImpressions: true, summarySaves: true,
         summaryOutboundClicks: true },
     });
     // If destination was edited outside our system, exclude old Pin evidence:
     // it cannot be used to attribute the old source domain to SayTwist.
-    if (!pin || !pin.isActive || !pin.analyticsEligible ||
+    if (!pin || !pin.isActive ||
         pin.destinationUrl !== test.destinationUrl ||
         !pin.summaryFetchedAt || !pin.publishedAt) {
       incomplete++; continue;
