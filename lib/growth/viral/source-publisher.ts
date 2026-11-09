@@ -14,6 +14,7 @@ import {
 } from "@/lib/growth/creative/storage";
 import { canonicalSourceTranslatorUrl } from "@/lib/growth/viral/catalog";
 import { countBlockingGrowthJobs } from "@/lib/growth/operations/approved-publication-queue";
+import { revokeGrowthWorkerActivation } from "@/lib/growth/settings";
 
 const ONE_DAY = 86400000;
 const REQUIRED_SCOPES = ["pins:read", "pins:write", "boards:read"];
@@ -88,6 +89,18 @@ export async function publishOneApprovedSourcePin(
     throw Error("VIRAL_SOURCE_PUBLISH_CHECKSUM_CHANGED");
   }
 
+  // Acquire the same scoped Growth activation lease used by the existing
+  // publisher. This serializes against ordinary Growth jobs and prevents
+  // two competing workers from creating Pins at the same time.
+  const deadline = new Date(now.getTime() + 180000);
+  const lease = await prisma.growthSettings.updateMany({
+    where: { id: "global", enabled: false,
+      attributionEnabled: false, workerActivationExpiresAt: null },
+    data: { enabled: true, workerActivationExpiresAt: deadline,
+      configVersion: { increment: 1 } },
+  });
+  if (lease.count !== 1) throw Error("VIRAL_SOURCE_PUBLISH_LEASE_RACE");
+  try {
   // Once-only claim, persisted before creating the official Pinterest Pin.
   const claimed = await prisma.growthViralPinTest.updateMany({
     where: { id: test.id, status: "APPROVED", publishClaimAt: null,
@@ -163,5 +176,9 @@ export async function publishOneApprovedSourcePin(
       },
     });
     return providerNotAttempted ? "FAILED_PRE_REQUEST" : "OUTCOME_UNKNOWN";
+  }
+  } finally {
+    const revoked = await revokeGrowthWorkerActivation(deadline);
+    if (revoked !== 1) throw Error("VIRAL_SOURCE_PUBLISH_LEASE_NOT_REVOKED");
   }
 }
