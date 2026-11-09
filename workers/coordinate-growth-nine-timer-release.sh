@@ -7,7 +7,7 @@ fail() { echo 'GROWTH_NINE_RELEASE=BLOCKED' >&2; exit 1; }
 [[ "$(id -u)" == 0 && "$#" == 3 ]] || fail
 [[ -f "$0" && ! -L "$0" && "$(stat -c '%u:%g:%a' "$0")" == 0:0:700 ]] || fail
 MODE="$1"; OLD="$2"; NEW="$3"
-[[ "$MODE" == audit || "$MODE" == hold || "$MODE" == restore ]] || fail
+[[ "$MODE" == audit || "$MODE" == hold || "$MODE" == restore || "$MODE" == recover ]] || fail
 [[ "$OLD" =~ ^[a-f0-9]{40}$ && "$NEW" =~ ^[a-f0-9]{40}$ && "$OLD" != "$NEW" ]] || fail
 [[ "$OLD" == a73ed6a4d4a5d3244fe5735bd7f027aa8a6d81ff ]] || fail
 
@@ -140,6 +140,26 @@ if [[ "$MODE" == audit || "$MODE" == hold ]]; then
   exit 0
 fi
 
+# Abort path before production migration: resume the original nine schedules on
+# the OLD release, only if every original unit is intact and DB is still at 33.
+if [[ "$MODE" == recover ]]; then
+  [[ "${GROWTH_NINE_RELEASE_APPROVAL:-}" == "RECOVER:$OLD:$NEW" ]] || fail
+  check_state
+  [[ "$(cat "$APP/.deployed-release")" == "$OLD" ]] || fail
+  [[ "$(count_migrations saytwist)" == 33 ]] || fail
+  safe_db
+  check_files "$OLD"
+  check_timers disabled
+  systemctl start saytwist-growth-lease-watchdog.service || fail
+  [[ "$(systemctl show -P Result saytwist-growth-lease-watchdog.service)" == success ]] || fail
+  systemctl enable --now saytwist-growth-lease-watchdog.timer >/dev/null || fail
+  systemctl enable --now "${OTHERS[@]}" >/dev/null || fail
+  check_files "$OLD"
+  write_state RECOVERED
+  echo 'GROWTH_NINE_RECOVER_OLD=PASSED'
+  exit 0
+fi
+
 [[ "${GROWTH_NINE_RELEASE_APPROVAL:-}" == "RESTORE:$OLD:$NEW" ]] || fail
 check_state
 [[ "$(cat "$APP/.deployed-release")" == "$NEW" ]] || fail
@@ -179,7 +199,11 @@ systemctl is-active --quiet saytwist-growth-lease-watchdog.timer || fail
 safe_db
 # Previously approved eight non-watchdog timers; none is a missed-run catch-up.
 systemctl enable --now "${OTHERS[@]}" >/dev/null || fail
-check_timers enabled
+# An already-approved timer may legitimately execute at its next tick.
+for n in "${NAMES[@]}"; do
+  systemctl is-enabled --quiet "saytwist-growth-$n.timer" || fail
+  systemctl is-active --quiet "saytwist-growth-$n.timer" || fail
+done
 check_files "$NEW"
 safe_db
 write_state RESTORED
