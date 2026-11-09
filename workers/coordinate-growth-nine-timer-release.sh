@@ -117,6 +117,15 @@ on_exit() {
 }
 trap on_exit EXIT
 
+quiet_window() {
+  # Avoid releasing paid AI/Telegram schedules near their daily execution.
+  # The existing approved 5-minute publisher still requires individual Pins.
+  case "$(date -u +%H)" in
+    00|01|02|03|15|16|17|18|19|20|21|22|23) ;;
+    *) fail ;;
+  esac
+}
+
 if [[ "$MODE" == audit || "$MODE" == hold ]]; then
   [[ "$(cat "$APP/.deployed-release")" == "$OLD" ]] || fail
   safe_db
@@ -129,6 +138,7 @@ if [[ "$MODE" == audit || "$MODE" == hold ]]; then
     echo 'GROWTH_NINE_DB=SAFE_OFF'
     exit 0
   fi
+  quiet_window
   [[ "${GROWTH_NINE_RELEASE_APPROVAL:-}" == "HOLD:$OLD:$NEW" ]] || fail
   [[ ! -e "$STATE" ]] || fail
   curl -fsS --max-time 10 https://saytwist.com/api/readyz >/dev/null || fail
@@ -166,6 +176,7 @@ if [[ "$MODE" == recover ]]; then
   exit 0
 fi
 
+quiet_window
 [[ "${GROWTH_NINE_RELEASE_APPROVAL:-}" == "RESTORE:$OLD:$NEW" ]] || fail
 check_state
 [[ "$(cat "$APP/.deployed-release")" == "$NEW" ]] || fail
