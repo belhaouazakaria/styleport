@@ -41,6 +41,10 @@ describe("AnythingTranslate read-only concept discovery", () => {
     expect(permittedByRobots("User-agent: *\nDisallow: /\n\nUser-agent: SayTwistResearchBot\nAllow: /translators/\n",
       "/translators/")).toBe(true);
     expect(permittedByRobots("User-agent: *\nAllow: /\n", "/translators/")).toBe(true);
+    expect(permittedByRobots("User-agent: SayTwistResearchBot\nDisallow: /\nUser-agent: *\nAllow: /\n",
+      "/translators/")).toBe(false);
+    expect(permittedByRobots("User-agent: *\nDisallow: /*\n",
+      "/translators/")).toBe(false);
   });
 
   it("never makes a request before explicit owner/day authorization", async () => {
