@@ -65,6 +65,8 @@ check_files() {
     fi
     [[ "$(systemctl show -P User "$prefix.service")" == saytwist ]] || fail
     [[ "$(grep -Fxc "Environment=$key=$sha" "$BASE/$prefix.service")" == 1 ]] || fail
+    systemctl show -P Environment "$prefix.service" |
+      tr ' ' '\n' | grep -Fqx "$key=$sha" || fail
     [[ "$(grep -Fxc "OnCalendar=${CALENDARS[$i]}" "$BASE/$prefix.timer")" == 1 ]] || fail
     [[ "$(grep -Fxc "Persistent=$persist" "$BASE/$prefix.timer")" == 1 ]] || fail
     [[ "$(grep -Fxc 'AccuracySec=1s' "$BASE/$prefix.timer")" == 1 ]] || fail
