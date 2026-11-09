@@ -32,7 +32,8 @@ export default async function ViralGrowthPage() {
         <Link href="/admin/growth" className="text-sm font-semibold text-brand-600">
           Back to Growth
         </Link>
-        <GrowthViralIntelligencePanel initialPolicy={policy}/>
+        <GrowthViralIntelligencePanel initialPolicy={policy}
+          concepts={concepts.map(x => ({ id: x.id, title: x.title }))}/>
         <section className="rounded-2xl border border-border bg-white p-5">
           <h2 className="font-display text-xl font-bold text-ink">
             Public-source translator concepts
