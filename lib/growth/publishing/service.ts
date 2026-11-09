@@ -22,6 +22,7 @@ import { hasPinterestScopes, PINTEREST_CREATE_PIN_SCOPES, requirePinterestConfig
 import { isOwnedPinterestDestination } from "@/lib/growth/pinterest/relevance";
 import { chooseLearnedWindow } from "@/lib/growth/learning/scheduler";
 import { prisma } from "@/lib/prisma";
+import { assertViralPortfolioApproval, VIRAL_PORTFOLIO_APPROVAL_LOCK } from "@/lib/growth/viral/portfolio-admission";
 import { approvePinSchema, PIN_APPROVAL_POLICY_VERSION, PUBLICATION_TIMING_VERSION, rejectPinSchema, type ApprovedPinSnapshot } from "@/lib/growth/publishing/contracts";
 import { buildPublicCreativeAssetUrl, pinApprovalSnapshotChecksum, pinterestPublicationUrlsMatch } from "@/lib/growth/publishing/snapshot";
 import { planPublicationTiming } from "@/lib/growth/publishing/timing";
@@ -71,6 +72,12 @@ export async function approvePinCandidate(raw: unknown, adminUserId: string, now
       }
       if (requestedAt <= now) throw new Error("Reapproval requires a new future publishing time.");
     }
+
+    // Default PAUSED: no change to existing publication behavior. Once ACTIVE,
+    // serialize both source and SayTwist approvals against one shared daily quota.
+    await tx.$queryRawUnsafe("SELECT pg_advisory_xact_lock(hashtext('" +
+      VIRAL_PORTFOLIO_APPROVAL_LOCK + "'))");
+    await assertViralPortfolioApproval(tx, "SAYTWIST", requestedAt);
 
     const approvalId = randomUUID();
     const publicationId = randomUUID();
