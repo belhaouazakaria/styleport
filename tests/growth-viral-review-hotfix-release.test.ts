@@ -27,6 +27,14 @@ describe("Viral review-mode no-migration protected release", () => {
     expect(text).toContain("PARTIAL_RESTORE_OPERATOR_REQUIRED");
     expect(text).toContain("PARTIAL_RECOVERY_OPERATOR_REQUIRED");
     expect(text).toContain("GROWTH_NINE_RELEASE_APPROVAL");
+    expect(text).toContain("PINTEREST_ACCOUNT_SYNC");
+    expect(text).toContain("PINTEREST_BOARD_SYNC");
+    expect(text).toContain('AND "attemptCount"=0 AND "maxAttempts"=3');
+    expect(text).toContain('"workerId" IS NULL');
+    expect(text).toContain("count(*) <= 2");
+    expect(text).toContain("2026-11-09 22:47:00");
+    expect(text).not.toContain("UPDATE \\"GrowthJob\\"");
+    expect(text).not.toContain("DELETE FROM");
     expect(text).toContain("OnCalendar=");
     expect(text).toContain("Persistent=$persist");
     expect(text).toContain("quiet_window");
