@@ -111,7 +111,7 @@ export async function updateViralProgramSettings(
         configVersion: { increment: 1 }, updatedById: userId },
     });
     await tx.growthActivity.create({
-      data: { actorKind: GrowthActivityActorKind.ADMIN,
+      data: { actorKind: GrowthActivityActorKind.USER,
         actorUserId: userId, entityType: "GrowthViralProgramSettings",
         entityId: "global", action: "VIRAL_PROGRAM_POLICY_CHANGED",
         correlationKey: "viral-settings-v" + updated.configVersion,
