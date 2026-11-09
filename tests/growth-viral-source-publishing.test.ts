@@ -7,6 +7,8 @@ import {
 import { readPngDimensions, creativeAssetChecksum } from "@/lib/growth/creative/storage";
 
 const service = readFileSync("lib/growth/viral/source-publishing.ts", "utf8");
+const ownedPublisher = readFileSync("lib/growth/publishing/service.ts", "utf8");
+const portfolioAdmission = readFileSync("lib/growth/viral/portfolio-admission.ts", "utf8");
 const worker = readFileSync("lib/growth/viral/source-publisher.ts", "utf8");
 const host = readFileSync("workers/growth-viral-source-launch.cjs", "utf8");
 const runner = readFileSync("workers/growth-viral-source-publisher.ts", "utf8");
@@ -43,6 +45,16 @@ describe("Original non-SayTwist source Pin creative", () => {
 });
 
 describe("Individually approved source publishing, separate from existing publisher", () => {
+  it("uses ONE transaction-scoped quota lock across source and SayTwist approvals", () => {
+    const shared = "VIRAL_PORTFOLIO_APPROVAL_LOCK";
+    expect(portfolioAdmission).toContain("growth-viral-portfolio-approval-v1");
+    expect(service).toContain("pg_advisory_xact_lock(hashtext(${" + shared + "}))");
+    expect(ownedPublisher).toContain("pg_advisory_xact_lock(hashtext(${" + shared + "}))");
+    expect(service).not.toContain("growth-viral-source-approval-v1");
+    expect(service).not.toContain("$queryRawUnsafe");
+    expect(ownedPublisher).not.toContain('$queryRawUnsafe("SELECT pg_advisory_xact_lock');
+  });
+
   it("preserves exact destination, owner consent, source rights, fair quotas, and approval ID", () => {
     expect(service).toContain("createOriginalSourceAsset(");
     expect(service).toContain("status: \"PLANNED\"");
