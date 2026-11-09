@@ -21,6 +21,7 @@ describe("Protected nine-timer release", () => {
     expect(hold).toContain("a73ed6a4d4a5d3244fe5735bd7f027aa8a6d81ff");
     expect(hold).toContain("0:0:700");
     expect(hold).toContain("DropInPaths");
+    expect(hold).toContain("systemctl show -P Environment");
     expect(hold).toContain("Persistent=$persist");
     expect(hold).toContain("GROWTH_PRIVATE_REPORT_APPROVAL");
   });
