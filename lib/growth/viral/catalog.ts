@@ -65,20 +65,20 @@ export function permittedByRobots(raw: string, path: string, userAgent = "SayTwi
   const lines = raw.split(/\r?\n/);
   const directives: RobotDirective[] = [];
   let agents: string[] = [];
-  let activeGroup = false;
+  let directivesSeen = false;
   for (const original of lines) {
     const line = original.split("#")[0].trim();
-    if (!line) { activeGroup = false; continue; }
+    if (!line) continue;
     const match = /^([a-z-]+)\s*:\s*(.*)$/i.exec(line);
     if (!match) continue;
     const key = match[1].toLowerCase(), value = match[2].trim();
     if (key === "user-agent") {
-      if (!activeGroup) agents = [];
+      if (directivesSeen) { agents = []; directivesSeen = false; }
       agents.push(value.toLowerCase());
     } else if (key === "allow" || key === "disallow") {
-      activeGroup = true;
+      directivesSeen = true;
       if (value) for (const agent of agents) directives.push({
-        agent, allow: key === "allow", path: value.split("$")[0],
+        agent, allow: key === "allow", path: value,
       });
     }
   }
@@ -86,7 +86,11 @@ export function permittedByRobots(raw: string, path: string, userAgent = "SayTwi
   const selected = directives.some(d => d.agent === agent) ? agent : "*";
   let winner: RobotDirective | undefined;
   for (const directive of directives) {
-    if (directive.agent !== selected || !path.startsWith(directive.path)) continue;
+    if (directive.agent !== selected) continue;
+    // Fail closed on advanced wildcard/anchor syntax until an independently
+    // qualified parser is available. Never silently ignore a Disallow rule.
+    if (/[*$]/.test(directive.path)) return false;
+    if (!path.startsWith(directive.path)) continue;
     if (!winner || directive.path.length > winner.path.length ||
         directive.path.length === winner.path.length && directive.allow) winner = directive;
   }
