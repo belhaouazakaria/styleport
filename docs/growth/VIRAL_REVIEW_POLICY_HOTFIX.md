@@ -22,6 +22,13 @@ return distinct safe messages.
 This is a **code-only hotfix**: no schema migrations, no new services, no
 Pin publication, no paid AI request, no automatic Growth activation.
 
+On 2026-11-09 the owner's read-only audit revealed two intentionally queued,
+not-started sync jobs (`PINTEREST_ACCOUNT_SYNC`, `PINTEREST_BOARD_SYNC`),
+created when the owner requested a refresh of outdated Pinterest boards.
+Keep these jobs and their audit records. Do not cancel or manually run them
+merely to clear a release gate. Their processing must be separately authorized
+with bounded Pinterest provider reads and Growth safety enforcement.
+
 ## Protected release (owner-run, one gate at a time)
 
 1. Finish PR CI (lint, typecheck, tests, build), review and merge.
@@ -34,7 +41,11 @@ Pin publication, no paid AI request, no automatic Growth activation.
    `workers/coordinate-growth-nine-timer-review-hotfix.sh`.
    It verifies the nine original systemd SHA pins, all nine enabled/active,
    watchdog status, root unit ownership, mode `PAUSED`, production safe OFF,
-   35 migrations, empty Growth queue, and the exact OLD deployed release.
+   35 migrations, and the exact OLD deployed release. The queue must be empty
+   **or** contain only the exact owner-requested unclaimed Pinterest account
+   and board sync pair from 2026-11-09 22:47 UTC. Each may have zero attempts,
+   no lease, no worker, a matching account/minute idempotency key, and no error.
+   This permits storage of those dormant jobs, never their execution.
 4. **SSH user: root.** Separately approve
    `GROWTH_NINE_RELEASE_APPROVAL=HOLD:OLD:NEW` and invoke
    `hold OLD NEW`. Must be within quiet UTC window 15:00-03:59.
