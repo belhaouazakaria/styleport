@@ -13,8 +13,8 @@ export async function scanViralSourceCatalog(now = new Date(), fetchImpl?: typeo
   const day = now.toISOString().slice(0, 10);
   const key = "viral-catalog:" + day;
   await prisma.$transaction(async tx => {
-    await tx.$queryRawUnsafe(
-      "SELECT pg_advisory_xact_lock(hashtext('growth-viral-catalog-v1'))");
+    // pg_advisory_xact_lock returns PostgreSQL void: execute, never deserialize.
+    await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext('growth-viral-catalog-v1'))`);
     const settings = await tx.growthViralProgramSettings.findUnique({
       where: { id: "global" },
     });
@@ -101,8 +101,8 @@ export async function updateViralProgramSettings(
   const parsed = viralPortfolioPolicySchema.parse(policy);
   if (!userId) throw Error("VIRAL_OWNER_REQUIRED");
   return prisma.$transaction(async tx => {
-    await tx.$queryRawUnsafe(
-      "SELECT pg_advisory_xact_lock(hashtext('growth-viral-settings-v1'))");
+    // pg_advisory_xact_lock returns PostgreSQL void: execute, never deserialize.
+    await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext('growth-viral-settings-v1'))`);
     const updated = await tx.growthViralProgramSettings.update({
       where: { id: "global" },
       data: { mode: parsed.mode,

@@ -86,9 +86,24 @@ export async function POST(request: Request) {
     try {
       const result = await scanViralSourceCatalog();
       return apiOk({ result, pinterestWrites: 0, paidAiCalls: 0 });
-    } catch {
+    } catch (error) {
+      // Keep the research attempt limit intact, but return an actionable,
+      // non-sensitive status instead of conflating three distinct conditions.
+      const kind = error instanceof Error ? error.message : "";
+      if (kind === "VIRAL_SOURCE_OWNER_PAUSED") {
+        return apiError(409, "CONFLICT",
+          "Research is paused. Save REVIEW mode before scanning.");
+      }
+      if (kind === "VIRAL_SOURCE_ALREADY_SCANNED_TODAY") {
+        return apiError(409, "CONFLICT",
+          "A scan was already reserved today (UTC). Do not retry today.");
+      }
+      if (kind === "VIRAL_CATALOG_SOURCE_UNAVAILABLE") {
+        return apiError(409, "CONFLICT",
+          "The public source could not be read. Today's scan attempt is recorded; do not retry.");
+      }
       return apiError(409, "CONFLICT",
-        "Research is paused, already attempted today, or the public source is unavailable.");
+        "Catalog scan blocked. No publishing or paid AI action was attempted.");
     }
   }
   if (action === "EVALUATE_WINNERS" && fields.join(",") === "action") {
