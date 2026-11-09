@@ -37,6 +37,8 @@ describe("Protected nine-timer release", () => {
     expect(hold).toContain("RECOVER_STARTED=1");
     expect(hold).toContain("RECOVER_STARTED=0");
     expect(hold).toContain("systemd-analyze verify");
+    expect(hold).toContain("quiet_window");
+    expect(hold).toContain("15|16|17|18|19|20|21|22|23");
     expect(hold).toContain("GROWTH_NINE_RESTORE=PASSED");
     expect(hold).toContain('"$(count_migrations saytwist)" == 33');
     expect(hold).toContain('"$(count_migrations saytwist)" == 35');
@@ -53,6 +55,7 @@ describe("Protected nine-timer release", () => {
     expect(migrate).toContain("same(prod,clone.slice(0,33))");
     expect(migrate).toContain("backup(url,sha)");
     expect(migrate).toContain("process.umask(0o077)");
+    expect(migrate).toContain("webReady();");
     expect(migrate).toContain('"migrate","deploy"');
     expect(migrate).toContain("VIRAL_PRODUCTION_TWO_MIGRATIONS_APPLIED=true");
     expect(migrate).not.toContain("systemctl enable");
