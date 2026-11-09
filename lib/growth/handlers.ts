@@ -10,6 +10,7 @@ import {
 } from "@/lib/growth/pinterest/analytics";
 import { recoverPinterestAnalyticsGaps } from "@/lib/growth/pinterest/analytics-recovery";
 import { oneAccountSyncFetch } from "@/lib/growth/pinterest/one-sync-guard";
+import { oneBoardSyncFetch } from "@/lib/growth/pinterest/board-one-get-guard";
 import {
   syncPinterestAccount,
   syncPinterestBoards,
@@ -125,6 +126,13 @@ const handlers = new Map<GrowthJobType, GrowthJobHandler>([
     GrowthJobType.PINTEREST_BOARD_SYNC,
     async ({ job }) => {
       const payload = parsePinterestSyncPayload(job.payload);
+      if (process.env.GROWTH_PINTEREST_BOARD_SYNC_ENTRYPOINT === "true") {
+        if (process.env.GROWTH_PINTEREST_BOARD_SYNC_JOB_ID !== job.id) {
+          throw new NonRetryableGrowthJobError("Scoped Pinterest board-sync mismatch.");
+        }
+        return syncPinterestBoards(payload.accountId,
+          oneBoardSyncFetch(job.id), { maxPages: 1 });
+      }
       return syncPinterestBoards(payload.accountId);
     },
   ],
