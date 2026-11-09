@@ -43,7 +43,42 @@ db() {
 }
 safe_db() {
   [[ "$(db saytwist 'SELECT CASE WHEN count(*)=1 AND bool_and(NOT "enabled" AND NOT "attributionEnabled" AND "workerActivationExpiresAt" IS NULL) THEN 1 ELSE 0 END FROM "GrowthSettings" WHERE id='\''global'\'';')" == 1 ]] || fail
-  [[ "$(db saytwist "SELECT count(*) FROM \"GrowthJob\" WHERE status IN ('PENDING','CLAIMED','RUNNING','FAILED_RETRYABLE');")" == 0 ]] || fail
+  # Preserve the owner's two manually requested Pinterest inventory syncs.
+  # No other Growth jobs are allowed. This is NOT permission to execute them.
+  # Empty queue also passes if both syncs have already completed independently.
+  local queue_sql
+  queue_sql="$(cat <<'SQL'
+WITH blocking AS (
+  SELECT "type"::text AS kind, "status"::text AS state,
+         "attemptCount", "maxAttempts", "idempotencyKey", "payload",
+         "runAfter", "claimedAt", "leaseUntil", "heartbeatAt",
+         "workerId", "completedAt", "lastError"
+  FROM "GrowthJob"
+  WHERE status IN ('PENDING','CLAIMED','RUNNING','FAILED_RETRYABLE')
+)
+SELECT CASE WHEN
+  count(*) <= 2
+  AND count(*) FILTER (
+    WHERE state='PENDING'
+      AND kind IN ('PINTEREST_ACCOUNT_SYNC','PINTEREST_BOARD_SYNC')
+      AND "attemptCount"=0 AND "maxAttempts"=3
+      AND "claimedAt" IS NULL AND "leaseUntil" IS NULL
+      AND "heartbeatAt" IS NULL AND "workerId" IS NULL
+      AND "completedAt" IS NULL AND "lastError" IS NULL
+      AND "idempotencyKey" ~ '^pinterest:(account|board)-sync:[a-z0-9]+:[0-9]+$'
+      AND "payload"->>'accountId'=split_part("idempotencyKey", ':', 3)
+      AND "runAfter">='2026-11-09 22:47:00'::timestamp
+      AND "runAfter"<'2026-11-09 22:49:00'::timestamp
+  )=count(*)
+  AND count(*) FILTER (WHERE kind='PINTEREST_ACCOUNT_SYNC')<=1
+  AND count(*) FILTER (WHERE kind='PINTEREST_BOARD_SYNC')<=1
+  AND count(DISTINCT split_part("idempotencyKey", ':', 3)
+    || ':' || split_part("idempotencyKey", ':', 4))<=1
+THEN 1 ELSE 0 END
+FROM blocking;
+SQL
+)"
+  [[ "$(db saytwist "$queue_sql")" == 1 ]] || fail
   # A no-migration application hotfix must never activate Viral source publishing.
   [[ "$(db saytwist "SELECT CASE WHEN count(*)=1 AND bool_and(mode='PAUSED') THEN 1 ELSE 0 END FROM \"GrowthViralProgramSettings\" WHERE id='global';")" == 1 ]] || fail
 }
