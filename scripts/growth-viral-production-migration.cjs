@@ -131,6 +131,8 @@ function validate() {
   return {sha,url,prod,clone};
 }
 function backup(url, sha) {
+  // Ensure pg_dump cannot create a world-readable backup even briefly.
+  process.umask(0o077);
   fs.mkdirSync(BACKUPS, {recursive:true,mode:0o700});
   check((fs.statSync(BACKUPS).mode & 0o777) === 0o700);
   const date = new Date().toISOString().replace(/[-:.]/g,"").slice(0,15);
