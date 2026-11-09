@@ -205,10 +205,11 @@ for n in "${NAMES[@]}"; do
   systemctl is-active --quiet "saytwist-growth-$n.timer" || fail
 done
 check_files "$NEW"
-safe_db
+# Existing approved schedulers may legitimately start work as they resume.
+# The strict empty-queue/lease gate was verified BEFORE any timer was enabled.
 write_state RESTORED
 RESTORE_STARTED=0
 echo 'GROWTH_NINE_RESTORE=PASSED'
 echo 'GROWTH_NINE_TIMERS=NINE_ENABLED_ACTIVE'
-echo 'GROWTH_NINE_DB=SAFE_OFF'
+echo 'GROWTH_NINE_DB_GATE=SAFE_OFF_BEFORE_RESUME'
 echo "GROWTH_NINE_RELEASE_SHA=$NEW"
