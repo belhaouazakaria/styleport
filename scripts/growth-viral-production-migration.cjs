@@ -112,6 +112,10 @@ function timerHold() {
     }
   }
 }
+function webReady() {
+  command("/usr/bin/curl",["-fsS","--max-time","10",
+    "https://saytwist.com/api/readyz"], {PATH:"/usr/bin:/bin"},15000);
+}
 function validate() {
   const {sha,names} = source();
   const url = runtimeDb();
@@ -160,11 +164,13 @@ function apply(url) {
 }
 function main() {
   const {sha,url,prod,clone} = validate();
+  webReady();
   console.log("VIRAL_PRODUCTION_PREMIGRATION=PASSED");
   const file=backup(url,sha);
   console.log("VIRAL_PRODUCTION_FRESH_BACKUP_VERIFIED=true");
   // From this point a failure requires operator inspection; never auto-retry.
   apply(url);
+  webReady();
   check(same(history(url,PROD),clone));
   safeDb(url);
   timerHold();
