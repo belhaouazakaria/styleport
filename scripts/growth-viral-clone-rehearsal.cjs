@@ -7,6 +7,7 @@
 // as a Prisma target. No timers, web processes, or provider APIs are touched.
 const fs = require("node:fs");
 const path = require("node:path");
+const os = require("node:os");
 const crypto = require("node:crypto");
 const { execFileSync, spawnSync } = require("node:child_process");
 
@@ -30,7 +31,7 @@ function same(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
 function sha256(bytes) { return crypto.createHash("sha256").update(bytes).digest("hex"); }
 
 function validateSource() {
-  check(process.getuid?.() !== 0 && process.env.USER === "saytwist");
+  check(process.getuid?.() !== 0 && os.userInfo().username === "saytwist");
   const sha = process.env.GROWTH_VIRAL_CLONE_RELEASE_SHA || "";
   check(/^[a-f0-9]{40}$/.test(sha) && ROOT === STAGING + sha);
   check(fs.readFileSync(path.join(ROOT, ".release-sha"), "utf8").trim() === sha);
