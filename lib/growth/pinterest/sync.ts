@@ -40,12 +40,15 @@ export async function syncPinterestAccount(accountId: string, fetchImpl?: typeof
   }
 }
 
-export async function syncPinterestBoards(accountId: string, fetchImpl?: typeof fetch) {
+export async function syncPinterestBoards(
+  accountId: string, fetchImpl?: typeof fetch, options: { maxPages?: 1 | 10 } = {},
+) {
+  const maxPages = options.maxPages ?? MAX_BOARD_PAGES;
   const boards: Array<{ id: string; name: string; description?: string | null; privacy?: string | null; owner?: { username?: string } | null }> = [];
   const seenBookmarks = new Set<string>();
   let bookmark: string | undefined;
   try {
-    for (let page = 0; page < MAX_BOARD_PAGES; page += 1) {
+    for (let page = 0; page < maxPages; page += 1) {
       const response = await getPinterestBoardsPage(accountId, bookmark, fetchImpl);
       boards.push(...response.data.items);
       if (boards.length > MAX_BOARD_COUNT) throw new Error("Pinterest board synchronization exceeded the 1000-board safety limit.");
@@ -54,7 +57,12 @@ export async function syncPinterestBoards(accountId: string, fetchImpl?: typeof 
       if (seenBookmarks.has(next)) throw new Error("Pinterest board pagination repeated a bookmark.");
       seenBookmarks.add(next);
       bookmark = next;
-      if (page === MAX_BOARD_PAGES - 1) throw new Error("Pinterest board synchronization exceeded the page safety limit.");
+      if (page === maxPages - 1) throw new Error("PINTEREST_BOARD_SYNC_PAGE_LIMIT");
+    }
+    // A one-GET owner-initiated run must not erase inventory on an empty
+    // response. Regular multi-page sync retains its existing semantics.
+    if (maxPages === 1 && boards.length === 0) {
+      throw new Error("PINTEREST_BOARD_SYNC_EMPTY_RESPONSE");
     }
     const syncedAt = new Date();
     await prisma.$transaction(async (tx) => {
