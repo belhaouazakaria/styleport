@@ -6,6 +6,7 @@ import {
   scanViralSourceCatalog, updateViralProgramSettings,
 } from "@/lib/growth/viral/store";
 import { prisma } from "@/lib/prisma";
+import { evaluateTrackedViralPins, prepareNicheProposals, trackOwnedViralPin } from "@/lib/growth/viral/analytics";
 
 export async function GET() {
   const guard = await adminRouteGuard();
@@ -73,15 +74,56 @@ export async function POST(request: Request) {
   try { body = await request.json(); }
   catch { return apiError(400, "BAD_REQUEST", "Invalid JSON."); }
   if (!body || typeof body !== "object" || Array.isArray(body) ||
-      Object.keys(body).length !== 1 ||
-      (body as Record<string, unknown>).action !== "SCAN_CATALOG") {
-    return apiError(400, "VALIDATION_ERROR", "Only the bounded catalog scan is supported.");
+      typeof (body as Record<string, unknown>).action !== "string") {
+    return apiError(400, "VALIDATION_ERROR", "Unsupported Viral Growth action.");
   }
-  try {
-    const result = await scanViralSourceCatalog();
-    return apiOk({ result, pinterestWrites: 0, paidAiCalls: 0 });
-  } catch {
-    return apiError(409, "CONFLICT",
-      "Research is paused, already attempted today, or the public source is unavailable.");
+  const input = body as Record<string, unknown>;
+  const action = input.action;
+  const fields = Object.keys(input).sort();
+  if (action === "SCAN_CATALOG" && fields.join(",") === "action") {
+    try {
+      const result = await scanViralSourceCatalog();
+      return apiOk({ result, pinterestWrites: 0, paidAiCalls: 0 });
+    } catch {
+      return apiError(409, "CONFLICT",
+        "Research is paused, already attempted today, or the public source is unavailable.");
+    }
   }
+  if (action === "EVALUATE_WINNERS" && fields.join(",") === "action") {
+    try {
+      const result = await evaluateTrackedViralPins();
+      return apiOk({ result, source: "SAVED_OFFICIAL_PINTEREST_ANALYTICS",
+        providerCalls: 0, pinterestWrites: 0 });
+    } catch {
+      return apiError(409, "CONFLICT", "Viral evaluation paused or unavailable.");
+    }
+  }
+  const session = await getSessionOrNull();
+  if (!session?.user?.id) return apiError(401, "UNAUTHORIZED", "Authentication required.");
+  if (action === "TRACK_PIN" &&
+      fields.join(",") === "action,conceptId,pinterestPinId" &&
+      typeof input.conceptId === "string" &&
+      typeof input.pinterestPinId === "string") {
+    try {
+      const result = await trackOwnedViralPin({
+        conceptId: input.conceptId, pinterestPinId: input.pinterestPinId,
+      }, session.user.id);
+      return apiOk({ result, pinterestWrites: 0 });
+    } catch {
+      return apiError(409, "CONFLICT",
+        "The Pin does not match the source or an active SayTwist translator.");
+    }
+  }
+  if (action === "PREPARE_NICHE" &&
+      fields.join(",") === "action,conceptId,proposals" &&
+      typeof input.conceptId === "string" &&
+      Array.isArray(input.proposals) && input.proposals.length <= 10) {
+    try {
+      const result = await prepareNicheProposals(input.conceptId, input.proposals);
+      return apiOk({ result, aiCalls: 0, pinterestWrites: 0 });
+    } catch {
+      return apiError(409, "CONFLICT", "Niche ideas were not accepted.");
+    }
+  }
+  return apiError(400, "VALIDATION_ERROR", "Unsupported or malformed Viral Growth action.");
 }
