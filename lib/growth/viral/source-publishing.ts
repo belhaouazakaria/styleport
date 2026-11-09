@@ -197,5 +197,7 @@ export async function approveOriginalSourcePin(
     });
     return { id: draft.id, status: "APPROVED" as const,
       scheduledAt: scheduled.toISOString(), pinterestWrites: 0 };
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10000 });
+  // READ COMMITTED takes the post-lock committed view of both channels.
+  // SERIALIZABLE could retain a stale pre-wait snapshot despite the shared lock.
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, timeout: 10000 });
 }
