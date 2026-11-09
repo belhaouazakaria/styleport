@@ -50,6 +50,16 @@ reviewed immutable release blob, then copy it to a separate root-owned,
 non-symlinked, private 0700 path, and verify that copied checksum again.
 Any mismatch blocks the release. No secret values belong in chat or logs.
 
+## Release window and health checks
+
+The hold and restore commands are restricted to the quiet UTC window
+15:00-03:59 (16:00-04:59 Algeria time), outside the existing scheduled daily
+content/analytics/report tasks. The five-minute publisher remains protected
+by its independent per-Pin approval and execution limits. The production
+migration script requires the existing website readiness endpoint to succeed
+both before and after applying SQL; a failed post-migration check is an
+operator blocker, not automatic rollback.
+
 ## Guarded operator sequence, explicitly authorized per gate
 
 1. **SSH user: root.** Before source or database changes, run the root-owned
