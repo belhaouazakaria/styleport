@@ -67,7 +67,7 @@ export async function trackOwnedViralPin(input: {
         rightsVerified: false, approvedById: adminUserId },
     });
     await tx.growthActivity.create({
-      data: { actorKind: GrowthActivityActorKind.ADMIN,
+      data: { actorKind: GrowthActivityActorKind.USER,
         actorUserId: adminUserId, entityType: "GrowthViralPinTest",
         entityId: test.id, action: "OWNED_PIN_REGISTERED_READ_ONLY",
         correlationKey: "viral-track:" + input.pinterestPinId,
@@ -81,7 +81,7 @@ export async function trackOwnedViralPin(input: {
 }
 
 function safeCount(value: bigint | null): number | null {
-  if (value === null || value < 0n || value > BigInt(Number.MAX_SAFE_INTEGER)) return null;
+  if (value === null || value < BigInt(0) || value > BigInt(Number.MAX_SAFE_INTEGER)) return null;
   return Number(value);
 }
 
@@ -131,8 +131,8 @@ export async function evaluateTrackedViralPins(now = new Date()) {
     const totals = days.reduce((a, day) => ({
       impressions: a.impressions + day.impressions,
       saves: a.saves + day.saves, outbound: a.outbound + day.outboundClicks,
-    }), { impressions: 0n, saves: 0n, outbound: 0n });
-    const baseline = days.length >= 3 && totals.impressions > 0n &&
+    }), { impressions: BigInt(0), saves: BigInt(0), outbound: BigInt(0) });
+    const baseline = days.length >= 3 && totals.impressions > BigInt(0) &&
       totals.impressions <= BigInt(Number.MAX_SAFE_INTEGER);
     const bSave = baseline ? Number(totals.saves) / Number(totals.impressions) : null;
     const bOutbound = baseline ? Number(totals.outbound) / Number(totals.impressions) : null;
