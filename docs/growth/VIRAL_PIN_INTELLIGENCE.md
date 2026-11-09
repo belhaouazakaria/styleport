@@ -1,6 +1,6 @@
 # Viral Pin Intelligence: controlled dual-channel translator demand testing
 
-Status: **development on PR #163; not deployed, migrated, enabled or tested live**.
+Status: **PR #163 merged into source; PR #164 second development slice in review. No viral schema migration, feature activation or new publisher is confirmed live.**
 Current production baseline has nine existing Growth timers. Do not disturb
 those through source merges. Owner task: issue #162.
 
@@ -53,6 +53,15 @@ Owner anecdotes are not provider-verified analytics.
    /admin/growth/viral. Same-origin guarded mutations, audit and one scan/day.
    Only own connected Pinterest account Pins can be imported for tracking.
    Winner scoring reuses stored official analytics, not new provider requests.
+
+## Second development slice (PR #164, source-only until separately qualified)
+
+- Generates original 1000×1500 PNG artwork and truthful third-party destination text from allowed catalog topics; never imports third-party media or copyrighted prompts.
+- Admin prepares a draft, views the immutable asset, chooses a connected account/board and future schedule, and explicitly approves that exact Pin.
+- Both existing SayTwist Pin approvals and source-linked approvals take the same PostgreSQL transaction-scoped advisory lock, then count BOTH channels before admitting a new Pin. The 3/day hard cap and fixed fair split prevent concurrent overbooking.
+- The separately isolated official API publisher claims exactly one approved draft, never blind-retries an ambiguous create, and retains audit/lease evidence. Its root-managed systemd timer is install-disabled.
+- An additive schema migration enforces destination identity, approved snapshot immutability, once-only claims and deduplication. CI alone is not production migration qualification.
+- Deployment requires a protected production backup, populated-clone migration rehearsal, a coordinated hold and exact-SHA restore of the NINE existing live timers, plus separate owner approval for migration, installation and any publication. No Pin is auto-approved by a code merge.
 
 ## Next development slices, NOT complete in this initial PR
 
