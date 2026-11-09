@@ -1,0 +1,112 @@
+name: SayTwist Viral Two-Migration Production-Clone Rehearsal
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: "Exact current main SHA, for CLONE ONLY; never production"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  clone:
+    if: >-
+      github.actor == 'belhaouazakaria' &&
+      github.ref == 'refs/heads/main' &&
+      github.event_name == 'workflow_dispatch' &&
+      inputs.release_sha == github.sha
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: production
+    concurrency:
+      group: saytwist-growth-viral-clone-rehearsal
+      cancel-in-progress: false
+    steps:
+      - name: Checkout trusted main
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Verify exact main source, two migrations, and safe operator
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_SHA: ${{ inputs.release_sha }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ "$GITHUB_ACTOR" == "belhaouazakaria" &&
+             "$GITHUB_REF" == "refs/heads/main" &&
+             "$INPUT_SHA" =~ ^[a-f0-9]{40}$ &&
+             "$INPUT_SHA" == "$GITHUB_SHA" ]] || exit 1
+          [[ "$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '.commit.sha')" == "$INPUT_SHA" ]] || exit 1
+          test -f prisma/migrations/20261109180000_growth_viral_intelligence_foundation/migration.sql
+          test -f prisma/migrations/20261109190000_growth_viral_pin_approval/migration.sql
+          node --check scripts/growth-viral-clone-rehearsal.cjs
+          test "$(find prisma/migrations -mindepth 1 -maxdepth 1 -type d | wc -l)" -eq 35
+
+      - name: Package reviewed source, no production runtime files
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          printf '%s\n' "$GITHUB_SHA" > .release-sha
+          tar -czf growth-viral-clone-source.tar.gz \
+            .release-sha prisma/schema.prisma prisma/migrations \
+            scripts/growth-viral-clone-rehearsal.cjs
+          tar -tzf growth-viral-clone-source.tar.gz >/dev/null
+
+      - name: Create private immutable release directory
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.HOSTINGER_SSH_HOST || vars.HOSTINGER_SSH_HOST }}
+          username: ${{ secrets.HOSTINGER_SSH_USER || vars.HOSTINGER_SSH_USER }}
+          key: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
+          port: ${{ secrets.HOSTINGER_SSH_PORT || vars.HOSTINGER_SSH_PORT }}
+          script_stop: true
+          command_timeout: 1m
+          script: |
+            set -eu
+            test "$(id -un)" = saytwist
+            umask 077
+            BASE=/home/saytwist/.local/share/saytwist/viral-clone-source
+            DIR="$BASE/${{ github.sha }}"
+            install -d -m 700 "$BASE"
+            test ! -e "$DIR"
+            install -d -m 700 "$DIR"
+
+      - name: Upload source to clone-only release directory
+        uses: appleboy/scp-action@v1.0.0
+        with:
+          host: ${{ secrets.HOSTINGER_SSH_HOST || vars.HOSTINGER_SSH_HOST }}
+          username: ${{ secrets.HOSTINGER_SSH_USER || vars.HOSTINGER_SSH_USER }}
+          key: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
+          port: ${{ secrets.HOSTINGER_SSH_PORT || vars.HOSTINGER_SSH_PORT }}
+          source: growth-viral-clone-source.tar.gz
+          target: /home/saytwist/.local/share/saytwist/viral-clone-source/${{ github.sha }}
+          overwrite: false
+
+      - name: Apply both migrations to exact fresh CLONE only
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.HOSTINGER_SSH_HOST || vars.HOSTINGER_SSH_HOST }}
+          username: ${{ secrets.HOSTINGER_SSH_USER || vars.HOSTINGER_SSH_USER }}
+          key: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
+          port: ${{ secrets.HOSTINGER_SSH_PORT || vars.HOSTINGER_SSH_PORT }}
+          script_stop: true
+          command_timeout: 6m
+          script: |
+            set -eu
+            test "$(id -un)" = saytwist
+            umask 077
+            DIR=/home/saytwist/.local/share/saytwist/viral-clone-source/${{ github.sha }}
+            test -f "$DIR/growth-viral-clone-source.tar.gz"
+            tar -tzf "$DIR/growth-viral-clone-source.tar.gz" >/dev/null
+            tar -xzf "$DIR/growth-viral-clone-source.tar.gz" -C "$DIR"
+            test "$(cat "$DIR/.release-sha")" = "${{ github.sha }}"
+            cd "$DIR"
+            GROWTH_VIRAL_CLONE_RELEASE_SHA="${{ github.sha }}" \
+              /home/saytwist/.nvm/versions/node/v24.20.0/bin/node \
+              scripts/growth-viral-clone-rehearsal.cjs
