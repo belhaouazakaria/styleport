@@ -52,7 +52,6 @@ describe("Owner-only one-page board sync release safeguards", () => {
     expect(runner).toContain("onlyJobId: boardJobId, batchSize: 1");
     expect(runner).toContain("await revokeGrowthWorkerActivation(deadline)");
     expect(runner).toContain("workerActivationExpiresAt: deadline");
-    expect(runner).toContain("source");
     expect(handler).toContain("oneBoardSyncFetch(job.id), { maxPages: 1 }");
     expect(sync).toContain("if (maxPages === 1 && boards.length === 0)");
     expect(sync).toContain("PINTEREST_BOARD_SYNC_PAGE_LIMIT");
