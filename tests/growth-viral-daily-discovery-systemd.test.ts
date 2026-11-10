@@ -26,7 +26,8 @@ describe("daily discovery rollout remains separately opt-in", () => {
     expect(launch).toContain('GROWTH_AI_IMAGE_ENABLED: "false"');
     expect(launch).toContain('GROWTH_WORKER_RUN_ENABLED: "false"');
     expect(worker).toContain('scanViralSourceCatalog');
-    expect(worker).toContain('viral?.mode !== "REVIEW"');
+    expect(worker).toContain('["REVIEW", "ACTIVE"].includes(viral?.mode ?? "")');
+    expect(worker).toContain("prepareDailySourceCreativeDrafts");
   });
   it("holds/restores exactly nine prior timers and preserves all global OFF gates", () => {
     expect(coordinator).toContain("b0ecf638effe2ca5212989d817d2f8c186bb4f57");
