@@ -91,13 +91,14 @@ function run() {
   });
   const output = (child.stdout || "").trim();
   const lines = output.split("\n");
-  if (child.status !== 0 || child.error || lines.length !== 6 ||
+  if (child.status !== 0 || child.error || lines.length !== 7 ||
       !/^GROWTH_VIRAL_DISCOVERY=(SCANNED|ALREADY_RESERVED)$/.test(lines[0]) ||
       !/^GROWTH_VIRAL_DISCOVERY_INSPECTED=(0|[1-9][0-9]{0,2})$/.test(lines[1]) ||
       !/^GROWTH_VIRAL_DISCOVERY_CREATED=(0|[1-9][0-9]{0,2})$/.test(lines[2]) ||
-      lines[3] !== "GROWTH_VIRAL_DISCOVERY_PIN_WRITES=0" ||
-      lines[4] !== "GROWTH_VIRAL_DISCOVERY_AI_CALLS=0" ||
-      lines[5] !== "GROWTH_VIRAL_DISCOVERY_GROWTH=OFF") {
+      !/^GROWTH_VIRAL_DISCOVERY_SOURCE_DRAFTS=(0|[1-3])$/.test(lines[3]) ||
+      lines[4] !== "GROWTH_VIRAL_DISCOVERY_PIN_WRITES=0" ||
+      lines[5] !== "GROWTH_VIRAL_DISCOVERY_AI_CALLS=0" ||
+      lines[6] !== "GROWTH_VIRAL_DISCOVERY_GROWTH=OFF") {
     throw Error("DISCOVERY_CHILD_BLOCKED");
   }
   process.stdout.write(output + "\n");
