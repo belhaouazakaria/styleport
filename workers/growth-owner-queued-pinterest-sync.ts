@@ -196,7 +196,7 @@ export async function completeOwnerQueuedPinterestSyncs() {
     where: { status: { in: [...ACTIVE] } },
     orderBy: { createdAt: "asc" }, take: 5,
   });
-  let board: { stage: "BOARD"; status: "SUCCEEDED" } | null = null;
+  let board: Awaited<ReturnType<typeof oneExistingJob>> | null = null;
   if (jobs.length === 2) {
     selectOwnerQueuedPinterestSync(jobs, "BOARD");
     board = await oneExistingJob("BOARD");
