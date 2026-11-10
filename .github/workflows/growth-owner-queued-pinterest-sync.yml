@@ -1,0 +1,76 @@
+name: SayTwist Complete Two Owner-Queued Pinterest Syncs
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_release_sha:
+        description: Exact deployed main SHA
+        required: true
+        type: string
+      confirmation:
+        description: Type COMPLETE TWO OWNER QUEUED PINTEREST SYNCS
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  queued-sync:
+    if: >-
+      github.actor == 'belhaouazakaria' &&
+      github.ref == 'refs/heads/main'
+    name: Two Existing Pinterest GET Jobs
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 10
+    concurrency:
+      group: saytwist-owner-queued-two-sync
+      cancel-in-progress: false
+    steps:
+      - name: Validate exact owner authorization and SHA
+        shell: bash
+        env:
+          EXPECTED_RELEASE_SHA: ${{ inputs.expected_release_sha }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -Eeuo pipefail
+          [[ "$CONFIRMATION" == 'COMPLETE TWO OWNER QUEUED PINTEREST SYNCS' ]]
+          [[ "$EXPECTED_RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$EXPECTED_RELEASE_SHA" == "$GITHUB_SHA" ]]
+          [[ "$GITHUB_ACTOR" == 'belhaouazakaria' ]]
+
+      - uses: actions/checkout@v5
+
+      - name: Verify protected pending sync worker
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          [[ "$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '.commit.sha')" == "$GITHUB_SHA" ]]
+          test -f workers/growth-owner-queued-pinterest-sync.ts
+          test -f workers/growth-owner-queued-pinterest-sync-launch.cjs
+          node --check workers/growth-owner-queued-pinterest-sync-launch.cjs
+
+      - name: Execute EXACT two queued read-only official Pinterest sync jobs
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          EXPECTED_RELEASE: ${{ github.sha }}
+        with:
+          host: ${{ secrets.HOSTINGER_SSH_HOST || vars.HOSTINGER_SSH_HOST }}
+          username: ${{ secrets.HOSTINGER_SSH_USER || vars.HOSTINGER_SSH_USER }}
+          key: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
+          port: ${{ secrets.HOSTINGER_SSH_PORT || vars.HOSTINGER_SSH_PORT }}
+          envs: EXPECTED_RELEASE
+          script_stop: false
+          command_timeout: 7m
+          script: |
+            set -eu
+            test "$(id -un)" = "saytwist"
+            cd /home/saytwist/htdocs/saytwist.com
+            test "$(cat .deployed-release)" = "$EXPECTED_RELEASE"
+            GROWTH_OWNER_QUEUED_SYNC_LAUNCH=true \
+            GROWTH_OWNER_QUEUED_SYNC_OWNER_APPROVAL="SAYTWIST_COMPLETE_TWO_QUEUED_SYNCS:$EXPECTED_RELEASE" \
+              /home/saytwist/.nvm/versions/node/v24.20.0/bin/node \
+              workers/growth-owner-queued-pinterest-sync-launch.cjs
