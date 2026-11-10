@@ -8,7 +8,9 @@ import type { ViralPortfolioPolicy } from "@/lib/growth/viral/portfolio";
 export function GrowthViralIntelligencePanel({
   initialPolicy, concepts, drafts, accounts, boards,
 }: { initialPolicy: ViralPortfolioPolicy;
-  concepts: Array<{ id: string; title: string }>;
+  concepts: Array<{ id: string; title: string;
+    score: number; decision: "PRIORITY" | "SCHEDULE_LATER" | "WITHDRAW";
+    suggestedDelayDays: number | null }>;
   drafts: Array<{ id: string; title: string; status: string;
     destinationUrl: string; assetPublicPath: string | null;
     scheduledAt: string | null }>;
@@ -18,7 +20,10 @@ export function GrowthViralIntelligencePanel({
   const router = useRouter();
   const [policy, setPolicy] = useState(initialPolicy);
   const [busy, setBusy] = useState(false);
-  const [selectedConcept, setSelectedConcept] = useState(concepts[0]?.id ?? "");
+  const [selectedConcept, setSelectedConcept] = useState(
+    concepts.find(x => x.decision === "PRIORITY")?.id ??
+    concepts.find(x => x.decision === "SCHEDULE_LATER")?.id ?? concepts[0]?.id ?? "");
+  const selectedRating = concepts.find(x => x.id === selectedConcept);
   const [ownedPinId, setOwnedPinId] = useState("");
   const [selectedDraftId, setSelectedDraftId] = useState(
     drafts.find(x => x.status === "PLANNED")?.id ?? "");
@@ -121,7 +126,10 @@ export function GrowthViralIntelligencePanel({
             value={selectedConcept}
             onChange={e => setSelectedConcept(e.target.value)}>
             <option value="">Select a concept</option>
-            {concepts.map(x => <option key={x.id} value={x.id}>{x.title}</option>)}
+            {concepts.map(x => <option key={x.id} value={x.id}>
+              {x.score}/100 · {x.decision === "PRIORITY" ? "Priority" :
+                x.decision === "SCHEDULE_LATER" ? "Later" : "Withdraw"} · {x.title}
+            </option>)}
           </select>
           <input aria-label="Owned Pinterest Pin ID" inputMode="numeric"
             placeholder="Owned Pinterest Pin ID" value={ownedPinId}
@@ -146,7 +154,14 @@ export function GrowthViralIntelligencePanel({
           translator. We do not import its artwork, descriptions or prompts.
           Each Pin needs independent approval and a safe scheduled window.
         </p>
-        <Button type="button" disabled={busy || policy.mode !== "ACTIVE" || !selectedConcept}
+        <p className="text-xs text-muted-ink">
+          {selectedRating ? `${selectedRating.score}/100 · ${selectedRating.decision}` : "Choose a topic"}
+          {selectedRating?.suggestedDelayDays ?
+            ` · Schedule at least ${selectedRating.suggestedDelayDays} days later.` : ""}
+          {" "}Withdrawn topics cannot be prepared or published.
+        </p>
+        <Button type="button" disabled={busy || policy.mode !== "ACTIVE" ||
+          !selectedConcept || selectedRating?.decision === "WITHDRAW"}
           onClick={() => request("POST", { action: "PREPARE_SOURCE_PIN",
             conceptId: selectedConcept })}>
           Prepare original source Pin
