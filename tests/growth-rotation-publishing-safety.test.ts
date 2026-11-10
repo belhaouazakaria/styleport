@@ -39,6 +39,7 @@ describe("rotating source and owned creative separation", () => {
     expect(fresh).toContain('readDailyRotation(dayStart)');
     expect(fresh).toContain('rotatingOwnedTarget: rotation.original');
     expect(fresh).toContain('accountId: rotation.accountId');
-    expect(fresh).toContain("GROWTH_DAILY_FRESH_PINS_PUBLISHED=0");
+    expect(fresh).toContain('console.log("GROWTH_DAILY_FRESH_PINS_PUBLISHED=" + result.pinsPublished)');
+    expect(fresh).toContain("pinsPublished: 0");
   });
 });
