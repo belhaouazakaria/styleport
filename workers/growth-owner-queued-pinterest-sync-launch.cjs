@@ -105,15 +105,21 @@ function run() {
     cwd: APP, env: childEnv, encoding: "utf8",
     timeout: 330_000, maxBuffer: 4096,
   });
+  const output = (child.stdout || "").trim();
+  const expectedOutput = EXPECTED.split("\n");
+  const actualOutput = output.split("\n");
   if (child.error || child.status !== 0 ||
-      (child.stdout || "").trim() !== EXPECTED) {
+      actualOutput.length !== expectedOutput.length ||
+      !["GROWTH_OWNER_PENDING_BOARD=SUCCEEDED",
+        "GROWTH_OWNER_PENDING_BOARD=ALREADY_SUCCEEDED"].includes(actualOutput[0]) ||
+      actualOutput.slice(1).join("\n") !== expectedOutput.slice(1).join("\n")) {
     const stage = (child.stderr || "").match(
       /GROWTH_OWNER_PENDING_STAGE=(RUNTIME|BOARD|ACCOUNT|POSTCONDITION)/,
     )?.[1] || "UNKNOWN";
     process.stderr.write("GROWTH_OWNER_PENDING_STAGE=" + stage + "\n");
     throw Error("OWNER_SYNC_CHILD_BLOCKED");
   }
-  process.stdout.write(EXPECTED + "\n");
+  process.stdout.write(output + "\n");
 }
 if (require.main === module) {
   try { run(); }
