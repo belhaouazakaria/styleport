@@ -15,8 +15,12 @@ import { hasPinterestScopes, PINTEREST_CREATE_PIN_SCOPES } from "@/lib/growth/pi
 const DAY = 86400000;
 const AUTHORIZED_SOURCE_CAP = 5;
 
-export async function prepareOriginalSourcePinDraft(conceptId: string, userId: string) {
-  if (!/^[a-z0-9]{10,40}$/.test(conceptId) || !userId) {
+/** ADMIN-supplied user or an explicitly isolated SYSTEM research runner.
+ * Neither actor can publish or grant Pin approval from this method.
+ */
+export async function prepareOriginalSourcePinDraft(conceptId: string, userId: string | null) {
+  if (!/^[a-z0-9]{10,40}$/.test(conceptId) ||
+      (userId !== null && !userId)) {
     throw Error("SOURCE_DRAFT_INPUT_INVALID");
   }
   const [settings, concept, existing] = await Promise.all([
@@ -60,7 +64,8 @@ export async function prepareOriginalSourcePinDraft(conceptId: string, userId: s
       });
       await tx.growthActivity.create({
         data: {
-          actorKind: GrowthActivityActorKind.USER, actorUserId: userId,
+          actorKind: userId === null ? GrowthActivityActorKind.SYSTEM : GrowthActivityActorKind.USER,
+          ...(userId ? { actorUserId: userId } : {}),
           entityType: "GrowthViralPinTest", entityId: record.id,
           action: "ORIGINAL_SOURCE_PIN_PREPARED",
           correlationKey: "viral-source-draft:" + record.id,
