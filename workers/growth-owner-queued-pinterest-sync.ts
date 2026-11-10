@@ -125,7 +125,8 @@ async function oneExistingJob(stage: "BOARD" | "ACCOUNT") {
         action: "PINTEREST_GLOBAL_API_REQUEST_RESERVED",
         createdAt: { gte: dayAgo } } }),
     ]);
-    if (cooldowns !== 0 || hourly > 2 || daily > 14) {
+    if (cooldowns !== 0 || hourly > (stage === "BOARD" ? 2 : 3) ||
+        daily > (stage === "BOARD" ? 14 : 15)) {
       throw Error("QUEUED_SYNC_PROVIDER_BUDGET_BLOCKED");
     }
     if (stage === "ACCOUNT") {
