@@ -1,67 +1,51 @@
-# SayTwist autonomous Growth: launch preparation and blockers
+# SayTwist: reduced-cadence 3-account rotating Growth release
 
-Prepared 2026-11-10. One authoritative continuation document. Source changes reside in PR #171, branch feat/growth-viral-daily-discovery-v1. No code from this PR is deployed.
+**Owner decision:** November 10, 2026. This document replaces the withdrawn 10-Pins-per-account/day proposal.  
+**Repository:** belhaouazakaria/styleport. **PR:** #171 (do not treat a green PR as a deployed production system).  
+**VPS:** 82.112.242.43. **SSH users:** saytwist for application reads, root for root-only timer/release operations.  
+**Previously verified production release:** b0ecf638effe2ca5212989d817d2f8c186bb4f57. Nine root-owned active timers, 35 applied migrations, Growth OFF outside scoped jobs, attribution OFF, Viral REVIEW.
 
-## Verified state before this PR
+## The exact owner-approved cadence
 
-- Application production SHA: b0ecf638effe2ca5212989d817d2f8c186bb4f57.
-- PostgreSQL 18 production migration count: 35.
-- Nine existing root-owned, exact-SHA-pinned Growth systemd timers, enabled and active after successful protected restore.
-- Global Growth OFF and attribution OFF between narrowly scoped scheduled operations.
-- Viral Program REVIEW; original AnythingTranslate editorial rating from PR #170 live and visually verified.
-- Private Telegram single-message delivery previously verified; recurring daily delivery must be separately accepted.
-- Two original pending owner-scoped Pinterest account/board sync jobs must never be deleted to make a safety gate pass.
+- At most **one** of the up to three connected Pinterest account roles posts on any UTC day: SAYTWIST, SAYTWIST_IDEAS, SAYTWIST_PLAYGROUND. After all three accounts are connected and board-ready, the chosen account rotates A/B/C/A/B/C. With only one connected account it is selected daily; with two connected accounts they alternate.
+- **Four or five original Pins in total per UTC day**, not per account. The number alternates by UTC date. Source/owned mix: 4 Pins = 2 original SayTwist + 2 original designs honestly linked to AnythingTranslate; 5 Pins = alternating (2 owned + 3 source) / (3 owned + 2 source). Never publish a low-quality, duplicated, unqualified or unapproved Pin merely to fill a quota.
+- Two or three owned SayTwist designs may use gpt-image-2. Two or three AnythingTranslate-linked original posters are created by SayTwist's deterministic image renderer and **do not require paid AI**. Existing budget hard gates remain $2/day and $30/month, three reserved image attempts/day, until explicitly updated. A budget block is not a license to retry or overspend.
+- Once per UTC day, research the fixed allowlisted public AnythingTranslate catalog (robots-check, two GETs maximum, one attempt/day). Rank source title/URL concepts, discard withdrawn or duplicated entries, prepare up to the rotating account's original source-art allocation. Never copy competitor artwork or descriptions. Source drafts do not schedule or approve Pinterest calls.
+- One private Telegram daily digest, existing exact-SHA timer. Pinterest analytics and timing use provider-backed account-local evidence; where insufficient, explore safe windows.
+- Pin approval must be **specific and individual**. Pinterest's developer guidelines require that the end user chooses each Pin for scheduled publishing. The agent drafts creatives and suggests account, board, time and copy. The authorized existing publisher performs scheduled Pinterest Create Pin only after that owner's exact-Pin approval. No cross-account coordinated engagement.
+- Accounts must have valid production OAuth, scopes, nonexpired refresh credentials and active boards. Owner connects the two missing accounts. Never create fictitious accounts or silently publish from one that is off the day's rotation.
 
-## Latest owner decisions
+## Implemented changes in PR #171
 
-- One connected Pinterest account now, two more planned, possibly more. Owner creates/connects accounts; Growth can only recommend new accounts.
-- Up to TEN new original design generations per connected account per UTC day and up to TEN eligible Pins per connected account per day. One account aims for ten; three accounts aim for thirty. A quota is a ceiling, not an obligation to publish low-quality or unapproved content.
-- Distinct editorial idea and design for any translator reused on two accounts, matched to account audience and suitable boards.
-- Official Pinterest API data: fetch ALL available authorized account, board and Pin records with cursor-based resumption and rate-limit/backoff protection. There is no deliberate total-history truncation; time-limited analytics remain limited by provider capabilities. Preserve relevant mature metrics and historical snapshots.
-- Agent chooses timing independently by account: randomized cold-start exploration followed by learned high-performing slots with ongoing exploration; never overwrite an owner-approved Pin time.
-- One original/new-idea research cycle per day and one combined private Telegram digest per day.
-- Flexible AI spend and priority on results, but still explicit hard spending caps, private project credentials, rate-limit protection, provider cost evidence and budget-related reporting. Do not silently enable unlimited spending.
-- Initially balance original SayTwist and honestly source-linked research channels 50/50 for each account, while maintaining verified originality and third-party licensing/destination truthfulness.
-- Pinterest's current developer guidelines require users to individually select each Pin for publishing. Automated creation, analysis and scheduling of individually approved Pins is allowed; blanket auto-approval is not.
+1. lib/growth/portfolio/daily-rotation.ts and daily-rotation-store.ts: pure date/role-ordered deterministic rotation and active production account qualification. Every new approval of an ACTIVE portfolio Pin, both source and SayTwist, is checked against the chosen account on the *scheduled* UTC day.
+2. lib/growth/viral/portfolio-admission.ts, portfolio.ts and source-publishing.ts: increase reviewed internal shared cap from 3 to **5 max**, but enforce the current date's exact 4/5 and source-vs-owned split across both channels under the preexisting shared transaction advisory lock. Require saved owner policy to be ACTIVE, maxPinsPerDay>=4/5 and sourceSharePercent=50 before approvals. Existing individually approved Pin snapshots remain immutable and are not retroactively modified.
+3. workers/growth-daily-fresh-creatives.ts and daily-fresh-creative-plan.ts: select today's account from connected roles, request only its 2/3 owned AI designs, preserve three-image global cap, saved editorial example quality, unique job key, no generic worker and lease/watchdog safety.
+4. lib/growth/viral/daily-source-drafts.ts, source-publishing.ts, workers/growth-viral-discovery.ts and launch: scan once daily and, **only when Viral policy is ACTIVE**, prepare up to 2/3 top-ranked original source-linked PNGs as audited SYSTEM-created DRAFTS with no publisher approval, Pinterest write or paid AI. In REVIEW, scan/read-only only. The separate 08:15 UTC timer is still install-disabled and requires explicit launch.
+5. Viral admin page shows today's selected account, date, target and mix. Owner's saved policy is not silently switched to ACTIVE or 5 by a code release.
+6. Older proposed ten-design-per-account planners/tests were removed from this branch. Earlier safe Pin inventory pagination without cumulative page/pin truncation remains, with three GETs per job, cursor-resumption and rate-limit protections. Existing board pagination remains more constrained; no claim of unbounded board syncing.
+7. New unit tests verify three-slot rotation, incomplete account connections, exact 4/5 balance, quota enforcement, source draft-only mode and release gates. Existing full CI, isolated Pinterest/viral PostgreSQL 18 suites and nightly build must be green at the final PR HEAD.
+8. workers/coordinate-growth-nine-timer-multi-account-preview-release.sh: root-owned, checksum-verified OLD=b0ecf638... coordinator for read-only audit/HOLD/exact-SHA deploy/RESTORE. It preserves nine existing timers, 35 migrations, Viral REVIEW and two pending owner-scoped account/board sync jobs before release.
 
-## Implemented in PR #171 source, NOT in production
+## IMPORTANT production activation boundaries
 
-- workers/growth-viral-discovery.ts plus the SHA-pinned launch helper, disabled-only systemd installer and private failure alert: one reviewed, allowlisted public catalog scan at 08:15 UTC, deduped per day, no AI or Pinterest write.
-- lib/growth/portfolio/per-account-creatives.ts: pure ten-design-per-account portfolio planner, shared budget round robin, reused translator only with different idea AND art direction.
-- lib/growth/portfolio/per-account-posting-schedule.ts: per-account ten-slot timezone/DST-aware cold-start, explore/exploit timing proposal. Does not publish Pins.
-- lib/growth/portfolio/per-account-budget.ts: conservative, explicit, configurable daily/monthly reservation envelope proposal; makes no spend-setting change.
-- lib/growth/pinterest/analytics.ts and analytics-contract.ts: remove arbitrary ten-page/2,500-Pin TOTAL inventory limit, preserve three official provider GETs per invocation, persistent continuation bookmarks, loop detection and safe integer counters.
-- workers/coordinate-growth-nine-timer-multi-account-preview-release.sh: code-only nine-timer release coordinator pinned to current OLD production SHA. Keeps 35 migration baseline, Growth OFF, Viral REVIEW, reserved owner sync jobs and all nine timer pins.
-- New tests: discovery runtime and disabled installation, per-account creative planning, account-local UTC/DST posting-time conversions, multi-account budget, account/provider/budget readiness, exact-SHA nine-timer gates. New read-only capacity assessor lib/growth/portfolio/scale-readiness.ts reports current production requirements are NOT met; it grants no permissions.
-- No migrations, provider calls, AI generations, account-setting mutations or publication rights changes are made by this branch.
+- **PR #171 is not deployed by merging.** Never direct-run a GitHub deployment without first invoking the protected nine-timer HOLD. Never enable an unrestricted Growth worker, global attribution or whole-platform Telegram scheduler.
+- **No migration is expected** from this PR. Production remains on 35 migrations.
+- Code-only deployment must happen while Viral remains REVIEW and the extra source publisher is disabled, as enforced by the nine-timer coordinator.
+- After deployment and protected nine-timer RESTORE, the owner must explicitly save **Viral ACTIVE, source share 50%, daily cap 5** at https://saytwist.com/admin/growth/viral. Do not enable ACTIVE before the protected release restore.
+- The daily 08:15 research/source-draft schedule and the separately installed 15:17-23:17 UTC hourly **individually approved-only** source publisher are NOT among the existing nine timers. Each has its own disabled-only root installer. They require additional audited root-controlled installation/enable and first-run verification. The source scheduler has a restricted UTC window; choose approved source Pin times that fall within it. A source Pin outside that window can wait until the next matching window.
+- Some preexisting Growth jobs may remain pending by design, and unapproved Pin drafts are never published. Under full owner selection, 4-5 is an upper target, not a guaranteed output.
+- One connected account today means full three-account rotation cannot be validated until owner adds the other two. Do not block the first account's safe operation on those absent accounts.
 
-## Remaining engineering blockers before claiming full autonomous rollout
+## Protected deployment procedure, next operator session
 
-1. Per-account generation execution is not built. The current daily AI image runner supports one account at a time and the rollout hard cap is three images globally. Make generation queueable in isolated one-image jobs and spread up to ten per connected account over the day. Recheck each account's persona, token, audience, editorial examples, duplicate concepts, provider/ledger and saved asset quality.
-2. Financial settings currently default to 3 images/day and $2 daily/$30 monthly across all accounts. Safe recommendation based on 30-cent conservative image reservations plus $1 nonimage allowance/account/day: $4/day and $124/month for one account, or $12/day and $372/month for three. This is only a proposed LIMIT, not actual projected billed spend. Require specific owner-approved hard ceilings before live changes, ensure transactional DB admission, migration/constraint checks, account fairness and no retry for ambiguous paid work.
-3. Publication quota is GLOBAL 3/day in GrowthViralProgramSettings today, not TEN PER ACCOUNT. Change transactional booking, source-vs-owned share, uniqueness and account/board approval tests; a schema migration might be required and must be PostgreSQL 18 clone-qualified. Each Pin must still be individually selected by the owner.
-4. Pinterest's independent local global request throttle currently allows only 4 requests/hour and 16 requests/24h across all account/Pins/OAuth/analytics operations, already too low for 10 per account plus required GETs. Increase only with verified provider quota and transactional reservations; adapt to connected account count, use dynamic backoff and retain the five-request provider reserve. Existing board synchronization has a 10-page/1,000-board cumulative limit, not full resume. Design page-by-page checkpointing, persistence, safe completeness/deactivation, quota controls and per-account scan scheduling. Existing daily observe is scoped to one account identity, and daily account analytics is not a complete all-account inventory sync.
-5. The pure account-specific time planner is not wired into real creative/Pinterest approval scheduling. Integrate with the stored account's own metrics, collision logic, owner-approved time binding and publication outcome learning.
-6. Private report schedule exists but recurring delivery and a single consolidated multi-account scorecard with alert/financial/approval metrics need verification. Check no duplicate Telegram sends.
-7. Original-source Pin publishing timer is installed disabled; independent explicit owner acceptance needed. No unrestricted Growth worker activation or auto-approval.
-8. CI must pass on final HEAD. If DB schema/quotas change, add populated PostgreSQL 18 clone rehearsal, exact migration gates, backup and rollback checks. Confirm provider permissions, rate limits, auth and image costs.
-9. Live end-to-end proof must include one individually approved Pin, correct account/board/destination, stored Pinterest Pin ID, no duplicate retry, metrics, one accepted design from the dedicated AI project, private report delivery, remaining budget, timer and website health.
+1. Review PR #171 final GitHub Actions run and source file diffs. Merge only after CI and isolated DB qualification are green, and record the exact new main merge SHA as NEW.
+2. Fetch the approved release coordinator from NEW and verify its **exact git blob SHA** using git hash-object. Copy it to root@82.112.242.43 outside application directory and install root:root 0700.
+3. On SSH user root, run the coordinator in read-only audit mode with OLD b0ecf638effe2ca5212989d817d2f8c186bb4f57 and NEW. Require GROWTH_NINE_AUDIT=PASSED, NINE_ENABLED_ACTIVE, SAFE_OFF. If not, stop.
+4. In a protected UTC quiet window only (00-03 or 15-23), run the coordinator HOLD with exact owner approval env value, verify nine timers disabled/inactive, then dispatch deploy-hostinger.yml using expected_release_sha=NEW. Confirm CI Gate and Production Deploy success and production .deployed-release=NEW.
+5. On SSH user root, invoke coordinator RESTORE with its exact separate owner approval, verify NINE_ENABLED_ACTIVE, DB SAFE_OFF, verified site health/readyz and unchanged queue. If any stage fails, use reviewed recovery, not manual force-enabling.
+6. Independently verify installer Git blobs of workers/install-growth-viral-discovery-systemd.sh and workers/install-growth-viral-source-systemd.sh; install verified root-owned 0700 copies and run their install-disabled steps. Verify exact installed service release SHA and 35 migrations.
+7. Owner explicitly saves Viral ACTIVE, source 50%, daily 5 in authenticated admin. Confirm no undesired source link changes. Under a second explicit source-schedule activation approval, enable the two newly installed timers only after inspecting their unit files and approval env; do not overwrite the nine existing timers.
+8. Live acceptance: one new source draft appears after once-daily research; one owned ready candidate exists for the selected account; its approved board/asset/URL/time are correct; exactly owner-selected Pins publish once (with provider ID), no unknown retry; daily Pin counts stay within current 4/5 mix; spend ledger and private Telegram report checked. If metrics are insufficient, scheduler remains in exploration.
+9. Record actual deployed SHA, systemd unit status and source timer status in this document or successor handoff.
 
-## Protected code-only release procedure
-
-- Review PR #171 HEAD and final green CI (lint, TypeScript, Vitest, build). Merge only after full verification and record the resulting exact main SHA as NEW; OLD must be b0ecf638effe2ca5212989d817d2f8c186bb4f57.
-- Fetch the reviewed coordinator file from merged main. Independently verify its exact Git blob SHA via git hash-object, then transfer it to root@82.112.242.43. The root-owned installed copy must have owner root, group root and mode 0700.
-- SSH USER root: execute read-only coordinator audit OLD NEW and require GROWTH_NINE_AUDIT=PASSED with NINE_ENABLED_ACTIVE, DB SAFE_OFF.
-- Quiet UTC window only (00-03 or 15-23): explicitly approve HOLD:OLD:NEW, require all nine timers disabled/inactive.
-- Mac: dispatch GitHub workflow deploy-hostinger.yml against main with expected_release_sha=NEW. Both CI Gate and Production Deploy must pass; independently read production .deployed-release.
-- SSH USER root: explicitly approve RESTORE:OLD:NEW in the permitted UTC window; require GROWTH_NINE_RESTORE=PASSED and NINE_ENABLED_ACTIVE, DB SAFE_OFF.
-- The code-only release does NOT activate the new daily discovery timer, change budget, or enable publisher. Each needs a qualified, separately approved run/test. Do not infer full-autonomy activation from a code-only deploy.
-- Verify site health, protected source SHA, all nine timers, 35 migrations, global Growth OFF, attribution OFF, Viral REVIEW, preserved owner sync queue, and report status. On blocked gates stop, preserve the existing production and diagnose. Do not force-edit systemd units to bypass the coordinator.
-
-## Morning handoff
-
-DONE: PR #170 release in production; PR #171 source implementation of daily discovery, full Pin inventory cursor continuation, per-account target/budget/timing planners and protected release coordinator. CI may still be running.
-
-NOT DONE: fully automatic ten designs per account, live account-specific cost increases, complete board/all-account ingestion, real scheduled creative-to-Pinterest loop, approval automation, final production acceptance. This is not a one-command full autonomous launch.
-
-Resume work from this file and PR #171 without asking the owner to repeat decisions. Do not silently deploy unfinished behavior or claim production is fully autonomous.
+**Current status:** source and protected release work prepared in PR #171. At the time of authoring, NEW was not deployed, the extra two timers remained uninstalled/inactive, Viral was REVIEW and the owner had one connected account. A code release alone cannot honestly be labeled a complete autonomous publishing launch.
