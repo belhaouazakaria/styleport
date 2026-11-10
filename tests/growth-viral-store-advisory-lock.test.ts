@@ -43,7 +43,8 @@ vi.mock("@/lib/prisma", () => ({
     growthActivity: { create: mocks.activityCreate },
   },
 }));
-vi.mock("@/lib/growth/viral/catalog", () => ({
+vi.mock("@/lib/growth/viral/catalog", async importOriginal => ({
+  ...(await importOriginal<typeof import("@/lib/growth/viral/catalog")>()),
   discoverAnythingTranslateTopics: mocks.discover,
 }));
 
