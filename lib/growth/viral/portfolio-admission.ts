@@ -39,6 +39,10 @@ export async function assertViralPortfolioApproval(
   }
   const rotation = await readDailyRotation(scheduledAt, tx);
   assertActiveRotationAccount(rotation, accountId);
+  if (policy.sourceSharePercent !== 50 ||
+      policy.maxPinsPerDay < rotation.targetPins) {
+    throw Error("VIRAL_ROTATION_POLICY_NOT_CONFIGURED");
+  }
   const dailyLimit = Math.min(AUTHORIZED_MAX_DAILY_PINS, rotation.targetPins);
   const { start, end } = utcPinScheduleWindow(scheduledAt);
   const [saytwistCommitted, sourceCommitted] = await Promise.all([
@@ -70,6 +74,7 @@ export async function assertViralPortfolioApproval(
       Math.max(0, dailyLimit - committed),
     originalConceptsQualified: 1, sourceConceptsQualified: 1,
     sourcePublishingRightsVerified: true,
+    rotatingTarget: { source: rotation.source, saytwist: rotation.original },
   });
   const allowed = channel === "SOURCE" ?
     plan.additional.source : plan.additional.saytwist;
