@@ -48,7 +48,7 @@ export async function publishOneApprovedSourcePin(
       publishClaimAt: null,
     },
     orderBy: [{ scheduledAt: "asc" }, { id: "asc" }],
-    include: { concept: { select: { sourceUrl: true, title: true } } },
+    include: { concept: { select: { sourceUrl: true, title: true, status: true } } },
     take: 40,
   });
   // Last-mile defense: never publish a withdrawn topic, including an
@@ -56,7 +56,8 @@ export async function publishOneApprovedSourcePin(
   // Among due, individually approved Pins publish highest editorial fit first.
   const eligible = rows.map(row => ({
     row, rating: rateSourceTranslator(row.concept.title, row.concept.sourceUrl),
-  })).filter(item => item.rating.decision !== "WITHDRAW")
+  })).filter(item =>
+    item.rating.decision !== "WITHDRAW" && item.row.concept.status !== "REJECTED")
     .sort((a,b) =>
       b.rating.score - a.rating.score ||
       (a.row.scheduledAt?.getTime() ?? 0) - (b.row.scheduledAt?.getTime() ?? 0) ||
