@@ -57,7 +57,12 @@ export async function publishOneApprovedSourcePin(
   const eligible = rows.map(row => ({
     row, rating: rateSourceTranslator(row.concept.title, row.concept.sourceUrl),
   })).filter(item =>
-    item.rating.decision !== "WITHDRAW" && item.row.concept.status !== "REJECTED")
+    item.rating.decision !== "WITHDRAW" && item.row.concept.status !== "REJECTED" &&
+    // Even legacy approved drafts cannot bypass the deferred-day gate.
+    (item.rating.decision === "PRIORITY" ||
+      (item.row.scheduledAt !== null && item.row.approvedAt !== null &&
+        item.row.scheduledAt.getTime() - item.row.approvedAt.getTime() >=
+        (item.rating.suggestedDelayDays ?? 2) * ONE_DAY)))
     .sort((a,b) =>
       b.rating.score - a.rating.score ||
       (a.row.scheduledAt?.getTime() ?? 0) - (b.row.scheduledAt?.getTime() ?? 0) ||
