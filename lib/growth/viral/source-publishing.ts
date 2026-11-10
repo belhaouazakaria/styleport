@@ -4,6 +4,7 @@ import {
 import { createHash } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { canonicalSourceTranslatorUrl } from "@/lib/growth/viral/catalog";
+import { rateSourceTranslator, SOURCE_RATING_VERSION } from "@/lib/growth/viral/rating";
 import { createOriginalSourceAsset } from "@/lib/growth/viral/source-creative";
 import { planViralPortfolio } from "@/lib/growth/viral/portfolio";
 import { VIRAL_PORTFOLIO_APPROVAL_LOCK } from "@/lib/growth/viral/portfolio-admission";
@@ -27,19 +28,24 @@ export async function prepareOriginalSourcePinDraft(conceptId: string, userId: s
   ]);
   if (!settings || settings.mode !== "ACTIVE") throw Error("SOURCE_DRAFT_NOT_ENABLED");
   if (!concept || canonicalSourceTranslatorUrl(concept.sourceUrl) !== concept.sourceUrl ||
-      concept.linkedTranslatorId || existing) throw Error("SOURCE_DRAFT_NOT_ELIGIBLE");
+      concept.linkedTranslatorId || concept.status === "REJECTED" || existing)
+    throw Error("SOURCE_DRAFT_NOT_ELIGIBLE");
+
+  const rating = rateSourceTranslator(concept.title, concept.sourceUrl);
+  if (rating.decision === "WITHDRAW") throw Error("SOURCE_DRAFT_QUALITY_WITHDRAWN");
 
   const creative = await createOriginalSourceAsset(concept.title, concept.sourceUrl);
   try {
     const draft = await prisma.$transaction(async tx => {
-      await tx.$queryRawUnsafe(
-        "SELECT pg_advisory_xact_lock(hashtext('growth-viral-source-draft-v1'))");
+      await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext('growth-viral-source-draft-v1'))`);
       const verified = await tx.growthViralConcept.findUnique({ where: { id: conceptId } });
       const currentSettings = await tx.growthViralProgramSettings.findUnique({
         where: { id: "global" },
       });
       if (!verified || verified.sourceUrl !== concept.sourceUrl ||
-          verified.linkedTranslatorId || currentSettings?.mode !== "ACTIVE") {
+          verified.linkedTranslatorId || verified.status === "REJECTED" ||
+          currentSettings?.mode !== "ACTIVE" ||
+          rateSourceTranslator(verified.title, verified.sourceUrl).decision === "WITHDRAW") {
         throw Error("SOURCE_DRAFT_RACE");
       }
       const record = await tx.growthViralPinTest.create({
@@ -60,6 +66,8 @@ export async function prepareOriginalSourcePinDraft(conceptId: string, userId: s
             assetChecksum: creative.checksum, sourceDomain: "anythingtranslate.com",
             sourceImageUsed: false, copiedThirdPartyDescription: false,
             pinPublished: false, ownerApprovalRequired: true,
+            rating: { score: rating.score, decision: rating.decision,
+              version: SOURCE_RATING_VERSION },
           },
         },
       });
@@ -146,6 +154,16 @@ export async function approveOriginalSourcePin(
         canonicalSourceTranslatorUrl(draft.destinationUrl) !== draft.concept.sourceUrl) {
       throw Error("SOURCE_APPROVAL_DRAFT_INVALID");
     }
+    if (draft.concept.status === "REJECTED") {
+      throw Error("SOURCE_APPROVAL_QUALITY_WITHDRAWN");
+    }
+    const rating = rateSourceTranslator(draft.concept.title, draft.concept.sourceUrl);
+    if (rating.decision === "WITHDRAW") throw Error("SOURCE_APPROVAL_QUALITY_WITHDRAWN");
+    if (rating.decision === "SCHEDULE_LATER" &&
+        scheduled.getTime() < now.getTime() +
+        (rating.suggestedDelayDays ?? 2) * DAY) {
+      throw Error("SOURCE_APPROVAL_QUALITY_DEFERRED");
+    }
     if (!account || account.connectionStatus !== "CONNECTED" ||
         account.apiEnvironment !== "PRODUCTION" || !account.encryptedCredentials ||
         !hasPinterestScopes(account.grantedScopes, PINTEREST_CREATE_PIN_SCOPES) ||
@@ -192,6 +210,8 @@ export async function approveOriginalSourcePin(
           boardId: input.boardId, assetChecksum: draft.assetChecksum,
           destinationUrl: draft.destinationUrl,
           ownerConfirmation: true, quota: plan.target,
+          sourceRating: { score: rating.score,
+            decision: rating.decision, version: SOURCE_RATING_VERSION },
         },
       },
     });
