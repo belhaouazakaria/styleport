@@ -76,7 +76,7 @@ export async function approvePinCandidate(raw: unknown, adminUserId: string, now
     // Default PAUSED: no change to existing publication behavior. Once ACTIVE,
     // serialize both source and SayTwist approvals against one shared daily quota.
     await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${VIRAL_PORTFOLIO_APPROVAL_LOCK}))`);
-    await assertViralPortfolioApproval(tx, "SAYTWIST", requestedAt);
+    await assertViralPortfolioApproval(tx, "SAYTWIST", requestedAt, input.accountId);
 
     const approvalId = randomUUID();
     const publicationId = randomUUID();
