@@ -13,6 +13,7 @@ import {
   creativeAssetChecksum, resolveCreativeAssetFile, validateCreativePng,
 } from "@/lib/growth/creative/storage";
 import { canonicalSourceTranslatorUrl } from "@/lib/growth/viral/catalog";
+import { rateSourceTranslator } from "@/lib/growth/viral/rating";
 import { hasPinterestScopes, PINTEREST_CREATE_PIN_SCOPES } from "@/lib/growth/pinterest/config";
 import { countBlockingGrowthJobs } from "@/lib/growth/operations/approved-publication-queue";
 import { revokeGrowthWorkerActivation } from "@/lib/growth/settings";
@@ -47,11 +48,21 @@ export async function publishOneApprovedSourcePin(
       publishClaimAt: null,
     },
     orderBy: [{ scheduledAt: "asc" }, { id: "asc" }],
-    include: { concept: { select: { sourceUrl: true } } },
-    take: 2,
+    include: { concept: { select: { sourceUrl: true, title: true } } },
+    take: 40,
   });
-  if (!rows.length) return "IDLE";
-  const test = rows[0];
+  // Last-mile defense: never publish a withdrawn topic, including an
+  // older approved draft created before scoring was introduced.
+  // Among due, individually approved Pins publish highest editorial fit first.
+  const eligible = rows.map(row => ({
+    row, rating: rateSourceTranslator(row.concept.title, row.concept.sourceUrl),
+  })).filter(item => item.rating.decision !== "WITHDRAW")
+    .sort((a,b) =>
+      b.rating.score - a.rating.score ||
+      (a.row.scheduledAt?.getTime() ?? 0) - (b.row.scheduledAt?.getTime() ?? 0) ||
+      a.row.id.localeCompare(b.row.id));
+  if (!eligible.length) return "IDLE";
+  const test = eligible[0].row;
   if (!test.approvedById || !test.approvedAt || !test.scheduledAt ||
       !test.publicationAttemptKey || !test.accountId || !test.boardId ||
       !test.rightsVerified || !test.assetPublicPath || !test.assetChecksum ||
@@ -118,6 +129,8 @@ export async function publishOneApprovedSourcePin(
         accountId: account.id, assetChecksum: test.assetChecksum,
         destinationUrl: test.destinationUrl,
         attemptsAuthorized: 1, retriesAuthorized: 0,
+        editorialScore: eligible[0].rating.score,
+        editorialDecision: eligible[0].rating.decision,
       },
     },
   });
