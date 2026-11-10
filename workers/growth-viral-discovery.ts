@@ -3,11 +3,12 @@ import os from "node:os";
 
 import { prisma } from "@/lib/prisma";
 import { scanViralSourceCatalog } from "@/lib/growth/viral/store";
+import { prepareDailySourceCreativeDrafts } from "@/lib/growth/viral/daily-source-drafts";
 
 const APP = "/home/saytwist/htdocs/saytwist.com";
 const NODE = "/home/saytwist/.nvm/versions/node/v24.20.0/bin/node";
 
-/** One review-only, fixed-source scan per UTC day, never a generic Growth worker. */
+/** One owner-scoped fixed-source scan per UTC day, never a generic Growth worker. */
 export function assertViralDiscoveryRuntime(
   env: Record<string, string | undefined>, deployedSha: string,
   identity: { username: string; uid: number; cwd: string; node: string },
@@ -54,9 +55,11 @@ async function assertSafeDatabaseState() {
       select: { mode: true } }),
   ]);
   if (!growth || growth.enabled || growth.attributionEnabled ||
-      growth.workerActivationExpiresAt !== null || viral?.mode !== "REVIEW") {
-    throw Error("DISCOVERY_DATABASE_NOT_REVIEW_ONLY");
+      growth.workerActivationExpiresAt !== null ||
+      !["REVIEW", "ACTIVE"].includes(viral?.mode ?? "")) {
+    throw Error("DISCOVERY_DATABASE_NOT_SAFE");
   }
+  return viral!.mode;
 }
 
 /**
@@ -77,9 +80,14 @@ export async function runDailyViralDiscovery(now = new Date()) {
       throw error;
     }
   }
+  const mode = await assertSafeDatabaseState();
+  const drafts = mode === "ACTIVE"
+    ? await prepareDailySourceCreativeDrafts(now)
+    : { created: 0 };
   await assertSafeDatabaseState();
   return { outcome, inspected: result?.inspected ?? 0,
-    created: result?.created ?? 0, published: 0, aiCalls: 0 };
+    created: result?.created ?? 0, sourceDrafts: drafts.created,
+    published: 0, aiCalls: 0 };
 }
 
 async function main() {
@@ -94,6 +102,7 @@ async function main() {
     console.log("GROWTH_VIRAL_DISCOVERY=" + result.outcome);
     console.log("GROWTH_VIRAL_DISCOVERY_INSPECTED=" + result.inspected);
     console.log("GROWTH_VIRAL_DISCOVERY_CREATED=" + result.created);
+    console.log("GROWTH_VIRAL_DISCOVERY_SOURCE_DRAFTS=" + result.sourceDrafts);
     console.log("GROWTH_VIRAL_DISCOVERY_PIN_WRITES=0");
     console.log("GROWTH_VIRAL_DISCOVERY_AI_CALLS=0");
     console.log("GROWTH_VIRAL_DISCOVERY_GROWTH=OFF");
