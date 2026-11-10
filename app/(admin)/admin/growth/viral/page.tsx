@@ -33,7 +33,11 @@ export default async function ViralGrowthPage() {
       select: { id: true, accountId: true, name: true }, take: 100,
     }),
   ]);
-  const ranked = rankSourceTranslators(concepts);
+  const ranked = rankSourceTranslators(concepts).map(topic =>
+    topic.status === "REJECTED" ? {
+      ...topic, rating: { ...topic.rating,
+        decision: "WITHDRAW" as const, suggestedDelayDays: null },
+    } : topic);
   const priorityCount = ranked.filter(x => x.rating.decision === "PRIORITY").length;
   const deferCount = ranked.filter(x => x.rating.decision === "SCHEDULE_LATER").length;
   const withdrawnCount = ranked.filter(x => x.rating.decision === "WITHDRAW").length;
