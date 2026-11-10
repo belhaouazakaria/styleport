@@ -28,7 +28,8 @@ export async function prepareOriginalSourcePinDraft(conceptId: string, userId: s
   ]);
   if (!settings || settings.mode !== "ACTIVE") throw Error("SOURCE_DRAFT_NOT_ENABLED");
   if (!concept || canonicalSourceTranslatorUrl(concept.sourceUrl) !== concept.sourceUrl ||
-      concept.linkedTranslatorId || existing) throw Error("SOURCE_DRAFT_NOT_ELIGIBLE");
+      concept.linkedTranslatorId || concept.status === "REJECTED" || existing)
+    throw Error("SOURCE_DRAFT_NOT_ELIGIBLE");
 
   const rating = rateSourceTranslator(concept.title, concept.sourceUrl);
   if (rating.decision === "WITHDRAW") throw Error("SOURCE_DRAFT_QUALITY_WITHDRAWN");
@@ -42,7 +43,8 @@ export async function prepareOriginalSourcePinDraft(conceptId: string, userId: s
         where: { id: "global" },
       });
       if (!verified || verified.sourceUrl !== concept.sourceUrl ||
-          verified.linkedTranslatorId || currentSettings?.mode !== "ACTIVE" ||
+          verified.linkedTranslatorId || verified.status === "REJECTED" ||
+          currentSettings?.mode !== "ACTIVE" ||
           rateSourceTranslator(verified.title, verified.sourceUrl).decision === "WITHDRAW") {
         throw Error("SOURCE_DRAFT_RACE");
       }
@@ -151,6 +153,9 @@ export async function approveOriginalSourcePin(
         !draft.title || !draft.description ||
         canonicalSourceTranslatorUrl(draft.destinationUrl) !== draft.concept.sourceUrl) {
       throw Error("SOURCE_APPROVAL_DRAFT_INVALID");
+    }
+    if (draft.concept.status === "REJECTED") {
+      throw Error("SOURCE_APPROVAL_QUALITY_WITHDRAWN");
     }
     const rating = rateSourceTranslator(draft.concept.title, draft.concept.sourceUrl);
     if (rating.decision === "WITHDRAW") throw Error("SOURCE_APPROVAL_QUALITY_WITHDRAWN");
