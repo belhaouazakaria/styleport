@@ -4,10 +4,12 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import type { ViralPortfolioPolicy } from "@/lib/growth/viral/portfolio";
+import type { DailyRotationPlan } from "@/lib/growth/portfolio/daily-rotation";
 
 export function GrowthViralIntelligencePanel({
-  initialPolicy, concepts, drafts, accounts, boards,
+  initialPolicy, concepts, drafts, accounts, boards, rotation,
 }: { initialPolicy: ViralPortfolioPolicy;
+  rotation: DailyRotationPlan;
   concepts: Array<{ id: string; title: string;
     score: number; decision: "PRIORITY" | "SCHEDULE_LATER" | "WITHDRAW";
     suggestedDelayDays: number | null }>;
@@ -27,9 +29,9 @@ export function GrowthViralIntelligencePanel({
   const [ownedPinId, setOwnedPinId] = useState("");
   const [selectedDraftId, setSelectedDraftId] = useState(
     drafts.find(x => x.status === "PLANNED")?.id ?? "");
-  const [accountId, setAccountId] = useState(accounts[0]?.id ?? "");
+  const [accountId, setAccountId] = useState(rotation.accountId ?? accounts[0]?.id ?? "");
   const [boardId, setBoardId] = useState(
-    boards.find(x => x.accountId === accounts[0]?.id)?.id ?? "");
+    boards.find(x => x.accountId === (rotation.accountId ?? accounts[0]?.id))?.id ?? "");
   const [scheduledLocal, setScheduledLocal] = useState("");
   const [ownerConfirmed, setOwnerConfirmed] = useState(false);
   const [message, setMessage] = useState("");
@@ -75,6 +77,13 @@ export function GrowthViralIntelligencePanel({
         still needs individual approval. Successful concepts receive new,
         original SayTwist translators and Pins, not an edited destination.
       </p>
+      <div className="rounded-lg border border-border bg-slate-50 px-3 py-2 text-sm text-ink">
+        <strong>Daily rotation (UTC):</strong>{" "}
+        {rotation.accountId
+          ? `${rotation.day} · ${accounts.find(x => x.id === rotation.accountId)?.username ?? rotation.publicationRole} · ${rotation.targetPins} Pins target (${rotation.original} SayTwist, ${rotation.source} AnythingTranslate)`
+          : "No eligible connected publication account."}
+        {" "}One account per day. Every Pin requires individual approval.
+      </div>
       <div className="grid gap-4 sm:grid-cols-3">
         <label className="grid gap-1 text-sm font-medium" htmlFor="viral-mode">
           Research and planning mode

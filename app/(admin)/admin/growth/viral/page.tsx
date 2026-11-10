@@ -5,6 +5,7 @@ import { requireAdminRoute } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { DEFAULT_VIRAL_PORTFOLIO_POLICY } from "@/lib/growth/viral/portfolio";
 import { rankSourceTranslators, SOURCE_RATING_VERSION } from "@/lib/growth/viral/rating";
+import { readDailyRotation } from "@/lib/growth/portfolio/daily-rotation-store";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +34,7 @@ export default async function ViralGrowthPage() {
       select: { id: true, accountId: true, name: true }, take: 100,
     }),
   ]);
+  const rotation = await readDailyRotation(new Date());
   const ranked = rankSourceTranslators(concepts).map(topic =>
     topic.status === "REJECTED" ? {
       ...topic, rating: { ...topic.rating,
@@ -54,7 +56,7 @@ export default async function ViralGrowthPage() {
         <Link href="/admin/growth" className="text-sm font-semibold text-brand-600">
           Back to Growth
         </Link>
-        <GrowthViralIntelligencePanel initialPolicy={policy}
+        <GrowthViralIntelligencePanel initialPolicy={policy} rotation={rotation}
           concepts={ranked.map(x => ({ id: x.id, title: x.title,
             score: x.rating.score, decision: x.rating.decision,
             suggestedDelayDays: x.rating.suggestedDelayDays }))}

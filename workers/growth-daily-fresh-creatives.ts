@@ -17,6 +17,7 @@ import { claimGrowthJobs, completeGrowthJob, failGrowthJob, markGrowthJobRunning
 import { countBlockingGrowthJobs } from "@/lib/growth/operations/approved-publication-queue";
 import { planDailyFreshCreatives } from "@/lib/growth/operations/daily-fresh-creative-plan";
 import { DEFAULT_DAILY_CADENCE_POLICY } from "@/lib/growth/portfolio/daily-cadence";
+import { readDailyRotation } from "@/lib/growth/portfolio/daily-rotation-store";
 import { revokeGrowthWorkerActivation } from "@/lib/growth/settings";
 
 const APP = "/home/saytwist/htdocs/saytwist.com";
@@ -84,7 +85,9 @@ async function buildBatch(day: string, now = new Date()) {
   await requireIdle();
   const dayStart = new Date(day + "T00:00:00Z");
   const dayEnd = new Date(dayStart.getTime() + 86_400_000);
-  const [policy, already, recentEvidence, accounts, available] = await Promise.all([
+  const rotation = await readDailyRotation(dayStart);
+  if (!rotation.accountId) throw Error("FRESH_ACCOUNT_NOT_QUALIFIED");
+  const [policy, already, recentEvidence, available] = await Promise.all([
     prisma.growthDailyCadencePreference.findUnique({
       where: { id: "global" },
       select: { pinMode: true, pinMinimum: true,
@@ -92,6 +95,7 @@ async function buildBatch(day: string, now = new Date()) {
     }),
     prisma.growthPinCandidate.count({ where: {
       createdAt: { gte: dayStart, lt: dayEnd },
+      accountId: rotation.accountId,
     } }),
     prisma.growthOpportunityAnalysisRun.findFirst({
       where: {
@@ -100,12 +104,6 @@ async function buildBatch(day: string, now = new Date()) {
       },
       select: { id: true },
       orderBy: { completedAt: "desc" },
-    }),
-    prisma.growthPinterestAccount.findMany({
-      where: { apiEnvironment: "PRODUCTION", connectionStatus: "CONNECTED",
-        encryptedCredentials: { not: null }, boards: { some: { isActive: true } },
-        grantedScopes: { hasEvery: ["pins:read", "pins:write", "boards:read", "boards:write"] } },
-      select: { id: true }, take: 2,
     }),
     prisma.translator.findMany({
       where: {
@@ -126,7 +124,6 @@ async function buildBatch(day: string, now = new Date()) {
       take: 150,
     }),
   ]);
-  if (accounts.length !== 1) throw Error("FRESH_ACCOUNT_NOT_QUALIFIED");
   // The full-image renderer uses TranslatorEditorialExample, not TranslatorExample.
   // Its first saved before/after pair must be meaningful before spending anything.
   const qualified = available.filter(target =>
@@ -142,8 +139,9 @@ async function buildBatch(day: string, now = new Date()) {
     alreadyCreatedToday: already,
     eligibleDistinctTargets: qualified.length,
     verifiedRecentOpportunityEvidence: Boolean(recentEvidence),
+    rotatingOwnedTarget: rotation.original,
   });
-  return { planned, targets: qualified.slice(0, planned.additional), accountId: accounts[0].id };
+  return { planned, targets: qualified.slice(0, planned.additional), accountId: rotation.accountId };
 }
 
 async function createOne(target: { id: string; slug: string }, day: string, accountId: string) {

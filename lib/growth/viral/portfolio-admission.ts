@@ -4,8 +4,10 @@ import {
 import {
   planViralPortfolio,
 } from "@/lib/growth/viral/portfolio";
+import { readDailyRotation } from "@/lib/growth/portfolio/daily-rotation-store";
+import { assertActiveRotationAccount } from "@/lib/growth/portfolio/daily-rotation";
 
-const AUTHORIZED_MAX_DAILY_PINS = 3;
+const AUTHORIZED_MAX_DAILY_PINS = 5;
 export const VIRAL_PORTFOLIO_APPROVAL_LOCK =
   "growth-viral-portfolio-approval-v1";
 
@@ -26,6 +28,7 @@ export async function assertViralPortfolioApproval(
   tx: Prisma.TransactionClient,
   channel: "SOURCE" | "SAYTWIST",
   scheduledAt: Date,
+  accountId: string,
 ) {
   const policy = await tx.growthViralProgramSettings.findUnique({
     where: { id: "global" },
@@ -34,6 +37,13 @@ export async function assertViralPortfolioApproval(
     if (channel === "SOURCE") throw Error("SOURCE_PIN_PROGRAM_NOT_ACTIVE");
     return { enabled: false, sourceAllowed: 0, saytwistAllowed: 0 };
   }
+  const rotation = await readDailyRotation(scheduledAt, tx);
+  assertActiveRotationAccount(rotation, accountId);
+  if (policy.sourceSharePercent !== 50 ||
+      policy.maxPinsPerDay < rotation.targetPins) {
+    throw Error("VIRAL_ROTATION_POLICY_NOT_CONFIGURED");
+  }
+  const dailyLimit = Math.min(AUTHORIZED_MAX_DAILY_PINS, rotation.targetPins);
   const { start, end } = utcPinScheduleWindow(scheduledAt);
   const [saytwistCommitted, sourceCommitted] = await Promise.all([
     tx.growthPinPublication.count({
@@ -55,15 +65,16 @@ export async function assertViralPortfolioApproval(
   const committed = saytwistCommitted + sourceCommitted;
   const plan = planViralPortfolio({
     mode: "ACTIVE", sourceSharePercent: policy.sourceSharePercent,
-    maxPinsPerDay: Math.min(policy.maxPinsPerDay, AUTHORIZED_MAX_DAILY_PINS),
+    maxPinsPerDay: Math.min(policy.maxPinsPerDay, dailyLimit),
   }, {
     day: start.toISOString().slice(0, 10),
     saytwistCommitted, sourceCommitted,
-    hardDailyPinCap: AUTHORIZED_MAX_DAILY_PINS,
+    hardDailyPinCap: dailyLimit,
     remainingProviderPublicationCapacity:
-      Math.max(0, AUTHORIZED_MAX_DAILY_PINS - committed),
+      Math.max(0, dailyLimit - committed),
     originalConceptsQualified: 1, sourceConceptsQualified: 1,
     sourcePublishingRightsVerified: true,
+    rotatingTarget: { source: rotation.source, saytwist: rotation.original },
   });
   const allowed = channel === "SOURCE" ?
     plan.additional.source : plan.additional.saytwist;

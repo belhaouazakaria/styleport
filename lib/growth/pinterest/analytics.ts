@@ -14,8 +14,6 @@ import {
   defaultBackfillRange,
   defaultRefreshRange,
   metricCount,
-  PINTEREST_INVENTORY_MAX_PAGES,
-  PINTEREST_INVENTORY_MAX_PINS,
   PINTEREST_INVENTORY_REQUESTS_PER_JOB,
   PINTEREST_PIN_REQUESTS_PER_JOB,
 } from "@/lib/growth/pinterest/analytics-contract";
@@ -238,12 +236,16 @@ export async function syncPinterestPinInventory(params: {
 
   try {
     for (let request = 0; request < PINTEREST_INVENTORY_REQUESTS_PER_JOB; request += 1) {
-      if (pageCount >= PINTEREST_INVENTORY_MAX_PAGES) throw new Error("Pinterest Pin inventory exceeded the 10-page safety limit.");
       const response = await getPinterestPinsPage(params.accountId, bookmark, params.fetchImpl);
       lastRateLimit = response.rateLimit;
       pageCount += 1;
       pinCount += response.data.items.length;
-      if (pinCount > PINTEREST_INVENTORY_MAX_PINS) throw new Error("Pinterest Pin inventory exceeded the 2500-Pin safety limit.");
+      // No arbitrary account-history ceiling: carry the provider cursor across
+      // bounded three-request invocations until the API returns no bookmark.
+      // Fail on unsafe counters, never truncate the inventory silently.
+      if (!Number.isSafeInteger(pageCount) || !Number.isSafeInteger(pinCount)) {
+        throw new Error("Pinterest inventory counters exceeded safe integer precision.");
+      }
       const syncedAt = new Date();
       const pinterestBoardIds = [...new Set(response.data.items.map((pin) => pin.board_id).filter((id): id is string => Boolean(id)))];
       const resolvedBoards = pinterestBoardIds.length ? await prisma.growthPinterestBoard.findMany({

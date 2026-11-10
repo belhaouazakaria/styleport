@@ -7,14 +7,20 @@ import { canonicalSourceTranslatorUrl } from "@/lib/growth/viral/catalog";
 import { rateSourceTranslator, SOURCE_RATING_VERSION } from "@/lib/growth/viral/rating";
 import { createOriginalSourceAsset } from "@/lib/growth/viral/source-creative";
 import { planViralPortfolio } from "@/lib/growth/viral/portfolio";
+import { readDailyRotation } from "@/lib/growth/portfolio/daily-rotation-store";
+import { assertActiveRotationAccount } from "@/lib/growth/portfolio/daily-rotation";
 import { VIRAL_PORTFOLIO_APPROVAL_LOCK } from "@/lib/growth/viral/portfolio-admission";
 import { hasPinterestScopes, PINTEREST_CREATE_PIN_SCOPES } from "@/lib/growth/pinterest/config";
 
 const DAY = 86400000;
-const AUTHORIZED_SOURCE_CAP = 3;
+const AUTHORIZED_SOURCE_CAP = 5;
 
-export async function prepareOriginalSourcePinDraft(conceptId: string, userId: string) {
-  if (!/^[a-z0-9]{10,40}$/.test(conceptId) || !userId) {
+/** ADMIN-supplied user or an explicitly isolated SYSTEM research runner.
+ * Neither actor can publish or grant Pin approval from this method.
+ */
+export async function prepareOriginalSourcePinDraft(conceptId: string, userId: string | null) {
+  if (!/^[a-z0-9]{10,40}$/.test(conceptId) ||
+      (userId !== null && !userId)) {
     throw Error("SOURCE_DRAFT_INPUT_INVALID");
   }
   const [settings, concept, existing] = await Promise.all([
@@ -58,7 +64,8 @@ export async function prepareOriginalSourcePinDraft(conceptId: string, userId: s
       });
       await tx.growthActivity.create({
         data: {
-          actorKind: GrowthActivityActorKind.USER, actorUserId: userId,
+          actorKind: userId === null ? GrowthActivityActorKind.SYSTEM : GrowthActivityActorKind.USER,
+          ...(userId ? { actorUserId: userId } : {}),
           entityType: "GrowthViralPinTest", entityId: record.id,
           action: "ORIGINAL_SOURCE_PIN_PREPARED",
           correlationKey: "viral-source-draft:" + record.id,
@@ -170,18 +177,26 @@ export async function approveOriginalSourcePin(
         !board?.isActive || board.accountId !== input.accountId) {
       throw Error("SOURCE_APPROVAL_ACCOUNT_UNAVAILABLE");
     }
+    const rotation = await readDailyRotation(scheduled, tx);
+    assertActiveRotationAccount(rotation, input.accountId);
+    if (policy.sourceSharePercent !== 50 ||
+        policy.maxPinsPerDay < rotation.targetPins) {
+      throw Error("SOURCE_ROTATION_POLICY_NOT_CONFIGURED");
+    }
+    const dailyLimit = Math.min(AUTHORIZED_SOURCE_CAP, rotation.targetPins);
     const alreadyApproved = otherApprovedSaytwist + otherSource;
     const plan = planViralPortfolio({
       mode: "ACTIVE", sourceSharePercent: policy.sourceSharePercent,
-      maxPinsPerDay: Math.min(policy.maxPinsPerDay, AUTHORIZED_SOURCE_CAP),
+      maxPinsPerDay: Math.min(policy.maxPinsPerDay, dailyLimit),
     }, {
       day: start.toISOString().slice(0, 10),
       saytwistCommitted: otherApprovedSaytwist,
       sourceCommitted: otherSource,
-      hardDailyPinCap: AUTHORIZED_SOURCE_CAP,
-      remainingProviderPublicationCapacity: AUTHORIZED_SOURCE_CAP - Math.min(AUTHORIZED_SOURCE_CAP, alreadyApproved),
+      hardDailyPinCap: dailyLimit,
+      remainingProviderPublicationCapacity: Math.max(0, dailyLimit - alreadyApproved),
       originalConceptsQualified: 1, sourceConceptsQualified: 1,
       sourcePublishingRightsVerified: true,
+      rotatingTarget: { source: rotation.source, saytwist: rotation.original },
     });
     if (plan.additional.source < 1) throw Error("SOURCE_APPROVAL_CHANNEL_QUOTA");
     const approvalIdentity = createHash("sha256").update(JSON.stringify({

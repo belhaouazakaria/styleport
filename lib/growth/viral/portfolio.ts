@@ -23,6 +23,8 @@ export type ViralPortfolioEvidence = {
   originalConceptsQualified: number;
   // External links need a valid, truthfully described source and ORIGINAL creative.
   sourcePublishingRightsVerified: boolean;
+  /** Optional approved one-account rotation mix, bounded by total daily cap. */
+  rotatingTarget?: { source: number; saytwist: number };
 };
 
 export type ViralPortfolioPlan = {
@@ -58,9 +60,17 @@ export function planViralPortfolio(raw: ViralPortfolioPolicy, e: ViralPortfolioE
   // sequence, including a 50:50 split when the real hard cap is three Pins.
   const dayIndex = Math.floor(date.getTime() / 86400000) % 100;
   const quotaUnits = total * policy.sourceSharePercent;
-  const source = Math.floor((dayIndex + 1) * quotaUnits / 100) -
-    Math.floor(dayIndex * quotaUnits / 100);
-  const saytwist = total - source;
+  const source = e.rotatingTarget
+    ? e.rotatingTarget.source
+    : Math.floor((dayIndex + 1) * quotaUnits / 100) -
+      Math.floor(dayIndex * quotaUnits / 100);
+  const saytwist = e.rotatingTarget
+    ? e.rotatingTarget.saytwist : total - source;
+  if (e.rotatingTarget &&
+      (!quantity(source) || !quantity(saytwist) ||
+       source + saytwist !== total)) {
+    throw Error("VIRAL_ROTATION_SPLIT_INVALID");
+  }
   const target = { saytwist, source };
   const base: ViralPortfolioPlan = {
     status: "PAUSED", target, additional: { saytwist: 0, source: 0 },
