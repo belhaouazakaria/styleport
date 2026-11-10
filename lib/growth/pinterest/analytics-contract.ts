@@ -13,8 +13,9 @@ export const PINTEREST_ANALYTICS_LOOKBACK_DAYS = 90;
 export const PINTEREST_ANALYTICS_REFRESH_DAYS = 7;
 export const PINTEREST_PIN_REQUESTS_PER_JOB = 8;
 export const PINTEREST_INVENTORY_REQUESTS_PER_JOB = 3;
-export const PINTEREST_INVENTORY_MAX_PAGES = 10;
-export const PINTEREST_INVENTORY_MAX_PINS = 2_500;
+// Inventory history has no arbitrary cumulative record/page ceiling.
+// The provider cursor is persisted and each bounded worker invocation reads
+// at most PINTEREST_INVENTORY_REQUESTS_PER_JOB pages.
 
 const dateOnlySchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
