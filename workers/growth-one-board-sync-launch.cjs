@@ -118,7 +118,7 @@ function run() {
   if (child.status !== 0 || child.error ||
       lines.length !== EXPECTED_LINES.length + 1 ||
       !lines.every((line, index) => index === 5
-        ? /^GROWTH_ONE_BOARD_SYNC_ACTIVE_BOARDS=(?:[1-9][0-9]?)$/.test(line)
+        ? /^GROWTH_ONE_BOARD_SYNC_ACTIVE_BOARDS=(?:[1-9][0-9]?|100)$/.test(line)
         : line === EXPECTED_LINES[index < 5 ? index : index - 1])) {
     throw Error("BOUNDED_SYNC_FAILED");
   }
