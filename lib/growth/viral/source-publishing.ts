@@ -179,6 +179,10 @@ export async function approveOriginalSourcePin(
     }
     const rotation = await readDailyRotation(scheduled, tx);
     assertActiveRotationAccount(rotation, input.accountId);
+    if (policy.sourceSharePercent !== 50 ||
+        policy.maxPinsPerDay < rotation.targetPins) {
+      throw Error("SOURCE_ROTATION_POLICY_NOT_CONFIGURED");
+    }
     const dailyLimit = Math.min(AUTHORIZED_SOURCE_CAP, rotation.targetPins);
     const alreadyApproved = otherApprovedSaytwist + otherSource;
     const plan = planViralPortfolio({
@@ -192,6 +196,7 @@ export async function approveOriginalSourcePin(
       remainingProviderPublicationCapacity: Math.max(0, dailyLimit - alreadyApproved),
       originalConceptsQualified: 1, sourceConceptsQualified: 1,
       sourcePublishingRightsVerified: true,
+      rotatingTarget: { source: rotation.source, saytwist: rotation.original },
     });
     if (plan.additional.source < 1) throw Error("SOURCE_APPROVAL_CHANNEL_QUOTA");
     const approvalIdentity = createHash("sha256").update(JSON.stringify({
