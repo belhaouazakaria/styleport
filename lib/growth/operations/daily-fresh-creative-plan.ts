@@ -21,6 +21,8 @@ export function planDailyFreshCreatives(input: {
   alreadyCreatedToday: number;
   eligibleDistinctTargets: number;
   verifiedRecentOpportunityEvidence: boolean;
+  /** Bounded selected account share of the daily 4-5 Pin rotation. */
+  rotatingOwnedTarget?: number;
 }): FreshCreativePlan {
   const { policy, alreadyCreatedToday, eligibleDistinctTargets,
     verifiedRecentOpportunityEvidence } = input;
@@ -33,10 +35,17 @@ export function planDailyFreshCreatives(input: {
   if (owner.mode === "PAUSED") {
     return { desired: 0, additional: 0, status: "PAUSED", model: "paused" };
   }
+  if (input.rotatingOwnedTarget !== undefined &&
+      (!Number.isSafeInteger(input.rotatingOwnedTarget) ||
+       input.rotatingOwnedTarget < 0 || input.rotatingOwnedTarget > 3)) {
+    throw Error("FRESH_ROTATION_TARGET_INVALID");
+  }
   const desired = Math.min(
     FRESH_CREATIVE_DAILY_HARD_CAP, owner.maximum,
-    owner.mode === "FIXED" ? owner.fixed! :
-      verifiedRecentOpportunityEvidence ? Math.max(owner.minimum, 3) : 1,
+    input.rotatingOwnedTarget !== undefined
+      ? input.rotatingOwnedTarget
+      : owner.mode === "FIXED" ? owner.fixed! :
+        verifiedRecentOpportunityEvidence ? Math.max(owner.minimum, 3) : 1,
   );
   const stillNeeded = Math.max(0, desired - alreadyCreatedToday);
   if (stillNeeded === 0) {
