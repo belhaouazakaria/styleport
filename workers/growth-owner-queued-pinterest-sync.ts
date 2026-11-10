@@ -195,7 +195,20 @@ async function oneExistingJob(stage: "BOARD" | "ACCOUNT") {
 }
 
 export async function completeOwnerQueuedPinterestSyncs() {
-  const board = await oneExistingJob("BOARD");
+  const jobs = await prisma.growthJob.findMany({
+    where: { status: { in: [...ACTIVE] } },
+    orderBy: { createdAt: "asc" }, take: 5,
+  });
+  let board: { stage: "BOARD"; status: "SUCCEEDED" } | null = null;
+  if (jobs.length === 2) {
+    selectOwnerQueuedPinterestSync(jobs, "BOARD");
+    board = await oneExistingJob("BOARD");
+  } else {
+    // Safe resume after an earlier attempt completed the board GET.
+    // The ACCOUNT stage independently verifies the matching board job
+    // was SUCCEEDED, not cancelled, rewritten or fabricated.
+    selectOwnerQueuedPinterestSync(jobs, "ACCOUNT");
+  }
   const account = await oneExistingJob("ACCOUNT");
   const blocking = await prisma.growthJob.count({
     where: { status: { in: [...ACTIVE] } },
@@ -213,10 +226,20 @@ async function main() {
         uid: process.getuid?.() ?? -1,
         cwd: process.cwd(), node: process.execPath,
       });
+    const jobs = await prisma.growthJob.findMany({
+      where: { status: { in: [...ACTIVE] } },
+      orderBy: { createdAt: "asc" }, take: 5,
+    });
     stage = "BOARD";
-    const board = await oneExistingJob("BOARD");
-    if (board.status !== "SUCCEEDED") throw Error("QUEUED_SYNC_BOARD_FAILED");
-    console.log("GROWTH_OWNER_PENDING_BOARD=SUCCEEDED");
+    if (jobs.length === 2) {
+      selectOwnerQueuedPinterestSync(jobs, "BOARD");
+      const board = await oneExistingJob("BOARD");
+      if (board.status !== "SUCCEEDED") throw Error("QUEUED_SYNC_BOARD_FAILED");
+      console.log("GROWTH_OWNER_PENDING_BOARD=SUCCEEDED");
+    } else {
+      selectOwnerQueuedPinterestSync(jobs, "ACCOUNT");
+      console.log("GROWTH_OWNER_PENDING_BOARD=ALREADY_SUCCEEDED");
+    }
     stage = "ACCOUNT";
     const account = await oneExistingJob("ACCOUNT");
     if (account.status !== "SUCCEEDED") throw Error("QUEUED_SYNC_ACCOUNT_FAILED");
