@@ -61,10 +61,7 @@ async function oneExistingJob(stage: "BOARD" | "ACCOUNT") {
   const now = new Date();
   const expiry = new Date(now.getTime() + LEASE_MS);
   const admitted = await prisma.$transaction(async tx => {
-    const lock = await tx.$queryRawUnsafe<Array<{ id: string }>>(
-      'SELECT "id" FROM "GrowthSettings" WHERE "id" = ' +
-      "'global' FOR UPDATE",
-    );
+    const lock = await tx.$queryRaw<Array<{ id: string }>>`SELECT "id" FROM "GrowthSettings" WHERE "id" = 'global' FOR UPDATE`;
     if (lock.length !== 1) throw Error("QUEUED_SYNC_SETTINGS_MISSING");
     const [settings, policy, jobs] = await Promise.all([
       tx.growthSettings.findUnique({ where: { id: "global" },
