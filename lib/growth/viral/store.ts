@@ -2,6 +2,7 @@ import { GrowthActivityActorKind, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { discoverAnythingTranslateTopics } from "@/lib/growth/viral/catalog";
 import { normalizeTranslatorConcept } from "@/lib/growth/viral/niche";
+import { rankSourceTranslators, SOURCE_RATING_VERSION } from "@/lib/growth/viral/rating";
 import {
   viralPortfolioPolicySchema, type ViralPortfolioPolicy,
 } from "@/lib/growth/viral/portfolio";
@@ -48,6 +49,15 @@ export async function scanViralSourceCatalog(now = new Date(), fetchImpl?: typeo
     throw Error("VIRAL_CATALOG_SOURCE_UNAVAILABLE");
   }
 
+  const rated = rankSourceTranslators(topics.map(topic => ({
+    ...topic, id: topic.sourceUrl,
+  })));
+  const ratingByUrl = new Map(rated.map(topic => [topic.sourceUrl, topic.rating]));
+  const qualityCounts = {
+    priority: rated.filter(x => x.rating.decision === "PRIORITY").length,
+    later: rated.filter(x => x.rating.decision === "SCHEDULE_LATER").length,
+    withdrawn: rated.filter(x => x.rating.decision === "WITHDRAW").length,
+  };
   const existingTranslators = await prisma.translator.findMany({
     where: { archivedAt: null }, select: { name: true, slug: true }, take: 10000,
   });
@@ -56,17 +66,26 @@ export async function scanViralSourceCatalog(now = new Date(), fetchImpl?: typeo
   ]));
   let created = 0, existing = 0, skipped = 0;
   for (const topic of topics) {
+    const rating = ratingByUrl.get(topic.sourceUrl);
+    if (!rating) throw Error("SOURCE_RATING_MISSING");
+    const disposition = rating.decision === "PRIORITY" ? "DISCOVERED" :
+      rating.decision === "SCHEDULE_LATER" ? "REVIEW" : "REJECTED";
     const normalizedKey = normalizeTranslatorConcept(topic.title);
     if (normalizedKey.length < 3 || normalizedKey.length > 160 ||
         catalogKeys.has(normalizedKey)) { skipped++; continue; }
     const found = await prisma.growthViralConcept.findFirst({
       where: { OR: [{ normalizedKey }, { sourceUrl: topic.sourceUrl }] },
-      select: { id: true, sourceUrl: true },
+      select: { id: true, sourceUrl: true, status: true },
     });
     if (found) {
       if (found.sourceUrl !== topic.sourceUrl) { skipped++; continue; }
       await prisma.growthViralConcept.update({
-        where: { id: found.id }, data: { lastSeenAt: now },
+        where: { id: found.id },
+        data: { lastSeenAt: now,
+          // Retain owner-reviewed, tested and winning states.
+          ...(found.status === "DISCOVERED" || found.status === "REVIEW"
+            ? { status: disposition } : {}),
+        },
       });
       existing++; continue;
     }
@@ -74,7 +93,7 @@ export async function scanViralSourceCatalog(now = new Date(), fetchImpl?: typeo
       await prisma.growthViralConcept.create({
         data: { title: topic.title, normalizedKey, sourceUrl: topic.sourceUrl,
           firstSeenAt: now, lastSeenAt: now,
-          status: "DISCOVERED", rightsVerified: false },
+          status: disposition, rightsVerified: false },
       });
       created++;
     } catch (error) {
@@ -88,6 +107,7 @@ export async function scanViralSourceCatalog(now = new Date(), fetchImpl?: typeo
       entityType: "GrowthViralSource", entityId: "anythingtranslate.com",
       action: "CATALOG_SCAN_ARCHIVED", correlationKey: key,
       summary: { day, inspected: topics.length, created, existing, skipped,
+        sourceRatingVersion: SOURCE_RATING_VERSION, qualityCounts,
         pinsPublished: 0, linksChanged: 0, aiCalls: 0 },
     },
   });
