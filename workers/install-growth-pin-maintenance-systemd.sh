@@ -34,11 +34,11 @@ for unit in "$SERVICE" "$TIMER" "$ALERT"; do
   [[ ! -e "$UNITS/$unit" && ! -L "$UNITS/$unit" ]] || fail
 done
 
-TMP=$(mktemp -d "$UNITS/.daily-analytics-install.XXXXXXXX")
+TMP=$(mktemp -d "$UNITS/.pin-maintenance-install.XXXXXXXX")
 trap 'rm -rf "$TMP"' EXIT
 cat > "$TMP/$SERVICE" <<EOF
 [Unit]
-Description=SayTwist one-account official Pinterest analytics refresh (owner opt-in)
+Description=SayTwist bounded one-GET Pinterest Pin inventory and metrics maintenance
 After=network-online.target
 Wants=network-online.target
 OnFailure=$ALERT
@@ -59,7 +59,7 @@ UMask=0077
 EOF
 cat > "$TMP/$TIMER" <<EOF
 [Unit]
-Description=SayTwist bounded Pinterest Pin analytics maintenance (owner opt-in) (owner opt-in)
+Description=SayTwist Pinterest Pin analytics maintenance, opt-in 7 ticks daily
 
 [Timer]
 OnCalendar=*-*-* 10,12,14,16,18,20,22:45:00 UTC
@@ -73,7 +73,7 @@ WantedBy=timers.target
 EOF
 cat > "$TMP/$ALERT" <<EOF
 [Unit]
-Description=SayTwist daily Pinterest account analytics failure alert
+Description=SayTwist bounded Pin maintenance failure alert
 After=network-online.target
 Wants=network-online.target
 
