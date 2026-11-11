@@ -6,7 +6,7 @@ export const LEGACY_TRANSLATOR_HOSTNAME = "translator.whattypeof.com";
 
 export function isLegacyTranslatorHostname(host: string | null | undefined): boolean {
   if (!host) return false;
-  return host.trim().toLowerCase().replace(/:443$/, "") === LEGACY_TRANSLATOR_HOSTNAME;
+  return host.trim().toLowerCase().replace(/:[0-9]{1,5}$/, "") === LEGACY_TRANSLATOR_HOSTNAME;
 }
 
 /**
