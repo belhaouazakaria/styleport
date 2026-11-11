@@ -31,16 +31,6 @@ export function resolveGrowthRollout(
       GrowthJobType.PINTEREST_ACCOUNT_ANALYTICS_SYNC,
     ] };
   }
-  // Separate exact-ID one-shot Pin maintenance scope. Never broad-sweep
-  // account metrics, content jobs, Pin publishing, or unrelated pending jobs.
-  if (env.GROWTH_ROLLOUT_MODE === "ANALYTICS" &&
-      env.GROWTH_PIN_MAINTENANCE_SCOPE === "true" &&
-      env.GROWTH_DAILY_ANALYTICS_SCOPE !== "true") {
-    return { mode: "ANALYTICS", allowedTypes: [
-      GrowthJobType.PINTEREST_PIN_INVENTORY_SYNC,
-      GrowthJobType.PINTEREST_PIN_ANALYTICS_SYNC,
-    ] };
-  }
   if (env.GROWTH_ROLLOUT_MODE === "OBSERVE") return { mode: "OBSERVE", allowedTypes: [...OBSERVE] };
   // The dedicated, SHA-pinned preparation runner can claim only one exact
   // content job. Generic worker scans MUST NOT activate in PREPARE mode.
