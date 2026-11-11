@@ -43,7 +43,10 @@ def verify_and_extract(artifact_zip: Path, destination: Path, expected_zip_sha25
             shutil.copyfileobj(source, target, length=1024 * 1024)
 
     with tarfile.open(destination, mode="r:gz") as release:
-        marker = release.extractfile(".release-sha")
+        try:
+            marker = release.extractfile(".release-sha")
+        except KeyError as exc:
+            raise ValueError("Release archive is missing .release-sha") from exc
         if marker is None:
             raise ValueError("Release archive is missing .release-sha")
         embedded_sha = marker.read(100).decode("utf-8").strip()
