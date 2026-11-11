@@ -28,7 +28,7 @@ The SHA-addressed `hostinger-release-<commit>` artifact is retained for 14 days 
 - `lib/`, `workers/`, and `tsconfig.json` for the existing editorial worker and bounded Growth worker commands;
 - `ecosystem.config.cjs`, `server.js`, Next configuration, and package manifests.
 
-The workflow verifies those paths after creating the archive.
+The workflow verifies those paths after creating the archive. The Hostinger script repeats critical staging checks before replacing runtime paths. It preserves `public/generated`; the separate `storage/` tree, `.env`, database backups, and rollback releases are not included or replaced by the release archive.
 
 ### 2026-11-11 Hostinger artifact-transfer recovery
 
@@ -39,7 +39,6 @@ The deployment job now SCP-uploads **only small deployment scripts**. Immediatel
 The existing `hostinger-deploy.sh` remains unchanged: exact SHA and release layout validation, PM2 contract, PostgreSQL 18 backup, zero-pending-migrations gate, generated asset preservation, release swap, health/readiness checks, and automatic code rollback remain mandatory.
 
 Do not rerun the cancelled release without the reviewed workflow fix, and do not use the old large-file SCP path or a manual copy as a substitute for the exact-SHA protected release gate. A new reviewed commit requires a **fresh approval** for that exact commit. After release, verify `https://translator.whattypeof.com/translators/jester-translator` returns 200 without `Location:`; also verify `saytwist.com`, the translation flow, and PM2 health.
- The Hostinger script repeats critical staging checks before replacing runtime paths. It preserves `public/generated`; the separate `storage/` tree, `.env`, database backups, and rollback releases are not included or replaced by the release archive.
 
 The Growth worker remains bounded and explicitly invoked. This release does not add a recurring Growth process, enable Growth, change attribution gates, or relax Pinterest approval/publishing restrictions.
 
