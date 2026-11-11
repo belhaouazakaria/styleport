@@ -1,5 +1,9 @@
 name: Deploy to Hostinger
 
+permissions:
+  contents: read
+  actions: read
+
 on:
   workflow_dispatch:
     inputs:
@@ -148,19 +152,13 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     name: Production Deploy
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 60
     environment: production
     needs: ci
 
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-
-      - name: Download deploy artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: hostinger-release-${{ github.sha }}
-          path: .
 
       - name: Validate deploy configuration
         env:
@@ -184,7 +182,7 @@ jobs:
             exit 1
           fi
 
-      - name: Upload application files to Hostinger
+      - name: Upload small deployment scripts to Hostinger
         uses: appleboy/scp-action@v1.0.0
         with:
           host: ${{ secrets.HOSTINGER_SSH_HOST || vars.HOSTINGER_SSH_HOST }}
@@ -192,28 +190,71 @@ jobs:
           key: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
           port: ${{ secrets.HOSTINGER_SSH_PORT || vars.HOSTINGER_SSH_PORT }}
           source: >-
-            release.tar.gz,scripts/hostinger-deploy.sh,scripts/pm2-process-contract.mjs
+            scripts/hostinger-deploy.sh,scripts/pm2-process-contract.mjs,scripts/hostinger-fetch-release.sh,scripts/hostinger-unpack-artifact.py
           target: ${{ secrets.HOSTINGER_APP_PATH || vars.HOSTINGER_APP_PATH }}
           overwrite: true
+
+      - name: Resolve signed GitHub artifact URL
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          response="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?per_page=100")"
+          metadata="$(jq -er \
+            --arg name "hostinger-release-$GITHUB_SHA" \
+            --arg sha "$GITHUB_SHA" \
+            '[.artifacts[] | select(.name == $name and (.expired | not))] |
+             if length == 1 and .[0].workflow_run.head_sha == $sha then .[0]
+             else error("Expected exactly one current-run SHA-matched artifact") end' <<< "$response")"
+          artifact_id="$(jq -r '.id' <<< "$metadata")"
+          digest="$(jq -r '.digest' <<< "$metadata")"
+          [[ "$artifact_id" =~ ^[0-9]+$ ]] || exit 1
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || exit 1
+
+          headers="$(mktemp)"
+          trap 'rm -f "$headers"' EXIT
+          status="$(curl --silent --show-error --max-time 30 \
+            -D "$headers" -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id/zip")"
+          [[ "$status" == "302" ]] || {
+            echo "::error::GitHub did not return a signed artifact download redirect ($status)."
+            exit 1
+          }
+          signed_url="$(grep -i '^location:' "$headers" | tail -n 1 | sed -E 's/^[^:]*:[[:space:]]*//; s/\r$//')"
+          [[ "$signed_url" == https://* ]] || {
+            echo "::error::GitHub artifact redirect was missing or not HTTPS."
+            exit 1
+          }
+          echo "::add-mask::$signed_url"
+          printf 'HOSTINGER_ARTIFACT_URL=%s\n' "$signed_url" >> "$GITHUB_ENV"
+          printf 'HOSTINGER_ARTIFACT_ZIP_SHA256=%s\n' "${digest#sha256:}" >> "$GITHUB_ENV"
+          echo "Resolved current-run SHA-matched artifact for secure VPS download."
 
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.2.0
         env:
           PM2_CLI: ${{ secrets.HOSTINGER_PM2_CLI || vars.HOSTINGER_PM2_CLI }}
+          # Artifact URL/digest are supplied by the preceding step via GITHUB_ENV.
+          HOSTINGER_RELEASE_SHA: ${{ github.sha }}
         with:
           host: ${{ secrets.HOSTINGER_SSH_HOST || vars.HOSTINGER_SSH_HOST }}
           username: ${{ secrets.HOSTINGER_SSH_USER || vars.HOSTINGER_SSH_USER }}
           key: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
           port: ${{ secrets.HOSTINGER_SSH_PORT || vars.HOSTINGER_SSH_PORT }}
           script_stop: true
-          command_timeout: 40m
-          envs: PM2_CLI
+          command_timeout: 50m
+          envs: PM2_CLI,HOSTINGER_ARTIFACT_URL,HOSTINGER_ARTIFACT_ZIP_SHA256,HOSTINGER_RELEASE_SHA
           script: |
             set -eu
             cd "${{ secrets.HOSTINGER_APP_PATH || vars.HOSTINGER_APP_PATH }}"
             echo "[gha][ssh] pwd=$(pwd)"
             command -v bash >/dev/null 2>&1 || { echo "[gha][ssh][error] bash not found"; exit 1; }
-            chmod +x ./scripts/hostinger-deploy.sh
+            chmod +x ./scripts/hostinger-fetch-release.sh ./scripts/hostinger-deploy.sh
+            HOSTINGER_APP_PATH="${{ secrets.HOSTINGER_APP_PATH || vars.HOSTINGER_APP_PATH }}" \
+              bash ./scripts/hostinger-fetch-release.sh
+            unset HOSTINGER_ARTIFACT_URL HOSTINGER_ARTIFACT_ZIP_SHA256
             HOSTINGER_NODE_BIN="/home/saytwist/.nvm/versions/node/v24.20.0/bin" \
               HOSTINGER_PM2_PROCESS="saytwist" \
               HOSTINGER_PM2_CLI="$PM2_CLI" \
