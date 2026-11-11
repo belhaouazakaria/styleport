@@ -26,12 +26,10 @@ const nextConfig: NextConfig = {
       statusCode: 301,
     } as const;
 
-    // Old domain redirects for SayTwist migration
-    // These handle permanent redirects from the old whattypeof.com domains
-    const oldHostnames = [
-      "translator.whattypeof.com",
-      "translators.whattypeof.com",
-    ];
+    // Keep the unused plural alias redirected to the canonical SayTwist site.
+    // The singular translator.whattypeof.com host serves the app directly.
+    // Canonical metadata and sitemap URLs remain on saytwist.com.
+    const oldHostnames = ["translators.whattypeof.com"];
 
     const redirects = oldHostnames.flatMap((hostname) => [
       {
