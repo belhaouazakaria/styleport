@@ -53,8 +53,8 @@ async function sendPinMaintenanceAlert({
         sender, to: [{ email: recipient }],
         subject: "SayTwist Pinterest Pin analytics maintenance failed: review required",
         textContent: [
-          "The bounded scheduled Pinterest account analytics GET failed or was blocked.",
-          "No automatic retry should be attempted.",
+          "A one-request Pinterest Pin inventory or metrics maintenance tick failed or was blocked.",
+          "Do not rerun the same reserved slot. The next approved timer tick is independent.",
           "Verify Growth remains OFF and the activation lease is NULL.",
           "Check systemctl status saytwist-growth-pin-maintenance.service",
           "and journalctl -u saytwist-growth-pin-maintenance.service.",
