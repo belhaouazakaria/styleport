@@ -41,6 +41,7 @@ describe("two-domain routing and ads.txt safety", () => {
   it("requires an exact legacy hostname and explicit advertising approval", () => {
     expect(isLegacyTranslatorHostname("translator.whattypeof.com")).toBe(true);
     expect(isLegacyTranslatorHostname("TRANSLATOR.WHATTYPEOF.COM:443")).toBe(true);
+    expect(isLegacyTranslatorHostname("translator.whattypeof.com:80")).toBe(true);
     expect(isLegacyTranslatorHostname("translator.whattypeof.com.attacker.test")).toBe(false);
     expect(advertisingPermittedForHost("translator.whattypeof.com", undefined)).toBe(false);
     expect(advertisingPermittedForHost("translator.whattypeof.com", "false")).toBe(false);
