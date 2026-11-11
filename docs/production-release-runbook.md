@@ -28,7 +28,18 @@ The SHA-addressed `hostinger-release-<commit>` artifact is retained for 14 days 
 - `lib/`, `workers/`, and `tsconfig.json` for the existing editorial worker and bounded Growth worker commands;
 - `ecosystem.config.cjs`, `server.js`, Next configuration, and package manifests.
 
-The workflow verifies those paths after creating the archive. The Hostinger script repeats critical staging checks before replacing runtime paths. It preserves `public/generated`; the separate `storage/` tree, `.env`, database backups, and rollback releases are not included or replaced by the release archive.
+The workflow verifies those paths after creating the archive.
+
+### 2026-11-11 Hostinger artifact-transfer recovery
+
+The prior release attempt (run `43086027279`, approved SHA `a4fa1f2a35c045e82aa3658f1312dffdf0474185`) passed its CI gate but timed out while `scp-action` attempted to send the approximately 430 MB release archive. The SSH deployment never started. A VPS read-only check verified the previous SHA `fc3ec602b6fbaad4d3afbedca840c3f2c43521c2` remained active, `release.tar.gz` was absent, and disk availability was 82 GB.
+
+The deployment job now SCP-uploads **only small deployment scripts**. Immediately before the protected SSH deploy, the GitHub runner requests a current-run SHA-bound artifact through GitHub's Actions API with its short-lived `GITHUB_TOKEN`, then resolves a one-minute signed HTTPS download URL. The token itself never goes to the VPS; only the ephemeral signed URL is delivered to the SSH action, masked in GitHub logs. The VPS pulls the ZIP directly, verifies its GitHub-published SHA-256 digest and its embedded `.release-sha`, checks tar readability, and atomically places `release.tar.gz` in the existing application directory. All partially downloaded files are cleaned on ordinary failure. A transfer failure stops before the protected deployment script touches database or running application files.
+
+The existing `hostinger-deploy.sh` remains unchanged: exact SHA and release layout validation, PM2 contract, PostgreSQL 18 backup, zero-pending-migrations gate, generated asset preservation, release swap, health/readiness checks, and automatic code rollback remain mandatory.
+
+Do not rerun the cancelled release without the reviewed workflow fix, and do not use the old large-file SCP path or a manual copy as a substitute for the exact-SHA protected release gate. A new reviewed commit requires a **fresh approval** for that exact commit. After release, verify `https://translator.whattypeof.com/translators/jester-translator` returns 200 without `Location:`; also verify `saytwist.com`, the translation flow, and PM2 health.
+ The Hostinger script repeats critical staging checks before replacing runtime paths. It preserves `public/generated`; the separate `storage/` tree, `.env`, database backups, and rollback releases are not included or replaced by the release archive.
 
 The Growth worker remains bounded and explicitly invoked. This release does not add a recurring Growth process, enable Growth, change attribution gates, or relax Pinterest approval/publishing restrictions.
 
