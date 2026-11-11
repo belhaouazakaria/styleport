@@ -219,6 +219,7 @@ async function bulkUpsertPinterestPins(params: {
 
 export async function syncPinterestPinInventory(params: {
   accountId: string; startDate: string; endDate: string; runStartedAt: string; fetchImpl?: typeof fetch;
+  maintenanceBounded?: boolean;
 }) {
   const now = new Date();
   const state = await prisma.growthPinterestAnalyticsState.upsert({
@@ -235,7 +236,7 @@ export async function syncPinterestPinInventory(params: {
   const settings = await getGrowthSettings();
 
   try {
-    for (let request = 0; request < PINTEREST_INVENTORY_REQUESTS_PER_JOB; request += 1) {
+    for (let request = 0; request < (params.maintenanceBounded ? 1 : PINTEREST_INVENTORY_REQUESTS_PER_JOB); request += 1) {
       const response = await getPinterestPinsPage(params.accountId, bookmark, params.fetchImpl);
       lastRateLimit = response.rateLimit;
       pageCount += 1;
@@ -282,7 +283,7 @@ export async function syncPinterestPinInventory(params: {
           });
           return count;
         });
-        await enqueueGrowthJob({
+        if (!params.maintenanceBounded) await enqueueGrowthJob({
           type: GrowthJobType.PINTEREST_PIN_ANALYTICS_SYNC,
           idempotencyKey: continuationKey([params.accountId, params.runStartedAt, "pins", "0"]),
           payload: {
@@ -305,7 +306,7 @@ export async function syncPinterestPinInventory(params: {
       });
       if (lowPinterestRateLimit(lastRateLimit)) break;
     }
-    await enqueueGrowthJob({
+    if (!params.maintenanceBounded) await enqueueGrowthJob({
       type: GrowthJobType.PINTEREST_PIN_INVENTORY_SYNC,
       idempotencyKey: continuationKey([params.accountId, params.runStartedAt, "inventory", String(pageCount), bookmark || "end"]),
       payload: { accountId: params.accountId, startDate: params.startDate, endDate: params.endDate, runStartedAt: params.runStartedAt },
@@ -387,6 +388,7 @@ export async function syncPinterestAccountAnalytics(params: {
 export async function syncPinterestPinAnalytics(params: {
   accountId: string; startDate: string; endDate: string; runStartedAt: string;
   batch: number; relevancePrepared?: boolean; fetchImpl?: typeof fetch;
+  maintenanceBounded?: boolean;
 }) {
   const cutoff = new Date(params.runStartedAt);
   try {
@@ -401,8 +403,13 @@ export async function syncPinterestPinAnalytics(params: {
       : { OR: [{ lastAnalyticsSyncAt: null }, { lastAnalyticsSyncAt: { lt: cutoff } }] };
     const pins = await prisma.growthPinterestPin.findMany({
       where: { accountId: params.accountId, isActive: true, analyticsEligible: true, ...analyticsDue },
-      orderBy: [{ analyticsPriorityAt: { sort: "desc", nulls: "last" } }, { lastAnalyticsSyncAt: { sort: "asc", nulls: "first" } }, { publishedAt: "desc" }],
-      take: PINTEREST_PIN_REQUESTS_PER_JOB,
+      orderBy: params.maintenanceBounded
+        ? [{ lastAnalyticsSyncAt: { sort: "asc", nulls: "first" } } as const,
+           { analyticsPriorityAt: { sort: "desc", nulls: "last" } } as const]
+        : [{ analyticsPriorityAt: { sort: "desc", nulls: "last" } } as const,
+           { lastAnalyticsSyncAt: { sort: "asc", nulls: "first" } } as const,
+           { publishedAt: "desc" } as const],
+      take: params.maintenanceBounded ? 1 : PINTEREST_PIN_REQUESTS_PER_JOB,
       select: { id: true, pinterestPinId: true },
     });
     let processed = 0;
@@ -438,7 +445,7 @@ export async function syncPinterestPinAnalytics(params: {
       where: { accountId: params.accountId, isActive: true, analyticsEligible: true, ...analyticsDue },
     });
     if (remaining > 0) {
-      await enqueueGrowthJob({
+      if (!params.maintenanceBounded) await enqueueGrowthJob({
         type: GrowthJobType.PINTEREST_PIN_ANALYTICS_SYNC,
         idempotencyKey: continuationKey([params.accountId, params.runStartedAt, "pins", String(params.batch + 1)]),
         payload: {
