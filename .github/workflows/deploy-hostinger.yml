@@ -236,8 +236,7 @@ jobs:
         uses: appleboy/ssh-action@v1.2.0
         env:
           PM2_CLI: ${{ secrets.HOSTINGER_PM2_CLI || vars.HOSTINGER_PM2_CLI }}
-          HOSTINGER_ARTIFACT_URL: ${{ env.HOSTINGER_ARTIFACT_URL }}
-          HOSTINGER_ARTIFACT_ZIP_SHA256: ${{ env.HOSTINGER_ARTIFACT_ZIP_SHA256 }}
+          # Artifact URL/digest are supplied by the preceding step via GITHUB_ENV.
           HOSTINGER_RELEASE_SHA: ${{ github.sha }}
         with:
           host: ${{ secrets.HOSTINGER_SSH_HOST || vars.HOSTINGER_SSH_HOST }}
