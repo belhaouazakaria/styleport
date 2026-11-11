@@ -15,8 +15,9 @@ const state = () => ({
 
 describe("Pinterest dashboard multi-component freshness", () => {
   it("is FRESH only when all components and current eligible Pins are current", () => {
-    expect(effectiveStatus(state(), 226, now)).toBe("FRESH");
-    expect(effectiveStatus(state(), 0, now)).toBe("FRESH");
+    expect(effectiveStatus(state(), 226, now, 226)).toBe("FRESH");
+    expect(effectiveStatus(state(), 226, now, 225)).toBe("STALE");
+    expect(effectiveStatus(state(), 0, now, 0)).toBe("FRESH");
   });
   it("does not hide a weeks-old inventory or pin backfill after account-only sync", () => {
     expect(effectiveStatus({
