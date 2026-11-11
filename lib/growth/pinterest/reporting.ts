@@ -18,7 +18,7 @@ export async function getPinterestAnalyticsDashboard(params: {
   rangeEnd.setUTCHours(0, 0, 0, 0);
   const rangeStart = new Date(rangeEnd);
   rangeStart.setUTCDate(rangeStart.getUTCDate() - (params.rangeDays - 1));
-  const [accountAggregate, trend, pinGroups, pinCount, analyticsRelevantPinCount] = await Promise.all([
+  const [accountAggregate, trend, pinGroups, pinCount, analyticsRelevantPinCount, recentlySyncedPinCount] = await Promise.all([
     prisma.growthPinterestAccountMetricDaily.aggregate({
       where: { accountId: selected.id, metricDate: { gte: rangeStart, lte: rangeEnd } },
       _sum: { impressions: true, saves: true, pinClicks: true, outboundClicks: true, engagements: true },
@@ -47,6 +47,8 @@ export async function getPinterestAnalyticsDashboard(params: {
     }),
     prisma.growthPinterestPin.count({ where: { accountId: selected.id, isActive: true } }),
     prisma.growthPinterestPin.count({ where: { accountId: selected.id, isActive: true, analyticsEligible: true } }),
+    prisma.growthPinterestPin.count({ where: { accountId: selected.id, isActive: true, analyticsEligible: true,
+      lastAnalyticsSyncAt: { gte: new Date(Date.now() - PIN_MAX_AGE_MS) } } }),
   ]);
   const pinRows = pinGroups.length ? await prisma.growthPinterestPin.findMany({
     where: { id: { in: pinGroups.map((row) => row.pinId) } },
@@ -64,7 +66,7 @@ export async function getPinterestAnalyticsDashboard(params: {
   });
   return {
     accounts, selected, pinCount, analyticsRelevantPinCount, rangeStart, rangeEnd,
-    freshnessStatus: effectiveStatus(selected.analyticsState, analyticsRelevantPinCount),
+    freshnessStatus: effectiveStatus(selected.analyticsState, analyticsRelevantPinCount, new Date(), recentlySyncedPinCount),
     totals: normalizedMetrics(accountAggregate._sum),
     trend: trend.map((row) => ({ ...row, date: row.metricDate.toISOString().slice(0, 10) })),
     pins,
@@ -89,9 +91,11 @@ function normalizedMetrics(value: {
 }
 
 export async function getPinterestAnalyticsOverview() {
-  const [pinsInventoried, analyticsRelevantPins, states] = await Promise.all([
+  const [pinsInventoried, analyticsRelevantPins, recentlySyncedPinCount, states] = await Promise.all([
     prisma.growthPinterestPin.count({ where: { isActive: true } }),
     prisma.growthPinterestPin.count({ where: { isActive: true, analyticsEligible: true } }),
+    prisma.growthPinterestPin.count({ where: { isActive: true, analyticsEligible: true,
+      lastAnalyticsSyncAt: { gte: new Date(Date.now() - PIN_MAX_AGE_MS) } } }),
     prisma.growthPinterestAnalyticsState.findMany({
       select: { status: true, lastSuccessfulSyncAt: true,
         lastAccountAnalyticsSyncAt: true, lastInventorySyncAt: true,
@@ -102,7 +106,7 @@ export async function getPinterestAnalyticsOverview() {
   ]);
   return {
     pinsInventoried, analyticsRelevantPins,
-    status: states.some((state) => state.status === "BACKFILLING") ? "BACKFILLING" : effectiveStatus(states[0]),
+    status: states.some((state) => state.status === "BACKFILLING") ? "BACKFILLING" : effectiveStatus(states[0], analyticsRelevantPins, new Date(), recentlySyncedPinCount),
     lastSuccessfulSyncAt: states[0]?.lastSuccessfulSyncAt || null,
     backfillPinsProcessed: states.reduce((sum, state) => sum + state.backfillPinsProcessed, 0),
     backfillPinsTotal: states.reduce((sum, state) => sum + state.backfillPinsTotal, 0),
@@ -130,6 +134,7 @@ export function effectiveStatus(
   state: FreshnessState | null | undefined,
   eligiblePinCount?: number,
   now = new Date(),
+  recentlySyncedPinCount?: number,
 ) {
   if (!state) return "NEVER_SYNCED";
   if (state.status !== "FRESH") return state.status;
@@ -139,7 +144,9 @@ export function effectiveStatus(
     value.getTime() > current || current - value.getTime() > maxAge;
   const expectedPins = eligiblePinCount ?? state.backfillPinsTotal ?? 0;
   const progressIncomplete = !Number.isSafeInteger(expectedPins) ||
-    expectedPins < 0 || (state.backfillPinsProcessed ?? -1) < expectedPins;
+    expectedPins < 0 || (state.backfillPinsProcessed ?? -1) < expectedPins ||
+    (recentlySyncedPinCount !== undefined &&
+      (!Number.isSafeInteger(recentlySyncedPinCount) || recentlySyncedPinCount < expectedPins));
   if (old(state.lastSuccessfulSyncAt, ACCOUNT_MAX_AGE_MS) ||
       old(state.lastAccountAnalyticsSyncAt, ACCOUNT_MAX_AGE_MS) ||
       old(state.lastInventorySyncAt, INVENTORY_MAX_AGE_MS) ||
