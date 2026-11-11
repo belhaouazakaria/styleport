@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import os from "node:os";
 
 import { prisma } from "@/lib/prisma";
+import { hasVerifiedRecentPinterestAccountSync } from "@/lib/growth/pinterest/daily-observe-freshness";
 import { runOneAccountSync } from "./growth-one-account-sync";
 
 const APP = "/home/saytwist/htdocs/saytwist.com";
@@ -57,15 +58,25 @@ export function assertDailyObserveRuntime(
 async function main() {
   let stage = "RUNTIME";
   try {
-    const { sha, day } = assertDailyObserveRuntime(process.env,
+    const { sha, day, mode } = assertDailyObserveRuntime(process.env,
       readFileSync(".deployed-release", "utf8").trim(), {
         username: os.userInfo().username,
         uid: process.getuid?.() ?? -1, cwd: process.cwd(),
         node: process.execPath,
       });
     stage = "ONE_ACCOUNT_GET";
-    const result = await runOneAccountSync(sha, { dailyUtcDate: day });
-    console.log("GROWTH_DAILY_OBSERVE=PASSED");
+    const alreadyFresh = mode === "SCHEDULED" &&
+      await hasVerifiedRecentPinterestAccountSync();
+    // Never grant an extra API call when another completed sync is fresh.
+    // Manual TRIAL mode retains its existing single-GET contract.
+    const result = alreadyFresh
+      ? { job: "EXISTING_SUCCEEDED" as const, growth: "OFF" as const,
+          lease: "NONE" as const, activeQueue: 0 as const,
+          providerGets: 0 as const, providerWrites: 0 as const,
+          aiCalls: 0 as const, telegram: 0 as const }
+      : await runOneAccountSync(sha, { dailyUtcDate: day });
+    console.log("GROWTH_DAILY_OBSERVE=" +
+      (alreadyFresh ? "ALREADY_FRESH" : "PASSED"));
     console.log("GROWTH_DAILY_OBSERVE_JOB=" + result.job);
     console.log("GROWTH_DAILY_OBSERVE_GROWTH=" + result.growth);
     console.log("GROWTH_DAILY_OBSERVE_LEASE=" + result.lease);

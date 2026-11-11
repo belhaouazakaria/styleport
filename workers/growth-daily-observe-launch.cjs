@@ -17,16 +17,27 @@ const PINTEREST_ENV_NAMES = [
   "PINTEREST_API_ENVIRONMENT", "GROWTH_CREDENTIAL_ENCRYPTION_KEY",
 ];
 const PINTEREST_REDIRECT = "https://saytwist.com/api/admin/growth/pinterest/oauth/callback";
-const EXPECTED_LINES = [
-  "GROWTH_DAILY_OBSERVE=PASSED",
-  "GROWTH_DAILY_OBSERVE_JOB=SUCCEEDED",
+const RESULT_TRAIL = [
   "GROWTH_DAILY_OBSERVE_GROWTH=OFF",
   "GROWTH_DAILY_OBSERVE_LEASE=NONE",
   "GROWTH_DAILY_OBSERVE_ACTIVE_QUEUE=0",
-  "GROWTH_DAILY_OBSERVE_PROVIDER_GETS=1",
   "GROWTH_DAILY_OBSERVE_PROVIDER_WRITES=0",
   "GROWTH_DAILY_OBSERVE_AI_CALLS=0",
   "GROWTH_DAILY_OBSERVE_TELEGRAM=0",
+];
+const EXPECTED_LINES = [
+  "GROWTH_DAILY_OBSERVE=PASSED",
+  "GROWTH_DAILY_OBSERVE_JOB=SUCCEEDED",
+  ...RESULT_TRAIL.slice(0, 3),
+  "GROWTH_DAILY_OBSERVE_PROVIDER_GETS=1",
+  ...RESULT_TRAIL.slice(3),
+];
+const FRESH_LINES = [
+  "GROWTH_DAILY_OBSERVE=ALREADY_FRESH",
+  "GROWTH_DAILY_OBSERVE_JOB=EXISTING_SUCCEEDED",
+  ...RESULT_TRAIL.slice(0, 3),
+  "GROWTH_DAILY_OBSERVE_PROVIDER_GETS=0",
+  ...RESULT_TRAIL.slice(3),
 ];
 
 /**
@@ -117,14 +128,17 @@ function run() {
       cwd: APP, env: childEnv, encoding: "utf8",
       timeout: 75_000, maxBuffer: 8192,
     });
-  if (child.status !== 0 || child.error ||
-      (child.stdout || "").trim() !== EXPECTED_LINES.join("\n")) {
+  const output = (child.stdout || "").trim();
+  const allowed = mode === "SCHEDULED"
+    ? [EXPECTED_LINES.join("\n"), FRESH_LINES.join("\n")]
+    : [EXPECTED_LINES.join("\n")];
+  if (child.status !== 0 || child.error || !allowed.includes(output)) {
     if ((child.stderr || "").includes("GROWTH_DAILY_OBSERVE_REASON=24H_RESERVATION")) {
       process.stderr.write("GROWTH_DAILY_OBSERVE_REASON=24H_RESERVATION\n");
     }
     throw Error("BOUNDED_SYNC_FAILED");
   }
-  process.stdout.write(EXPECTED_LINES.join("\n") + "\n");
+  process.stdout.write(output + "\n");
 }
 if (require.main === module) {
   try { run(); } catch {
