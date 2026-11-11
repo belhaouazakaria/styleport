@@ -27,21 +27,28 @@ describe("ads.txt redirect", () => {
     expect(ezoicRedirects[0]?.source).toBe("/ads.txt");
   });
 
-  it("preserves both existing domain migration redirect patterns", async () => {
+  it("keeps only the plural legacy hostname's permanent redirects", async () => {
     const redirects = await nextConfig.redirects!();
     const migrationRedirects = redirects.filter((item) =>
       item.has?.some(
         (condition) =>
           condition.type === "host" &&
-          ["translator.whattypeof.com", "translators.whattypeof.com"].includes(
-            condition.value,
-          ),
+          condition.value === "translators.whattypeof.com",
       ),
     );
 
-    expect(migrationRedirects).toHaveLength(4);
+    expect(migrationRedirects).toHaveLength(2);
     expect(migrationRedirects.every((item) => item.permanent === true)).toBe(
       true,
     );
+    expect(
+      redirects.some((item) =>
+        item.has?.some(
+          (condition) =>
+            condition.type === "host" &&
+            condition.value === "translator.whattypeof.com",
+        ),
+      ),
+    ).toBe(false);
   });
 });
