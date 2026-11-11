@@ -140,13 +140,7 @@ const handlers = new Map<GrowthJobType, GrowthJobHandler>([
     GrowthJobType.PINTEREST_PIN_INVENTORY_SYNC,
     async ({ job }) => {
       const payload = parsePinterestAnalyticsPayload(job.payload);
-      const maintenanceBounded = process.env.GROWTH_PIN_MAINTENANCE_SCOPE === "true";
-      if (maintenanceBounded &&
-          (process.env.GROWTH_PIN_MAINTENANCE_ENTRYPOINT !== "true" ||
-           process.env.GROWTH_PIN_MAINTENANCE_JOB_ID !== job.id)) {
-        throw new NonRetryableGrowthJobError("Scoped Pinterest inventory maintenance mismatch.");
-      }
-      return syncPinterestPinInventory({ ...payload, maintenanceBounded });
+      return syncPinterestPinInventory(payload);
     },
   ],
   [
@@ -160,14 +154,8 @@ const handlers = new Map<GrowthJobType, GrowthJobHandler>([
     GrowthJobType.PINTEREST_PIN_ANALYTICS_SYNC,
     async ({ job }) => {
       const payload = parsePinterestAnalyticsPayload(job.payload, true);
-      const maintenanceBounded = process.env.GROWTH_PIN_MAINTENANCE_SCOPE === "true";
-      if (maintenanceBounded &&
-          (process.env.GROWTH_PIN_MAINTENANCE_ENTRYPOINT !== "true" ||
-           process.env.GROWTH_PIN_MAINTENANCE_JOB_ID !== job.id)) {
-        throw new NonRetryableGrowthJobError("Scoped Pinterest Pin metrics maintenance mismatch.");
-      }
       return syncPinterestPinAnalytics({
-        ...payload, maintenanceBounded,
+        ...payload,
         batch: payload.batch || 0,
       });
     },
