@@ -26,7 +26,7 @@ const nextConfig: NextConfig = {
       source: "/ads.txt",
       has: [{ type: "host" as const, value: hostname }],
       destination: "https://srv.adstxtmanager.com/19390/saytwist.com",
-      statusCode: 301,
+      statusCode: 301 as const,
     }));
 
     // The singular legacy hostname is intentionally served alongside SayTwist.
