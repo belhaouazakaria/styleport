@@ -3,6 +3,7 @@ import { AdDeviceType, AdPageType, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ensureUniqueSlug } from "@/lib/slug";
 import { getAppSettings } from "@/lib/settings";
+import { advertisingPermittedForCurrentHost } from "@/lib/legacy-domain";
 import type { AdPlacementUpsertInput } from "@/lib/types";
 
 const RENDERABLE_AD_CACHE_TTL_MS = 30_000;
@@ -195,6 +196,9 @@ async function queryRenderableAdPlacements(context: AdRenderContext) {
 }
 
 export async function getRenderableAdPlacements(context: AdRenderContext) {
+  // Host approval takes precedence over cached shared placement inventory.
+  if (!(await advertisingPermittedForCurrentHost())) return [];
+
   const cacheKey = `${context.pageType}:${context.deviceType}:${context.categorySlug || "-"}`;
   const now = Date.now();
   const cached = renderableAdCache.get(cacheKey);

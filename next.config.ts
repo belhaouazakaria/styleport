@@ -20,18 +20,18 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   compress: true,
   async redirects() {
-    const ezoicAdsTxtRedirect = {
+    // Keep SayTwist's existing seller authorization on SayTwist only.
+    // The legacy host serves its own ads.txt via app/ads.txt/route.ts.
+    const ezoicAdsTxtRedirects = ["saytwist.com", "www.saytwist.com"].map((hostname) => ({
       source: "/ads.txt",
+      has: [{ type: "host" as const, value: hostname }],
       destination: "https://srv.adstxtmanager.com/19390/saytwist.com",
-      statusCode: 301,
-    } as const;
+      statusCode: 301 as const,
+    }));
 
-    // Old domain redirects for SayTwist migration
-    // These handle permanent redirects from the old whattypeof.com domains
-    const oldHostnames = [
-      "translator.whattypeof.com",
-      "translators.whattypeof.com",
-    ];
+    // The singular legacy hostname is intentionally served alongside SayTwist.
+    // Preserve the plural historical alias redirect, which is not a live site.
+    const oldHostnames = ["translators.whattypeof.com"];
 
     const redirects = oldHostnames.flatMap((hostname) => [
       {
@@ -48,7 +48,7 @@ const nextConfig: NextConfig = {
       },
     ]);
 
-    return [ezoicAdsTxtRedirect, ...redirects];
+    return [...ezoicAdsTxtRedirects, ...redirects];
   },
   async headers() {
     return [

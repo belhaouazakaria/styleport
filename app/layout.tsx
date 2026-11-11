@@ -6,6 +6,7 @@ import { ToastProvider } from "@/components/providers/toast-provider";
 import { APP_NAME, SEO_DESCRIPTION } from "@/lib/constants";
 import { getAppBaseUrl } from "@/lib/env";
 import { renderCustomHeadCode } from "@/lib/head-code";
+import { advertisingPermittedForCurrentHost } from "@/lib/legacy-domain";
 import { getAppSettings } from "@/lib/settings";
 
 import "./globals.css";
@@ -85,11 +86,14 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const settings = await getAppSettings();
+  const [settings, advertisingPermitted] = await Promise.all([
+    getAppSettings(),
+    advertisingPermittedForCurrentHost(),
+  ]);
 
   return (
     <html lang="en" className={`${bodyFont.variable} ${displayFont.variable}`}>
-      <head>{renderCustomHeadCode(settings.customHeadCode || "")}</head>
+      <head>{advertisingPermitted ? renderCustomHeadCode(settings.customHeadCode || "") : null}</head>
       <body className="min-h-screen bg-page text-ink antialiased">
         <ToastProvider>
           <RequestTranslatorProvider>{children}</RequestTranslatorProvider>
