@@ -64,7 +64,7 @@ export async function getPinterestAnalyticsDashboard(params: {
   });
   return {
     accounts, selected, pinCount, analyticsRelevantPinCount, rangeStart, rangeEnd,
-    freshnessStatus: effectiveStatus(selected.analyticsState),
+    freshnessStatus: effectiveStatus(selected.analyticsState, analyticsRelevantPinCount),
     totals: normalizedMetrics(accountAggregate._sum),
     trend: trend.map((row) => ({ ...row, date: row.metricDate.toISOString().slice(0, 10) })),
     pins,
@@ -93,7 +93,10 @@ export async function getPinterestAnalyticsOverview() {
     prisma.growthPinterestPin.count({ where: { isActive: true } }),
     prisma.growthPinterestPin.count({ where: { isActive: true, analyticsEligible: true } }),
     prisma.growthPinterestAnalyticsState.findMany({
-      select: { status: true, lastSuccessfulSyncAt: true, backfillPinsProcessed: true, backfillPinsTotal: true },
+      select: { status: true, lastSuccessfulSyncAt: true,
+        lastAccountAnalyticsSyncAt: true, lastInventorySyncAt: true,
+        lastPinAnalyticsSyncAt: true, backfillCompletedAt: true,
+        backfillPinsProcessed: true, backfillPinsTotal: true },
       orderBy: { lastSuccessfulSyncAt: "desc" },
     }),
   ]);
@@ -106,8 +109,43 @@ export async function getPinterestAnalyticsOverview() {
   };
 }
 
-function effectiveStatus(state: { status: string; lastSuccessfulSyncAt: Date | null } | null | undefined) {
+type FreshnessState = {
+  status: string;
+  lastSuccessfulSyncAt: Date | null;
+  lastAccountAnalyticsSyncAt?: Date | null;
+  lastInventorySyncAt?: Date | null;
+  lastPinAnalyticsSyncAt?: Date | null;
+  backfillCompletedAt?: Date | null;
+  backfillPinsProcessed?: number;
+  backfillPinsTotal?: number;
+};
+const ACCOUNT_MAX_AGE_MS = 36 * 60 * 60_000;
+const INVENTORY_MAX_AGE_MS = 24 * 60 * 60_000;
+const PIN_MAX_AGE_MS = 36 * 60 * 60_000;
+
+/** Do not let account-only analytics updates masquerade as fresh inventory
+ * or fresh detailed Pin metrics. This is display-only; no job/state writes.
+ */
+export function effectiveStatus(
+  state: FreshnessState | null | undefined,
+  eligiblePinCount?: number,
+  now = new Date(),
+) {
   if (!state) return "NEVER_SYNCED";
-  if (state.status === "FRESH" && (!state.lastSuccessfulSyncAt || Date.now() - state.lastSuccessfulSyncAt.getTime() > 36 * 60 * 60 * 1000)) return "STALE";
-  return state.status;
+  if (state.status !== "FRESH") return state.status;
+  const current = now.getTime();
+  const old = (value: Date | null | undefined, maxAge: number) =>
+    !(value instanceof Date) || !Number.isFinite(value.getTime()) ||
+    value.getTime() > current || current - value.getTime() > maxAge;
+  const expectedPins = eligiblePinCount ?? state.backfillPinsTotal ?? 0;
+  const progressIncomplete = !Number.isSafeInteger(expectedPins) ||
+    expectedPins < 0 || (state.backfillPinsProcessed ?? -1) < expectedPins;
+  if (old(state.lastSuccessfulSyncAt, ACCOUNT_MAX_AGE_MS) ||
+      old(state.lastAccountAnalyticsSyncAt, ACCOUNT_MAX_AGE_MS) ||
+      old(state.lastInventorySyncAt, INVENTORY_MAX_AGE_MS) ||
+      (expectedPins > 0 && old(state.lastPinAnalyticsSyncAt, PIN_MAX_AGE_MS)) ||
+      !state.backfillCompletedAt || progressIncomplete) {
+    return "STALE";
+  }
+  return "FRESH";
 }
