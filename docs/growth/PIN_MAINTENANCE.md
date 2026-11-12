@@ -1,6 +1,38 @@
 # SayTwist Phase 14: Pinterest Pin maintenance (proposed)
 
-Status: **feature PR only; not deployed, installed or activated**.
+Status: **installed and enabled in production, verified on November 12, 2026**.
+The original feature proposal below is retained for design context; the source
+and the live unit status are authoritative for current operation.
+
+## November 12, 2026: production evidence and maintenance lookback correction
+
+Live operator audit: 12/12 Growth timers active/enabled and SHA-pinned to
+`924134f2947150d3bf3bba064dd296fc17b2071b`; global Growth OFF, attribution
+OFF, worker lease NULL, no claimable queue. Historical Pin backfill is marked
+complete (225 of 228 Pins processed). Of 228 currently eligible Pins, only one
+was synced in November and 224 were last synced before November; three had no
+Pin-analytics sync timestamp. The November 9 intelligence run considered 226
+Pins, formed eight clusters, reported PARTIAL evidence, and produced no
+opportunities. No live Pin-maintenance post-recovery run was yet observed at the
+time of the audit; its next scheduled tick was 22:45 UTC November 12.
+
+**Proposed code correction (not yet deployed):** When the isolated bounded Pin
+maintenance service selects a Pin, request **28 completed UTC days** through
+the existing single-Pin GET instead of seven. The seven-day scheduled account
+analytics window does not change. Request count stays one Pin or inventory page
+per approved slot, with the same shared transport limit of four/hour and
+16/24h and the 2/hour, 10/day maintenance admission headroom. Missing and
+PROCESSING provider observations still cannot be counted as READY; no synthetic
+rows, new Growth jobs, automatic provider retries, paid AI or publishing.
+
+This improves recoverability for a selected Pin but does **not** make 228 Pins
+current, resolve incomplete cluster-level evidence, or guarantee that the
+current stringent account-wide completeness gate will yield opportunities.
+The Pinterest multi-Pin endpoint remains closed beta per Pinterest's official
+FAQ and must not be enabled absent separately confirmed app eligibility.
+
+The correction requires CI, safe SHA-aware 12-timer release handling, and
+post-deploy monitoring. Do not merge or deploy solely on this documentation.
 
 ## Purpose
 

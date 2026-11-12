@@ -77,7 +77,10 @@ export async function runBoundedPinMaintenance(now = new Date()) {
     throw Error("MAINTENANCE_WINDOW_INVALID");
   }
   const key = "growth-pin-maintenance-v1:" + now.toISOString().slice(0, 13).replace("T", ":");
-  const range = completedUtcAnalyticsWindow(now.toISOString().slice(0, 10));
+  // A 7-day response cannot recover the 14-day observation requirement
+  // on a Pin that has not been refreshed for weeks. A 28-day response
+  // stays inside Pinterest's 90-day window without using additional GETs.
+  const range = completedUtcAnalyticsWindow(now.toISOString().slice(0, 10), 28);
   const admission = await prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT "id" FROM "GrowthSettings"
       WHERE "id" = 'global' FOR UPDATE`;
