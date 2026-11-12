@@ -6,6 +6,8 @@ const isProduction = process.env.NODE_ENV === "production";
 // addresses known AdSense/Auto ads requests without relaxing admin or API CSP.
 // Google's durable recommendation is a nonce-based strict CSP (separate migration).
 const adSenseScriptSources = [
+  // The SODAR verifier is an external script, not only a connect-src request.
+  "https://*.adtrafficquality.google",
   "https://fundingchoicesmessages.google.com",
   "https://*.googlesyndication.com",
   "https://*.doubleclick.net",
