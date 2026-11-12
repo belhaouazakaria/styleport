@@ -30,6 +30,9 @@ describe("daily official Pinterest account analytics with exact job safety", () 
     expect(completedUtcAnalyticsWindow("2027-01-03")).toEqual({
       startDate: "2026-12-27", endDate: "2027-01-02",
     });
+    expect(completedUtcAnalyticsWindow("2026-11-12", 28)).toEqual({
+      startDate: "2026-10-15", endDate: "2026-11-11",
+    });
     for (const date of ["2026-02-30", "2026/11/08", "2026-13-01"]) {
       expect(() => completedUtcAnalyticsWindow(date)).toThrow();
     }
