@@ -2,18 +2,46 @@ import type { NextConfig } from "next";
 
 const isProduction = process.env.NODE_ENV === "production";
 
-const contentSecurityPolicy = [
-  "default-src 'self'",
-  "base-uri 'self'",
-  "form-action 'self'",
-  "frame-ancestors 'none'",
-  "img-src 'self' data: blob: https:",
-  "font-src 'self' data:",
-  "style-src 'self' 'unsafe-inline'",
-  `script-src 'self' 'unsafe-inline' ${isProduction ? "" : "'unsafe-eval'"} https://pagead2.googlesyndication.com https://www.googletagmanager.com https://www.google.com https://www.gstatic.com`,
-  "connect-src 'self' https://api.openai.com https://api.brevo.com https://*.sentry.io https://www.google-analytics.com https://*.google-analytics.com https://www.googletagmanager.com",
-  "frame-src 'self' https://googleads.g.doubleclick.net https://tpc.googlesyndication.com",
-].join("; ");
+// Google ad resources can change over time. This targeted compatibility list
+// addresses known AdSense/Auto ads requests without relaxing admin or API CSP.
+// Google's durable recommendation is a nonce-based strict CSP (separate migration).
+const adSenseScriptSources = [
+  "https://fundingchoicesmessages.google.com",
+  "https://*.googlesyndication.com",
+  "https://*.doubleclick.net",
+  "https://*.googleadservices.com",
+];
+const adSenseConnectSources = [
+  "https://*.adtrafficquality.google",
+  "https://fundingchoicesmessages.google.com",
+  "https://*.googlesyndication.com",
+  "https://*.doubleclick.net",
+  "https://*.googleadservices.com",
+  "https://www.google.com",
+];
+const adSenseFrameSources = [
+  "https://fundingchoicesmessages.google.com",
+  "https://*.googlesyndication.com",
+  "https://*.doubleclick.net",
+  "https://www.google.com",
+];
+
+function buildContentSecurityPolicy(publicPage: boolean) {
+  const adSources = (sources: string[]) => publicPage ? ` ${sources.join(" ")}` : "";
+
+  return [
+    "default-src 'self'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+    "img-src 'self' data: blob: https:",
+    "font-src 'self' data:",
+    "style-src 'self' 'unsafe-inline'",
+    `script-src 'self' 'unsafe-inline' ${isProduction ? "" : "'unsafe-eval'"} https://pagead2.googlesyndication.com https://www.googletagmanager.com https://www.google.com https://www.gstatic.com${adSources(adSenseScriptSources)}`,
+    `connect-src 'self' https://api.openai.com https://api.brevo.com https://*.sentry.io https://www.google-analytics.com https://*.google-analytics.com https://www.googletagmanager.com${adSources(adSenseConnectSources)}`,
+    `frame-src 'self' https://googleads.g.doubleclick.net https://tpc.googlesyndication.com${adSources(adSenseFrameSources)}`,
+  ].join("; ");
+}
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
@@ -49,7 +77,7 @@ const nextConfig: NextConfig = {
         headers: [
           {
             key: "Content-Security-Policy",
-            value: contentSecurityPolicy,
+            value: buildContentSecurityPolicy(true),
           },
           {
             key: "Referrer-Policy",
@@ -75,6 +103,17 @@ const nextConfig: NextConfig = {
           isProduction ? true : header.key !== "Strict-Transport-Security",
         ),
       },
+      // Keep authenticated and authentication-related routes on the original
+      // tighter policy. Next.js applies the later matching header last.
+      ...["/admin/:path*", "/api/:path*", "/login"].map((source) => ({
+        source,
+        headers: [
+          {
+            key: "Content-Security-Policy",
+            value: buildContentSecurityPolicy(false),
+          },
+        ],
+      })),
     ];
   },
 };

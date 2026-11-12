@@ -63,6 +63,20 @@ function toReactProps(attributes: Record<string, HtmlAttributeValue>) {
   return props;
 }
 
+function isAdSenseLoader(src: string): boolean {
+  try {
+    const url = new URL(src);
+    return (
+      url.protocol === "https:" &&
+      url.hostname === "pagead2.googlesyndication.com" &&
+      url.pathname === "/pagead/js/adsbygoogle.js" &&
+      /^ca-pub-\d+$/.test(url.searchParams.get("client") || "")
+    );
+  } catch {
+    return false;
+  }
+}
+
 function renderScriptTag(tag: string, key: string) {
   const scriptMatch = SCRIPT_PATTERN.exec(tag);
   if (!scriptMatch) {
@@ -77,6 +91,13 @@ function renderScriptTag(tag: string, key: string) {
   delete rest.src;
 
   if (src) {
+    // AdSense requires a native head script. Next's Script adds data-nscript,
+    // which triggers "AdSense head tag doesn't support data-nscript".
+    // Keep other custom scripts on the existing Next.js loading strategy.
+    if (isAdSenseLoader(src)) {
+      return <script key={key} async src={src} crossOrigin="anonymous" />;
+    }
+
     return <Script key={key} src={src} strategy="afterInteractive" {...rest} />;
   }
 
