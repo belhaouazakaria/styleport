@@ -43,14 +43,8 @@ describe("legacy hostname routing", () => {
     );
   });
 
-  it("keeps the existing managed ads.txt redirect", async () => {
+  it("lets both served hostnames use the self-hosted ads.txt", async () => {
     const redirects = (await nextConfig.redirects?.()) ?? [];
-    expect(redirects).toContainEqual(
-      expect.objectContaining({
-        source: "/ads.txt",
-        destination: "https://srv.adstxtmanager.com/19390/saytwist.com",
-        statusCode: 301,
-      }),
-    );
+    expect(redirects.some((redirect) => redirect.source === "/ads.txt")).toBe(false);
   });
 });
