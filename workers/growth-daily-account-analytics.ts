@@ -63,16 +63,18 @@ export function assertDailyAccountAnalyticsRuntime(
   return { sha, day };
 }
 
-export function completedUtcAnalyticsWindow(day: string) {
+export function completedUtcAnalyticsWindow(day: string, days: 7 | 28 = 7) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) throw Error("ANALYTICS_DAY_INVALID");
   const today = new Date(day + "T00:00:00.000Z");
   if (Number.isNaN(today.getTime()) || today.toISOString().slice(0, 10) !== day) {
     throw Error("ANALYTICS_DAY_INVALID");
   }
-  // Rolling seven *completed* UTC days, not the incomplete current date.
-  // Recent data can remain PROCESSING at Pinterest; we preserve its status.
+  // Account analytics retains seven completed UTC days. The bounded Pin
+  // maintenance reader explicitly requests 28 completed days to recover
+  // Opportunity Intelligence evidence within the same single provider GET.
+  // Recent data can remain PROCESSING at Pinterest; preserve its status.
   return {
-    startDate: new Date(today.getTime() - 7 * 86_400_000).toISOString().slice(0, 10),
+    startDate: new Date(today.getTime() - days * 86_400_000).toISOString().slice(0, 10),
     endDate: new Date(today.getTime() - 86_400_000).toISOString().slice(0, 10),
   };
 }
