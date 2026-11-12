@@ -16,6 +16,7 @@ import {
   getDiscoveryResult,
   getFeaturedPublicTranslators,
   getNewestPublicTranslatorsPage,
+  getPublicCategories,
 } from "@/lib/data/translators";
 import { getAppBaseUrl } from "@/lib/env";
 import { getAppSettings } from "@/lib/settings";
@@ -125,9 +126,21 @@ export default async function HomePage({ searchParams }: PageProps) {
   const page = Math.max(1, Number(params.page || 1) || 1);
   const pageSize = settings.discoveryPageSize || DISCOVERY_DEFAULT_PAGE_SIZE;
 
-  const [discovery, newestCatalog, featured, desktopAds, mobileAds] =
-    await Promise.all([
-      withPublicDataFallback(
+  // The unfiltered homepage renders the newest catalog, not discovery's
+  // separately sorted translator results. Load only cached categories here
+  // instead of performing a redundant count + full translator query.
+  const discoveryTask = useNewestCatalog
+    ? withPublicDataFallback("categories", getPublicCategories(), []).then((categories) => ({
+        translators: [],
+        total: 0,
+        page,
+        pageSize,
+        totalPages: 1,
+        categories,
+        q,
+        category,
+      }))
+    : withPublicDataFallback(
         "discovery",
         getDiscoveryResult({ q, category, page, pageSize }),
         {
@@ -140,7 +153,11 @@ export default async function HomePage({ searchParams }: PageProps) {
           q,
           category,
         },
-      ),
+      );
+
+  const [discovery, newestCatalog, featured, desktopAds, mobileAds] =
+    await Promise.all([
+      discoveryTask,
       useNewestCatalog
         ? withPublicDataFallback(
             "newest translators",
