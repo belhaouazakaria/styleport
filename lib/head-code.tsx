@@ -70,7 +70,7 @@ function isAdSenseLoader(src: string): boolean {
       url.protocol === "https:" &&
       url.hostname === "pagead2.googlesyndication.com" &&
       url.pathname === "/pagead/js/adsbygoogle.js" &&
-      /^ca-pub-\\d+$/.test(url.searchParams.get("client") || "")
+      /^ca-pub-\d+$/.test(url.searchParams.get("client") || "")
     );
   } catch {
     return false;
