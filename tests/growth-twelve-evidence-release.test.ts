@@ -40,7 +40,7 @@ describe("protected 12-timer release coordinator", () => {
     expect(script).toContain("NOT EXISTS(SELECT 1 FROM \"GrowthJob\"");
     expect(script).toContain("sourceSharePercent");
     expect(script).toContain("maxPinsPerDay");
-    expect(script).toContain("migration_count");
+    expect(script).toContain("count_migrations");
     expect(script).toContain(".deployed-release");
     expect(script).toContain("127.0.0.1:3001/api/readyz");
   });
