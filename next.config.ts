@@ -22,6 +22,8 @@ const adSenseConnectSources = [
   "https://www.google.com",
 ];
 const adSenseFrameSources = [
+  // Google SODAR loads its traffic-quality verifier in a cross-origin iframe.
+  "https://*.adtrafficquality.google",
   "https://fundingchoicesmessages.google.com",
   "https://*.googlesyndication.com",
   "https://*.doubleclick.net",
