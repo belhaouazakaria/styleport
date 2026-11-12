@@ -37,6 +37,7 @@ describe("AdSense CSP integration", () => {
     const connectSrc = directives.find((value) => value.startsWith("connect-src "));
     const frameSrc = directives.find((value) => value.startsWith("frame-src "));
 
+    expect(scriptSrc).toContain("https://*.adtrafficquality.google");
     expect(scriptSrc).toContain("https://fundingchoicesmessages.google.com");
     expect(scriptSrc).toContain("https://*.googlesyndication.com");
     expect(connectSrc).toContain("https://*.adtrafficquality.google");
