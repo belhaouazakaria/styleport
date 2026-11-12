@@ -124,6 +124,7 @@ describe("crash-safe, queue-free maintenance tick", () => {
     expect(m.metrics).toHaveBeenCalledOnce();
     expect(m.metrics).toHaveBeenCalledWith(expect.objectContaining({
       accountId: "account123", maintenanceBounded: true, batch: 0, relevancePrepared: true,
+      startDate: "2026-10-15", endDate: "2026-11-11",
     }));
     expect(m.inventory).not.toHaveBeenCalled();
     expect(m.audit).toHaveBeenCalledWith(expect.objectContaining({
