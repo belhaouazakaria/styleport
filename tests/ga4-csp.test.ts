@@ -43,6 +43,7 @@ describe("AdSense CSP integration", () => {
     expect(connectSrc).toContain("https://*.adtrafficquality.google");
     expect(connectSrc).toContain("https://*.googlesyndication.com");
     expect(connectSrc).toContain("https://fundingchoicesmessages.google.com");
+    expect(frameSrc).toContain("https://*.adtrafficquality.google");
     expect(frameSrc).toContain("https://*.doubleclick.net");
 
     // Do not use a blanket HTTPS permission for executable scripts or fetches.
