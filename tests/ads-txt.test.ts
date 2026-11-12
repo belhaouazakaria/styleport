@@ -1,30 +1,26 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import nextConfig from "@/next.config";
 
-const EZOIC_ADS_TXT_URL = "https://srv.adstxtmanager.com/19390/saytwist.com";
+const EXPECTED_ADS_TXT = "google.com, pub-7927856375186557, DIRECT, f08c47fec0942fa0\n";
 
-describe("ads.txt redirect", () => {
-  it("redirects exactly /ads.txt to Ezoic with HTTP 301", async () => {
-    const redirects = await nextConfig.redirects!();
-    const redirect = redirects.find((item) => item.source === "/ads.txt");
+describe("self-hosted ads.txt", () => {
+  it("contains exactly one approved Google publisher record", () => {
+    const adsTxt = readFileSync(path.join(import.meta.dirname, "../public/ads.txt"), "utf8");
 
-    expect(redirect).toEqual({
-      source: "/ads.txt",
-      destination: EZOIC_ADS_TXT_URL,
-      statusCode: 301,
-    });
-    expect(redirect).not.toHaveProperty("permanent");
+    expect(adsTxt).toBe(EXPECTED_ADS_TXT);
+    expect(adsTxt.trimEnd().split("\n")).toHaveLength(1);
   });
 
-  it("does not redirect unrelated paths to AdsTxtManager", async () => {
+  it("does not redirect /ads.txt to a third party or elsewhere", async () => {
     const redirects = await nextConfig.redirects!();
-    const ezoicRedirects = redirects.filter(
-      (item) => item.destination === EZOIC_ADS_TXT_URL,
-    );
 
-    expect(ezoicRedirects).toHaveLength(1);
-    expect(ezoicRedirects[0]?.source).toBe("/ads.txt");
+    expect(redirects.some((redirect) => redirect.source === "/ads.txt")).toBe(false);
+    expect(
+      redirects.some((redirect) => redirect.destination.includes("adstxtmanager.com")),
+    ).toBe(false);
   });
 
   it("keeps only the plural legacy hostname's permanent redirects", async () => {
@@ -38,9 +34,7 @@ describe("ads.txt redirect", () => {
     );
 
     expect(migrationRedirects).toHaveLength(2);
-    expect(migrationRedirects.every((item) => item.permanent === true)).toBe(
-      true,
-    );
+    expect(migrationRedirects.every((item) => item.permanent === true)).toBe(true);
     expect(
       redirects.some((item) =>
         item.has?.some(
