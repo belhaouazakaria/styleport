@@ -20,12 +20,6 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   compress: true,
   async redirects() {
-    const ezoicAdsTxtRedirect = {
-      source: "/ads.txt",
-      destination: "https://srv.adstxtmanager.com/19390/saytwist.com",
-      statusCode: 301,
-    } as const;
-
     // Keep the unused plural alias redirected to the canonical SayTwist site.
     // The singular translator.whattypeof.com host serves the app directly.
     // Canonical metadata and sitemap URLs remain on saytwist.com.
@@ -46,7 +40,7 @@ const nextConfig: NextConfig = {
       },
     ]);
 
-    return [ezoicAdsTxtRedirect, ...redirects];
+    return redirects;
   },
   async headers() {
     return [
