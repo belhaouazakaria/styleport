@@ -61,7 +61,10 @@ validate_inputs() {
   grep -Fqx "migrations=31" "$HOLD_STATE" || fail "Expected 31-migration hold baseline."
   grep -Fqx "status=HELD" "$HOLD_STATE" || fail "The 12 Growth timers were not held."
   [[ "$(cat "$APP_PATH/.deployed-release")" == "$OLD_RELEASE" ]] || fail "Live release changed."
-  [[ "$(stat -c '%u:%g' "$MIGRATION_ROOT")" == 0:0 ]] || fail "Migration source must be root-owned."
+  [[ "$(stat -c '%u:%g:%a' "$MIGRATION_ROOT")" == 0:0:700 ]] || fail "Migration source must be root-owned and mode 0700."
+  for file in "$MIGRATION_ROOT/prisma/schema.prisma" "$MIGRATION_ROOT/prisma/migrations/$APPROVED_MIGRATION/migration.sql" "$MIGRATION_ROOT/.release-sha"; do
+    [[ -f "$file" && ! -L "$file" && "$(stat -c '%u:%g' "$file")" == 0:0 ]] || fail "Migration source file is not root-owned."
+  done
   for name in lease-watchdog daily-observe autonomous-cycle approved-publisher daily-fresh private-report autonomous-content daily-account-analytics auto-translator-publish viral-discovery viral-source pin-maintenance; do
     [[ "$(systemctl is-enabled "saytwist-growth-$name.timer" 2>/dev/null || true)" == disabled ]] || fail "Timer is enabled."
     ! systemctl is-active --quiet "saytwist-growth-$name.timer" || fail "Timer active."
