@@ -1866,6 +1866,8 @@ model GrowthTelegramPinReview {
   id                  String             @id @default(cuid())
   candidateId         String             @unique
   candidateRevision   Int
+  contentHash         String             @db.VarChar(64)
+  assetChecksum       String             @db.VarChar(64)
   accountId           String
   boardId             String
   scheduledAt         DateTime
