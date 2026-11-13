@@ -10,6 +10,8 @@ CREATE TABLE "GrowthTelegramPinReview" (
   "candidateId" TEXT NOT NULL,
   "candidateRevision" INTEGER NOT NULL,
   "accountId" TEXT NOT NULL,
+  "boardId" TEXT NOT NULL,
+  "scheduledAt" TIMESTAMP(3) NOT NULL,
   "ownerUserId" TEXT NOT NULL,
   "telegramMessageId" INTEGER,
   "status" VARCHAR(24) NOT NULL DEFAULT 'QUEUED',
