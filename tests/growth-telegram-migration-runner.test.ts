@@ -21,7 +21,7 @@ describe("Telegram Pin review production migration runner", () => {
     expect(source).toContain("3122aaf16c8b862f3860c586489f1843533369f1");
     expect(source).toContain("new=$RELEASE_SHA");
     expect(source).toContain("status=HELD");
-    expect(source).toContain("migrations=31");
+    expect(source).toContain("migrations=35");
     expect(source).toContain("0:0:700");
     for (const name of [
       "lease-watchdog","daily-observe","autonomous-cycle","approved-publisher",
