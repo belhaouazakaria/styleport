@@ -111,8 +111,9 @@ export async function offerPinForTelegramReview(
   }
   const plan = await recommendPinApprovalPlan(candidateId, now);
   const domain = preference?.defaultPinterestDestinationDomain;
-  if (!isPinDestinationDomain(domain || "saytwist.com")) throw Error("PIN_REVIEW_DOMAIN_INVALID");
-  const preferenceDomain = domainForPinPath(domain || "saytwist.com", candidate.destinationPath);
+  const selectedDomain = domain || "saytwist.com";
+  if (!isPinDestinationDomain(selectedDomain)) throw Error("PIN_REVIEW_DOMAIN_INVALID");
+  const preferenceDomain = domainForPinPath(selectedDomain, candidate.destinationPath);
   const existing = await prisma.growthTelegramPinReview.findUnique({ where: { candidateId } });
   if (plan.scheduledAt.getTime() <= now.getTime() + 2 * 60_000) throw Error("PIN_REVIEW_SLOT_TOO_SOON");
   if (existing) throw Error("PIN_REVIEW_ALREADY_ATTEMPTED");
