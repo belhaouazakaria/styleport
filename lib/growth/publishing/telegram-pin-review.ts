@@ -109,6 +109,9 @@ export async function offerPinForTelegramReview(
       candidate.asset.width !== 1000 || candidate.asset.height !== 1500) {
     throw Error("PIN_REVIEW_CANDIDATE_NOT_READY");
   }
+  if (await prisma.growthPinApproval.count({
+    where: { candidateId, status: "APPROVED" },
+  })) throw Error("PIN_REVIEW_ALREADY_APPROVED");
   const plan = await recommendPinApprovalPlan(candidateId, now);
   const domain = preference?.defaultPinterestDestinationDomain;
   const selectedDomain = domain || "saytwist.com";
@@ -119,7 +122,9 @@ export async function offerPinForTelegramReview(
   if (existing) throw Error("PIN_REVIEW_ALREADY_ATTEMPTED");
   const review = await prisma.growthTelegramPinReview.create({
     data: {
-      candidateId, candidateRevision: candidate.revision, accountId: plan.accountId,
+      candidateId, candidateRevision: candidate.revision,
+      contentHash: candidate.contentHash, assetChecksum: candidate.asset.checksum,
+      accountId: plan.accountId,
       boardId: plan.boardId, scheduledAt: plan.scheduledAt,
       ownerUserId, status: "QUEUED",
       expiresAt: new Date(Math.min(now.getTime() + 24 * 60 * 60_000, plan.scheduledAt.getTime() - 60_000)),
@@ -198,12 +203,16 @@ export async function acceptPrivatePinCallback(
   if (!parsed) return { status: "IGNORED" as const };
   const review = await prisma.growthTelegramPinReview.findUnique({
     where: { id: parsed.id },
-    include: { candidate: { select: { revision: true, status: true, destinationPath: true } } },
+    include: { candidate: { select: { revision: true, status: true,
+      destinationPath: true, contentHash: true,
+      asset: { select: { checksum: true } } } } },
   });
   if (!review || review.status !== "SENT" ||
       review.expiresAt <= now ||
       review.telegramMessageId !== parsed.messageId ||
       review.candidate.revision !== review.candidateRevision ||
+      review.candidate.contentHash !== review.contentHash ||
+      review.candidate.asset.checksum !== review.assetChecksum ||
       review.candidate.status !== GrowthPinCandidateStatus.READY) {
     return { status: "IGNORED" as const };
   }
