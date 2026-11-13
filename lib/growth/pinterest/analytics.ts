@@ -32,6 +32,7 @@ import {
   reclassifyPinterestPins,
 } from "@/lib/growth/pinterest/relevance";
 import { toSafeGrowthError } from "@/lib/growth/safe-data";
+import { selectMaintenancePinId } from "@/lib/growth/pinterest/maintenance-priority";
 import { getGrowthSettings } from "@/lib/growth/settings";
 import { prisma } from "@/lib/prisma";
 
@@ -401,8 +402,16 @@ export async function syncPinterestPinAnalytics(params: {
     const analyticsDue = isInitialBackfill
       ? { lastAnalyticsSyncAt: null }
       : { OR: [{ lastAnalyticsSyncAt: null }, { lastAnalyticsSyncAt: { lt: cutoff } }] };
+    // Targeted priority is strictly limited to the existing one-GET maintenance
+    // path. The generic worker and all continuation behavior are unchanged.
+    const maintenancePinId = params.maintenanceBounded
+      ? await selectMaintenancePinId({
+          accountId: params.accountId, initialBackfill: isInitialBackfill, cutoff,
+        })
+      : null;
     const pins = await prisma.growthPinterestPin.findMany({
-      where: { accountId: params.accountId, isActive: true, analyticsEligible: true, ...analyticsDue },
+      where: { accountId: params.accountId, isActive: true, analyticsEligible: true,
+        ...analyticsDue, ...(maintenancePinId ? { id: maintenancePinId } : {}) },
       orderBy: params.maintenanceBounded
         ? [{ lastAnalyticsSyncAt: { sort: "asc", nulls: "first" } } as const,
            { analyticsPriorityAt: { sort: "desc", nulls: "last" } } as const]
