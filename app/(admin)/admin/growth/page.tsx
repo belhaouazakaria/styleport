@@ -191,6 +191,7 @@ export default async function AdminGrowthPage() {
             intensity: overview.settings.intensity,
             workerBatchSize: overview.settings.workerBatchSize,
             ownedDomains: overview.settings.ownedDomains,
+            defaultPinterestDestinationDomain: overview.settings.defaultPinterestDestinationDomain === "translator.whattypeof.com" ? "translator.whattypeof.com" : "saytwist.com",
             attributionEnabled: overview.settings.attributionEnabled,
             attributionWindowDays: overview.settings.attributionWindowDays,
             attributionSessionRetentionDays:

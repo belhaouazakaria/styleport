@@ -12,6 +12,7 @@ interface GrowthSettingsFormProps {
     intensity: "LOW" | "BALANCED" | "AGGRESSIVE" | "CUSTOM";
     workerBatchSize: number;
     ownedDomains: readonly string[];
+    defaultPinterestDestinationDomain: "saytwist.com" | "translator.whattypeof.com";
     attributionEnabled: boolean;
     attributionWindowDays: number;
     attributionSessionRetentionDays: number;
@@ -58,6 +59,7 @@ export function GrowthSettingsForm({ initial }: GrowthSettingsFormProps) {
         intensity: result.settings.intensity,
         workerBatchSize: result.settings.workerBatchSize,
         ownedDomains: result.settings.ownedDomains,
+        defaultPinterestDestinationDomain: result.settings.defaultPinterestDestinationDomain,
         attributionEnabled: result.settings.attributionEnabled,
         attributionWindowDays: result.settings.attributionWindowDays,
         attributionSessionRetentionDays: result.settings.attributionSessionRetentionDays,
@@ -143,6 +145,16 @@ export function GrowthSettingsForm({ initial }: GrowthSettingsFormProps) {
         <span className="block font-normal leading-5 text-muted-ink">
           Pins linking to these domains receive detailed per-Pin analytics. Other Pins remain inventoried but are not individually backfilled. Enter one hostname per line, without a scheme or path.
         </span>
+      </label>
+      <label className="mt-4 block space-y-2 text-sm font-semibold text-ink">
+        <span>Default Pinterest destination website</span>
+        <select value={settings.defaultPinterestDestinationDomain}
+          onChange={(event) => setSettings((current) => ({ ...current, defaultPinterestDestinationDomain: event.target.value as "saytwist.com" | "translator.whattypeof.com" }))}
+          className="w-full rounded-xl border border-border bg-white px-3 py-2 text-sm">
+          <option value="saytwist.com">saytwist.com (recommended)</option>
+          <option value="translator.whattypeof.com">translator.whattypeof.com (legacy Translators)</option>
+        </select>
+        <span className="block text-xs font-normal leading-5 text-muted-ink">Automatically preselects this website when reviewing new Translator Pins. Ideas always link to saytwist.com. The legacy domain redirects to SayTwist and should be verified before enabling.</span>
       </label>
       <label className="mt-4 block space-y-2 text-sm font-semibold text-ink">
         <span>Evergreen promotion cooldown (days)</span>

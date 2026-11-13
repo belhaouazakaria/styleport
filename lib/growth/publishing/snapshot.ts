@@ -29,7 +29,13 @@ export function pinterestPublicationUrlsMatch(actualValue: string, expectedValue
     return false;
   }
   if (actual.username || actual.password || actual.hash || expected.username || expected.password || expected.hash) return false;
-  if (actual.origin !== baseUrl.origin || expected.origin !== baseUrl.origin || actual.pathname !== expected.pathname) return false;
+  const canonical = baseUrl.origin;
+  const legacy = "https://translator.whattypeof.com";
+  // The exact chosen hostname is bound in the immutable approval snapshot.
+  // The legacy origin is valid only for an actual Translator route.
+  if (![canonical, legacy].includes(expected.origin) || actual.origin !== expected.origin ||
+      (expected.origin === legacy && !/^\/translators\/[a-z0-9]+(?:-[a-z0-9]+)*\/?$/.test(expected.pathname)) ||
+      actual.pathname !== expected.pathname) return false;
   if (expected.searchParams.get("utm_source") !== "pinterest" || expected.searchParams.get("utm_medium") !== "organic") return false;
   for (const key of ["utm_campaign", "utm_content", "pin_ref"] as const) {
     const expectedValueForKey = expected.searchParams.get(key);

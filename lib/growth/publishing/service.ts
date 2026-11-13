@@ -25,6 +25,7 @@ import { prisma } from "@/lib/prisma";
 import { assertViralPortfolioApproval, VIRAL_PORTFOLIO_APPROVAL_LOCK } from "@/lib/growth/viral/portfolio-admission";
 import { approvePinSchema, PIN_APPROVAL_POLICY_VERSION, PUBLICATION_TIMING_VERSION, rejectPinSchema, type ApprovedPinSnapshot } from "@/lib/growth/publishing/contracts";
 import { buildPublicCreativeAssetUrl, pinApprovalSnapshotChecksum, pinterestPublicationUrlsMatch } from "@/lib/growth/publishing/snapshot";
+import { domainForPinPath, pinDestinationUrl, type PinDestinationDomain } from "@/lib/growth/publishing/destinations";
 import { planPublicationTiming } from "@/lib/growth/publishing/timing";
 
 function bounded(value: string | null | undefined, max: number) { return value?.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, max) || null; }
@@ -66,11 +67,15 @@ export async function approvePinCandidate(raw: unknown, adminUserId: string, now
     if (!account || account.apiEnvironment !== config.apiEnvironment || !hasPinterestScopes(account.grantedScopes, PINTEREST_CREATE_PIN_SCOPES) || !account.encryptedCredentials || (account.refreshTokenExpiresAt && account.refreshTokenExpiresAt <= now)) throw new Error("Pinterest account is not eligible for publishing.");
     const board = await tx.growthPinterestBoard.findFirst({ where: { id: input.boardId, accountId: account.id, isActive: true }, select: { id: true } });
     if (!board) throw new Error("Pinterest board is inactive or does not belong to the selected account.");
+    const preference = await tx.growthSettings.findUnique({ where: { id: "global" }, select: { defaultPinterestDestinationDomain: true } });
+    const desiredDomain = domainForPinPath((input.destinationDomain || preference?.defaultPinterestDestinationDomain || "saytwist.com") as PinDestinationDomain, candidate.destinationPath);
     const existing = await tx.growthPinApproval.findFirst({ where: { candidateId: candidate.id, status: GrowthPinApprovalStatus.APPROVED }, include: { publication: true }, orderBy: { createdAt: "desc" } });
     if (existing) {
       const recoverable = existing.publication?.status === GrowthPublicationStatus.CANCELLED || existing.publication?.status === GrowthPublicationStatus.FAILED_TERMINAL;
       if (!recoverable) {
-        if (existing.publication && existing.accountId === account.id && existing.boardId === board.id && existing.scheduledAt?.getTime() === requestedAt.getTime()) return { approval: existing, publication: existing.publication, created: false };
+        const prior = existing.snapshot as unknown as { destinationUrl?: string };
+        const previousDomain = prior.destinationUrl ? new URL(prior.destinationUrl).hostname : "";
+        if (existing.publication && existing.accountId === account.id && existing.boardId === board.id && existing.scheduledAt?.getTime() === requestedAt.getTime() && previousDomain === desiredDomain) return { approval: existing, publication: existing.publication, created: false };
         throw new Error("This candidate already has an active approved publication.");
       }
       if (requestedAt <= now) throw new Error("Reapproval requires a new future publishing time.");
@@ -86,7 +91,7 @@ export async function approvePinCandidate(raw: unknown, adminUserId: string, now
     const publicRef = generateAttributionPublicRef();
     const destinationPath = normalizeAttributionDestinationPath(candidate.destinationPath);
     const attribution = await tx.growthAttributionRef.create({ data: { publicRef, destinationPath, campaignKey: account.publicationRole.toLowerCase(), contentKey: publicationId.replaceAll("-", ""), modelVersion: "pinterest_organic_v1" } });
-    const destinationUrl = buildAttributionUrl(attribution);
+    const destinationUrl = pinDestinationUrl(buildAttributionUrl(attribution), desiredDomain);
     const snapshot: ApprovedPinSnapshot = { candidateId: candidate.id, candidateRevision: candidate.revision, contentHash: candidate.contentHash, assetChecksum: candidate.asset.checksum, rendererKey: candidate.rendererKey, rendererVersion: candidate.rendererVersion, templateId: candidate.templateId, title: candidate.title, description: candidate.description, destinationPath, destinationUrl, assetPublicUrl: buildPublicCreativeAssetUrl(candidate.asset.publicPath), accountId: account.id, boardId: board.id, scheduledAt: requestedAt.toISOString(), approvalPolicyVersion: PIN_APPROVAL_POLICY_VERSION };
     const snapshotChecksum = pinApprovalSnapshotChecksum(snapshot);
     if (existing) await tx.growthPinApproval.update({ where: { id: existing.id }, data: { status: GrowthPinApprovalStatus.SUPERSEDED } });
@@ -97,6 +102,65 @@ export async function approvePinCandidate(raw: unknown, adminUserId: string, now
     await recordGrowthActivity({ actorKind: GrowthActivityActorKind.USER, actorUserId: adminUserId, entityType: "GrowthPinApproval", entityId: approval.id, action: "PIN_APPROVED", toState: GrowthPinApprovalStatus.APPROVED, summary: { candidateId: candidate.id, accountId: account.id, boardId: board.id, scheduledAt: requestedAt.toISOString(), snapshotChecksum, timingMode }, correlationKey: publication.idempotencyKey }, tx);
     return { approval, publication: { ...publication, publishJobId: job.id }, created: true };
   });
+}
+
+
+// Board and scheduling are deterministic recommendations, never a blanket
+// authorization to publish. Each candidate still needs its own approval.
+function boardTerms(value: string) {
+  const stop = new Set(["a","an","and","for","how","in","of","on","the","to","your","with","translators","translator","ideas","saytwist"]);
+  return new Set((value.toLowerCase().match(/[a-z0-9]{3,}/g) || []).filter(word => !stop.has(word)));
+}
+
+export async function recommendPinApprovalPlan(candidateId: string, now = new Date()) {
+  const candidate = await prisma.growthPinCandidate.findFirst({
+    where: { id: candidateId, status: GrowthPinCandidateStatus.READY },
+    select: { id: true, accountId: true, boardId: true, title: true,
+      topic: true, description: true, destinationPath: true },
+  });
+  if (!candidate) throw Error("PIN_PLAN_NOT_READY");
+  const accounts = await prisma.growthPinterestAccount.findMany({
+    where: { connectionStatus: GrowthPinterestConnectionStatus.CONNECTED },
+    select: { id: true, publicationRole: true, grantedScopes: true },
+    take: 4,
+  });
+  const usable = accounts.filter(account => hasPinterestScopes(account.grantedScopes, PINTEREST_CREATE_PIN_SCOPES));
+  const matching = candidate.accountId ? usable.filter(a => a.id === candidate.accountId) : usable;
+  if (matching.length !== 1) throw Error("PIN_PLAN_ACCOUNT_AMBIGUOUS");
+  const accountId = matching[0].id;
+  const boards = await prisma.growthPinterestBoard.findMany({
+    where: { accountId, isActive: true },
+    select: { id: true, name: true, description: true },
+    orderBy: [{ name: "asc" }, { id: "asc" }], take: 101,
+  });
+  if (!boards.length || boards.length > 100) throw Error("PIN_PLAN_BOARD_UNAVAILABLE");
+  const original = boards.find(board => board.id === candidate.boardId);
+  const desired = boardTerms(candidate.title + " " + candidate.topic + " " + candidate.description);
+  const ranked = boards.map(board => {
+    const titleWords = boardTerms(board.name);
+    const detailWords = boardTerms(board.description || "");
+    return { board, score: [...desired].reduce((n, word) => n + (titleWords.has(word) ? 3 : detailWords.has(word) ? 1 : 0), 0) };
+  }).sort((a,b) => b.score - a.score || a.board.name.localeCompare(b.board.name) || a.board.id.localeCompare(b.board.id));
+  const chosen = original || (ranked[0].score > 0 || boards.length === 1 ? ranked[0].board : null);
+  if (!chosen) throw Error("PIN_PLAN_BOARD_AMBIGUOUS");
+  const timing = await recommendPublicationTiming(accountId, candidateId, now);
+  if (timing.scheduledAt <= now) throw Error("PIN_PLAN_TIME_INVALID");
+  return { candidateId, accountId, boardId: chosen.id, boardName: chosen.name,
+    scheduledAt: timing.scheduledAt, destinationPath: candidate.destinationPath };
+}
+
+export async function approvePinCandidateAutomatically(
+  candidateId: string,
+  adminUserId: string,
+  destinationDomain?: PinDestinationDomain,
+  now = new Date(),
+) {
+  const plan = await recommendPinApprovalPlan(candidateId, now);
+  return approvePinCandidate({
+    candidateId, accountId: plan.accountId, boardId: plan.boardId,
+    scheduledAt: plan.scheduledAt.toISOString(), confirmation: true,
+    ...(destinationDomain ? { destinationDomain } : {}),
+  }, adminUserId, now);
 }
 
 export async function rejectPinCandidate(raw: unknown, adminUserId: string, now = new Date()) {

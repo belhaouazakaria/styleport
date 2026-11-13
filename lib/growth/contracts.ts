@@ -1,6 +1,7 @@
 import { GrowthIntensity, GrowthJobStatus, GrowthJobType } from "@prisma/client";
 import { z } from "zod";
 import { ownedPinterestDomainsSchema } from "@/lib/growth/pinterest/relevance";
+import { PIN_DESTINATION_DOMAINS } from "@/lib/growth/publishing/destinations";
 import { DEFAULT_EVERGREEN_COOLDOWN_DAYS } from "@/lib/growth/learning/constants";
 
 export const GROWTH_SETTINGS_ID = "global";
@@ -20,6 +21,7 @@ export const growthSettingsSchema = z
     intensity: z.nativeEnum(GrowthIntensity),
     workerBatchSize: z.number().int().min(1).max(MAX_GROWTH_WORKER_BATCH_SIZE),
     ownedDomains: ownedPinterestDomainsSchema,
+    defaultPinterestDestinationDomain: z.enum(PIN_DESTINATION_DOMAINS).default("saytwist.com"),
     attributionEnabled: z.boolean().default(false),
     attributionWindowDays: z.number().int().min(1).max(30).default(DEFAULT_ATTRIBUTION_WINDOW_DAYS),
     attributionSessionRetentionDays: z.number().int().min(7).max(90).default(DEFAULT_ATTRIBUTION_SESSION_RETENTION_DAYS),

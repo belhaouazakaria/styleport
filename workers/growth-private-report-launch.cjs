@@ -43,7 +43,7 @@ function run() {
     if (read(key) === "true") throw Error("REPORT_WEB_AUTOMATION_NOT_ISOLATED");
   }
   const child = spawnSync(NODE, ["node_modules/tsx/dist/cli.mjs", "workers/growth-report-runner.ts"], {
-    cwd: APP, encoding: "utf8", timeout: 45_000, maxBuffer: 4096,
+    cwd: APP, encoding: "utf8", timeout: 120_000, maxBuffer: 4096,
     env: {
       NODE_ENV: "production", HOME: "/home/saytwist",
       PATH: NODEDIR + ":/usr/local/bin:/usr/bin:/bin",
@@ -52,6 +52,9 @@ function run() {
       TELEGRAM_REPORTS_ENABLED: "true",
       TELEGRAM_BOT_TOKEN: token,
       TELEGRAM_REPORT_CHAT_ID: chat,
+      GROWTH_TELEGRAM_PIN_APPROVALS_ENABLED: process.env.GROWTH_TELEGRAM_PIN_APPROVALS_ENABLED === "true" ? "true" : "false",
+      GROWTH_TELEGRAM_PIN_OWNER_USER_ID: process.env.GROWTH_TELEGRAM_PIN_OWNER_USER_ID || "",
+      GROWTH_TELEGRAM_PIN_WEBHOOK_SECRET: process.env.GROWTH_TELEGRAM_PIN_WEBHOOK_SECRET || "",
       GROWTH_WORKER_RUN_ENABLED: "false",
       GROWTH_ATTRIBUTION_COLLECTION_ENABLED: "false",
       GROWTH_ROLLOUT_MODE: "OFF",
