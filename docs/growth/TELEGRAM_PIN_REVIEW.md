@@ -15,7 +15,7 @@
 
 - Pinterest's current developer guidelines require user consideration of each Pin. This flow keeps explicit per-Pin approval and does not auto-publish unreviewed Pins.
 - The callback API is `POST /api/growth/telegram-pin-review`. It requires a separately generated high-entropy `x-telegram-bot-api-secret-token` and exactly the configured **private** Telegram chat ID **and sender ID**, never a group.
-- The review stores the candidate revision, recipient message ID, account, board, time, owner admin user, and terminal decision. Every callback is a one-time atomic `SENT -> PROCESSING` claim. Message mismatches, replayed, expired or stale-revision responses are rejected.
+- The review stores the candidate revision, exact content hash and image checksum, recipient message ID, account, board, time, owner admin user, and terminal decision. A change to the image or copy after Telegram delivery invalidates the old buttons. Every callback is a one-time atomic `SENT -> PROCESSING` claim. Message mismatches, replayed, expired or stale-revision responses are rejected.
 - An ambiguous Telegram send is recorded `UNKNOWN`, not automatically replayed. A failed final publication is not blindly retried.
 - Bot token, chat ID and webhook secret remain server-only and never printed in logs or returned in admin API responses.
 - Existing Pinterest provider transport remains at **4/hour and 16/24h**, with its own account scopes, budget reserve, exact candidate approval and cross-worker lease gates. Telegram review sends require no Pinterest API calls.
