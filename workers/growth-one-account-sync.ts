@@ -5,6 +5,8 @@ import { GrowthActivityActorKind, GrowthJobStatus, GrowthJobType,
 
 import { recordGrowthActivity } from "@/lib/growth/activity";
 import { reserveOneAccountSyncRequest } from "@/lib/growth/pinterest/one-sync-guard";
+import { assertScheduledPinterestAccounts, chooseLeastRecentlyServed,
+  isScheduledPinterestAccountReady } from "@/lib/growth/pinterest/scheduled-account-selection";
 import { prisma } from "@/lib/prisma";
 import { countBlockingGrowthJobs } from "@/lib/growth/operations/approved-publication-queue";
 import { revokeGrowthWorkerActivation } from "@/lib/growth/settings";
@@ -68,20 +70,33 @@ export async function runOneAccountSync(sha: string, options: { dailyUtcDate?: s
         tx.growthPinterestAccount.findMany({ where: {
           apiEnvironment: GrowthPinterestApiEnvironment.PRODUCTION,
           connectionStatus: GrowthPinterestConnectionStatus.CONNECTED,
-        }, select: { id: true, encryptedCredentials: true,
-          grantedScopes: true, accessTokenExpiresAt: true,
-          refreshTokenExpiresAt: true }, take: 2 }),
+        }, select: { id: true, activeRole: true,
+          encryptedCredentials: true, grantedScopes: true,
+          accessTokenExpiresAt: true, refreshTokenExpiresAt: true,
+          lastAccountSyncAt: true }, take: 4 }),
       ]);
       if (!settings || settings.enabled || settings.attributionEnabled ||
-          settings.workerActivationExpiresAt !== null || activeCount !== 0 ||
-          accounts.length !== 1) throw Error("ADMISSION_NOT_IDLE");
-      const account = accounts[0];
-      if (!account.encryptedCredentials || !account.grantedScopes.includes("user_accounts:read") ||
-          !account.accessTokenExpiresAt ||
-          account.accessTokenExpiresAt.getTime() - now.getTime() < 15 * 60_000 ||
-          (account.refreshTokenExpiresAt && account.refreshTokenExpiresAt <= now)) {
-        throw Error("PINTEREST_ACCOUNT_NOT_READY");
+          settings.workerActivationExpiresAt !== null || activeCount !== 0)
+        throw Error("ADMISSION_NOT_IDLE");
+      assertScheduledPinterestAccounts(accounts);
+      // Keep the original one-GET/24h per-account guard. Select only a role
+      // with no active reservation; the guarded reservation rechecks under
+      // its own row lock before the provider call.
+      const ready = [];
+      for (const account of accounts) {
+        if (!isScheduledPinterestAccountReady(account,
+          ["user_accounts:read"], now, 15 * 60_000)) continue;
+        const recent = await tx.growthActivity.count({ where: {
+          entityType: "GrowthPinterestAccount", entityId: account.id,
+          action: "PINTEREST_ONE_SYNC_API_REQUEST_RESERVED",
+          createdAt: { gte: new Date(now.getTime() - 24 * 60 * 60_000) },
+        } });
+        if (!recent) ready.push({
+          account, lastServedAt: account.lastAccountSyncAt,
+        });
       }
+      const account = chooseLeastRecentlyServed(ready);
+      if (!account) throw Error("PINTEREST_ACCOUNT_NOT_READY");
       // This durable reservation is committed with activation before the provider GET.
       await reserveOneAccountSyncRequest(tx, account.id, key, now);
       const enabled = await tx.growthSettings.updateMany({
