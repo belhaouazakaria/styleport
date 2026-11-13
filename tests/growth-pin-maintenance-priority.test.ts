@@ -115,6 +115,7 @@ describe("bounded-maintenance database selection", () => {
 
   it("honors the initial-backfill null-only scope", async () => {
     m.pins.mockResolvedValue([{ id: "never", lastAnalyticsSyncAt: null }]);
+    m.members.mockResolvedValue([{ pinId: "never" }]);
     const id = await selectMaintenancePinId({
       accountId, initialBackfill: true, cutoff,
     });
@@ -124,7 +125,7 @@ describe("bounded-maintenance database selection", () => {
     }));
   });
 
-  it("falls back to age ordering with no recent analysis", async () => {
+  it("delegates to original ordering with no recent analysis", async () => {
     m.latest.mockResolvedValue(null);
     expect(await selectMaintenancePinId({
       accountId, initialBackfill: false, cutoff,
