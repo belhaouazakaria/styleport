@@ -27,9 +27,10 @@ const now = new Date("2026-11-12T10:45:01.000Z");
 const state = () => ({
   inventoryStartedAt: null, inventoryBookmark: null,
   lastInventorySyncAt: new Date("2026-11-12T08:00:00.000Z"),
+  lastPinAnalyticsSyncAt: new Date("2026-11-12T08:30:00.000Z"),
 });
 const account = () => ({
-  id: "account123", encryptedCredentials: "opaque",
+  id: "account123", activeRole: "SAYTWIST", encryptedCredentials: "opaque",
   grantedScopes: ["user_accounts:read", "pins:read"],
   accessTokenExpiresAt: new Date("2026-12-11T12:55:06.900Z"),
   refreshTokenExpiresAt: new Date("2027-01-12T00:00:00.000Z"),
@@ -162,6 +163,59 @@ describe("crash-safe, queue-free maintenance tick", () => {
     expect(m.metrics).not.toHaveBeenCalled();
     expect(m.audit).not.toHaveBeenCalled();
   });
+  it("keeps the existing primary account working when another role is connected but uninitialized", async () => {
+    m.accounts.mockResolvedValue([account(), {
+      ...account(), id: "ideas123", activeRole: "SAYTWIST_IDEAS",
+    }]);
+    m.state.mockImplementation(async (query: { where: { accountId: string } }) =>
+      query.where.accountId === "account123" ? state() : null);
+    await expect(runBoundedPinMaintenance(now)).resolves.toMatchObject({
+      status: "PIN_SUCCEEDED", providerGetsMax: 1,
+    });
+    expect(m.metrics).toHaveBeenCalledOnce();
+    expect(m.metrics).toHaveBeenCalledWith(expect.objectContaining({
+      accountId: "account123", maintenanceBounded: true,
+    }));
+    expect(m.inventory).not.toHaveBeenCalled();
+  });
+
+  it("allocates the single maintenance GET to the least recently serviced ready role", async () => {
+    m.accounts.mockResolvedValue([
+      account(),
+      { ...account(), id: "ideas123", activeRole: "SAYTWIST_IDEAS" },
+      { ...account(), id: "playground123", activeRole: "SAYTWIST_PLAYGROUND" },
+    ]);
+    m.state.mockImplementation(async (query: { where: { accountId: string } }) => {
+      if (query.where.accountId === "playground123") return null;
+      if (query.where.accountId === "ideas123") return {
+        ...state(),
+        lastInventorySyncAt: new Date("2026-11-11T08:00:00.000Z"),
+        lastPinAnalyticsSyncAt: new Date("2026-11-11T08:30:00.000Z"),
+      };
+      return state();
+    });
+    await expect(runBoundedPinMaintenance(now)).resolves.toMatchObject({
+      status: "INVENTORY_SUCCEEDED", providerGetsMax: 1,
+    });
+    expect(m.inventory).toHaveBeenCalledOnce();
+    expect(m.inventory).toHaveBeenCalledWith(expect.objectContaining({
+      accountId: "ideas123", maintenanceBounded: true,
+    }));
+    expect(m.metrics).not.toHaveBeenCalled();
+  });
+
+  it("fails closed on a fourth connected account without using Pinterest", async () => {
+    m.accounts.mockResolvedValue([account(),
+      { ...account(), id: "ideas123", activeRole: "SAYTWIST_IDEAS" },
+      { ...account(), id: "playground123", activeRole: "SAYTWIST_PLAYGROUND" },
+      { ...account(), id: "unknown123", activeRole: "SAYTWIST" },
+    ]);
+    await expect(runBoundedPinMaintenance(now))
+      .rejects.toThrow("SCHEDULED_PINTEREST_ACCOUNT_SCOPE_INVALID");
+    expect(m.inventory).not.toHaveBeenCalled();
+    expect(m.metrics).not.toHaveBeenCalled();
+  });
+
   it("does not repeat an ambiguous failed request in the same time slot", async () => {
     m.metrics.mockRejectedValue(Error("provider unavailable"));
     await expect(runBoundedPinMaintenance(now)).rejects.toThrow("provider unavailable");
