@@ -64,10 +64,10 @@ describe("pure bounded-maintenance Pin prioritization", () => {
 
   it("ranks clusters by observed outbound clicks per Pin, not total clicks", () => {
     const snapshots = [
-      { id: "large", pinCount: 39, outboundClicks: 62n },
-      { id: "focused", pinCount: 16, outboundClicks: 61n },
-      { id: "zero", pinCount: 20, outboundClicks: 0n },
-      { id: "small", pinCount: 2, outboundClicks: 2n },
+      { id: "large", pinCount: 39, outboundClicks: BigInt(62) },
+      { id: "focused", pinCount: 16, outboundClicks: BigInt(61) },
+      { id: "zero", pinCount: 20, outboundClicks: BigInt(0) },
+      { id: "small", pinCount: 2, outboundClicks: BigInt(2) },
     ];
     expect(selectPrioritySnapshots(snapshots)).toEqual(["focused", "large"]);
     expect(snapshots[0].id).toBe("large");
@@ -83,8 +83,8 @@ describe("bounded-maintenance database selection", () => {
     ]);
     m.latest.mockResolvedValue({ id: "run-1" });
     m.snapshots.mockResolvedValue([
-      { id: "cluster-1", pinCount: 39, outboundClicks: 62n },
-      { id: "cluster-2", pinCount: 16, outboundClicks: 61n },
+      { id: "cluster-1", pinCount: 39, outboundClicks: BigInt(62) },
+      { id: "cluster-2", pinCount: 16, outboundClicks: BigInt(61) },
     ]);
     m.members.mockResolvedValue([{ pinId: "high-value" }]);
   });
@@ -135,14 +135,14 @@ describe("bounded-maintenance database selection", () => {
 
   it("falls back on snapshot/membership caps without partial prioritization", async () => {
     m.snapshots.mockResolvedValue(Array.from({ length: 101 }, (_, i) => ({
-      id: String(i), pinCount: 2, outboundClicks: 1n,
+      id: String(i), pinCount: 2, outboundClicks: BigInt(1),
     })));
     expect(await selectMaintenancePinId({
       accountId, initialBackfill: false, cutoff,
     })).toBe("baseline");
     expect(m.members).not.toHaveBeenCalled();
     m.snapshots.mockResolvedValue([
-      { id: "cluster-1", pinCount: 39, outboundClicks: 62n },
+      { id: "cluster-1", pinCount: 39, outboundClicks: BigInt(62) },
     ]);
     m.members.mockResolvedValue(Array.from({ length: 501 }, () => ({
       pinId: "high-value",
