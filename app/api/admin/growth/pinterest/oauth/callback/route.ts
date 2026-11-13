@@ -4,7 +4,6 @@ import { GrowthPinterestConnectionStatus } from "@prisma/client";
 import { fetchPinterestUserAccountWithToken } from "@/lib/growth/pinterest/api";
 import { connectPinterestAccount, isUniqueConstraintError } from "@/lib/growth/pinterest/accounts";
 import { requirePinterestConfiguration } from "@/lib/growth/pinterest/config";
-import { enqueuePinterestSyncJobs } from "@/lib/growth/pinterest/jobs";
 import { consumePinterestOAuthState, exchangePinterestAuthorizationCode } from "@/lib/growth/pinterest/oauth";
 import { adminRouteGuard, getSessionOrNull } from "@/lib/permissions";
 
@@ -35,7 +34,10 @@ export async function GET(request: Request) {
       profile: profile.data, token, publicationRole: oauthState.publicationRole, adminUserId: session.user.id,
     });
     if (account.connectionStatus === GrowthPinterestConnectionStatus.REAUTH_REQUIRED) return adminRedirect("missing_scopes");
-    await enqueuePinterestSyncJobs(account.id);
+    // OAuth only registers the account. Enqueuing generic sync/board jobs here
+    // would strand jobs while Growth is OFF and block an explicitly approved
+    // scheduled Pin publication. A separate owner-authorized, scoped
+    // onboarding operation must initialize boards and analytics.
     return adminRedirect("connected");
   } catch (error) {
     return adminRedirect(isUniqueConstraintError(error) ? "role_or_account_conflict" : "connection_failed");

@@ -7,6 +7,8 @@ import {
 
 import { recordGrowthActivity } from "@/lib/growth/activity";
 import { countBlockingGrowthJobs } from "@/lib/growth/operations/approved-publication-queue";
+import { assertScheduledPinterestAccounts, chooseLeastRecentlyServed,
+  isScheduledPinterestAccountReady } from "@/lib/growth/pinterest/scheduled-account-selection";
 import { revokeGrowthWorkerActivation } from "@/lib/growth/settings";
 import { runGrowthWorker } from "@/lib/growth/worker";
 import { prisma } from "@/lib/prisma";
@@ -105,25 +107,30 @@ export async function runDailyAccountAnalytics(day: string) {
             apiEnvironment: GrowthPinterestApiEnvironment.PRODUCTION,
             connectionStatus: GrowthPinterestConnectionStatus.CONNECTED,
           },
-          select: { id: true, encryptedCredentials: true, grantedScopes: true,
-            accessTokenExpiresAt: true, refreshTokenExpiresAt: true },
-          take: 2,
+          select: { id: true, activeRole: true, encryptedCredentials: true,
+            grantedScopes: true, accessTokenExpiresAt: true,
+            refreshTokenExpiresAt: true,
+            analyticsState: { select: { lastAccountAnalyticsSyncAt: true } } },
+          take: 4,
         }),
       ]);
       if (!settings || settings.enabled || settings.attributionEnabled ||
-          settings.workerActivationExpiresAt !== null ||
-          blockers !== 0 || accounts.length !== 1) {
+          settings.workerActivationExpiresAt !== null || blockers !== 0) {
         throw Error("DAILY_ANALYTICS_NOT_IDLE");
       }
-      const account = accounts[0];
-      if (!account.encryptedCredentials ||
-          !account.grantedScopes.includes("user_accounts:read") ||
-          !account.accessTokenExpiresAt ||
-          account.accessTokenExpiresAt.getTime() <= Date.now() + 20 * 60_000 ||
-          (account.refreshTokenExpiresAt &&
-            account.refreshTokenExpiresAt.getTime() <= Date.now())) {
-        throw Error("DAILY_ANALYTICS_ACCOUNT_NOT_READY");
-      }
+      assertScheduledPinterestAccounts(accounts);
+      // One exact scoped job per day across all roles, never one per role.
+      // Uninitialized accounts are deferred until their inventory/boards
+      // have been safely onboarded. Previously connected roles still run.
+      const account = chooseLeastRecentlyServed(
+        accounts
+          .filter(a => a.analyticsState &&
+            isScheduledPinterestAccountReady(a, ["user_accounts:read"],
+              new Date(), 20 * 60_000))
+          .map(a => ({ account: a,
+            lastServedAt: a.analyticsState!.lastAccountAnalyticsSyncAt })),
+      );
+      if (!account) throw Error("DAILY_ANALYTICS_ACCOUNT_NOT_READY");
       const state = await tx.growthPinterestAnalyticsState.findUnique({
         where: { accountId: account.id }, select: { accountId: true },
       });

@@ -63,17 +63,17 @@ describe("Pinterest OAuth routes", () => {
     expect(mocks.exchange).not.toHaveBeenCalled();
   });
 
-  it("connects only after token and user-account success, then uses a fixed internal redirect", async () => {
+  it("connects after token and user-account success without autoqueueing blockers", async () => {
     mocks.consumeState.mockResolvedValue({ publicationRole: GrowthPinterestPublicationRole.SAYTWIST });
     mocks.exchange.mockResolvedValue({ access_token: "secret", refresh_token: "secret2" });
     mocks.fetchProfile.mockResolvedValue({ data: { id: "pin-1", username: "saytwist" } });
     mocks.connect.mockResolvedValue({ id: "account-1" });
-    mocks.enqueue.mockResolvedValue({});
     const response = await callback(new Request("https://attacker.test/api/admin/growth/pinterest/oauth/callback?state=s&code=oauth-secret"));
     expect(response.headers.get("location")).toBe("https://saytwist.test/admin/growth/accounts?status=connected");
     expect(response.headers.get("location")).not.toContain("oauth-secret");
     expect(mocks.fetchProfile).toHaveBeenCalledWith("secret");
-    expect(mocks.enqueue).toHaveBeenCalledWith("account-1");
+    // A successful OAuth must not strand account/board sync jobs while Growth is OFF.
+    expect(mocks.enqueue).not.toHaveBeenCalled();
   });
 
   it("reports a partial OAuth grant as missing scopes and does not enqueue sync", async () => {

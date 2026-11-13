@@ -81,7 +81,9 @@ describe("One controlled Pinterest worker job", () => {
     }] : []);
     m.publicationList.mockResolvedValue([]);
     m.accounts.mockImplementation(async () => [{
-      id: "account123", encryptedCredentials: "opaque",
+      id: "account123", activeRole: "SAYTWIST",
+      encryptedCredentials: "opaque",
+      lastAccountSyncAt: new Date(Date.now() - 25 * 3600_000),
       grantedScopes: ["user_accounts:read"],
       accessTokenExpiresAt: new Date(Date.now() + 3600_000),
       refreshTokenExpiresAt: new Date(Date.now() + 3600_000),
