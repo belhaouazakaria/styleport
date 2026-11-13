@@ -2,7 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { GrowthAssetState, GrowthPinCandidateStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { buildPublicCreativeAssetUrl } from "@/lib/growth/publishing/snapshot";
-import { approvePinCandidateAutomatically, recommendPinApprovalPlan, rejectPinCandidate } from "@/lib/growth/publishing/service";
+import { approvePinCandidate, recommendPinApprovalPlan, rejectPinCandidate } from "@/lib/growth/publishing/service";
 import { domainForPinPath, isPinDestinationDomain, type PinDestinationDomain } from "@/lib/growth/publishing/destinations";
 
 /** No Telegram update is trusted without both the Bot API webhook secret and
@@ -114,12 +114,14 @@ export async function offerPinForTelegramReview(
   if (!isPinDestinationDomain(domain || "saytwist.com")) throw Error("PIN_REVIEW_DOMAIN_INVALID");
   const preferenceDomain = domainForPinPath(domain || "saytwist.com", candidate.destinationPath);
   const existing = await prisma.growthTelegramPinReview.findUnique({ where: { candidateId } });
+  if (plan.scheduledAt.getTime() <= now.getTime() + 2 * 60_000) throw Error("PIN_REVIEW_SLOT_TOO_SOON");
   if (existing) throw Error("PIN_REVIEW_ALREADY_ATTEMPTED");
   const review = await prisma.growthTelegramPinReview.create({
     data: {
       candidateId, candidateRevision: candidate.revision, accountId: plan.accountId,
+      boardId: plan.boardId, scheduledAt: plan.scheduledAt,
       ownerUserId, status: "QUEUED",
-      expiresAt: new Date(now.getTime() + 48 * 60 * 60_000),
+      expiresAt: new Date(Math.min(now.getTime() + 24 * 60 * 60_000, plan.scheduledAt.getTime() - 60_000)),
     },
   });
   const caption = [
@@ -222,9 +224,12 @@ export async function acceptPrivatePinCallback(
       if (domainForPinPath(selected, review.candidate.destinationPath) !== selected) {
         throw Error("PIN_REVIEW_DOMAIN_INVALID");
       }
-      const approved = await approvePinCandidateAutomatically(
-        review.candidateId, review.ownerUserId, selected, now,
-      );
+      const approved = await approvePinCandidate({
+        candidateId: review.candidateId,
+        accountId: review.accountId, boardId: review.boardId,
+        scheduledAt: review.scheduledAt.toISOString(), confirmation: true,
+        destinationDomain: selected,
+      }, review.ownerUserId, now);
       await prisma.growthTelegramPinReview.update({
         where: { id: review.id }, data: { status: "APPROVED",
           actedAt: now, destinationDomain: selected,
