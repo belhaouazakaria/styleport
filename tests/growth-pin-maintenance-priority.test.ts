@@ -40,14 +40,14 @@ describe("pure bounded-maintenance Pin prioritization", () => {
     expect(chooseMaintenancePinId([
       { id: "baseline", lastAnalyticsSyncAt: old },
       { id: "priority", lastAnalyticsSyncAt: severalDaysLater },
-    ], new Set(["priority"]))).toBe("baseline");
+    ], new Set(["priority"]))).toBeNull();
   });
 
   it("gives never-synced Pins absolute precedence over previously fetched Pins", () => {
     expect(chooseMaintenancePinId([
       { id: "never", lastAnalyticsSyncAt: null },
       { id: "priority", lastAnalyticsSyncAt: old },
-    ], new Set(["priority"]))).toBe("never");
+    ], new Set(["priority"]))).toBeNull();
     expect(chooseMaintenancePinId([
       { id: "never", lastAnalyticsSyncAt: null },
       { id: "never-priority", lastAnalyticsSyncAt: null },
@@ -58,7 +58,7 @@ describe("pure bounded-maintenance Pin prioritization", () => {
   it("falls back deterministically on no match or an empty list", () => {
     expect(chooseMaintenancePinId([
       { id: "oldest", lastAnalyticsSyncAt: old },
-    ], new Set())).toBe("oldest");
+    ], new Set())).toBeNull();
     expect(chooseMaintenancePinId([], new Set(["arbitrary"]))).toBeNull();
   });
 
@@ -128,7 +128,7 @@ describe("bounded-maintenance database selection", () => {
     m.latest.mockResolvedValue(null);
     expect(await selectMaintenancePinId({
       accountId, initialBackfill: false, cutoff,
-    })).toBe("baseline");
+    })).toBeNull();
     expect(m.snapshots).not.toHaveBeenCalled();
     expect(m.members).not.toHaveBeenCalled();
   });
@@ -139,7 +139,7 @@ describe("bounded-maintenance database selection", () => {
     })));
     expect(await selectMaintenancePinId({
       accountId, initialBackfill: false, cutoff,
-    })).toBe("baseline");
+    })).toBeNull();
     expect(m.members).not.toHaveBeenCalled();
     m.snapshots.mockResolvedValue([
       { id: "cluster-1", pinCount: 39, outboundClicks: BigInt(62) },
@@ -149,7 +149,7 @@ describe("bounded-maintenance database selection", () => {
     })));
     expect(await selectMaintenancePinId({
       accountId, initialBackfill: false, cutoff,
-    })).toBe("baseline");
+    })).toBeNull();
   });
 
   it("delegates to old selection if eligible pool exceeds the safe scan cap", async () => {
