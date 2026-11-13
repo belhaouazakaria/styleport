@@ -191,6 +191,7 @@ export default async function AdminGrowthPage() {
             intensity: overview.settings.intensity,
             workerBatchSize: overview.settings.workerBatchSize,
             ownedDomains: overview.settings.ownedDomains,
+            defaultPinterestDestinationDomain: overview.settings.defaultPinterestDestinationDomain,
             attributionEnabled: overview.settings.attributionEnabled,
             attributionWindowDays: overview.settings.attributionWindowDays,
             attributionSessionRetentionDays:
