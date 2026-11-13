@@ -524,6 +524,7 @@ model User {
   growthPinterestStates GrowthPinterestOAuthState[] @relation("GrowthPinterestOAuthStateAdmin")
   growthIdeaVersions    GrowthIdeaVersion[]         @relation("GrowthIdeaVersionAuthor")
   growthPinApprovals    GrowthPinApproval[]         @relation("GrowthPinApprovalApprover")
+  telegramPinReviews   GrowthTelegramPinReview[]
 }
 
 model Account {
@@ -1821,6 +1822,7 @@ model GrowthPinCandidate {
   idea                       GrowthIdea?                            @relation(fields: [ideaId], references: [id], onDelete: Restrict)
   asset                      GrowthAsset                            @relation(fields: [assetId], references: [id], onDelete: Restrict)
   approvals                  GrowthPinApproval[]
+  telegramReview              GrowthTelegramPinReview?
   publications               GrowthPinPublication[]
   preparedFromRecommendation GrowthEvergreenRecommendationRecord?   @relation("PreparedEvergreenCandidate")
 
@@ -1858,6 +1860,27 @@ model GrowthPinApproval {
   @@index([candidateId, status, createdAt])
   @@index([status, scheduledAt])
   @@index([accountId, scheduledAt])
+}
+
+model GrowthTelegramPinReview {
+  id                  String             @id @default(cuid())
+  candidateId         String             @unique
+  candidateRevision   Int
+  accountId           String
+  ownerUserId         String
+  telegramMessageId   Int?
+  status              String             @default("QUEUED") @db.VarChar(24)
+  expiresAt           DateTime
+  sentAt              DateTime?
+  actedAt             DateTime?
+  destinationDomain   String?            @db.VarChar(80)
+  publicationId       String?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  candidate           GrowthPinCandidate @relation(fields: [candidateId], references: [id], onDelete: Restrict)
+  owner               User               @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+
+  @@index([status, expiresAt])
 }
 
 model GrowthPinPublication {
