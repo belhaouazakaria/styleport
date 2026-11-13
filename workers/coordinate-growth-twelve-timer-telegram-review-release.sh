@@ -114,9 +114,9 @@ write_state() {
 check_state() {
   local expected
   [[ -f "$STATE" && ! -L "$STATE" && "$(stat -c '%u:%g:%a' "$STATE")" == 0:0:600 ]] || fail
-  # Hold records exactly 31 completed migrations; restore must see the
-  # independent, approved additive migration (#32), not the old count.
-  expected="$(printf 'old=%s\nnew=%s\nmigrations=%s\nstatus=HELD' "$OLD" "$NEW" "31")"
+  # Hold records exactly 35 completed migrations; restore must see the
+  # independent, approved additive migration (#36), not the old count.
+  expected="$(printf 'old=%s\nnew=%s\nmigrations=%s\nstatus=HELD' "$OLD" "$NEW" "35")"
   [[ "$(cat "$STATE")" == "$expected" ]] || fail
 }
 quiet_window() {
@@ -128,12 +128,12 @@ quiet_window() {
 MIGRATIONS="$(count_migrations)" || fail
 [[ "$MIGRATIONS" =~ ^[0-9]+$ ]] || fail
 case "$MODE" in
-  audit|hold) [[ "$MIGRATIONS" == 31 ]] || fail ;;
-  restore) [[ "$MIGRATIONS" == 32 ]] || fail ;;
-  recover) [[ "$MIGRATIONS" == 31 || "$MIGRATIONS" == 32 ]] || fail ;;
+  audit|hold) [[ "$MIGRATIONS" == 35 ]] || fail ;;
+  restore) [[ "$MIGRATIONS" == 36 ]] || fail ;;
+  recover) [[ "$MIGRATIONS" == 35 || "$MIGRATIONS" == 36 ]] || fail ;;
 esac
 if [[ "$MODE" == restore ]]; then
-  [[ "$(db 'SELECT count(*) FROM "_prisma_migrations" WHERE migration_name = '''20261113100000_growth_telegram_pin_review''' AND finished_at IS NOT NULL AND rolled_back_at IS NULL;')" == 1 ]] || fail
+  [[ "$(db "SELECT count(*) FROM \"_prisma_migrations\" WHERE migration_name = '20261113100000_growth_telegram_pin_review' AND finished_at IS NOT NULL AND rolled_back_at IS NULL;")" == 1 ]] || fail
 fi
 safe_db
 if [[ "$MODE" == audit || "$MODE" == hold ]]; then
