@@ -207,6 +207,10 @@ export async function acceptPrivatePinCallback(
       review.candidate.status !== GrowthPinCandidateStatus.READY) {
     return { status: "IGNORED" as const };
   }
+  const owner = await prisma.user.findUnique({
+    where: { id: review.ownerUserId }, select: { role: true },
+  });
+  if (owner?.role !== "ADMIN") return { status: "IGNORED" as const };
   const claim = await prisma.growthTelegramPinReview.updateMany({
     where: { id: review.id, status: "SENT", expiresAt: { gt: now },
       telegramMessageId: parsed.messageId },
