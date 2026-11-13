@@ -9,6 +9,8 @@ CREATE TABLE "GrowthTelegramPinReview" (
   "id" TEXT NOT NULL,
   "candidateId" TEXT NOT NULL,
   "candidateRevision" INTEGER NOT NULL,
+  "contentHash" VARCHAR(64) NOT NULL,
+  "assetChecksum" VARCHAR(64) NOT NULL,
   "accountId" TEXT NOT NULL,
   "boardId" TEXT NOT NULL,
   "scheduledAt" TIMESTAMP(3) NOT NULL,
