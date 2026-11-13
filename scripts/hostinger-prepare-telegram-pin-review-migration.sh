@@ -4,6 +4,8 @@ set -Eeuo pipefail
 APP_PATH="${HOSTINGER_APP_PATH:-/home/saytwist/htdocs/saytwist.com}"
 NODE_BIN="${HOSTINGER_NODE_BIN:-/home/saytwist/.nvm/versions/node/v24.20.0/bin/node}"
 ENV_FILE="${HOSTINGER_ENV_FILE:-$APP_PATH/.env}"
+TEMP_ENV_FILE=""
+NODE_DIR=/home/saytwist/.nvm/versions/node/v24.20.0/bin
 MIGRATION_ROOT="${HOSTINGER_MIGRATION_ROOT:-}"
 RELEASE_SHA="${HOSTINGER_RELEASE_SHA:-}"
 APPROVED_MIGRATION="20261113100000_growth_telegram_pin_review"
@@ -43,7 +45,6 @@ validate_inputs() {
   [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] || fail "HOSTINGER_RELEASE_SHA must be the reviewed full commit SHA."
   [[ "$APPROVAL" == "APPLY $APPROVED_MIGRATION" ]] || fail "Exact operator approval is required for $APPROVED_MIGRATION."
   [[ -x "$NODE_BIN" ]] || fail "Approved production Node.js binary is unavailable."
-  [[ -f "$ENV_FILE" ]] || fail "Production environment file is unavailable."
   [[ -f "$PRISMA_CLI" ]] || fail "Existing production Prisma CLI is unavailable."
   [[ -f "$MIGRATION_ROOT/prisma/schema.prisma" ]] || fail "Reviewed Prisma schema is unavailable."
   [[ -f "$MIGRATION_ROOT/prisma/migrations/$APPROVED_MIGRATION/migration.sql" ]] || fail "Approved migration SQL is unavailable."
@@ -77,10 +78,70 @@ validate_inputs() {
 
 }
 
+cleanup() {
+  if [[ -n "$TEMP_ENV_FILE" ]]; then
+    rm -f -- "$TEMP_ENV_FILE"
+  fi
+  rmdir "$LOCK_DIR" >/dev/null 2>&1 || true
+}
+
 acquire_lock() {
   mkdir "$LOCK_DIR" >/dev/null 2>&1 \
     || fail "A deployment or migration operation is already active."
-  trap 'rmdir "$LOCK_DIR" >/dev/null 2>&1 || true' EXIT
+  trap cleanup EXIT
+}
+
+# The deployed SayTwist app has no .env. Load exactly the existing
+# validated PM2 process DATABASE_URL into a root-only ephemeral /run file.
+# Do not print PM2 data, credentials, or the resulting URL.
+prepare_database_env() {
+  if [[ -f "$ENV_FILE" ]]; then
+    [[ ! -L "$ENV_FILE" && -r "$ENV_FILE" ]] || fail "Environment file is untrusted."
+    return
+  fi
+  [[ "$ENV_FILE" == "$APP_PATH/.env" ]] ||
+    fail "Explicitly selected environment file is unavailable."
+  TEMP_ENV_FILE="$(mktemp /run/saytwist-telegram-db.XXXXXXXX)" ||
+    fail "Could not create private runtime configuration."
+  chmod 0600 "$TEMP_ENV_FILE"
+  if ! runuser -u saytwist -- env \
+    HOME=/home/saytwist PM2_HOME=/home/saytwist/.pm2 \
+    PATH="$NODE_DIR:/usr/local/bin:/usr/bin:/bin" \
+    "$NODE_BIN" -e '
+      const fs = require("node:fs");
+      const { spawnSync } = require("node:child_process");
+      const app = "/home/saytwist/htdocs/saytwist.com";
+      const nodeDir = "/home/saytwist/.nvm/versions/node/v24.20.0/bin";
+      const candidates = [
+        "/home/saytwist/.npm/_npx/5f7878ce38f1eb13/node_modules/pm2/bin/pm2",
+        nodeDir + "/pm2",
+      ];
+      try {
+        const pm2 = candidates.find(fs.existsSync);
+        if (!pm2) throw Error("PM2_MISSING");
+        const proc = spawnSync(pm2, ["jlist"], {
+          cwd: app, encoding: "utf8", timeout: 10000,
+          maxBuffer: 16 * 1024 * 1024,
+          env: {
+            HOME: "/home/saytwist", PM2_HOME: "/home/saytwist/.pm2",
+            PATH: nodeDir + ":/usr/local/bin:/usr/bin:/bin",
+          },
+        });
+        if (proc.status !== 0 || proc.error) throw Error("PM2_UNAVAILABLE");
+        const { validatedDatabaseUrl } = require(
+          app + "/workers/growth-lease-watchdog-launch.cjs"
+        );
+        const value = validatedDatabaseUrl(proc.stdout);
+        process.stdout.write("DATABASE_URL=" + JSON.stringify(value) + "\n");
+      } catch {
+        process.stderr.write("MIGRATION_PM2_CONFIG_UNAVAILABLE\n");
+        process.exitCode = 1;
+      }
+    ' > "$TEMP_ENV_FILE"; then
+      fail "Could not read validated application database configuration."
+  fi
+  [[ -s "$TEMP_ENV_FILE" ]] || fail "Runtime database configuration was empty."
+  ENV_FILE="$TEMP_ENV_FILE"
 }
 
 validate_database_target() {
@@ -101,32 +162,23 @@ check_runtime() {
 }
 
 validate_exact_pending_migration() {
-  MIGRATION_ROOT="$MIGRATION_ROOT" APPROVED_MIGRATION="$APPROVED_MIGRATION" \
-    "$NODE_BIN" --env-file="$ENV_FILE" -e '
-      const fs = require("node:fs");
-      const path = require("node:path");
-      const { PrismaClient } = require(path.join(process.argv[1], "node_modules/@prisma/client"));
-      const root = process.env.MIGRATION_ROOT;
-      const approved = process.env.APPROVED_MIGRATION;
-      const client = new PrismaClient();
-      (async () => {
-        const rows = await client.$queryRawUnsafe(
-          `SELECT migration_name, finished_at, rolled_back_at FROM "_prisma_migrations" ORDER BY started_at`,
-        );
-        if (rows.some((row) => row.finished_at === null && row.rolled_back_at === null)) {
-          throw new Error("Production contains an unfinished Prisma migration");
-        }
-        const applied = new Set(rows.filter((row) => row.finished_at !== null).map((row) => row.migration_name));
-        const available = fs.readdirSync(path.join(root, "prisma/migrations"), { withFileTypes: true })
-          .filter((entry) => entry.isDirectory())
-          .map((entry) => entry.name)
-          .sort();
-        const pending = available.filter((name) => !applied.has(name));
-        if (pending.length !== 1 || pending[0] !== approved) {
-          throw new Error(`Expected only ${approved} pending; found ${pending.join(", ") || "none"}`);
-        }
-      })().finally(() => client.$disconnect());
-    ' "$APP_PATH" || fail "Pending migration allow-list validation failed."
+  local db_names source_names
+  [[ "$(runuser -u postgres -- /usr/lib/postgresql/18/bin/psql \
+    -X -qAt -v ON_ERROR_STOP=1 -p 5433 -d saytwist \
+    -c 'SELECT COUNT(*) FROM "_prisma_migrations" WHERE finished_at IS NULL AND rolled_back_at IS NULL;')" == 0 ]] ||
+      fail "Production contains unfinished Prisma migrations."
+  db_names="$(runuser -u postgres -- /usr/lib/postgresql/18/bin/psql \
+    -X -qAt -v ON_ERROR_STOP=1 -p 5433 -d saytwist \
+    -c 'SELECT migration_name FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL ORDER BY migration_name;')" ||
+      fail "Could not inspect applied migrations."
+  source_names="$(find "$MIGRATION_ROOT/prisma/migrations" -mindepth 1 -maxdepth 1 \
+    -type d ! -name "$APPROVED_MIGRATION" -printf '%f\n' | LC_ALL=C sort)" ||
+      fail "Could not inspect reviewed migration source."
+  [[ "$db_names" == "$source_names" ]] ||
+    fail "Applied production migrations do not match reviewed migration source."
+  [[ -f "$MIGRATION_ROOT/prisma/migrations/$APPROVED_MIGRATION/migration.sql" ]] ||
+    fail "The exact approved migration is not present."
+
 }
 
 create_verified_backup() {
@@ -165,6 +217,8 @@ main() {
   command -v curl >/dev/null 2>&1 || fail "curl is required."
   validate_inputs
   acquire_lock
+  prepare_database_env
+  unset DATABASE_URL
   validate_database_target
   check_runtime
   validate_exact_pending_migration
