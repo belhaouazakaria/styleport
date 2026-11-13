@@ -256,3 +256,39 @@ export async function acceptPrivatePinCallback(
   }, config, fetcher).catch(() => undefined);
   return { status: result };
 }
+
+
+/** Opt-in daily courier: forwards at most three recent READY candidates to the
+ * one private owner chat. Never approves or publishes on its own. */
+export async function dispatchPendingPinReviews(
+  config = getPrivatePinReviewConfig(),
+  fetcher: typeof fetch = fetch,
+  now = new Date(),
+  ownerUserId = process.env.GROWTH_TELEGRAM_PIN_OWNER_USER_ID || "",
+) {
+  if (!ownerUserId || ownerUserId.length > 191) throw Error("PIN_REVIEW_OWNER_NOT_CONFIGURED");
+  const guard = await prisma.growthSettings.findUnique({
+    where: { id: "global" },
+    select: { enabled: true, attributionEnabled: true, workerActivationExpiresAt: true },
+  });
+  if (!guard || guard.enabled || guard.attributionEnabled ||
+      guard.workerActivationExpiresAt !== null) throw Error("PIN_REVIEW_GLOBAL_GATE");
+  const candidates = await prisma.growthPinCandidate.findMany({
+    where: { status: GrowthPinCandidateStatus.READY,
+      createdAt: { gte: new Date(now.getTime() - 72 * 60 * 60_000) },
+      telegramReview: { is: null },
+      approvals: { none: { status: "APPROVED" } },
+    },
+    select: { id: true },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    take: 3,
+  });
+  let submitted = 0;
+  for (const candidate of candidates) {
+    // Never automatically retry an ambiguous offer. If the first candidate
+    // cannot be recommended or delivered, stop without attempting another.
+    await offerPinForTelegramReview(candidate.id, ownerUserId, config, fetcher, now);
+    submitted++;
+  }
+  return { submitted };
+}
