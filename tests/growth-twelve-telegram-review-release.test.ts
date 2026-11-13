@@ -26,8 +26,8 @@ describe("migration-aware 12-timer Telegram review release", () => {
     expect(source).not.toContain("pm2 start");
   });
   it("fails closed on nonexact database migration state and requires operator approval", () => {
-    expect(source).toContain('audit|hold) [[ "$MIGRATIONS" == 31 ]]');
-    expect(source).toContain('restore) [[ "$MIGRATIONS" == 32 ]]');
+    expect(source).toContain('audit|hold) [[ "$MIGRATIONS" == 35 ]]');
+    expect(source).toContain('restore) [[ "$MIGRATIONS" == 36 ]]');
     expect(source).toContain("20261113100000_growth_telegram_pin_review");
     expect(source).toContain('migrations=%s');
     expect(source).toContain('HOLD:$OLD:$NEW');
