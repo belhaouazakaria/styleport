@@ -34,6 +34,8 @@ GROWTH_TELEGRAM_PIN_WEBHOOK_SECRET=<independent 32+ character randomly generated
 The existing private sender credentials `TELEGRAM_BOT_TOKEN` and `TELEGRAM_REPORT_CHAT_ID` remain required.
 The Next.js web application that accepts callbacks also needs the independent enablement flag, exact private-chat ID, bot token and same webhook secret, **as server-only secret settings**. Nothing is exposed to `NEXT_PUBLIC_*` or published in repo.
 
+Production uses no application `.env` file. The new protected migration runner reads only the validated existing SayTwist PM2 process's database URL using the `saytwist` OS identity, writes a root-only mode 0600 temporary environment file under `/run`, and deletes it on exit. It verifies every existing migration identity against the reviewed release source. No database credentials are printed or committed. Do not manually create an `.env` in the application directory.
+
 The operator must configure the Bot API `setWebhook` once for `https://saytwist.com/api/growth/telegram-pin-review`, with exact secret header token and **callback_query-only** updates. A new secret must be issued if any existing webhook compromise is suspected. Do not call `setWebhook` in CI, on page load, or implicitly on application deployment.
 
 ## Acceptance and rollout gates
