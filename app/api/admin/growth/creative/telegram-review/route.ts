@@ -20,6 +20,6 @@ export async function POST(request: Request) {
     return apiOk({ status: result.status });
   } catch {
     // No private Telegram settings or transport errors in browser responses.
-    return apiError(409, "PIN_REVIEW_UNAVAILABLE", "Private Telegram review is not available or this Pin has already been offered.");
+    return apiError(409, "VALIDATION_ERROR", "Private Telegram review is not available or this Pin has already been offered.");
   }
 }
