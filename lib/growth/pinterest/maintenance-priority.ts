@@ -52,7 +52,7 @@ export function selectPrioritySnapshots(
   snapshots: readonly SnapshotRanking[],
 ): string[] {
   return snapshots
-    .filter(s => s.pinCount > 0 && s.outboundClicks > 0n)
+    .filter(s => s.pinCount > 0 && s.outboundClicks > BigInt(0))
     .sort((a, b) => {
       const left = a.outboundClicks * BigInt(b.pinCount);
       const right = b.outboundClicks * BigInt(a.pinCount);
@@ -99,7 +99,7 @@ export async function selectMaintenancePinId(input: {
   if (!latest) return pins[0].id;
 
   const snapshots = await prisma.growthContentClusterSnapshot.findMany({
-    where: { analysisRunId: latest.id, outboundClicks: { gt: 0n } },
+    where: { analysisRunId: latest.id, outboundClicks: { gt: BigInt(0) } },
     select: { id: true, outboundClicks: true, pinCount: true },
     take: MAX_CLUSTERS + 1,
   });
