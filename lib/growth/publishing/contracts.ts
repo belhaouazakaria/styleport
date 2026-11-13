@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PIN_DESTINATION_DOMAINS } from "@/lib/growth/publishing/destinations";
 
 export const PIN_APPROVAL_POLICY_VERSION = "pin_approval_v1";
 export const PUBLICATION_TIMING_VERSION = "publication_timing_v1";
@@ -9,6 +10,7 @@ export const approvePinSchema = z.object({
   boardId: z.string().min(1).max(191),
   scheduledAt: z.string().datetime({ offset: true }),
   confirmation: z.literal(true),
+  destinationDomain: z.enum(PIN_DESTINATION_DOMAINS).optional(),
 }).strict();
 
 export const rejectPinSchema = z.object({
