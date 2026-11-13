@@ -14,6 +14,7 @@ describe("Growth foundation contracts", () => {
       intensity: "BALANCED",
       workerBatchSize: 5,
       ownedDomains: ["saytwist.com"],
+      defaultPinterestDestinationDomain: "saytwist.com",
       attributionEnabled: false,
       attributionWindowDays: 7,
       attributionSessionRetentionDays: 30,
