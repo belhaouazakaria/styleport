@@ -4,6 +4,9 @@ import { GrowthActivityActorKind, GrowthJobType, GrowthPinterestApiEnvironment, 
 import { recordGrowthActivity } from "@/lib/growth/activity";
 import { countBlockingGrowthJobs } from "@/lib/growth/operations/approved-publication-queue";
 import { syncPinterestPinAnalytics, syncPinterestPinInventory } from "@/lib/growth/pinterest/analytics";
+import { assertScheduledPinterestAccounts, chooseLeastRecentlyServed,
+  isScheduledPinterestAccountReady, latestMaintenanceActivity,
+} from "@/lib/growth/pinterest/scheduled-account-selection";
 import { prisma } from "@/lib/prisma";
 import { completedUtcAnalyticsWindow } from "./growth-daily-account-analytics";
 
@@ -96,33 +99,53 @@ export async function runBoundedPinMaintenance(now = new Date()) {
     const accounts = await tx.growthPinterestAccount.findMany({
       where: { apiEnvironment: GrowthPinterestApiEnvironment.PRODUCTION,
         connectionStatus: GrowthPinterestConnectionStatus.CONNECTED },
-      select: { id: true, encryptedCredentials: true, grantedScopes: true,
-        accessTokenExpiresAt: true, refreshTokenExpiresAt: true }, take: 2,
+      select: { id: true, activeRole: true, encryptedCredentials: true, grantedScopes: true,
+        accessTokenExpiresAt: true, refreshTokenExpiresAt: true }, take: 4,
     });
-    if (accounts.length !== 1) throw Error("PIN_MAINTENANCE_ACCOUNT_COUNT");
-    const account = accounts[0];
-    if (!account.encryptedCredentials ||
-        !account.grantedScopes.includes("pins:read") ||
-        !account.grantedScopes.includes("user_accounts:read") ||
-        !account.accessTokenExpiresAt ||
-        account.accessTokenExpiresAt.getTime() <= Date.now() + 20 * 60_000 ||
-        (account.refreshTokenExpiresAt && account.refreshTokenExpiresAt <= now)) {
-      throw Error("PIN_MAINTENANCE_ACCOUNT_NOT_READY");
+    // Never broaden past the three explicitly assigned production roles.
+    assertScheduledPinterestAccounts(accounts);
+    const candidates: Array<{
+      account: typeof accounts[number]; kind: GrowthJobType;
+      lastServedAt: Date | null; inventoryIncomplete: boolean;
+    }> = [];
+    let readyAccounts = 0;
+    for (const account of accounts) {
+      if (!isScheduledPinterestAccountReady(account,
+        ["pins:read", "user_accounts:read"], now, 20 * 60_000)) continue;
+      readyAccounts++;
+      // A recently connected account has not yet completed board/inventory
+      // onboarding. Do not spend its only GET before that setup is complete.
+      const state = await tx.growthPinterestAnalyticsState.findUnique({
+        where: { accountId: account.id },
+        select: { inventoryStartedAt: true, inventoryBookmark: true,
+          lastInventorySyncAt: true, lastPinAnalyticsSyncAt: true },
+      });
+      if (!state) continue;
+      const eligible = await tx.growthPinterestPin.count({
+        where: { accountId: account.id, isActive: true, analyticsEligible: true },
+      });
+      const kind = chooseMaintenanceKind(state, eligible, now);
+      if (!kind) continue;
+      candidates.push({ account, kind,
+        lastServedAt: latestMaintenanceActivity(
+          state.lastInventorySyncAt, state.lastPinAnalyticsSyncAt),
+        inventoryIncomplete: Boolean(state.inventoryStartedAt || state.inventoryBookmark),
+      });
     }
-    const state = await tx.growthPinterestAnalyticsState.findUnique({
-      where: { accountId: account.id },
-      select: { inventoryStartedAt: true, inventoryBookmark: true, lastInventorySyncAt: true },
-    });
-    if (!state) throw Error("PIN_MAINTENANCE_STATE_MISSING");
-    const eligible = await tx.growthPinterestPin.count({
-      where: { accountId: account.id, isActive: true, analyticsEligible: true },
-    });
-    const selected = chooseMaintenanceKind(state, eligible, now);
-    if (!selected) return { status: "SKIPPED_NO_PINS" as const };
+    if (!readyAccounts) throw Error("PIN_MAINTENANCE_ACCOUNT_NOT_READY");
+    // Continue an in-progress inventory walk before starting another page.
+    // Otherwise, rotate the single GET toward the least recently served role.
+    const pendingInventory = candidates.filter(c => c.inventoryIncomplete);
+    const pool = pendingInventory.length ? pendingInventory : candidates;
+    const account = chooseLeastRecentlyServed(pool.map(c => ({
+      account: c.account, lastServedAt: c.lastServedAt,
+    })));
+    if (!account) return { status: "SKIPPED_NO_PINS" as const };
+    const selected = pool.find(c => c.account.id === account.id)!.kind;
     // Durable slot reservation is committed before network access. If the
     // process crashes, the slot is not retried and NO GrowthJob is stranded.
     const previous = await tx.growthActivity.count({
-      where: { entityType: "GrowthPinterestAccount", entityId: account.id,
+      where: { entityType: "GrowthPinterestAccount",
         action: "PIN_MAINTENANCE_SLOT_RESERVED", correlationKey: key },
     });
     if (previous !== 0) return { status: "ALREADY_ATTEMPTED" as const };
