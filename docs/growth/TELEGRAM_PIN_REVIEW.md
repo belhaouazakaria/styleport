@@ -21,7 +21,7 @@
 - Existing Pinterest provider transport remains at **4/hour and 16/24h**, with its own account scopes, budget reserve, exact candidate approval and cross-worker lease gates. Telegram review sends require no Pinterest API calls.
 - Growth/attribution remain OFF. No publication is initiated by the Telegram courier. The existing scheduled approved publisher continues to publish only individually approved Pins.
 - Every default/overridden destination still carries the same explicit `utm_*` and `pin_ref` parameters, and exact chosen hostname, path and query are bound to the immutable approval snapshot.
-- Legacy URLs require a **production redirect check** to confirm HTTPS redirects land at the expected canonical Translator while preserving the tracking parameters. The presence of the option is not proof that Pinterest will distribute a redirected-domain Pin; `saytwist.com` is the recommended default. Do not use the legacy hostname to evade Pinterest link restrictions.
+- **Host behavior differs from previous expectations:** The current `next.config.ts` redirects only the *plural* `translators.whattypeof.com`. It explicitly documents that singular `translator.whattypeof.com` serves the app directly. The singular hostname must be independently verified on production HTTPS, including a real Translator page and retained tracking parameters, before enabling the legacy website option. We could not establish the live network behavior from CI or source alone. `saytwist.com` is the recommended default, and the legacy hostname must never be used to evade Pinterest link restrictions.
 
 ## Server-only configuration (not supplied through chat)
 
