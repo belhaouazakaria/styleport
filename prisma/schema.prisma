@@ -1867,6 +1867,8 @@ model GrowthTelegramPinReview {
   candidateId         String             @unique
   candidateRevision   Int
   accountId           String
+  boardId             String
+  scheduledAt         DateTime
   ownerUserId         String
   telegramMessageId   Int?
   status              String             @default("QUEUED") @db.VarChar(24)
