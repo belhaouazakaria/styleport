@@ -38,7 +38,9 @@ export function chooseMaintenancePinId(
       return pin.id;
     }
   }
-  return oldest.id;
+  // Delegate to the original analyticsPriorityAt ordering if there is no
+  // evidence-backed candidate in the oldest due-Pin age window.
+  return null;
 }
 
 type SnapshotRanking = {
@@ -96,23 +98,23 @@ export async function selectMaintenancePinId(input: {
     orderBy: [{ analysisDate: "desc" }, { createdAt: "desc" }],
     select: { id: true },
   });
-  if (!latest) return pins[0].id;
+  if (!latest) return null;
 
   const snapshots = await prisma.growthContentClusterSnapshot.findMany({
     where: { analysisRunId: latest.id, outboundClicks: { gt: BigInt(0) } },
     select: { id: true, outboundClicks: true, pinCount: true },
     take: MAX_CLUSTERS + 1,
   });
-  if (snapshots.length > MAX_CLUSTERS) return pins[0].id;
+  if (snapshots.length > MAX_CLUSTERS) return null;
   const chosen = selectPrioritySnapshots(snapshots);
-  if (!chosen.length) return pins[0].id;
+  if (!chosen.length) return null;
 
   const members = await prisma.growthContentClusterMembership.findMany({
     where: { snapshotId: { in: chosen }, pinId: { not: null } },
     select: { pinId: true },
     take: MAX_ELIGIBLE_PINS + 1,
   });
-  if (members.length > MAX_ELIGIBLE_PINS) return pins[0].id;
+  if (members.length > MAX_ELIGIBLE_PINS) return null;
   return chooseMaintenancePinId(
     pins,
     new Set(members.map(m => m.pinId).filter((id): id is string => id !== null)),
