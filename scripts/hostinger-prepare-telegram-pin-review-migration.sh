@@ -58,7 +58,7 @@ validate_inputs() {
     fail "Verified 12-timer hold state is missing."
   grep -Fqx "old=$OLD_RELEASE" "$HOLD_STATE" || fail "Held old SHA does not match."
   grep -Fqx "new=$RELEASE_SHA" "$HOLD_STATE" || fail "Held new SHA does not match."
-  grep -Fqx "migrations=31" "$HOLD_STATE" || fail "Expected 31-migration hold baseline."
+  grep -Fqx "migrations=35" "$HOLD_STATE" || fail "Expected 35-migration hold baseline."
   grep -Fqx "status=HELD" "$HOLD_STATE" || fail "The 12 Growth timers were not held."
   [[ "$(cat "$APP_PATH/.deployed-release")" == "$OLD_RELEASE" ]] || fail "Live release changed."
   [[ "$(stat -c '%u:%g:%a' "$MIGRATION_ROOT")" == 0:0:700 ]] || fail "Migration source must be root-owned and mode 0700."
@@ -73,7 +73,7 @@ validate_inputs() {
   local completed
   completed="$(runuser -u postgres -- /usr/lib/postgresql/18/bin/psql -X -qAt -v ON_ERROR_STOP=1 -p 5433 -d saytwist -c 'SELECT count(*) FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL;')" ||
     fail "Could not inspect migration baseline."
-  [[ "$completed" == 31 ]] || fail "Production migration count is not 31."
+  [[ "$completed" == 35 ]] || fail "Production migration count is not 35."
 
 }
 
