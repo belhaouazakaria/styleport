@@ -22,7 +22,7 @@ export async function POST(request: Request) {
     }
     const result = auto
       ? await approvePinCandidateAutomatically(input.candidateId as string, session.user.id, input.destinationDomain as "saytwist.com" | "translator.whattypeof.com" | undefined)
-      : await approvePinCandidate(parsed.data, session.user.id);
+      : await approvePinCandidate(approvePinSchema.parse(body), session.user.id);
     return apiOk({ approvalId: result.approval.id, publicationId: result.publication?.id, created: result.created }, result.created ? 201 : 200);
   }
   catch (error) { return apiError(400, "VALIDATION_ERROR", error instanceof Error ? error.message : "Pin approval failed."); }
