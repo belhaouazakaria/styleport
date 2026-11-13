@@ -957,6 +957,7 @@ model GrowthSettings {
   intensity                       GrowthIntensity @default(BALANCED)
   workerBatchSize                 Int             @default(5)
   ownedDomains                    String[]        @default(["saytwist.com", "www.saytwist.com", "translator.whattypeof.com"])
+  defaultPinterestDestinationDomain String        @default("saytwist.com") @db.VarChar(80)
   attributionEnabled              Boolean         @default(false)
   attributionWindowDays           Int             @default(7)
   attributionSessionRetentionDays Int             @default(30)
