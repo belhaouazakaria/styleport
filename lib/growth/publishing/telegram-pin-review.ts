@@ -41,7 +41,7 @@ type TelegramReply = {
 };
 
 async function telegramRequest(
-  method: "sendPhoto" | "answerCallbackQuery",
+  method: "sendPhoto" | "answerCallbackQuery" | "editMessageCaption" | "editMessageReplyMarkup",
   payload: object,
   config: PrivatePinReviewConfig,
   fetcher: typeof fetch,
@@ -167,12 +167,88 @@ export async function offerPinForTelegramReview(
   }
 }
 
+type ClosedPinReviewStatus = "APPROVED" | "REJECTED" | "EXPIRED" | "FAILED";
+const CLOSED_CAPTIONS: Record<ClosedPinReviewStatus, string> = {
+  APPROVED: "✅ Approved and scheduled.",
+  REJECTED: "❌ Rejected.",
+  EXPIRED: "⌛ Approval expired. No action was taken.",
+  FAILED: "⚠️ Review closed. Check the admin panel for the outcome.",
+};
+
+/** Preserve the photo and the original candidate, board and time details when
+ * Telegram includes the original caption in its callback. */
+export function closedPinReviewCaption(
+  original: string | null | undefined,
+  status: ClosedPinReviewStatus,
+  fallback: { title: string; description: string; scheduledAt: Date },
+) {
+  const knownOriginal = typeof original === "string" &&
+    original.startsWith("SayTwist Pin approval\n") && original.length <= 950
+    ? original
+    : null;
+  const base = knownOriginal
+    ? knownOriginal.replace(/\nApprove only if you want this specific Pin published\.$/, "")
+    : [
+      "SayTwist Pin approval",
+      fallback.title.slice(0, 100),
+      fallback.description.slice(0, 360),
+      "Suggested time: " + fallback.scheduledAt.toISOString() + " (UTC)",
+    ].join("\n");
+  return base.slice(0, 900).trimEnd() + "\n" + CLOSED_CAPTIONS[status];
+}
+
+/** Best-effort visual cleanup only. Database decisions must be committed first.
+ * An edit failure must never cause another approval, rejection or Pin publish. */
+async function closePinReviewMessage(
+  messageId: number | null,
+  status: ClosedPinReviewStatus,
+  originalCaption: string | null,
+  fallback: { title: string; description: string; scheduledAt: Date },
+  config: PrivatePinReviewConfig,
+  fetcher: typeof fetch,
+) {
+  if (!Number.isSafeInteger(messageId) || !messageId || messageId < 1) return false;
+  const destination = { chat_id: config.privateChatId, message_id: messageId };
+  try {
+    await telegramRequest("editMessageCaption", {
+      ...destination,
+      caption: closedPinReviewCaption(originalCaption, status, fallback),
+      reply_markup: { inline_keyboard: [] },
+    }, config, fetcher);
+    return true;
+  } catch {
+    // Clearing the keyboard remains useful if caption editing is unavailable.
+    try {
+      await telegramRequest("editMessageReplyMarkup", {
+        ...destination, reply_markup: { inline_keyboard: [] },
+      }, config, fetcher);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
+async function answerPinReviewCallback(
+  callbackId: string,
+  status: ClosedPinReviewStatus | "PROCESSING",
+  config: PrivatePinReviewConfig,
+  fetcher: typeof fetch,
+) {
+  const text = status === "PROCESSING" ? "This Pin review is already being processed."
+    : CLOSED_CAPTIONS[status];
+  await telegramRequest("answerCallbackQuery", {
+    callback_query_id: callbackId, text, show_alert: false,
+  }, config, fetcher).catch(() => undefined);
+}
+
 export type PinCallback = {
   id: string;
   from: { id: number | string };
   data: string;
   message: {
     message_id: number;
+    caption?: string;
     chat: { id: number | string; type: string };
   };
 };
@@ -188,7 +264,8 @@ export function parsePrivatePinCallback(update: unknown, chatId: string) {
   const matched = /^p:([a-z0-9]{10,35}):(s|l|r)$/.exec(callback.data || "");
   if (!matched) return null;
   return { id: matched[1], action: matched[2] as "s"|"l"|"r",
-    messageId: callback.message.message_id, callbackId: callback.id };
+    messageId: callback.message.message_id, callbackId: callback.id,
+    caption: typeof callback.message.caption === "string" ? callback.message.caption : null };
 }
 
 /** This is the sole bridge to the existing immutable per-Pin approval service.
@@ -204,16 +281,55 @@ export async function acceptPrivatePinCallback(
   const review = await prisma.growthTelegramPinReview.findUnique({
     where: { id: parsed.id },
     include: { candidate: { select: { revision: true, status: true,
-      destinationPath: true, contentHash: true,
-      asset: { select: { checksum: true } } } } },
+      destinationPath: true, contentHash: true, title: true,
+      description: true, asset: { select: { checksum: true } } } } },
   });
-  if (!review || review.status !== "SENT" ||
-      review.expiresAt <= now ||
-      review.telegramMessageId !== parsed.messageId ||
-      review.candidate.revision !== review.candidateRevision ||
+  if (!review || review.telegramMessageId !== parsed.messageId) {
+    return { status: "IGNORED" as const };
+  }
+  const captionContext = { title: review.candidate.title,
+    description: review.candidate.description, scheduledAt: review.scheduledAt };
+  if (review.status === "APPROVED" || review.status === "REJECTED" ||
+      review.status === "EXPIRED" || review.status === "FAILED") {
+    // A stale tap may repair a failed Telegram edit without repeating the
+    // approval or rejection side effect.
+    await answerPinReviewCallback(parsed.callbackId, review.status, config, fetcher);
+    await closePinReviewMessage(parsed.messageId, review.status, parsed.caption,
+      captionContext, config, fetcher);
+    return { status: "IGNORED" as const };
+  }
+  if (review.status === "PROCESSING") {
+    await answerPinReviewCallback(parsed.callbackId, "PROCESSING", config, fetcher);
+    return { status: "IGNORED" as const };
+  }
+  if (review.status !== "SENT") return { status: "IGNORED" as const };
+  if (review.expiresAt <= now) {
+    const expired = await prisma.growthTelegramPinReview.updateMany({
+      where: { id: review.id, status: "SENT", expiresAt: { lte: now },
+        telegramMessageId: parsed.messageId },
+      data: { status: "EXPIRED", actedAt: now },
+    });
+    if (expired.count !== 1) return { status: "IGNORED" as const };
+    await answerPinReviewCallback(parsed.callbackId, "EXPIRED", config, fetcher);
+    await closePinReviewMessage(parsed.messageId, "EXPIRED", parsed.caption,
+      captionContext, config, fetcher);
+    return { status: "EXPIRED" as const };
+  }
+  if (review.candidate.revision !== review.candidateRevision ||
       review.candidate.contentHash !== review.contentHash ||
       review.candidate.asset.checksum !== review.assetChecksum ||
       review.candidate.status !== GrowthPinCandidateStatus.READY) {
+    // A changed creative invalidates only this review, not the candidate.
+    const closed = await prisma.growthTelegramPinReview.updateMany({
+      where: { id: review.id, status: "SENT", expiresAt: { gt: now },
+        telegramMessageId: parsed.messageId },
+      data: { status: "FAILED", actedAt: now },
+    });
+    if (closed.count === 1) {
+      await answerPinReviewCallback(parsed.callbackId, "FAILED", config, fetcher);
+      await closePinReviewMessage(parsed.messageId, "FAILED", parsed.caption,
+        captionContext, config, fetcher);
+    }
     return { status: "IGNORED" as const };
   }
   const owner = await prisma.user.findUnique({
@@ -257,20 +373,56 @@ export async function acceptPrivatePinCallback(
       });
     }
   } catch {
-    await prisma.growthTelegramPinReview.update({
+    const recorded = await prisma.growthTelegramPinReview.update({
       where: { id: review.id }, data: { status: "FAILED", actedAt: now },
-    }).catch(() => undefined);
+    }).then(() => true).catch(() => false);
+    if (recorded) {
+      await answerPinReviewCallback(parsed.callbackId, "FAILED", config, fetcher);
+      await closePinReviewMessage(parsed.messageId, "FAILED", parsed.caption,
+        captionContext, config, fetcher);
+    }
     return { status: "FAILED" as const };
   }
-  // Approval is already durable. Telegram acknowledgement is best effort.
-  await telegramRequest("answerCallbackQuery", {
-    callback_query_id: parsed.callbackId,
-    text: result === "APPROVED" ? "Pin approved and scheduled." : "Pin rejected.",
-    show_alert: false,
-  }, config, fetcher).catch(() => undefined);
+  // Approval/rejection is durable. UI cleanup is best effort and can never
+  // authorize additional provider calls.
+  await answerPinReviewCallback(parsed.callbackId, result, config, fetcher);
+  await closePinReviewMessage(parsed.messageId, result, parsed.caption,
+    captionContext, config, fetcher);
   return { status: result };
 }
 
+
+/** Bounded expiry cleanup inside the already opt-in private courier.
+ * Expiry is checked in the callback regardless of whether the courier runs.
+ * If Telegram editing fails, leave SENT for a future safe cleanup attempt. */
+export async function closeExpiredPrivatePinReviews(
+  config: PrivatePinReviewConfig,
+  fetcher: typeof fetch = fetch,
+  now = new Date(),
+) {
+  const expired = await prisma.growthTelegramPinReview.findMany({
+    where: { status: "SENT", expiresAt: { lte: now },
+      telegramMessageId: { not: null } },
+    select: { id: true, telegramMessageId: true, scheduledAt: true,
+      candidate: { select: { title: true, description: true } } },
+    orderBy: [{ expiresAt: "asc" }, { id: "asc" }],
+    take: 10,
+  });
+  let closed = 0;
+  for (const review of expired) {
+    const edited = await closePinReviewMessage(review.telegramMessageId,
+      "EXPIRED", null, { title: review.candidate.title,
+        description: review.candidate.description,
+        scheduledAt: review.scheduledAt }, config, fetcher);
+    if (!edited) continue;
+    const persisted = await prisma.growthTelegramPinReview.updateMany({
+      where: { id: review.id, status: "SENT", expiresAt: { lte: now } },
+      data: { status: "EXPIRED", actedAt: now },
+    });
+    closed += persisted.count;
+  }
+  return { closed };
+}
 
 /** Opt-in daily courier: forwards at most three recent READY candidates to the
  * one private owner chat. Never approves or publishes on its own. */
@@ -287,6 +439,7 @@ export async function dispatchPendingPinReviews(
   });
   if (!guard || guard.enabled || guard.attributionEnabled ||
       guard.workerActivationExpiresAt !== null) throw Error("PIN_REVIEW_GLOBAL_GATE");
+  await closeExpiredPrivatePinReviews(config, fetcher, now);
   const candidates = await prisma.growthPinCandidate.findMany({
     where: { status: GrowthPinCandidateStatus.READY,
       createdAt: { gte: new Date(now.getTime() - 72 * 60 * 60_000) },
