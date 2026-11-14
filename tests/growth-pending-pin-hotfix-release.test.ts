@@ -6,6 +6,8 @@ import { describe, expect, it } from "vitest";
 const file = path.join(process.cwd(),
   "workers/coordinate-growth-twelve-timer-pending-pin-hotfix-release.sh");
 const source = readFileSync(file, "utf8");
+const stage = readFileSync(path.join(process.cwd(),
+  ".github/workflows/growth-queued-pin-hotfix-stage.yml"), "utf8");
 
 describe("2026-11-14 exact-SHA queued approved Pin production release", () => {
   it("has valid Bash syntax and is bound to the exact currently deployed SHA", () => {
@@ -72,5 +74,21 @@ describe("2026-11-14 exact-SHA queued approved Pin production release", () => {
     expect(source).not.toContain("UPDATE \"GrowthJob\"");
     expect(source).not.toContain("prisma migrate deploy");
     expect(source).not.toContain("pm2 start");
+  });
+  it("stages exact-SHA source separately without touching the app or root unit files", () => {
+    expect(stage).toContain("workflow_dispatch:");
+    expect(stage).toContain("inputs.expected_release_sha == github.sha");
+    expect(stage).toContain("github.actor == 'belhaouazakaria'");
+    expect(stage).toContain("github.ref == 'refs/heads/main'");
+    expect(stage).toContain("persist-credentials: false");
+    expect(stage).toContain("environment: production");
+    expect(stage).toContain("git hash-object");
+    expect(stage).toContain("queued-pin-hotfix-source");
+    expect(stage).toContain("test ! -e \\"$DIR\\"");
+    expect(stage).toContain("overwrite: false");
+    expect(stage).toContain("GROWTH_PRODUCTION_APP_UNCHANGED=true");
+    expect(stage).not.toContain("systemctl ");
+    expect(stage).not.toContain("pm2 ");
+    expect(stage).not.toContain("prisma migrate deploy");
   });
 });
