@@ -31,12 +31,13 @@ export function rebuildApprovedPinDestinationUrl(
   if (typeof approvedDestinationUrl !== "string") return null;
   try {
     const approved = new URL(approvedDestinationUrl);
+    const approvedHost = approved.hostname;
     if (approved.protocol !== "https:" || approved.username || approved.password ||
-        approved.hash || approved.port || !isPinDestinationDomain(approved.hostname) ||
-        domainForPinPath(approved.hostname, approved.pathname) !== approved.hostname) {
+        approved.hash || approved.port || !isPinDestinationDomain(approvedHost) ||
+        domainForPinPath(approvedHost, approved.pathname) !== approvedHost) {
       return null;
     }
-    const rebuilt = pinDestinationUrl(canonicalDestinationUrl, approved.hostname, baseUrl);
+    const rebuilt = pinDestinationUrl(canonicalDestinationUrl, approvedHost, baseUrl);
     return rebuilt === approvedDestinationUrl ? rebuilt : null;
   } catch {
     return null;
