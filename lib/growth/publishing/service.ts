@@ -24,7 +24,7 @@ import { chooseLearnedWindow } from "@/lib/growth/learning/scheduler";
 import { prisma } from "@/lib/prisma";
 import { assertViralPortfolioApproval, VIRAL_PORTFOLIO_APPROVAL_LOCK } from "@/lib/growth/viral/portfolio-admission";
 import { approvePinSchema, PIN_APPROVAL_POLICY_VERSION, PUBLICATION_TIMING_VERSION, rejectPinSchema, type ApprovedPinSnapshot } from "@/lib/growth/publishing/contracts";
-import { buildPublicCreativeAssetUrl, pinApprovalSnapshotChecksum, pinterestPublicationUrlsMatch } from "@/lib/growth/publishing/snapshot";
+import { buildPublicCreativeAssetUrl, pinApprovalSnapshotChecksum, pinterestPublicationUrlsMatch, rebuildApprovedPinDestinationUrl } from "@/lib/growth/publishing/snapshot";
 import { domainForPinPath, pinDestinationUrl, type PinDestinationDomain } from "@/lib/growth/publishing/destinations";
 import { planPublicationTiming } from "@/lib/growth/publishing/timing";
 
@@ -250,8 +250,20 @@ export async function publishApprovedPin(publicationId: string, fetchImpl?: type
       const config = requirePinterestConfiguration();
       if (row.approval.status !== GrowthPinApprovalStatus.APPROVED || row.approval.candidateRevision !== row.candidate.revision || row.candidate.status !== GrowthPinCandidateStatus.READY || (row.candidate.accountId !== null && row.candidate.accountId !== row.accountId) || row.candidate.asset.state !== GrowthAssetState.READY || row.candidate.asset.mimeType !== "image/png" || row.candidate.asset.width !== 1000 || row.candidate.asset.height !== 1500 || row.account.connectionStatus !== GrowthPinterestConnectionStatus.CONNECTED || row.account.apiEnvironment !== config.apiEnvironment || !hasPinterestScopes(row.account.grantedScopes, PINTEREST_CREATE_PIN_SCOPES) || !row.account.encryptedCredentials || !row.board.isActive || row.board.accountId !== row.accountId || !row.attributionRef) throw new NonRetryableGrowthJobError("Approved Pin authorization is no longer valid.");
       const snapshot = parseSnapshot(row.approval.snapshot);
-      const rebuilt: ApprovedPinSnapshot = { candidateId: row.candidate.id, candidateRevision: row.candidate.revision, contentHash: row.candidate.contentHash, assetChecksum: row.candidate.asset.checksum, rendererKey: row.candidate.rendererKey, rendererVersion: row.candidate.rendererVersion, templateId: row.candidate.templateId, title: row.candidate.title, description: row.candidate.description, destinationPath: normalizeAttributionDestinationPath(row.candidate.destinationPath), destinationUrl: buildAttributionUrl(row.attributionRef), assetPublicUrl: buildPublicCreativeAssetUrl(row.candidate.asset.publicPath), accountId: row.accountId, boardId: row.boardId, scheduledAt: row.scheduledAt.toISOString(), approvalPolicyVersion: row.approval.approvalPolicyVersion };
-      if (pinApprovalSnapshotChecksum(rebuilt) !== row.approval.snapshotChecksum || pinApprovalSnapshotChecksum(snapshot) !== row.approval.snapshotChecksum) throw new NonRetryableGrowthJobError("Approved Pin snapshot changed; a new approval is required.");
+      // The immutable approval must be intact before its exact chosen host
+      // can be used to reconstruct a destination for comparison. This also
+      // supports the owner-approved legacy Translator hostname.
+      if (pinApprovalSnapshotChecksum(snapshot) !== row.approval.snapshotChecksum) {
+        throw new NonRetryableGrowthJobError("Approved Pin snapshot changed; a new approval is required.");
+      }
+      const approvedDestinationUrl = rebuildApprovedPinDestinationUrl(
+        buildAttributionUrl(row.attributionRef), snapshot.destinationUrl,
+      );
+      if (!approvedDestinationUrl) {
+        throw new NonRetryableGrowthJobError("Approved Pin destination changed; a new approval is required.");
+      }
+      const rebuilt: ApprovedPinSnapshot = { candidateId: row.candidate.id, candidateRevision: row.candidate.revision, contentHash: row.candidate.contentHash, assetChecksum: row.candidate.asset.checksum, rendererKey: row.candidate.rendererKey, rendererVersion: row.candidate.rendererVersion, templateId: row.candidate.templateId, title: row.candidate.title, description: row.candidate.description, destinationPath: normalizeAttributionDestinationPath(row.candidate.destinationPath), destinationUrl: approvedDestinationUrl, assetPublicUrl: buildPublicCreativeAssetUrl(row.candidate.asset.publicPath), accountId: row.accountId, boardId: row.boardId, scheduledAt: row.scheduledAt.toISOString(), approvalPolicyVersion: row.approval.approvalPolicyVersion };
+      if (pinApprovalSnapshotChecksum(rebuilt) !== row.approval.snapshotChecksum) throw new NonRetryableGrowthJobError("Approved Pin snapshot changed; a new approval is required.");
       await tx.growthPinPublication.update({ where: { id: row.id }, data: { status: GrowthPublicationStatus.PUBLISHING, attemptCount: { increment: 1 }, lastAttemptAt: new Date(), lastErrorCode: null, lastErrorSummary: null } });
       return { ...row, status: GrowthPublicationStatus.PUBLISHING, approval: { ...row.approval, snapshot: rebuilt } };
     });
