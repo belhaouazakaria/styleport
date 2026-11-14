@@ -1,0 +1,115 @@
+name: SayTwist Approved Pending Pin Hotfix Release Source Staging
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_release_sha:
+        description: "Exact current main SHA; stage reviewed one-off coordinator only"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  stage-only:
+    name: Stage verified source outside production app
+    if: >-
+      github.actor == 'belhaouazakaria' &&
+      github.ref == 'refs/heads/main' &&
+      github.event_name == 'workflow_dispatch' &&
+      inputs.expected_release_sha == github.sha
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    environment: production
+    concurrency:
+      group: saytwist-queued-pin-hotfix-source-stage
+      cancel-in-progress: false
+    steps:
+      - name: Checkout approved exact main SHA
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Verify main SHA and offline-only source
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APPROVED_SHA: ${{ inputs.expected_release_sha }}
+        run: |
+          set -Eeuo pipefail
+          [[ "$GITHUB_ACTOR" == "belhaouazakaria" &&
+            "$GITHUB_REF" == "refs/heads/main" &&
+            "$APPROVED_SHA" =~ ^[0-9a-f]{40}$ &&
+            "$APPROVED_SHA" == "$GITHUB_SHA" ]] || exit 1
+          [[ "$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '.commit.sha')" == "$APPROVED_SHA" ]] || exit 1
+          bash -n workers/coordinate-growth-twelve-timer-pending-pin-hotfix-release.sh
+          grep -Fq '5ddbfc5f44814b80c34fcf048b59dcf1105e840e' workers/coordinate-growth-twelve-timer-pending-pin-hotfix-release.sh
+          grep -Fq '2026-11-14 18:00:00+00' workers/coordinate-growth-twelve-timer-pending-pin-hotfix-release.sh
+          test "$(find prisma/migrations -mindepth 1 -maxdepth 1 -type d | wc -l)" -eq 36
+
+      - name: Package only the one-off reviewed coordinator
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          printf '%s\n' "$GITHUB_SHA" > .release-sha
+          git hash-object workers/coordinate-growth-twelve-timer-pending-pin-hotfix-release.sh > .coordinator-blob
+          tar -czf queued-pin-hotfix-source.tar.gz .release-sha .coordinator-blob \
+            workers/coordinate-growth-twelve-timer-pending-pin-hotfix-release.sh
+
+      - name: Reserve immutable source-only directory
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.HOSTINGER_SSH_HOST || vars.HOSTINGER_SSH_HOST }}
+          username: ${{ secrets.HOSTINGER_SSH_USER || vars.HOSTINGER_SSH_USER }}
+          key: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
+          port: ${{ secrets.HOSTINGER_SSH_PORT || vars.HOSTINGER_SSH_PORT }}
+          script_stop: true
+          command_timeout: 1m
+          script: |
+            set -eu
+            test "$(id -un)" = saytwist
+            umask 077
+            BASE=/home/saytwist/.local/share/saytwist/queued-pin-hotfix-source
+            DIR="$BASE/${{ github.sha }}"
+            install -d -m 0700 "$BASE"
+            test ! -e "$DIR"
+            install -d -m 0700 "$DIR"
+
+      - name: Upload source to private non-application path
+        uses: appleboy/scp-action@v1.0.0
+        with:
+          host: ${{ secrets.HOSTINGER_SSH_HOST || vars.HOSTINGER_SSH_HOST }}
+          username: ${{ secrets.HOSTINGER_SSH_USER || vars.HOSTINGER_SSH_USER }}
+          key: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
+          port: ${{ secrets.HOSTINGER_SSH_PORT || vars.HOSTINGER_SSH_PORT }}
+          source: queued-pin-hotfix-source.tar.gz
+          target: /home/saytwist/.local/share/saytwist/queued-pin-hotfix-source/${{ github.sha }}
+          overwrite: false
+
+      - name: Verify staged source is intact, no runtime touched
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.HOSTINGER_SSH_HOST || vars.HOSTINGER_SSH_HOST }}
+          username: ${{ secrets.HOSTINGER_SSH_USER || vars.HOSTINGER_SSH_USER }}
+          key: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
+          port: ${{ secrets.HOSTINGER_SSH_PORT || vars.HOSTINGER_SSH_PORT }}
+          script_stop: true
+          command_timeout: 1m
+          script: |
+            set -eu
+            test "$(id -un)" = saytwist
+            umask 077
+            DIR=/home/saytwist/.local/share/saytwist/queued-pin-hotfix-source/${{ github.sha }}
+            test -f "$DIR/queued-pin-hotfix-source.tar.gz"
+            tar -tzf "$DIR/queued-pin-hotfix-source.tar.gz" >/dev/null
+            test ! -e "$DIR/.release-sha"
+            tar -xzf "$DIR/queued-pin-hotfix-source.tar.gz" -C "$DIR"
+            test "$(cat "$DIR/.release-sha")" = "${{ github.sha }}"
+            SCRIPT="$DIR/workers/coordinate-growth-twelve-timer-pending-pin-hotfix-release.sh"
+            test -f "$SCRIPT" && test ! -L "$SCRIPT"
+            test "$(git hash-object "$SCRIPT")" = "$(cat "$DIR/.coordinator-blob")"
+            bash -n "$SCRIPT"
+            echo GROWTH_QUEUED_PIN_SOURCE_STAGED=true
+            echo GROWTH_PRODUCTION_APP_UNCHANGED=true
