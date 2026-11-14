@@ -28,6 +28,8 @@ WITH active AS (
     p.id AS publication_id, p.status AS publication_status,
     p."scheduledAt" AS publication_time, p."candidateId" AS pin_candidate,
     p."accountId" AS pin_account, p."boardId" AS pin_board,
+    p."attemptCount" AS pin_attempts, p."pinterestPinId" AS provider_pin_id,
+    p."lastAttemptAt" AS pin_last_attempt, p."reconcileJobId" AS reconcile_job_id,
     a.id AS approval_id, a.status AS approval_status,
     a."approvedById", a."reviewedAt", a."scheduledAt" AS approval_time,
     a."accountId" AS approval_account, a."boardId" AS approval_board,
@@ -43,6 +45,8 @@ WITH active AS (
   SELECT * FROM active
   WHERE type='PINTEREST_PIN_PUBLISH' AND status='PENDING'
     AND "attemptCount"=0 AND publication_status='SCHEDULED'
+    AND pin_attempts=0 AND provider_pin_id IS NULL
+    AND pin_last_attempt IS NULL AND reconcile_job_id IS NULL
     AND approval_status='APPROVED' AND candidate_status='READY'
     AND "approvedById" IS NOT NULL AND "reviewedAt" IS NOT NULL
     AND approval_candidate=pin_candidate AND approval_account=pin_account
