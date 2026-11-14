@@ -539,3 +539,33 @@ The separately reviewed `workers/rotate-growth-autonomous-cycle-systemd.sh OLD_S
 5. Run a fresh exact-SHA owner-approved read-only production audit and verify all systemd calendars, alerts, effective SHA pins and global OFF flags. Independently authorize re-enabling each daily timer. Do not manually start the intelligence service outside its schedule or bypass Pinterest's 24-hour request admission.
 
 This PR is code-only, does not rotate the currently live SHA and does not merge or deploy anything. Real root systemd integration for the rotator still needs a protected host qualification before a new release.
+
+
+## 2026-11-14 approved Pin revalidation incident (source-only fix awaiting release)
+
+One owner-approved Pinterest publication scheduled at 2026-11-14 02:00 UTC was observed
+as `GrowthJob=FAILED_TERMINAL`, `GrowthPinPublication=FAILED_TERMINAL`,
+job attempt count 1, publication attempt count 0, with
+`PUBLICATION_REVALIDATION_FAILED` / `Approved Pin snapshot changed; a new approval is required.`
+Growth and attribution remained OFF and the activation lease was cleared.
+
+The publishing service previously created an approved immutable snapshot with a
+specific selected destination domain (either canonical `saytwist.com` or approved
+legacy Translator `translator.whattypeof.com`) but reconstructed only a canonical
+link when comparing the snapshot checksum immediately before Pinterest Create Pin.
+For legacy-host approvals, this deterministic mismatch prevents dispatch without
+a Pinterest request. The actual affected approval's selected host must be checked
+against protected production data before declaring this the exclusive incident cause.
+
+The proposed correction verifies the stored snapshot checksum first, reconstructs
+the tracking URL on *only the exact already-approved eligible host*, and then
+compares the complete rebuilt snapshot checksum. It never substitutes a new host,
+changes approval, bypasses image/board/account checks or replays a failed job.
+Invalid host/route/query or content changes continue to fail closed. Existing
+terminal publications must **not** be reset or automatically retried. Review the
+original approval, publish attempt, provider evidence, and destination before a
+new explicit approval and new future schedule under the standard workflow.
+
+This is a code fix, not a deployment, migration, production remediation, or
+authorization for additional Pinterest requests. Keep multi-account PR #197 and
+analytics-priority PR #196 separate until release qualification.
