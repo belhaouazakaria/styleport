@@ -1,7 +1,7 @@
 import { GrowthPublicationTimingMode } from "@prisma/client";
 import { describe, expect, it } from "vitest";
 import { approvePinSchema, publicationJobPayloadSchema } from "@/lib/growth/publishing/contracts";
-import { buildPublicCreativeAssetUrl, pinApprovalSnapshotChecksum, pinterestPublicationUrlsMatch } from "@/lib/growth/publishing/snapshot";
+import { buildPublicCreativeAssetUrl, pinApprovalSnapshotChecksum, pinterestPublicationUrlsMatch, rebuildApprovedPinDestinationUrl } from "@/lib/growth/publishing/snapshot";
 import { planPublicationTiming } from "@/lib/growth/publishing/timing";
 
 function localHour(date: Date) { return Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "2-digit", hourCycle: "h23" }).format(date)); }
@@ -46,6 +46,44 @@ describe("Phase 11 publishing contracts and timing", () => {
     expect(buildPublicCreativeAssetUrl(path, new URL("https://saytwist.com"))).toBe(`https://saytwist.com${path}`);
     expect(() => buildPublicCreativeAssetUrl("/etc/passwd", new URL("https://saytwist.com"))).toThrow("not publishable");
     expect(pinApprovalSnapshotChecksum({ b: 2, a: 1 })).toBe(pinApprovalSnapshotChecksum({ a: 1, b: 2 }));
+  });
+
+  it("revalidates the exact explicitly approved canonical or legacy Translator URL", () => {
+    const canonical = "https://saytwist.com/translators/jester-translator?utm_source=pinterest&utm_medium=organic&utm_campaign=saytwist&utm_content=candidate1&pin_ref=p_exact";
+    const legacy = canonical.replace("https://saytwist.com", "https://translator.whattypeof.com");
+    const app = new URL("https://saytwist.com");
+    expect(rebuildApprovedPinDestinationUrl(canonical, canonical, app)).toBe(canonical);
+    expect(rebuildApprovedPinDestinationUrl(canonical, legacy, app)).toBe(legacy);
+    // Previously, a legitimate selected legacy host was replaced by the
+    // canonical host and therefore failed the immutable approval checksum.
+    expect(pinApprovalSnapshotChecksum({ destinationUrl: legacy })).not.toBe(
+      pinApprovalSnapshotChecksum({ destinationUrl: canonical }),
+    );
+    expect(pinApprovalSnapshotChecksum({ destinationUrl: rebuildApprovedPinDestinationUrl(canonical, legacy, app) })).toBe(
+      pinApprovalSnapshotChecksum({ destinationUrl: legacy }),
+    );
+  });
+
+  it("rejects destination host, route, tracking, and URL-shape substitution", () => {
+    const canonical = "https://saytwist.com/translators/jester-translator?utm_source=pinterest&utm_medium=organic&utm_campaign=saytwist&utm_content=approved&pin_ref=p_exact";
+    const app = new URL("https://saytwist.com");
+    for (const invalid of [
+      "https://evil.example/translators/jester-translator",
+      "http://saytwist.com/translators/jester-translator",
+      "https://saytwist.com.evil.example/translators/jester-translator",
+      "https://user@translator.whattypeof.com/translators/jester-translator",
+      canonical + "#fragment",
+      canonical.replace("jester-translator", "other-translator"),
+      canonical.replace("p_exact", "p_other"),
+      canonical + "&utm_source=other",
+    ]) {
+      expect(rebuildApprovedPinDestinationUrl(canonical, invalid, app)).toBeNull();
+    }
+    expect(rebuildApprovedPinDestinationUrl(canonical, null, app)).toBeNull();
+    const idea = "https://saytwist.com/ideas/quick-check?utm_source=pinterest";
+    expect(rebuildApprovedPinDestinationUrl(
+      idea, idea.replace("saytwist.com", "translator.whattypeof.com"), app,
+    )).toBeNull();
   });
 
   it("matches exact publication URLs independent of query ordering", () => {
