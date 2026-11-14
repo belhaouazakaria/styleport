@@ -27,6 +27,10 @@ describe("2026-11-14 exact-SHA queued approved Pin production release", () => {
     expect(source).toContain("2026-11-14 23:00:00+00");
     expect(source).toContain("translator.whattypeof.com/%");
     expect(source).toContain('"attemptCount"=0');
+    expect(source).toContain("pin_attempts=0");
+    expect(source).toContain("provider_pin_id IS NULL");
+    expect(source).toContain("pin_last_attempt IS NULL");
+    expect(source).toContain("reconcile_job_id IS NULL");
     expect(source).toContain("approval_status='APPROVED'");
     expect(source).toContain("publication_status='SCHEDULED'");
     expect(source).toContain("candidate_status='READY'");
