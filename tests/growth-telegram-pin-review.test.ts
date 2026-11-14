@@ -5,7 +5,7 @@ import { pinDestinationUrl, domainForPinPath } from "@/lib/growth/publishing/des
 import { pinterestPublicationUrlsMatch } from "@/lib/growth/publishing/snapshot";
 import {
   getPrivatePinReviewConfig, secretMatches,
-  parsePrivatePinCallback, pinReviewButtons,
+  parsePrivatePinCallback, pinReviewButtons, closedPinReviewCaption,
 } from "@/lib/growth/publishing/telegram-pin-review";
 
 const baseUrl = new URL("https://saytwist.com");
@@ -73,7 +73,7 @@ describe("private Telegram Pin review protocol", () => {
   });
   it("accepts only matching private chat/user, pin ID and exact callback message", () => {
     expect(parsePrivatePinCallback(message, "1234567")).toEqual({
-      id: "ck12345678901234", action: "s", messageId: 456, callbackId: "abc",
+      id: "ck12345678901234", action: "s", messageId: 456, callbackId: "abc", caption: null,
     });
     expect(parsePrivatePinCallback({ callback_query: { ...message.callback_query, from: { id: 1 } } }, "1234567")).toBeNull();
     expect(parsePrivatePinCallback({ callback_query: { ...message.callback_query, message: {
@@ -81,6 +81,25 @@ describe("private Telegram Pin review protocol", () => {
     } } }, "1234567")).toBeNull();
     expect(parsePrivatePinCallback({ callback_query: { ...message.callback_query, data: "p:ck12345678901234:execute" } }, "1234567")).toBeNull();
   });
+  it("preserves the original Telegram preview while replacing action text with terminal status", () => {
+    const original = [
+      "SayTwist Pin approval", "Original title", "Original description",
+      "Board: Translators", "Suggested time: 2026-11-14T02:00:00.000Z (UTC)",
+      "Website default: translator.whattypeof.com",
+      "Approve only if you want this specific Pin published.",
+    ].join("\n");
+    const context = { title: "Original title", description: "Original description",
+      scheduledAt: new Date("2026-11-14T02:00:00.000Z") };
+    const approved = closedPinReviewCaption(original, "APPROVED", context);
+    expect(approved).toContain("Board: Translators");
+    expect(approved).toContain("Website default: translator.whattypeof.com");
+    expect(approved).toContain("✅ Approved and scheduled.");
+    expect(approved).not.toContain("Approve only if");
+    expect(closedPinReviewCaption(original, "REJECTED", context)).toContain("❌ Rejected.");
+    expect(closedPinReviewCaption(null, "EXPIRED", context)).toContain("⌛ Approval expired.");
+    expect(closedPinReviewCaption(null, "FAILED", context)).toContain("Review closed.");
+  });
+
   it("offers only per-Pin approval, both translator hosts and rejection", () => {
     const buttons = pinReviewButtons("ck12345678901234", "/translators/jester-translator", "translator.whattypeof.com");
     const options = buttons.inline_keyboard.flat().map(x => x.callback_data);
