@@ -84,7 +84,7 @@ describe("2026-11-14 exact-SHA queued approved Pin production release", () => {
     expect(stage).toContain("environment: production");
     expect(stage).toContain("git hash-object");
     expect(stage).toContain("queued-pin-hotfix-source");
-    expect(stage).toContain("test ! -e \\"$DIR\\"");
+    expect(stage).toContain('test ! -e "$DIR"');
     expect(stage).toContain("overwrite: false");
     expect(stage).toContain("GROWTH_PRODUCTION_APP_UNCHANGED=true");
     expect(stage).not.toContain("systemctl ");
