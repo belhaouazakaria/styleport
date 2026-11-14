@@ -569,3 +569,31 @@ new explicit approval and new future schedule under the standard workflow.
 This is a code fix, not a deployment, migration, production remediation, or
 authorization for additional Pinterest requests. Keep multi-account PR #197 and
 analytics-priority PR #196 separate until release qualification.
+
+
+## 2026-11-14 private Telegram Pin review button finalization (source-only)
+
+For each review photo in the single verified private Telegram chat, a successful
+owner callback first persists the per-Pin decision (`APPROVED` or `REJECTED`)
+under the existing atomic `SENT -> PROCESSING` claim. Only *after* this
+transactional side effect does the bot edit the existing photo caption with
+an approved/rejected status and an empty inline keyboard. It keeps the photo
+and original caption details when Telegram includes the caption in the callback,
+or reconstructs a bounded basic caption from the stored candidate.
+If Telegram refuses the caption edit, it attempts `editMessageReplyMarkup`
+to hide the buttons without changing the photo or prior approval.
+
+Expired offers are not actionable: a late owner tap transitions `SENT -> EXPIRED`
+with the exact matching private chat and message ID, then disables the buttons.
+The already opt-in private review courier also performs a bounded cleanup of
+at most 10 `SENT` records whose `expiresAt` passed, only after the existing
+OFF/lease safety gate. Failed Telegram cleanup leaves the review expired by
+timestamp and available for a future courier cleanup. A stale tap of an
+already closed review can retry only Telegram UI editing, never a second
+approval, rejection, generation, Pinterest request or publication.
+
+This change adds **no new migration, timer, account, bot, chat or broad
+permission**. It has no effect until the protected source release reaches
+production. Existing previously approved Telegram messages are not edited in
+a batch on deployment. The original 2026-11-14 failed publication stays
+terminal and cannot be automatically republished.
