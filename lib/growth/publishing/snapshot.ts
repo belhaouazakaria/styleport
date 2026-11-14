@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { getAppBaseUrl } from "@/lib/env";
+import { domainForPinPath, isPinDestinationDomain, pinDestinationUrl } from "@/lib/growth/publishing/destinations";
 
 function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
@@ -12,6 +13,34 @@ export function buildPublicCreativeAssetUrl(publicPath: string, baseUrl = getApp
   const url = new URL(publicPath, baseUrl);
   if (url.origin !== baseUrl.origin || (process.env.NODE_ENV === "production" && url.protocol !== "https:")) throw new Error("Creative asset URL must use the canonical HTTPS SayTwist origin.");
   return url.toString();
+}
+
+/**
+ * Rebuild the destination using the specific hostname bound to a previously
+ * checksum-verified Pin approval. There is no fallback to a different host:
+ * the exact approved URL, tracking query, and route must still match.
+ *
+ * Callers MUST verify pinApprovalSnapshotChecksum(storedSnapshot) before
+ * passing storedSnapshot.destinationUrl to this function.
+ */
+export function rebuildApprovedPinDestinationUrl(
+  canonicalDestinationUrl: string,
+  approvedDestinationUrl: unknown,
+  baseUrl = getAppBaseUrl(),
+): string | null {
+  if (typeof approvedDestinationUrl !== "string") return null;
+  try {
+    const approved = new URL(approvedDestinationUrl);
+    if (approved.protocol !== "https:" || approved.username || approved.password ||
+        approved.hash || approved.port || !isPinDestinationDomain(approved.hostname) ||
+        domainForPinPath(approved.hostname, approved.pathname) !== approved.hostname) {
+      return null;
+    }
+    const rebuilt = pinDestinationUrl(canonicalDestinationUrl, approved.hostname, baseUrl);
+    return rebuilt === approvedDestinationUrl ? rebuilt : null;
+  } catch {
+    return null;
+  }
 }
 
 function sortedQueryEntries(url: URL) {
