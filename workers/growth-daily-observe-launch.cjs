@@ -39,6 +39,13 @@ const FRESH_LINES = [
   "GROWTH_DAILY_OBSERVE_PROVIDER_GETS=0",
   ...RESULT_TRAIL.slice(3),
 ];
+const PAUSED_LINES = [
+  "GROWTH_DAILY_OBSERVE=QUOTA_PAUSED",
+  "GROWTH_DAILY_OBSERVE_JOB=NONE",
+  ...RESULT_TRAIL.slice(0, 3),
+  "GROWTH_DAILY_OBSERVE_PROVIDER_GETS=0",
+  ...RESULT_TRAIL.slice(3),
+];
 
 /**
  * The web app and regular Growth worker read production credentials from
@@ -119,6 +126,7 @@ function run() {
       : "SAYTWIST_DAILY_OBSERVE_SCHEDULED:" + sha,
     GROWTH_DAILY_OBSERVE_DATE: now.toISOString().slice(0, 10),
     GROWTH_DAILY_OBSERVE_MODE: mode,
+    GROWTH_V2_INTELLIGENCE_ENABLED: process.env.GROWTH_V2_INTELLIGENCE_ENABLED === "true" ? "true" : "false",
     GROWTH_DAILY_OBSERVE_ENTRYPOINT: "true",
     GROWTH_WORKER_RUN_ENABLED: "false", GROWTH_ROLLOUT_MODE: "OFF",
   };
@@ -130,7 +138,7 @@ function run() {
     });
   const output = (child.stdout || "").trim();
   const allowed = mode === "SCHEDULED"
-    ? [EXPECTED_LINES.join("\n"), FRESH_LINES.join("\n")]
+    ? [EXPECTED_LINES.join("\n"), FRESH_LINES.join("\n"), PAUSED_LINES.join("\n")]
     : [EXPECTED_LINES.join("\n")];
   if (child.status !== 0 || child.error || !allowed.includes(output)) {
     if ((child.stderr || "").includes("GROWTH_DAILY_OBSERVE_REASON=24H_RESERVATION")) {

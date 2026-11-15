@@ -1,4 +1,7 @@
 import { reservePinterestGlobalAttempt } from "@/lib/growth/pinterest/global-budget";
+import { executeDailyObservation } from "@/workers/growth-daily-observe";
+import { readDailyRotation } from "@/lib/growth/portfolio/daily-rotation-store";
+import { readV2FollowupEvidence } from "@/scripts/growth-v2-followup-evidence";
 import {
   readFreshCreativeTargets,
   bindNativeCampaignJob,
@@ -215,6 +218,57 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 suite("Unified owner consent with PostgreSQL 18", () => {
+  it("observes exactly the rotated account in a three-account production portfolio and reuses its real completion", async () => {
+    const accounts = [];
+    const main = await prisma.growthPinterestAccount.findFirstOrThrow({ where: { apiEnvironment: "SANDBOX" } });
+    const environment = process.env.PINTEREST_API_ENVIRONMENT;
+    process.env.PINTEREST_API_ENVIRONMENT = "production";
+    try {
+      accounts.push(await prisma.growthPinterestAccount.update({ where: { id: main.id }, data: { apiEnvironment: "PRODUCTION", encryptedCredentials: encryptPinterestCredentials({ accessToken: "mock-access", refreshToken: "mock-refresh" }), accessTokenExpiresAt: new Date(Date.now() + 3600000) } }));
+      for (const role of ["SAYTWIST_IDEAS", "SAYTWIST_PLAYGROUND"] as const) {
+        const account = await prisma.growthPinterestAccount.create({ data: {
+          pinterestAccountId: "observe-" + role, username: "observe-" + role,
+          publicationRole: role, activeRole: role, apiEnvironment: "PRODUCTION", connectionStatus: "CONNECTED",
+          grantedScopes: ["user_accounts:read", "boards:read", "boards:write", "pins:read", "pins:write"],
+          encryptedCredentials: encryptPinterestCredentials({ accessToken: "mock-access", refreshToken: "mock-refresh" }),
+          accessTokenExpiresAt: new Date(Date.now() + 3600000),
+        } });
+        accounts.push(account);
+        await prisma.growthPinterestBoard.create({ data: { accountId: account.id, pinterestBoardId: "observe-board-" + role, name: "Translators", isActive: true, lastSeenAt: new Date(), lastSyncedAt: new Date() } });
+      }
+      const day = new Date().toISOString().slice(0, 10);
+      const rotation = await readDailyRotation(new Date(day + "T00:00:00Z"));
+      const selected = accounts.find(a => a.id === rotation.accountId)!;
+      const fetcher = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+        expect(String(url)).toBe("https://api.pinterest.com/v5/user_account");
+        expect(init?.method).toBe("GET");
+        return Response.json({ id: selected.pinterestAccountId, username: selected.username, account_type: "BUSINESS" }, { headers: { "x-ratelimit-limit": "100", "x-ratelimit-remaining": "99", "x-ratelimit-reset": "3600" } });
+      });
+      vi.stubGlobal("fetch", fetcher);
+      expect((await executeDailyObservation("a".repeat(40), day, "SCHEDULED", true)).status).toBe("PASSED");
+      expect((await executeDailyObservation("a".repeat(40), day, "SCHEDULED", true)).status).toBe("ALREADY_FRESH");
+      expect(fetcher).toHaveBeenCalledTimes(1);
+      const observed = await prisma.growthPinterestAccount.findMany({ where: { id: { in: accounts.map(a => a.id) }, lastAccountSyncAt: { not: null } } });
+      expect(observed.map(a => a.id)).toEqual([selected.id]);
+      expect(await prisma.growthJob.findFirstOrThrow({ where: { idempotencyKey: "growth-daily-observe:" + day } })).toMatchObject({ status: "SUCCEEDED", attemptCount: 1, payload: { accountId: selected.id } });
+      expect(await prisma.growthSettings.findUniqueOrThrow({ where: { id: "global" } })).toMatchObject({ enabled: false, attributionEnabled: false, workerActivationExpiresAt: null });
+      expect(await prisma.growthPinPublication.count()).toBe(0);
+    } finally {
+      vi.unstubAllGlobals(); process.env.PINTEREST_API_ENVIRONMENT = environment;
+      await prisma.growthPinterestAccount.deleteMany({ where: { id: { in: accounts.filter(a => a.id !== main.id).map(a => a.id) } } });
+      await prisma.growthPinterestAccount.update({ where: { id: main.id }, data: { apiEnvironment: main.apiEnvironment, connectionStatus: main.connectionStatus, lastConnectionError: main.lastConnectionError, encryptedCredentials: main.encryptedCredentials, accessTokenExpiresAt: main.accessTokenExpiresAt, lastAccountSyncAt: main.lastAccountSyncAt, lastSuccessfulApiCallAt: main.lastSuccessfulApiCallAt } });
+    }
+  });
+  it("freezes real release evidence read-only and refuses an unrelated pending job", async () => {
+    const before = await prisma.growthJob.count();
+    const first = await readV2FollowupEvidence();
+    expect(first).toEqual(await readV2FollowupEvidence());
+    expect(first).toMatchObject({ safe: true, fingerprint: expect.stringMatching(/^[a-f0-9]{64}$/) });
+    expect(await prisma.growthJob.count()).toBe(before);
+    const job = await prisma.growthJob.create({ data: { type: "PINTEREST_ACCOUNT_SYNC", idempotencyKey: "blocked-evidence-" + randomUUID(), payload: { accountId: "unbound" } } });
+    try { await expect(readV2FollowupEvidence()).rejects.toThrow("FOLLOWUP_QUEUE_BUSY"); }
+    finally { await prisma.growthJob.update({ where: { id: job.id }, data: { status: "CANCELLED" } }); }
+  });
   it("consumes an existing inventory pair through real leases and workers using GET-only provider mocks", async () => {
     const account = await prisma.growthPinterestAccount.create({
       data: {

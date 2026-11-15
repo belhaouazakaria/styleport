@@ -4,6 +4,9 @@ import os from "node:os";
 import { prisma } from "@/lib/prisma";
 import { hasVerifiedRecentPinterestAccountSync } from "@/lib/growth/pinterest/daily-observe-freshness";
 import { runOneAccountSync } from "./growth-one-account-sync";
+import { readDailyRotation } from "@/lib/growth/portfolio/daily-rotation-store";
+import { hasPinterestMaintenanceCapacity } from "@/lib/growth/pinterest/global-budget";
+import { countBlockingGrowthJobs } from "@/lib/growth/operations/approved-publication-queue";
 
 const APP = "/home/saytwist/htdocs/saytwist.com";
 const NODE = "/home/saytwist/.nvm/versions/node/v24.20.0/bin/node";
@@ -55,6 +58,70 @@ export function assertDailyObserveRuntime(
   return { sha, day, mode };
 }
 
+export async function executeDailyObservation(
+  sha: string,
+  day: string,
+  mode: string,
+  v2 = false,
+) {
+  let selectedAccountId: string | undefined;
+  if (mode === "SCHEDULED" && v2) {
+    const rotation = await readDailyRotation(new Date(day + "T00:00:00Z"));
+    if (!rotation.accountId) throw Error("DAILY_OBSERVE_NO_ELIGIBLE_ACCOUNT");
+    selectedAccountId = rotation.accountId;
+  }
+  const alreadyFresh =
+    mode === "SCHEDULED" &&
+    (await hasVerifiedRecentPinterestAccountSync(
+      new Date(),
+      selectedAccountId,
+    ));
+  const quotaPaused =
+    mode === "SCHEDULED" &&
+    !alreadyFresh &&
+    !(await hasPinterestMaintenanceCapacity());
+  if (quotaPaused) {
+    const [settings, blockers] = await Promise.all([
+      prisma.growthSettings.findUnique({ where: { id: "global" } }),
+      countBlockingGrowthJobs(prisma),
+    ]);
+    if (
+      !settings ||
+      settings.enabled ||
+      settings.attributionEnabled ||
+      settings.workerActivationExpiresAt ||
+      blockers
+    )
+      throw Error("DAILY_OBSERVE_NOT_IDLE");
+  }
+  const result =
+    alreadyFresh || quotaPaused
+      ? {
+          job: alreadyFresh
+            ? ("EXISTING_SUCCEEDED" as const)
+            : ("NONE" as const),
+          growth: "OFF" as const,
+          lease: "NONE" as const,
+          activeQueue: 0 as const,
+          providerGets: 0 as const,
+          providerWrites: 0 as const,
+          aiCalls: 0 as const,
+          telegram: 0 as const,
+        }
+      : await runOneAccountSync(sha, {
+          dailyUtcDate: day,
+          ...(selectedAccountId ? { selectedAccountId } : {}),
+        });
+  return {
+    status: alreadyFresh
+      ? "ALREADY_FRESH"
+      : quotaPaused
+        ? "QUOTA_PAUSED"
+        : "PASSED",
+    result,
+  };
+}
+
 async function main() {
   let stage = "RUNTIME";
   try {
@@ -65,18 +132,9 @@ async function main() {
         node: process.execPath,
       });
     stage = "ONE_ACCOUNT_GET";
-    const alreadyFresh = mode === "SCHEDULED" &&
-      await hasVerifiedRecentPinterestAccountSync();
-    // Never grant an extra API call when another completed sync is fresh.
-    // Manual TRIAL mode retains its existing single-GET contract.
-    const result = alreadyFresh
-      ? { job: "EXISTING_SUCCEEDED" as const, growth: "OFF" as const,
-          lease: "NONE" as const, activeQueue: 0 as const,
-          providerGets: 0 as const, providerWrites: 0 as const,
-          aiCalls: 0 as const, telegram: 0 as const }
-      : await runOneAccountSync(sha, { dailyUtcDate: day });
-    console.log("GROWTH_DAILY_OBSERVE=" +
-      (alreadyFresh ? "ALREADY_FRESH" : "PASSED"));
+    const { status, result } = await executeDailyObservation(sha, day, mode,
+      process.env.GROWTH_V2_INTELLIGENCE_ENABLED === "true");
+    console.log("GROWTH_DAILY_OBSERVE=" + status);
     console.log("GROWTH_DAILY_OBSERVE_JOB=" + result.job);
     console.log("GROWTH_DAILY_OBSERVE_GROWTH=" + result.growth);
     console.log("GROWTH_DAILY_OBSERVE_LEASE=" + result.lease);
