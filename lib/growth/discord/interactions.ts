@@ -89,7 +89,7 @@ export async function receiveDiscordDecision(
       status: "SENT",
       providerChannelId: i.channel_id,
       providerMessageId: i.message.id,
-      request: { ownerUserId: config.ownerUserId },
+      request: { ownerUserId: config.ownerUserId, ...(selection ? { kind: { in: ["NATIVE_PIN", "SOURCE_PIN"] } } : {}) },
     },
     select: { requestId: true },
   });

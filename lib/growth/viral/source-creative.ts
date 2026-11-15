@@ -44,7 +44,7 @@ export function originalSourceCreativeCopy(
   if (!/^[A-Za-z0-9 &,'-]{8,80}$/.test(title) || !/\btranslator\b/i.test(title))
     throw Error("SOURCE_CREATIVE_TOPIC_INVALID");
   const label = title.replace(/\s+translator$/i, "").trim();
-  const headline = "What if your words sounded " + label + "?";
+  const headline = "Explore " + label + " wording";
   const subline = "Explore a different way to express the same message.";
   const description =
     "Curious about " +
