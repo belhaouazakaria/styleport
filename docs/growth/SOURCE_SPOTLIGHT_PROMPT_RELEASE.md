@@ -1,0 +1,19 @@
+# Credited source spotlight prompt follow-up
+
+Production base: `4e1d41be19682126099c4537a2079be71f7f75c1`, 41 migrations, fourteen enabled Growth timers. Main explicitly uses its existing AI style while Upright commercial-use permission remains pending. The image cap is 5/day, with monetary caps $2/day and $30/month unchanged.
+
+The bounded live source-image acceptance returned a valid AI PNG, but visual inspection found an invented BEFORE/AFTER translation pair. The unapproved draft was held as CANCELLED with `AI_VISUAL_QA_UNVERIFIED_EXAMPLE`; its pending review became STALE. Original artwork, source destination and paid usage evidence were retained. No second acceptance image was requested and no Pin was approved.
+
+The source prompt had combined a prohibition on invented examples with native account directions asking for transformation proof/reveals. Source spotlights now have their own account-level visual directions, with no invented proof requirement. A final source rule prohibits comparison panels, sample sentences, translated phrases and result demonstrations, and identifies the supplied JSON as the complete visible-copy allowlist. Native campaigns retain their verified example instructions. This reduces the specific prompt conflict; it does not claim every model output will be correct. Owner visual review remains required.
+
+## Protected rollout
+
+This follow-up requires a new exact-SHA owner authorization. The prior 4e1d41b authorization is not reused for changed code. No migration, new budget ceiling, extra acceptance AI request, publication approval, deadline extension or destination change is included.
+
+Before owner approval, pass CI and prompt/release regression checks, verify a fresh PostgreSQL 18 backup and encrypted off-host copy, restore the isolated production-backup clone, and compare all 41 migration checksums and preserved tables. Build the exact Linux artifact using the artifact-only branch of the existing Hostinger workflow; verify its GitHub digest and embedded SHA and exercise health/readiness, approval security/replay and source-prompt invariants against the clone. Use no live image/provider calls for qualification.
+
+Stage the reviewed source under a root-owned 0700 directory outside the app, including `.release-sha`, Prisma migrations and `scripts/growth-v2-followup-evidence.ts`. Store root:root 0600 `source-prompt-qualification.json` beside it with `releaseSha`, `cloneDatabase: saytwist_growth_v2_rehearsal_20261115`, `cloneMigrations: 41`, `cloneVerified: true`, `backupPath`, `backupSha256`, `artifactZipPath` and `artifactZipSha256`. Copy `workers/coordinate-growth-source-prompt-release.py` outside the app as root:root 0700.
+
+Run `audit NEW_SHA ROOT_SOURCE` before requesting approval. Within the existing permitted UTC release window, owner-authorized `hold` requires `GROWTH_SOURCE_PROMPT_RELEASE_APPROVAL=HOLD:OLD_SHA:NEW_SHA`. It archives and holds all fourteen timers and freezes the safe queue and protected evidence. Deploy the exact authorized main SHA through the Hostinger pipeline, then `restore` with `RESTORE:OLD_SHA:NEW_SHA`. Only release pins rotate; existing cadence, Main's temporary legacy setting, credentials and budgets remain unchanged. All 41 SQL checksums and frozen evidence must match.
+
+On a failed deployment returning the healthy old release, the separately guarded `recover` mode requires `RECOVER:OLD_SHA:NEW_SHA` and unchanged evidence/configuration. No data rollback is performed. If any guard fails, timers stay held; do not edit fingerprints, reset jobs or weaken SHA checks. Live acceptance verifies health, configuration, private callbacks and subsequent real service results without another acceptance image call or a bypass of a daily clock guard.

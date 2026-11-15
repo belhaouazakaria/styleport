@@ -10,6 +10,7 @@ vi.mock("@/lib/growth/economics/credential-policy", () => ({ getGrowthOpenAiCred
 
 import { buildCreativeImagePrompt, OpenAICreativeImageProvider, type CreativeAiImageInput } from "@/lib/growth/creative/ai-image-provider";
 import { readPngDimensions } from "@/lib/growth/creative/storage";
+import { ACCOUNT_CREATIVE_DIRECTION, ACCOUNT_SOURCE_CREATIVE_DIRECTION, type CreativePublicationRole } from "@/lib/growth/creative/account-direction";
 
 const fullCreativeInput: CreativeAiImageInput = {
   topic: "19th Century English Translator",
@@ -90,6 +91,29 @@ describe("Creative Lab OpenAI image provider", () => {
     expect(prompt).toContain("Do not invent a translation example");
     expect(prompt).toContain("Entertainment and curiosity");
     expect(prompt).not.toContain(fullCreativeInput.afterText);
+  });
+
+  it.each(Object.keys(ACCOUNT_SOURCE_CREATIVE_DIRECTION) as CreativePublicationRole[])("keeps %s source discovery separate from native transformation instructions", (role) => {
+    const prompt = buildCreativeImagePrompt({ ...fullCreativeInput, mode: "TOPIC_SPOTLIGHT", publicationRole: role,
+      topic: "Average Chile Meme Translator", headline: "Explore Average Chile Meme Wording",
+      beforeText: "Explore a different way to express the same message.", domain: "anythingtranslate.com" });
+    expect(prompt).toContain(ACCOUNT_SOURCE_CREATIVE_DIRECTION[role]);
+    expect(prompt).not.toContain(ACCOUNT_CREATIVE_DIRECTION[role]);
+    expect(prompt).toContain("no verified translation example was supplied");
+    expect(prompt).toContain("Do not depict BEFORE/AFTER comparisons");
+    expect(prompt).toContain("complete visible-text allowlist");
+    expect(prompt).not.toContain(fullCreativeInput.afterText);
+    expect(prompt).not.toContain(fullCreativeInput.beforeText);
+    const visibleCopy = JSON.parse(prompt.split("\n").find(line => line.startsWith('{"brand":'))!);
+    expect(Object.keys(visibleCopy)).toEqual(["brand", "headline", "subline", "cta", "domain"]);
+  });
+
+  it("retains transformation direction and verified example copy for native Main campaigns", () => {
+    const prompt = buildCreativeImagePrompt({ ...fullCreativeInput, publicationRole: "SAYTWIST" });
+    expect(prompt).toContain(ACCOUNT_CREATIVE_DIRECTION.SAYTWIST);
+    expect(prompt).toContain(fullCreativeInput.beforeText);
+    expect(prompt).toContain(fullCreativeInput.afterText);
+    expect(prompt).not.toContain("SOURCE DISCOVERY RULE");
   });
 
 });
