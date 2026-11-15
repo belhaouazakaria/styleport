@@ -44,8 +44,9 @@ export function assertOneSyncRuntime(
   return sha;
 }
 
-export async function runOneAccountSync(sha: string, options: { dailyUtcDate?: string } = {}) {
+export async function runOneAccountSync(sha: string, options: { dailyUtcDate?: string; selectedAccountId?: string } = {}) {
   if (!/^[a-f0-9]{40}$/.test(sha)) throw Error("RELEASE_INVALID");
+  if (options.selectedAccountId !== undefined && (!options.dailyUtcDate || !/^[a-z0-9]{10,40}$/.test(options.selectedAccountId))) throw Error("DAILY_OBSERVE_ACCOUNT_INVALID");
   const now = new Date();
   if (options.dailyUtcDate !== undefined &&
       (!/^\d{4}-\d{2}-\d{2}$/.test(options.dailyUtcDate) ||
@@ -68,6 +69,7 @@ export async function runOneAccountSync(sha: string, options: { dailyUtcDate?: s
         tx.growthPinterestAccount.findMany({ where: {
           apiEnvironment: GrowthPinterestApiEnvironment.PRODUCTION,
           connectionStatus: GrowthPinterestConnectionStatus.CONNECTED,
+          ...(options.selectedAccountId ? { id: options.selectedAccountId } : {}),
         }, select: { id: true, encryptedCredentials: true,
           grantedScopes: true, accessTokenExpiresAt: true,
           refreshTokenExpiresAt: true }, take: 2 }),
@@ -76,6 +78,7 @@ export async function runOneAccountSync(sha: string, options: { dailyUtcDate?: s
           settings.workerActivationExpiresAt !== null || activeCount !== 0 ||
           accounts.length !== 1) throw Error("ADMISSION_NOT_IDLE");
       const account = accounts[0];
+      if (options.selectedAccountId && account.id !== options.selectedAccountId) throw Error("DAILY_OBSERVE_ACCOUNT_MISMATCH");
       if (!account.encryptedCredentials || !account.grantedScopes.includes("user_accounts:read") ||
           !account.accessTokenExpiresAt ||
           account.accessTokenExpiresAt.getTime() - now.getTime() < 15 * 60_000 ||

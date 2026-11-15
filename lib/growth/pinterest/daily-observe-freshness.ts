@@ -17,8 +17,9 @@ const MAX_SYNC_COMPLETION_LAG_MS = 2 * 60_000;
  * Failure to prove freshness returns false, causing the existing one-GET
  * worker's durable 24h reservation to continue failing closed.
  */
-export async function hasVerifiedRecentPinterestAccountSync(now = new Date()) {
+export async function hasVerifiedRecentPinterestAccountSync(now = new Date(), selectedAccountId?: string) {
   if (!Number.isFinite(now.getTime())) throw Error("DAILY_OBSERVE_DATE_INVALID");
+  if (selectedAccountId !== undefined && !/^[a-z0-9]{10,40}$/.test(selectedAccountId)) throw Error("DAILY_OBSERVE_ACCOUNT_INVALID");
   const since = new Date(now.getTime() - WINDOW_MS);
   const [settings, blocking, accounts] = await Promise.all([
     prisma.growthSettings.findUnique({ where: { id: "global" },
@@ -28,6 +29,7 @@ export async function hasVerifiedRecentPinterestAccountSync(now = new Date()) {
     prisma.growthPinterestAccount.findMany({ where: {
       apiEnvironment: GrowthPinterestApiEnvironment.PRODUCTION,
       connectionStatus: GrowthPinterestConnectionStatus.CONNECTED,
+      ...(selectedAccountId ? { id: selectedAccountId } : {}),
     }, select: {
       id: true, encryptedCredentials: true, grantedScopes: true,
       accessTokenExpiresAt: true, refreshTokenExpiresAt: true,
@@ -38,6 +40,7 @@ export async function hasVerifiedRecentPinterestAccountSync(now = new Date()) {
       settings.workerActivationExpiresAt !== null ||
       blocking !== 0 || accounts.length !== 1) return false;
   const account = accounts[0];
+  if (selectedAccountId && account.id !== selectedAccountId) return false;
   if (!account.encryptedCredentials ||
       !account.grantedScopes.includes("user_accounts:read") ||
       !account.accessTokenExpiresAt ||

@@ -8,10 +8,10 @@ const helper = readFileSync("lib/growth/pinterest/daily-observe-freshness.ts", "
 describe("safe daily OBSERVE zero-request existing-sync outcome", () => {
   it("only permits existing-success shortcut in scheduled mode", () => {
     expect(runner).toContain('mode === "SCHEDULED"');
-    expect(runner).toContain("hasVerifiedRecentPinterestAccountSync()");
-    expect(runner).toContain('job: "EXISTING_SUCCEEDED"');
+    expect(runner).toContain("hasVerifiedRecentPinterestAccountSync(");
+    expect(runner).toContain('"EXISTING_SUCCEEDED" as const');
     expect(runner).toContain("providerGets: 0");
-    expect(runner).toContain("runOneAccountSync(sha, { dailyUtcDate: day })");
+    expect(runner).toContain("selectedAccountId");
   });
   it("keeps a strict output contract for the new zero-GET result", () => {
     expect(launcher).toContain("GROWTH_DAILY_OBSERVE=ALREADY_FRESH");

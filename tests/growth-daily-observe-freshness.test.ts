@@ -76,4 +76,29 @@ describe("daily OBSERVE respects verified 24-hour account freshness", () => {
     m.accounts.mockResolvedValue([account(), account()]);
     expect(await hasVerifiedRecentPinterestAccountSync(now)).toBe(false);
   });
+  it("proves freshness for the explicit rotating account without broadening the legacy query", async () => {
+    expect(await hasVerifiedRecentPinterestAccountSync(now, accountId)).toBe(
+      true,
+    );
+    expect(m.accounts).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: accountId,
+          connectionStatus: "CONNECTED",
+          apiEnvironment: "PRODUCTION",
+        }),
+      }),
+    );
+    m.accounts.mockResolvedValue([{ ...account(), id: "anotheraccount123" }]);
+    expect(await hasVerifiedRecentPinterestAccountSync(now, accountId)).toBe(
+      false,
+    );
+  });
+  it("rejects an invalid explicit account before database work", async () => {
+    await expect(
+      hasVerifiedRecentPinterestAccountSync(now, "invalid/account"),
+    ).rejects.toThrow("DAILY_OBSERVE_ACCOUNT_INVALID");
+    expect(m.accounts).not.toHaveBeenCalled();
+  });
+
 });

@@ -144,6 +144,18 @@ describe("One controlled Pinterest worker job", () => {
     expect(m.update).not.toHaveBeenCalled();
     expect(m.run).not.toHaveBeenCalled();
   });
+  it("scopes a scheduled portfolio read to one explicit account and one job", async () => {
+    const selectedAccountId = "cmwgfd44v000ya54wraf6ai89";
+    m.accounts.mockResolvedValue([{ id: selectedAccountId, encryptedCredentials: "opaque", grantedScopes: ["user_accounts:read"], accessTokenExpiresAt: new Date(Date.now() + 3600000), refreshTokenExpiresAt: new Date(Date.now() + 3600000) }]);
+    await expect(runOneAccountSync(sha, { dailyUtcDate: new Date().toISOString().slice(0, 10), selectedAccountId })).resolves.toMatchObject({ job: "SUCCEEDED", providerGets: 1 });
+    expect(m.accounts).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ id: selectedAccountId, apiEnvironment: "PRODUCTION", connectionStatus: "CONNECTED" }) }));
+    expect(m.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ maxAttempts: 1, payload: { accountId: selectedAccountId } }) }));
+    expect(m.run).toHaveBeenCalledWith(expect.objectContaining({ onlyJobId: "job123", batchSize: 1 }));
+  });
+  it("does not broaden a manual qualification through an account selector", async () => {
+    await expect(runOneAccountSync(sha, { selectedAccountId: "cmwgfd44v000ya54wraf6ai89" })).rejects.toThrow("DAILY_OBSERVE_ACCOUNT_INVALID");
+    expect(m.transaction).not.toHaveBeenCalled(); expect(m.run).not.toHaveBeenCalled();
+  });
   it("revokes the lease when the worker fails", async () => {
     m.run.mockRejectedValue(Error("worker failed"));
     await expect(runOneAccountSync(sha)).rejects.toThrow("worker failed");
