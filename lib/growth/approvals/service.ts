@@ -1,3 +1,4 @@
+import { sourceUsesGenZ } from "@/lib/growth/creative/genz-account-scope";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
@@ -115,6 +116,7 @@ export async function createSourcePinReview(
     !board.isActive
   )
     throw Error("SOURCE_REVIEW_NOT_READY");
+  if (account.publicationRole !== "SAYTWIST" && await sourceUsesGenZ(draft.id)) throw Error("Gen-Z Editorial belongs only to the main SayTwist account.");
   return createReview(
     "SOURCE_PIN",
     draft.id,

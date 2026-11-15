@@ -1,3 +1,4 @@
+import { sourceUsesGenZ } from "@/lib/growth/creative/genz-account-scope";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { pinReviewSnapshotSchema, evidenceChecksum } from "./contracts";
@@ -11,7 +12,7 @@ import { ROTATION_ROLES } from "@/lib/growth/portfolio/daily-rotation";
 
 type Reader = Pick<
   Prisma.TransactionClient,
-  "growthPinterestAccount" | "growthPinCandidate"
+  "growthPinterestAccount" | "growthPinCandidate" | "growthActivity"
 >;
 export type ReviewChoices = {
   accounts: { value: string; label: string }[];
@@ -50,7 +51,10 @@ export async function readReviewChoices(
     orderBy: { id: "asc" },
     take: 4,
   });
-  const eligible = accounts.filter((a) =>
+  const mainOnly = review.kind === "NATIVE_PIN"
+    ? (await reader.growthPinCandidate.findUnique({ where: { id: review.subjectId }, select: { rendererKey: true } }))?.rendererKey === "genz-editorial"
+    : await sourceUsesGenZ(review.subjectId, reader);
+  const eligible = accounts.filter(a => !mainOnly || a.publicationRole === "SAYTWIST").filter((a) =>
     ROTATION_ROLES.includes(
       (a.activeRole ?? a.publicationRole) as (typeof ROTATION_ROLES)[number],
     ),

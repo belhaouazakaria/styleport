@@ -1,3 +1,5 @@
+import { mainPinDesignDefault } from "@/lib/growth/creative/genz-editorial";
+import { generateGenZEditorial } from "@/lib/growth/creative/genz-generation";
 import type { CreativePublicationRole } from "@/lib/growth/creative/account-direction";
 import { OpenAICreativeImageProvider } from "@/lib/growth/creative/ai-image-provider";
 import sharp from "sharp";
@@ -121,6 +123,18 @@ export async function createOriginalSourceAsset(
   if (process.env.GROWTH_AI_IMAGE_ENABLED !== "true")
     throw Error("SOURCE_AI_DESIGN_REQUIRED");
   const copy = originalSourceCreativeCopy(topic, sourceUrl);
+  if (publicationRole === "SAYTWIST" && mainPinDesignDefault() === "genz_editorial") {
+    const rendered = await generateGenZEditorial({ name: topic, description: copy.description, purpose: "An independent, clearly credited language-style discovery. Depict the translator's identity without inventing a transformation example." }, new OpenAICreativeImageProvider(attemptId));
+    const stored = await persistCreativeAssetFile(rendered.png);
+    let webp: Awaited<ReturnType<typeof persistCreativeAssetFile>> | null = null;
+    try {
+      webp = await persistCreativeAssetFile(rendered.webp, "webp");
+      return { ...copy, ...stored, designStyle: "genz_editorial", fontChecksum: rendered.fontChecksum, webpPublicPath: webp.publicPath };
+    } finally {
+      await releaseCreativeAssetLease(stored.leasePath);
+      if (webp) await releaseCreativeAssetLease(webp.leasePath);
+    }
+  }
   const generated = await new OpenAICreativeImageProvider(attemptId).generate({
     mode: "TOPIC_SPOTLIGHT",
     topic,
@@ -141,5 +155,5 @@ export async function createOriginalSourceAsset(
   if (stored.checksum !== creativeAssetChecksum(bytes))
     throw Error("SOURCE_ASSET_CHECKSUM_INVALID");
   await releaseCreativeAssetLease(stored.leasePath);
-  return { ...copy, ...stored };
+  return { ...copy, ...stored, designStyle: "legacy", fontChecksum: null, webpPublicPath: null };
 }

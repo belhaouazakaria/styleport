@@ -1,3 +1,7 @@
+import { GENZ_EDITORIAL_KEY, GENZ_EDITORIAL_VERSION, genzHeadline, genzTypographySchema, resolvePinDesignStyle, mainPinDesignDefault } from "./genz-editorial";
+import { loadUprightFont } from "./genz-font";
+import { layoutGenZHeadline } from "./genz-renderer";
+import { generateGenZEditorial } from "./genz-generation";
 import {
   GrowthActivityActorKind,
   GrowthAssetGenerationKind,
@@ -86,6 +90,8 @@ interface CreativeTarget {
   destinationPath: string;
   clusterId: string | null;
   title: string;
+  displayName?: string;
+  category?: string;
   excerpt: string;
   topic: string;
   sourceLabel: string;
@@ -205,6 +211,7 @@ async function readEligibleCreativeTarget(
         title: true,
         subtitle: true,
         shortDescription: true,
+        category: true,
         sourceLabel: true,
         targetLabel: true,
         promptSystem: true,
@@ -226,6 +233,8 @@ async function readEligibleCreativeTarget(
       destinationPath: `/translators/${translator.slug}`,
       clusterId: null,
       title: translator.title || translator.name,
+      displayName: translator.name,
+      category: translator.category ?? undefined,
       excerpt: translator.shortDescription || translator.subtitle,
       topic:
         translator.name.replace(/\btranslator\b/gi, "").trim() ||
@@ -415,6 +424,7 @@ function candidateGroupKey(payload: CreativeGenerationJobPayload) {
     accountId: payload.accountId || null,
     experimentId: payload.experimentId || null,
     variantKey: payload.variantKey || null,
+    ...(payload.designStyle ? { designStyle: payload.designStyle, strokeWidthPercent: payload.strokeWidthPercent, webpQuality: payload.webpQuality, fontChecksum: payload.fontChecksum, regenerationNonce: payload.regenerationNonce } : {}),
   }).slice(0, 48);
 }
 
@@ -542,15 +552,26 @@ export async function enqueueCreativeGeneration(
     runAfter?: Date;
     idempotencyScope?: string;
     evergreenRecommendationId?: string;
+    useAccountDefaultStyle?: boolean;
   } = {},
 ) {
   const request = creativeGenerationRequestSchema.parse(input);
+  const explicitArchetype = typeof input === "object" && input !== null && "archetype" in input && typeof input.archetype === "string";
+  const explicitLegacy = request.designStyle === "legacy" || (!request.designStyle && explicitArchetype && !options.useAccountDefaultStyle);
+  const account = !explicitLegacy && request.accountId ? await prisma.growthPinterestAccount.findUnique({ where: { id: request.accountId }, select: { publicationRole: true } }) : null;
+  const designStyle = explicitLegacy ? "legacy" : resolvePinDesignStyle(account?.publicationRole, request.designStyle, mainPinDesignDefault());
+  let fontChecksum: string | undefined;
+
   const target = await getEligibleCreativeTarget(
     request.targetKind,
     request.targetId,
   );
+  if (designStyle === "genz_editorial") {
+    const font = await loadUprightFont(); fontChecksum = font.checksum;
+    layoutGenZHeadline(target.displayName ?? target.title, font, { strokeWidthPercent: request.strokeWidthPercent, webpQuality: request.webpQuality });
+  }
   if (
-    request.archetype === GrowthCreativeArchetype.BEFORE_AFTER &&
+    designStyle !== "genz_editorial" && request.archetype === GrowthCreativeArchetype.BEFORE_AFTER &&
     !target.savedExample &&
     !request.useAiExample
   ) {
@@ -608,6 +629,8 @@ export async function enqueueCreativeGeneration(
     );
   const payload: CreativeGenerationJobPayload = {
     ...request,
+    designStyle,
+    ...(fontChecksum ? { fontChecksum } : {}),
     ...(options.evergreenRecommendationId
       ? { evergreenRecommendationId: options.evergreenRecommendationId }
       : {}),
@@ -616,6 +639,8 @@ export async function enqueueCreativeGeneration(
   };
   const requestIdentity = hash({
     request,
+    designStyle, fontChecksum,
+    ...(designStyle === "genz_editorial" ? { identity: { name: target.displayName ?? target.title, category: target.category } } : {}),
     sourceFingerprint: target.sourceFingerprint,
     predecessorCandidateId: latest?.id || null,
     visualVariation,
@@ -626,7 +651,7 @@ export async function enqueueCreativeGeneration(
     `creative-generate:${requestIdentity}`,
   );
   const requiresPaidGeneration =
-    request.archetype === GrowthCreativeArchetype.BEFORE_AFTER;
+    designStyle === "genz_editorial" || request.archetype === GrowthCreativeArchetype.BEFORE_AFTER;
   return enqueueGrowthJob({
     type: GrowthJobType.CREATIVE_LAB_GENERATE,
     idempotencyKey,
@@ -640,8 +665,24 @@ export async function enqueueCreativeRegeneration(input: unknown) {
   const { candidateId } = creativeRegenerationRequestSchema.parse(input);
   const source = await prisma.growthPinCandidate.findUnique({
     where: { id: candidateId },
-    include: { generationJob: { select: { id: true } } },
+    include: { generationJob: { select: { id: true, payload: true } } },
   });
+  if (source?.rendererKey === GENZ_EDITORIAL_KEY) {
+    if (![GrowthPinCandidateStatus.READY, GrowthPinCandidateStatus.DEFERRED].includes(source.status as "READY" | "DEFERRED")) throw new NonRetryableGrowthJobError("Only an active Gen-Z Editorial design can be regenerated.");
+    const targetId = source.translatorId || source.ideaId;
+    if (!targetId || !source.accountId) throw Error("GENZ_REGENERATION_TARGET_REQUIRED");
+    const account = await prisma.growthPinterestAccount.findUnique({ where: { id: source.accountId }, select: { publicationRole: true } });
+    resolvePinDesignStyle(account?.publicationRole, "genz_editorial");
+    const target = await getEligibleCreativeTarget(source.destinationKind, targetId);
+    const original = creativeGenerationJobPayloadSchema.safeParse(source.generationJob?.payload);
+    const config = genzTypographySchema.parse(original.success ? { strokeWidthPercent: original.data.strokeWidthPercent, webpQuality: original.data.webpQuality } : {});
+    const font = await loadUprightFont(); layoutGenZHeadline(target.displayName ?? target.title, font, config);
+    const latest = await prisma.growthPinCandidate.findFirst({ where: { rendererKey: GENZ_EDITORIAL_KEY, destinationPath: source.destinationPath, accountId: source.accountId }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], select: { id: true } });
+    const nonce = hash({ source: source.id, previous: latest?.id ?? source.id, target: target.sourceFingerprint, font: font.checksum, config }).slice(0, 24);
+    const payload: CreativeGenerationJobPayload = { targetKind: source.destinationKind, targetId, accountId: source.accountId, archetype: original.success ? original.data.archetype : GrowthCreativeArchetype.MINIMAL_STATEMENT,
+      designStyle: "genz_editorial", ...config, fontChecksum: font.checksum, regenerationOfCandidateId: source.id, regenerationNonce: nonce, creativeModelVersion: CREATIVE_LAB_VERSION };
+    return enqueueGrowthJob({ type: GrowthJobType.CREATIVE_LAB_GENERATE, idempotencyKey: await creativeGenerationIdempotencyKey("genz-regenerate:" + source.id + ":" + nonce), payload, maxAttempts: 1 });
+  }
   if (!source || source.status !== GrowthPinCandidateStatus.DEFERRED)
     throw new NonRetryableGrowthJobError(
       "Only a deferred Creative Lab candidate can be regenerated.",
@@ -826,6 +867,7 @@ async function validateCreativeContext(
     : null;
   if (payload.accountId && !account)
     throw new NonRetryableGrowthJobError("Creative account is unavailable.");
+  if (payload.designStyle === "genz_editorial") resolvePinDesignStyle(account?.publicationRole, "genz_editorial");
   const experiment = payload.experimentId
     ? await db.growthExperiment.findUnique({
         where: { id: payload.experimentId },
@@ -1125,7 +1167,7 @@ export async function generateCreativeCandidate(
         }
       : getCreativeRendererDefinition(payload.archetype);
   const visualVariation = payload.visualVariation ?? 0;
-  const definition: CreativeDefinition =
+  let definition: CreativeDefinition =
     payload.archetype === GrowthCreativeArchetype.BEFORE_AFTER &&
     payload.creativeDirection
       ? {
@@ -1150,6 +1192,14 @@ export async function generateCreativeCandidate(
     payload.targetKind,
     payload.targetId,
   );
+  const isGenZ = payload.designStyle === "genz_editorial";
+  if (isGenZ) {
+    const font = await loadUprightFont();
+    if (payload.fontChecksum && font.checksum !== payload.fontChecksum) throw Error("UPRIGHT_FONT_CHANGED_AFTER_QUEUEING");
+    const config = genzTypographySchema.parse({ strokeWidthPercent: payload.strokeWidthPercent, webpQuality: payload.webpQuality });
+    layoutGenZHeadline(target.displayName ?? target.title, font, config);
+    definition = { rendererKey: GENZ_EDITORIAL_KEY, rendererVersion: GENZ_EDITORIAL_VERSION + ":" + font.checksum.slice(0, 12), templateId: "genz_editorial-s" + config.strokeWidthPercent + "-q" + config.webpQuality + (payload.regenerationNonce ? "-r" + payload.regenerationNonce : ""), headlinePattern: "translator-display-name", ctaPattern: "none", visualTreatment: "genz-photography-upright" };
+  }
   const creativeContext = await validateCreativeContext(
     prisma as unknown as CreativeReadClient,
     payload,
@@ -1158,13 +1208,19 @@ export async function generateCreativeCandidate(
   );
   const { copy, exampleSource, exampleMetadata } = await buildCopy(
     target,
-    payload.archetype,
-    payload.useAiExample === true,
+    isGenZ ? GrowthCreativeArchetype.MINIMAL_STATEMENT : payload.archetype,
+    !isGenZ && payload.useAiExample === true,
     options.exampleProvider,
     jobId,
   );
+  if (isGenZ) {
+    copy.title = clamp(genzHeadline(target.displayName ?? target.title), 100);
+    copy.headline = clamp(genzHeadline(target.displayName ?? target.title), 90);
+    copy.description = clamp(target.excerpt.replace(/\u2014/g, " - "), 500);
+  }
   const contentHash = hash({
     target: target.sourceFingerprint,
+    ...(isGenZ ? { identity: { name: target.displayName ?? target.title, category: target.category }, fontChecksum: payload.fontChecksum } : {}),
     copy,
     definition,
     archetype: payload.archetype,
@@ -1207,6 +1263,7 @@ export async function generateCreativeCandidate(
   );
 
   let bytes: Buffer | null = null;
+  let webpBytes: Buffer | null = null;
   let generationKind: GrowthAssetGenerationKind =
     GrowthAssetGenerationKind.DETERMINISTIC;
   let aiMetadata: {
@@ -1216,7 +1273,16 @@ export async function generateCreativeCandidate(
     imageUnits: number;
     estimatedCost: number | null;
   } | null = null;
-  if (
+  if (!preexistingExactContent && isGenZ) {
+    const enabled = options.aiEnabled ?? getServerEnv().GROWTH_AI_IMAGE_ENABLED === true;
+    if (!enabled) throw new NonRetryableGrowthJobError("Creative AI image generation is disabled.");
+    const active = await prisma.growthSettings.findUnique({ where: { id: GROWTH_SETTINGS_ID }, select: { enabled: true } });
+    if (!active?.enabled) throw new NonRetryableGrowthJobError("Growth is disabled before AI photography generation.");
+    const generated = await generateGenZEditorial({ name: target.displayName ?? target.title, description: target.excerpt, category: target.category, purpose: target.promptInstructions, tone: target.targetLabel }, options.aiProvider || new OpenAICreativeImageProvider(jobId || ""), { strokeWidthPercent: payload.strokeWidthPercent, webpQuality: payload.webpQuality }, payload.fontChecksum);
+    bytes = generated.png; webpBytes = generated.webp;
+    generationKind = GrowthAssetGenerationKind.AI;
+    aiMetadata = { provider: generated.metadata.provider, model: generated.metadata.model, responseId: generated.metadata.responseId ?? null, imageUnits: 1, estimatedCost: generated.metadata.estimatedCost ?? null };
+  } else if (
     !preexistingExactContent &&
     payload.archetype === GrowthCreativeArchetype.V1_CONTROL &&
     process.env.NODE_ENV !== "production"
@@ -1391,6 +1457,7 @@ export async function generateCreativeCandidate(
     );
   }
 
+  let webpStored: Awaited<ReturnType<typeof persistCreativeAssetFile>> | null = null;
   const stored = bytes ? await persistCreativeAssetFile(bytes) : null;
   const visualChecksum =
     preexistingExactContent?.asset.checksum || stored?.checksum;
@@ -1399,6 +1466,7 @@ export async function generateCreativeCandidate(
       "Creative visual fingerprint is unavailable.",
     );
   try {
+    if (webpBytes) webpStored = await persistCreativeAssetFile(webpBytes, "webp");
     if (options.beforePersist) await options.beforePersist();
     const result = await prisma.$transaction(async (tx) => {
       const settings = await tx.$queryRaw<Array<{ enabled: boolean }>>(
@@ -1578,6 +1646,7 @@ export async function generateCreativeCandidate(
             exampleCompletionTokens: exampleMetadata?.completionTokens ?? null,
             exampleTotalTokens: exampleMetadata?.totalTokens ?? null,
             creativeDirection: payload.creativeDirection || null,
+            ...(isGenZ ? { designStyle: "genz_editorial", fontChecksum: payload.fontChecksum ?? null, strokeWidthPercent: payload.strokeWidthPercent ?? 190, webpQuality: payload.webpQuality ?? 92, webpPublicPath: webpStored?.publicPath ?? null } : {}),
             regenerationOfCandidateId:
               payload.regenerationOfCandidateId || null,
             regenerationReason: payload.regenerationReason || null,
@@ -1595,6 +1664,7 @@ export async function generateCreativeCandidate(
     }
     return result;
   } catch (error) {
+    if (webpStored) await cleanupCreativeAssetAfterFailure(webpStored, () => prisma.growthActivity.count({ where: { summary: { path: ["webpPublicPath"], equals: webpStored!.publicPath } } }));
     if (stored)
       await cleanupCreativeAssetAfterFailure(stored, () =>
         prisma.growthAsset.count({ where: { publicPath: stored.publicPath } }),
@@ -1602,6 +1672,7 @@ export async function generateCreativeCandidate(
     throw error;
   } finally {
     if (stored) await releaseCreativeAssetLease(stored.leasePath);
+    if (webpStored) await releaseCreativeAssetLease(webpStored.leasePath);
   }
 }
 

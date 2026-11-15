@@ -1,3 +1,4 @@
+import sharp from "sharp";
 import { createHash, randomBytes } from "node:crypto";
 import { link, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -35,10 +36,16 @@ export async function readControlAsset(filePath: string) {
   return bytes;
 }
 
-export async function persistCreativeAssetFile(bytes: Buffer) {
-  validateCreativePng(bytes);
+export async function persistCreativeAssetFile(bytes: Buffer, format: "png" | "webp" = "png") {
+  async function validate(bytes: Buffer) {
+    if (format === "png") return validateCreativePng(bytes);
+    if (!bytes.length || bytes.length > MAX_CREATIVE_BYTES) throw Error("Creative WebP exceeds the bounded asset size.");
+    const metadata = await sharp(bytes, { limitInputPixels: 40_000_000 }).metadata();
+    if (metadata.format !== "webp" || metadata.width !== CREATIVE_WIDTH || metadata.height !== CREATIVE_HEIGHT) throw Error("Creative WebP must be 1000x1500.");
+  }
+  await validate(bytes);
   const checksum = creativeAssetChecksum(bytes);
-  const fileName = `creative-${checksum}.png`;
+  const fileName = `creative-${checksum}.${format}`;
   const finalPath = path.join(storageDirectory, fileName);
   const publicPath = `${publicPathPrefix}/${fileName}`;
   await mkdir(storageDirectory, { recursive: true });
@@ -53,7 +60,7 @@ export async function persistCreativeAssetFile(bytes: Buffer) {
     } catch (error) {
       if (!(error instanceof Error && "code" in error && error.code === "EEXIST")) throw error;
       const existing = await readFile(finalPath);
-      validateCreativePng(existing);
+      await validate(existing);
       if (creativeAssetChecksum(existing) !== checksum) throw new Error("Existing Creative asset does not match its content-addressed path.");
     }
     await link(finalPath, leasePath);
@@ -99,7 +106,7 @@ export async function releaseCreativeAssetLease(leasePath: string) {
 }
 
 export function resolveCreativeAssetFile(filename: string) {
-  if (!filename || filename.length > 191 || !/^creative-[a-f0-9]{64}\.png$/.test(filename)) return null;
+  if (!filename || filename.length > 191 || !/^creative-[a-f0-9]{64}\.(?:png|webp)$/.test(filename)) return null;
   return path.join(storageDirectory, filename);
 }
 

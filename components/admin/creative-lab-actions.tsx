@@ -6,7 +6,7 @@ import { useEffect, useId, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 const archetypeOptions = [
-  { value: GrowthCreativeArchetype.MINIMAL_STATEMENT, label: "Minimal poster", description: "Fast deterministic branded creative." },
+  { value: GrowthCreativeArchetype.MINIMAL_STATEMENT, label: "Minimal poster", description: "Existing AI topic-poster style." },
   { value: GrowthCreativeArchetype.BEFORE_AFTER, label: "Before → after", description: "AI designs the complete Pin around a real transformation." },
 ];
 
@@ -106,10 +106,13 @@ function TranslatorTargetPicker({ initialOptions, targetId, onSelect }: { initia
   </div>;
 }
 
-export function CreativeGenerationForm({ translators, ideas, accounts, experiments, aiImageEnabled = false }: {
+export function CreativeGenerationForm({ translators, ideas, accounts, experiments, aiImageEnabled = false, uprightReady = false, uprightMessage = "Upright Regular is not available.", mainDefaultStyle = "genz_editorial" }: {
   translators: TranslatorOption[];
   ideas: Array<{ id: string; title: string }>;
-  accounts: Array<{ id: string; label: string }>;
+  accounts: Array<{ id: string; label: string; publicationRole?: string }>;
+  uprightReady?: boolean;
+  uprightMessage?: string;
+  mainDefaultStyle?: "genz_editorial" | "legacy";
   experiments: Array<{ id: string; hypothesis: string; variants: Array<{ key: string; label: string }> }>;
   aiImageEnabled?: boolean;
 }) {
@@ -118,7 +121,12 @@ export function CreativeGenerationForm({ translators, ideas, accounts, experimen
   const [targetId, setTargetId] = useState(translators[0]?.id || "");
   const [archetype, setArchetype] = useState<GrowthCreativeArchetype>(GrowthCreativeArchetype.MINIMAL_STATEMENT);
   const [useAiExample, setUseAiExample] = useState(true);
-  const [accountId, setAccountId] = useState("");
+  const [accountId, setAccountId] = useState(accounts.find(a => a.publicationRole === "SAYTWIST")?.id ?? "");
+  const [styleChoice, setStyleChoice] = useState<"auto" | "genz_editorial" | "legacy">("auto");
+  const [strokeWidthPercent, setStrokeWidthPercent] = useState(190);
+  const [webpQuality, setWebpQuality] = useState(92);
+  const mainAccount = accounts.find(a => a.id === accountId)?.publicationRole === "SAYTWIST";
+  const genz = mainAccount && (styleChoice === "genz_editorial" || (styleChoice === "auto" && mainDefaultStyle === "genz_editorial"));
   const [experimentId, setExperimentId] = useState("");
   const selectedExperiment = experiments.find((item) => item.id === experimentId);
   const [variantKey, setVariantKey] = useState("");
@@ -135,7 +143,7 @@ export function CreativeGenerationForm({ translators, ideas, accounts, experimen
   return <form className="overflow-hidden rounded-[1.75rem] border border-brand-200 bg-white shadow-[0_24px_70px_-48px_rgba(15,23,42,0.55)]" onSubmit={async (event) => {
     event.preventDefault(); setBusy(true); setMessage("");
     try {
-      await post("/api/admin/growth/creative/generate", { targetKind: kind, targetId, archetype, ...(archetype === GrowthCreativeArchetype.BEFORE_AFTER && useAiExample ? { useAiExample: true } : {}), ...(accountId ? { accountId } : {}), ...(experimentId && variantKey ? { experimentId, variantKey } : {}), creativeModelVersion: "creative_lab_v1" });
+      await post("/api/admin/growth/creative/generate", { targetKind: kind, targetId, archetype, designStyle: genz ? "genz_editorial" : "legacy", ...(genz ? { strokeWidthPercent, webpQuality } : {}), ...(!genz && archetype === GrowthCreativeArchetype.BEFORE_AFTER && useAiExample ? { useAiExample: true } : {}), ...(accountId ? { accountId } : {}), ...(experimentId && variantKey ? { experimentId, variantKey } : {}), creativeModelVersion: "creative_lab_v1" });
       setMessage("One creative has been added to the Growth queue."); router.refresh();
     } catch (error) { setMessage(error instanceof Error ? error.message : "Request failed."); } finally { setBusy(false); }
   }}>
@@ -149,27 +157,36 @@ export function CreativeGenerationForm({ translators, ideas, accounts, experimen
         <div className="mt-3 grid max-w-md grid-cols-2 rounded-2xl bg-muted-surface p-1" aria-label="Destination type">
           {[{ value: GrowthCreativeDestinationKind.TRANSLATOR, label: "Translator" }, { value: GrowthCreativeDestinationKind.IDEA, label: "Idea" }].map((item) => <button key={item.value} type="button" aria-pressed={kind === item.value} onClick={() => chooseKind(item.value)} className={`min-h-10 rounded-xl px-4 text-sm font-bold transition ${kind === item.value ? "bg-ink text-white shadow-sm" : "text-muted-ink hover:text-ink"}`}>{item.label}</button>)}
         </div>
+        <label className="mt-4 block max-w-2xl text-sm font-bold text-ink">Pinterest account<select className={fieldClass} value={accountId} onChange={(event) => { setAccountId(event.target.value); if (accounts.find(a => a.id === event.target.value)?.publicationRole !== "SAYTWIST") setStyleChoice("auto"); }}><option value="">No account association</option>{accounts.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
       </fieldset>
 
       {kind === GrowthCreativeDestinationKind.TRANSLATOR ? <TranslatorTargetPicker initialOptions={translators} targetId={targetId} onSelect={setTargetId} /> : <label className="block text-sm font-extrabold text-ink">2. Select the Idea<select className={`${fieldClass} max-w-2xl`} value={targetId} onChange={(event) => setTargetId(event.target.value)}>{targets.map((item) => <option key={item.id} value={item.id}>{"name" in item ? item.name : item.title}</option>)}</select></label>}
 
       <fieldset>
         <legend className="text-sm font-extrabold text-ink">3. Pick a creative style</legend>
-        <div className="mt-3 grid max-w-3xl gap-3 sm:grid-cols-2">{archetypeOptions.filter((item) => kind === GrowthCreativeDestinationKind.TRANSLATOR || item.value === GrowthCreativeArchetype.MINIMAL_STATEMENT).map((item) => <label key={item.value} className={`relative cursor-pointer rounded-2xl border p-4 transition ${archetype === item.value ? "border-brand-500 bg-brand-50 shadow-[0_4px_0_rgba(20,184,166,0.2)]" : "border-border bg-white hover:border-brand-300"}`}><input type="radio" name="archetype" className="sr-only" value={item.value} checked={archetype === item.value} onChange={() => setArchetype(item.value)} /><span className="block font-display text-base font-bold text-ink">{item.label}</span><span className="mt-1 block text-xs leading-5 text-muted-ink">{item.description}</span>{archetype === item.value ? <span className="absolute right-3 top-3 h-2.5 w-2.5 rounded-full bg-brand-500" aria-hidden="true" /> : null}</label>)}</div>
-      {kind === GrowthCreativeDestinationKind.TRANSLATOR && archetype === GrowthCreativeArchetype.BEFORE_AFTER ? <div className="mt-4 max-w-3xl rounded-xl border border-supporting-200 bg-supporting-50 px-4 py-3"><label className="flex cursor-pointer items-start gap-3"><input type="checkbox" checked={useAiExample} onChange={(event) => setUseAiExample(event.target.checked)} className="mt-1 h-4 w-4 accent-teal-600" /><span><span className="block text-sm font-bold text-ink">Generate a real transformation when needed</span><span className="mt-0.5 block text-xs leading-5 text-muted-ink">A saved Translator example is preferred. Otherwise Creative Lab makes one bounded text transformation. One controlled AI image call designs the complete final Pin.</span></span></label><p className={`mt-2 text-xs font-bold ${aiImageEnabled ? "text-brand-800" : "text-amber-800"}`}>{aiImageEnabled ? "AI image generation is enabled." : "AI image generation is currently disabled; this concept will not run until enabled."}</p></div> : null}
+        <div className="mt-3 grid max-w-3xl gap-3 sm:grid-cols-2">
+          <label className={`relative rounded-2xl border p-4 transition focus-within:ring-2 focus-within:ring-brand-500 ${!mainAccount ? "cursor-not-allowed border-border bg-muted-surface opacity-60" : genz ? "cursor-pointer border-brand-500 bg-brand-50 shadow-[0_4px_0_rgba(20,184,166,0.2)]" : "cursor-pointer border-border bg-white hover:border-brand-300"}`}>
+            <input type="radio" name="archetype" className="sr-only" value="genz_editorial" disabled={!mainAccount} checked={genz} onChange={() => setStyleChoice("genz_editorial")} />
+            <span className="block font-display text-base font-bold text-ink">Gen-Z Editorial</span><span className="mt-1 block text-xs leading-5 text-muted-ink">Candid AI photography. White Upright headline. Bold black outline.</span><span className="mt-3 inline-block rounded-full bg-ink px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white">Main SayTwist account only</span>
+          </label>{archetypeOptions.filter((item) => kind === GrowthCreativeDestinationKind.TRANSLATOR || item.value === GrowthCreativeArchetype.MINIMAL_STATEMENT).map((item) => <label key={item.value} className={`relative cursor-pointer rounded-2xl border p-4 transition ${!genz && archetype === item.value ? "border-brand-500 bg-brand-50 shadow-[0_4px_0_rgba(20,184,166,0.2)]" : "border-border bg-white hover:border-brand-300"}`}><input type="radio" name="archetype" className="sr-only" value={item.value} checked={!genz && archetype === item.value} onChange={() => { setStyleChoice("legacy"); setArchetype(item.value); }} /><span className="block font-display text-base font-bold text-ink">{item.label}</span><span className="mt-1 block text-xs leading-5 text-muted-ink">{item.description}</span>{!genz && archetype === item.value ? <span className="absolute right-3 top-3 h-2.5 w-2.5 rounded-full bg-brand-500" aria-hidden="true" /> : null}</label>)}</div>
+      {genz ? <div className="mt-4 max-w-3xl rounded-xl border border-brand-200 bg-brand-50/50 p-4">
+        <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-bold text-ink">Black outline: {strokeWidthPercent}%<input aria-label="Stroke width percentage" type="range" min={180} max={200} step={1} value={strokeWidthPercent} onChange={e => setStrokeWidthPercent(Number(e.target.value))} className="mt-3 block w-full accent-teal-600" /><span className="mt-1 block text-xs font-normal text-muted-ink">180% to 200%. Default 190%.</span></label><label className="text-sm font-bold text-ink">WebP export quality<input type="number" min={90} max={95} value={webpQuality} onChange={e => setWebpQuality(Number(e.target.value))} className={fieldClass} /><span className="mt-1 block text-xs font-normal text-muted-ink">90 to 95. PNG retained for publishing compatibility.</span></label></div>
+        <p className={`mt-3 text-xs font-semibold ${uprightReady ? "text-brand-800" : "text-amber-800"}`} role={uprightReady ? "status" : "alert"}>{uprightMessage}</p><p className="mt-1 text-xs text-muted-ink">The photo is AI-generated; the actual Translator name is rendered separately in Upright. Existing Pins are preserved.</p>
+      </div> : null}
+      {!genz && kind === GrowthCreativeDestinationKind.TRANSLATOR && archetype === GrowthCreativeArchetype.BEFORE_AFTER ? <div className="mt-4 max-w-3xl rounded-xl border border-supporting-200 bg-supporting-50 px-4 py-3"><label className="flex cursor-pointer items-start gap-3"><input type="checkbox" checked={useAiExample} onChange={(event) => setUseAiExample(event.target.checked)} className="mt-1 h-4 w-4 accent-teal-600" /><span><span className="block text-sm font-bold text-ink">Generate a real transformation when needed</span><span className="mt-0.5 block text-xs leading-5 text-muted-ink">A saved Translator example is preferred. Otherwise Creative Lab makes one bounded text transformation. One controlled AI image call designs the complete final Pin.</span></span></label><p className={`mt-2 text-xs font-bold ${aiImageEnabled ? "text-brand-800" : "text-amber-800"}`}>{aiImageEnabled ? "AI image generation is enabled." : "AI image generation is currently disabled; this concept will not run until enabled."}</p></div> : null}
       </fieldset>
 
       <details className="group border-t border-dashed border-border pt-5">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-sm font-bold text-ink"><span>Advanced settings <span className="font-normal text-muted-ink">— optional</span></span><ChevronDown className="h-4 w-4 transition group-open:rotate-180" aria-hidden="true" /></summary>
         <p className="mt-1 text-xs leading-5 text-muted-ink">Associate this candidate with a connected account or an existing draft experiment.</p>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <label className="text-sm font-bold text-ink">Pinterest account<select className={fieldClass} value={accountId} onChange={(event) => setAccountId(event.target.value)}><option value="">No account association</option>{accounts.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
-          <label className="text-sm font-bold text-ink">Draft experiment<select className={fieldClass} value={experimentId} onChange={(event) => { setExperimentId(event.target.value); setVariantKey(""); }}><option value="">No experiment</option>{experiments.map((item) => <option key={item.id} value={item.id}>{item.hypothesis}</option>)}</select></label>
+
+          <label className="text-sm font-bold text-ink">Draft experiment<select className={fieldClass} value={experimentId} onChange={(event) => { setExperimentId(event.target.value); setVariantKey(""); if (event.target.value) setStyleChoice("legacy"); }}><option value="">No experiment</option>{experiments.map((item) => <option key={item.id} value={item.id}>{item.hypothesis}</option>)}</select></label>
           {selectedExperiment ? <label className="text-sm font-bold text-ink sm:col-start-2">Experiment variant<select className={fieldClass} value={variantKey} onChange={(event) => setVariantKey(event.target.value)}><option value="">Choose a variant</option>{selectedExperiment.variants.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}</select></label> : null}
         </div>
       </details>
 
-      <div className="flex flex-wrap items-center gap-4 border-t border-border pt-5"><button disabled={busy || !targetId || Boolean(experimentId) !== Boolean(variantKey) || (archetype === GrowthCreativeArchetype.BEFORE_AFTER && !aiImageEnabled)} className="min-h-11 rounded-full bg-accent-500 px-6 py-2.5 text-sm font-bold text-white shadow-[0_4px_0_#d9563b] transition hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-50 disabled:shadow-none">{busy ? "Adding to queue…" : "Generate one candidate"}</button>{message ? <p role="status" className="text-sm font-medium text-muted-ink">{message}</p> : null}</div>
+      <div className="flex flex-wrap items-center gap-4 border-t border-border pt-5"><button disabled={busy || !targetId || Boolean(experimentId) !== Boolean(variantKey) || ((genz || archetype === GrowthCreativeArchetype.BEFORE_AFTER) && !aiImageEnabled) || (genz && (!uprightReady || webpQuality < 90 || webpQuality > 95))} className="min-h-11 rounded-full bg-accent-500 px-6 py-2.5 text-sm font-bold text-white shadow-[0_4px_0_#d9563b] transition hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-50 disabled:shadow-none">{busy ? "Adding to queue…" : "Generate one candidate"}</button>{message ? <p role="status" className="text-sm font-medium text-muted-ink">{message}</p> : null}</div>
     </div>
   </form>;
 }

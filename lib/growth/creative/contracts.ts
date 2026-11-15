@@ -25,6 +25,9 @@ const selectableCreativeArchetypes = new Set<string>([
 const creativeGenerationFields = {
   targetKind: z.nativeEnum(GrowthCreativeDestinationKind),
   targetId: identifier,
+  designStyle: z.enum(["genz_editorial", "legacy"]).optional(),
+  strokeWidthPercent: z.number().min(180).max(200).optional(),
+  webpQuality: z.number().int().min(90).max(95).optional(),
   archetype: z.enum([
     GrowthCreativeArchetype.V1_CONTROL,
     GrowthCreativeArchetype.TYPOGRAPHY_LED,
@@ -33,7 +36,7 @@ const creativeGenerationFields = {
     GrowthCreativeArchetype.MINIMAL_STATEMENT,
     GrowthCreativeArchetype.BEFORE_AFTER,
     GrowthCreativeArchetype.SCENE_BASED,
-  ]),
+  ]).default(GrowthCreativeArchetype.MINIMAL_STATEMENT),
   useAiExample: z.boolean().optional(),
   accountId: identifier.optional(),
   experimentId: identifier.optional(),
@@ -91,6 +94,9 @@ export const creativeGenerationRequestSchema = z
 export const creativeGenerationJobPayloadSchema = z
   .object({
     ...creativeGenerationFields,
+    archetype: creativeGenerationFields.archetype.unwrap(),
+    fontChecksum: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+    regenerationNonce: identifier.optional(),
     evergreenRecommendationId: identifier.optional(),
     visualVariation: z.number().int().min(0).max(2).optional(),
     creativeDirection: z.enum(CREATIVE_DIRECTIONS).optional(),

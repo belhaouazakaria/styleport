@@ -290,4 +290,19 @@ describe("Phase 10 Creative Lab contracts", () => {
     expect(Object.values(GrowthPinCandidateStatus)).not.toEqual(expect.arrayContaining(["APPROVED", "QUEUED", "PUBLISHED"]));
     expect(STATIC_RENDERER_DEFINITIONS).not.toHaveProperty(GrowthCreativeArchetype.SCENE_BASED);
   });
+  it("stores immutable WebP exports and serves the correct media type alongside PNG", async () => {
+    const bytes = await sharp({ create: { width: 1000, height: 1500, channels: 3, background: "#5f6173" } }).webp({ quality: 92 }).toBuffer();
+    const first = await persistCreativeAssetFile(bytes, "webp");
+    const second = await persistCreativeAssetFile(bytes, "webp");
+    try {
+      expect(first.publicPath).toMatch(/creative-[a-f0-9]{64}\.webp$/);
+      expect(second.publicPath).toBe(first.publicPath);
+      expect(second.created).toBe(false);
+      const response = await getCreativeAsset(new Request("https://saytwist.com"), { params: Promise.resolve({ filename: first.publicPath.split("/").at(-1)! }) });
+      expect(response.status).toBe(200); expect(response.headers.get("Content-Type")).toBe("image/webp");
+      expect(Buffer.from(await response.arrayBuffer())).toEqual(bytes);
+      await expect(persistCreativeAssetFile(Buffer.from("not an image"), "webp")).rejects.toThrow();
+    } finally { await releaseCreativeAssetLease(first.leasePath); await releaseCreativeAssetLease(second.leasePath); await cleanupCreativeAssetAfterFailure(first, async () => 0); }
+  });
+
 });

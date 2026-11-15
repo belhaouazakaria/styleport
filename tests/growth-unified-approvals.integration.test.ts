@@ -1,3 +1,10 @@
+import { existsSync } from "node:fs";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import sharp from "sharp";
+import { enqueueCreativeGeneration, enqueueCreativeRegeneration, generateCreativeCandidate } from "@/lib/growth/creative/candidates";
+import { UPRIGHT_REFERENCE_SHA256 } from "@/lib/growth/creative/genz-font";
 import { readReviewChoices, replaceReviewPlan } from "@/lib/growth/approvals/choices";
 import { discordReviewCard } from "@/lib/growth/discord/outbox";
 import { reservePinterestGlobalAttempt } from "@/lib/growth/pinterest/global-budget";
@@ -1279,6 +1286,68 @@ suite("Unified owner consent with PostgreSQL 18", () => {
       expect(await prisma.growthApprovalRequest.count({ where: { subjectId: ai.candidate.id, status: "PENDING" } })).toBe(1);
       expect(await prisma.growthApprovalRequest.count({ where: { subjectId: legacy.candidate.id, status: "PENDING" } })).toBe(0);
     } finally { vi.unstubAllEnvs(); }
+  });
+
+  it("restricts Gen-Z review account choices to Main without altering legacy choices", async () => {
+    const { review, candidate } = await fixture();
+    const main = await prisma.growthPinterestAccount.findUniqueOrThrow({ where: { id: candidate.accountId! } });
+    try {
+      await prisma.growthPinterestAccount.update({ where: { id: main.id }, data: { apiEnvironment: "PRODUCTION" } });
+      const legacy = await readReviewChoices(review);
+      expect(legacy.accounts.length).toBeGreaterThan(1);
+      await prisma.growthPinCandidate.update({ where: { id: candidate.id }, data: { rendererKey: "genz-editorial" } });
+      const photo = await readReviewChoices(review);
+      expect(photo.accounts).toEqual([{ value: main.id, label: "@saytwist" }]);
+      const other = legacy.accounts.find(a => a.value !== main.id)!;
+      await expect(replaceReviewPlan({ requestId: review.id, action: "PLAN_ACCOUNT", value: other.value }, config.ownerUserId)).rejects.toThrow("CHOICE_UNAVAILABLE");
+      expect(await prisma.growthPinPublication.count({ where: { candidateId: candidate.id } })).toBe(0);
+    } finally {
+      await prisma.growthPinterestAccount.update({ where: { id: main.id }, data: { apiEnvironment: main.apiEnvironment } });
+    }
+  });
+
+  it.skipIf(!existsSync(path.join(process.cwd(), "storage/fonts/upright/Upright.otf")))("generates and explicitly regenerates Main Gen-Z designs with new backgrounds and preserved assets", async () => {
+    const original = await fixture();
+    const translator = await prisma.translator.update({ where: { id: original.candidate.translatorId! }, data: { name: "Cat Translator", title: "Cat Translator", shortDescription: "Turn ordinary messages into curious and expressive feline phrasing.", category: "Animals", promptInstructions: "Speak like a curious cat while preserving meaning." } });
+    const temporary = await mkdtemp(path.join(os.tmpdir(), "saytwist-genz-unit-"));
+    const permission = path.join(temporary, "permission.json");
+    await writeFile(permission, JSON.stringify({ fontSha256: UPRIGHT_REFERENCE_SHA256, commercialRenderingAuthorized: true, licenseReference: "TEST ONLY: mocked provider, no commercial generation" }));
+    vi.stubEnv("GROWTH_UPRIGHT_FONT_PERMISSION_PATH", permission);
+    const beforePublications = await prisma.growthPinPublication.count();
+    const originalAsset = await prisma.growthAsset.findUniqueOrThrow({ where: { id: original.candidate.assetId } });
+    const generate = vi.fn();
+    const metadata = { provider: "OPENAI", model: "gpt-image-2", imageUnits: 1 as const };
+    for (const background of ["#8c7964", "#50685e"]) {
+      generate.mockResolvedValueOnce({ bytes: await sharp({ create: { width: 1000, height: 1500, channels: 3, background } }).png().toBuffer(), width: 1000, height: 1500, mimeType: "image/png", metadata });
+    }
+    const jobs: string[] = [];
+    try {
+      const queued = await enqueueCreativeGeneration({ targetKind: "TRANSLATOR", targetId: translator.id, accountId: original.candidate.accountId, creativeModelVersion: "creative_lab_v1" }); jobs.push(queued.job.id);
+      expect(queued.job.payload).toMatchObject({ designStyle: "genz_editorial", fontChecksum: UPRIGHT_REFERENCE_SHA256 });
+      await prisma.growthSettings.update({ where: { id: "global" }, data: { enabled: true } });
+      const first = await generateCreativeCandidate(queued.job.payload, queued.job.id, { aiEnabled: true, aiProvider: { generate } });
+      expect(first.candidate.rendererKey).toBe("genz-editorial");
+      expect(first.asset.generationKind).toBe("AI");
+      expect(generate.mock.calls[0][0]).toMatchObject({ mode: "GENZ_BACKGROUND", visualIdentity: { name: "Cat Translator", category: "Animals" } });
+      const regeneration = await enqueueCreativeRegeneration({ candidateId: first.candidate.id }); jobs.push(regeneration.job.id);
+      expect(regeneration.job.payload).toMatchObject({ designStyle: "genz_editorial", regenerationOfCandidateId: first.candidate.id });
+      const second = await generateCreativeCandidate(regeneration.job.payload, regeneration.job.id, { aiEnabled: true, aiProvider: { generate } });
+      expect(generate).toHaveBeenCalledTimes(2);
+      expect(second.asset.checksum).not.toBe(first.asset.checksum);
+      expect((await prisma.growthAsset.findUniqueOrThrow({ where: { id: first.asset.id } })).checksum).toBe(first.asset.checksum);
+      expect(await prisma.growthAsset.findUniqueOrThrow({ where: { id: originalAsset.id } })).toEqual(originalAsset);
+      expect(await prisma.growthPinPublication.count()).toBe(beforePublications);
+      const failure = await enqueueCreativeRegeneration({ candidateId: second.candidate.id }); jobs.push(failure.job.id);
+      generate.mockRejectedValueOnce(Error("SIMULATED_PROVIDER_FAILURE"));
+      await expect(generateCreativeCandidate(failure.job.payload, failure.job.id, { aiEnabled: true, aiProvider: { generate } })).rejects.toThrow("SIMULATED_PROVIDER_FAILURE");
+      expect(generate).toHaveBeenCalledTimes(3);
+      expect((await prisma.growthAsset.findUniqueOrThrow({ where: { id: first.asset.id } })).checksum).toBe(first.asset.checksum);
+      expect((await prisma.growthAsset.findUniqueOrThrow({ where: { id: second.asset.id } })).checksum).toBe(second.asset.checksum);
+    } finally {
+      await prisma.growthSettings.update({ where: { id: "global" }, data: { enabled: false } });
+      await prisma.growthJob.updateMany({ where: { id: { in: jobs } }, data: { status: "SUCCEEDED" } });
+      vi.unstubAllEnvs(); await rm(temporary, { recursive: true, force: true });
+    }
   });
 
 });
