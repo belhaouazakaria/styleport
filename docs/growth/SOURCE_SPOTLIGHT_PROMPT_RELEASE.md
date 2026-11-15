@@ -1,10 +1,12 @@
-# Credited source spotlight prompt follow-up
+# Source spotlight prompt and SayTwist branding follow-up
 
 Production base: `4e1d41be19682126099c4537a2079be71f7f75c1`, 41 migrations, fourteen enabled Growth timers. Main explicitly uses its existing AI style while Upright commercial-use permission remains pending. The image cap is 5/day, with monetary caps $2/day and $30/month unchanged.
 
 The bounded live source-image acceptance returned a valid AI PNG, but visual inspection found an invented BEFORE/AFTER translation pair. The unapproved draft was held as CANCELLED with `AI_VISUAL_QA_UNVERIFIED_EXAMPLE`; its pending review became STALE. Original artwork, source destination and paid usage evidence were retained. No second acceptance image was requested and no Pin was approved.
 
 The source prompt had combined a prohibition on invented examples with native account directions asking for transformation proof/reveals. Source spotlights now have their own account-level visual directions, with no invented proof requirement. A final source rule prohibits comparison panels, sample sentences, translated phrases and result demonstrations, and identifies the supplied JSON as the complete visible-copy allowlist. Native campaigns retain their verified example instructions. This reduces the specific prompt conflict; it does not claim every model output will be correct. Owner visual review remains required.
+
+New source-derived artwork and public Pin copy use SayTwist branding only, including `saytwist.com` in the visible copy allowlist. Source branding is stripped from the public topic context; the original concept title, URL and internal provenance remain stored. Main-account source photographs add a small Upright SayTwist wordmark separately from the AI photo. Native Gen-Z layouts remain unchanged. This applies to newly generated assets only and never rewrites an existing approved bitmap or snapshot. The actual source destination remains explicit in private owner approval records and is not changed by public branding.
 
 ## Protected rollout
 

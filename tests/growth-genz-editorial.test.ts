@@ -100,4 +100,20 @@ describe.skipIf(!existsSync(fontPath))("Actual Upright glyph geometry and output
     for (let i = 0; i < data.length; i += 3) { if (data[i] === 255 && data[i+1] === 255 && data[i+2] === 255) white++; if (data[i] === 0 && data[i+1] === 0 && data[i+2] === 0) black++; }
     expect(white).toBeGreaterThan(1000); expect(black).toBeGreaterThan(1000);
   });
+  it("adds SayTwist branding to source photographs while preserving the native headline layout", async () => {
+    const font = await loadUprightFont({ forPreview: true });
+    const bg = await sharp({ create: { width: 1000, height: 1500, channels: 3, background: "#795f50" } }).png().toBuffer();
+    const headline = buildGenZHeadline("Cat Translator");
+    const native = await compositeGenZEditorial(bg, headline, font);
+    const source = await compositeGenZEditorial(bg, headline, font, {}, true);
+    const top = { left: 55, top: 50, width: 300, height: 120 };
+    expect((await sharp(await sharp(native.png).extract(top).toBuffer()).stats()).channels[0].stdev).toBe(0);
+    expect((await sharp(await sharp(source.png).extract(top).toBuffer()).stats()).channels[0].stdev).toBeGreaterThan(20);
+    const lower = { left: 0, top: 700, width: 1000, height: 800 };
+    const sourcePixels = await sharp(source.png).extract(lower).raw().toBuffer();
+    const nativePixels = await sharp(native.png).extract(lower).raw().toBuffer();
+    expect(sourcePixels.equals(nativePixels)).toBe(true);
+    expect(source.layout).toEqual(native.layout);
+    expect(await sharp(source.webp).metadata()).toMatchObject({ format: "webp", width: 1000, height: 1500 });
+  });
 });

@@ -74,7 +74,7 @@ export async function prepareOriginalSourcePinDraft(conceptId: string, userId: s
           action: "ORIGINAL_SOURCE_PIN_PREPARED",
           correlationKey: "viral-source-draft:" + record.id,
           summary: {
-            assetChecksum: creative.checksum, sourceDomain: "anythingtranslate.com",
+            assetChecksum: creative.checksum, sourceDomain: "anythingtranslate.com", publicBrand: "SayTwist",
             sourceImageUsed: false, copiedThirdPartyDescription: false,
             designStyle: creative.designStyle, fontChecksum: creative.fontChecksum, webpPublicPath: creative.webpPublicPath,
             designGeneration: "AI", aiProvider: "OPENAI", aiModel: "gpt-image-2", aiCalls: 1,
