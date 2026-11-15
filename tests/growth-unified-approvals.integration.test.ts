@@ -18,6 +18,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { prisma } from "@/lib/prisma";
 import { evidenceChecksum } from "@/lib/growth/approvals/contracts";
 import {
+  preparePendingOwnerReviews,
   createBudgetChangeReview,
   decideGrowthReview,
 } from "@/lib/growth/approvals/service";
@@ -1264,6 +1265,20 @@ suite("Unified owner consent with PostgreSQL 18", () => {
     expect(available.boards.some(b => b.value === snapshot.boardId)).toBe(true);
     await expect(replaceReviewPlan({ requestId: replacement.id, action: "PLAN_BOARD", value: "unknown-board" }, config.ownerUserId)).rejects.toThrow("CHOICE_UNAVAILABLE");
     expect(await prisma.growthPinPublication.count({ where: { candidateId: candidate.id } })).toBe(0);
+  });
+
+  it("does not let an older template draft block the AI review queue", async () => {
+    const legacy = await fixture();
+    const ai = await fixture();
+    await prisma.growthAsset.update({ where: { id: ai.candidate.assetId }, data: { generationKind: "AI", aiProvider: "OPENAI", aiModel: "gpt-image-2", aiImageUnits: 1 } });
+    for (const request of [legacy.review, ai.review]) await prisma.growthApprovalRequest.update({ where: { id: request.id }, data: { status: "EXPIRED", decidedAt: now } });
+    await prisma.growthViralProgramSettings.update({ where: { id: "global" }, data: { mode: "REVIEW" } });
+    vi.stubEnv("NODE_ENV", "production");
+    try {
+      await preparePendingOwnerReviews(config.ownerUserId);
+      expect(await prisma.growthApprovalRequest.count({ where: { subjectId: ai.candidate.id, status: "PENDING" } })).toBe(1);
+      expect(await prisma.growthApprovalRequest.count({ where: { subjectId: legacy.candidate.id, status: "PENDING" } })).toBe(0);
+    } finally { vi.unstubAllEnvs(); }
   });
 
 });
