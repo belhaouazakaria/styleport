@@ -24,6 +24,14 @@ export async function runScheduledGrowthDailyReport(
 ) {
   if (config.GROWTH_DAILY_REPORT_SCHEDULE_ENABLED !== "true")
     return { status: "DISABLED" as const };
+  if (config.GROWTH_NOTIFICATION_PROVIDER === "DISCORD") {
+    if (config.GROWTH_DISCORD_ENABLED !== "true") return { status: "DISABLED" as const };
+    const { getDiscordConfig } = await import("@/lib/growth/discord/config");
+    getDiscordConfig(config);
+    const { queueDiscordDailyReport } = await import("./discord");
+    return queueDiscordDailyReport(now);
+  }
+  // Telegram is a separately opted-in legacy provider.
   // Validate the second, independent transport gate BEFORE any DB work.
   if (!getTelegramReportSettings(config).enabled)
     return { status: "DISABLED" as const };

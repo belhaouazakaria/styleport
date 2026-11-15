@@ -83,10 +83,10 @@ export function completedUtcAnalyticsWindow(day: string, days: 7 | 28 = 7) {
  * The global Pinterest transport reserves each actual GET in the shared
  * 4/hour, 16/day API budget and enforces provider header safeguards.
  */
-export async function runDailyAccountAnalytics(day: string) {
-  const range = completedUtcAnalyticsWindow(day);
+export async function runDailyAccountAnalytics(day: string, selectedAccountId?: string) {
+  const range = completedUtcAnalyticsWindow(day, selectedAccountId ? 28 : 7);
   const deadline = new Date(Date.now() + LEASE_MS);
-  const key = "growth-daily-account-analytics-v1:" + day;
+  const key = "growth-daily-account-analytics-v1:" + day + (selectedAccountId ? ":" + selectedAccountId : "");
   let leased = false;
   let jobId: string | null = null;
   try {
@@ -104,6 +104,7 @@ export async function runDailyAccountAnalytics(day: string) {
           where: {
             apiEnvironment: GrowthPinterestApiEnvironment.PRODUCTION,
             connectionStatus: GrowthPinterestConnectionStatus.CONNECTED,
+            ...(selectedAccountId ? { id: selectedAccountId } : {}),
           },
           select: { id: true, encryptedCredentials: true, grantedScopes: true,
             accessTokenExpiresAt: true, refreshTokenExpiresAt: true },
@@ -136,6 +137,7 @@ export async function runDailyAccountAnalytics(day: string) {
         data: { type: GrowthJobType.PINTEREST_ACCOUNT_ANALYTICS_SYNC,
           idempotencyKey: key, maxAttempts: 1,
           payload: { accountId: account.id, ...range,
+            ...(selectedAccountId ? { includeTopPins: false } : {}),
             runStartedAt: new Date().toISOString() } },
         select: { id: true },
       });
@@ -196,7 +198,18 @@ async function main() {
       { username: os.userInfo().username, uid: process.getuid?.() ?? -1,
         cwd: process.cwd(), node: process.execPath },
     );
-    const result = await runDailyAccountAnalytics(day);
+    let result: Awaited<ReturnType<typeof runDailyAccountAnalytics>>;
+    if (process.env.GROWTH_V2_INTELLIGENCE_ENABLED === "true") {
+      const accounts = await prisma.growthPinterestAccount.findMany({ where: { apiEnvironment: "PRODUCTION", connectionStatus: "CONNECTED" }, select: { id: true }, orderBy: { id: "asc" }, take: 4 });
+      if (!accounts.length || accounts.length > 3) throw Error("DAILY_ANALYTICS_PORTFOLIO_INVALID");
+      let failed = false;
+      for (const account of accounts) {
+        try { await runDailyAccountAnalytics(day, account.id); }
+        catch { failed = true; }
+      }
+      if (failed) throw Error("DAILY_ANALYTICS_PORTFOLIO_PARTIAL");
+      result = { job: "SUCCEEDED", growth: "OFF", pinsPublished: 0, aiCalls: 0 };
+    } else result = await runDailyAccountAnalytics(day);
     console.log("GROWTH_DAILY_ACCOUNT_ANALYTICS=" + result.job);
     console.log("GROWTH_DAILY_ACCOUNT_ANALYTICS_GROWTH=" + result.growth);
     console.log("GROWTH_DAILY_ACCOUNT_ANALYTICS_PINS_PUBLISHED=0");

@@ -1,5 +1,7 @@
 # SayTwist Growth Agent
 
+**2026-11-15 V2 development:** Provider-independent Admin/Discord approvals, source-winner/native lineage and coverage/recovery integration are under qualification. No V2 production cutover is claimed. See [Growth Agent V2](GROWTH_AGENT_V2.md) for implementation, evidence, default-off flags and exact remaining gates.
+
 **Status (2026-11-09, read-only GitHub verification):** Phase 14 Growth is partly operational. The operator reports NINE previously approved production systemd timers, but their exact current runtime state has not been revalidated through VPS SSH. GitHub's latest successful guarded Hostinger deployment is `a73ed6a4d4a5d3244fe5735bd7f027aa8a6d81ff` (November 8), not the current source HEAD. Viral Intelligence PR #163 is merged into `main`; PR #164 adds separately approved original source-linked Pin publishing but remains source-only until its database migration is independently approved and applied. No new viral scheduler, original-source Pin, provider spend or link rewrite is activated by a merge. The existing nine approved timers must be held and restored around any new exact-SHA deployment. Attribution remains OFF unless separately consented; Pinterest publication still needs explicit selection of each Pin.
 **Scope:** Pinterest-first autonomous growth system inside SayTwist  
 **Primary admin surface:** `/admin/growth`  

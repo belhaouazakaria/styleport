@@ -382,6 +382,7 @@ export async function previewPinterestAnalyticsRecovery(params: {
 export async function enqueuePinterestAnalyticsRecovery(params: {
   accountId: string;
   adminUserId: string;
+  systemInitiated?: boolean;
   startDate: string;
   endDate: string;
   previewToken: string;
@@ -445,8 +446,8 @@ export async function enqueuePinterestAnalyticsRecovery(params: {
     });
     await recordGrowthActivity(
       {
-        actorKind: GrowthActivityActorKind.USER,
-        actorUserId: params.adminUserId,
+        actorKind: params.systemInitiated ? GrowthActivityActorKind.SYSTEM : GrowthActivityActorKind.USER,
+        actorUserId: params.systemInitiated ? undefined : params.adminUserId,
         entityType: "GrowthPinterestAnalyticsRecovery",
         entityId: recovery.id,
         action: "PINTEREST_ANALYTICS_RECOVERY_QUEUED",

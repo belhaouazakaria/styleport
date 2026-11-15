@@ -248,3 +248,8 @@ The single-send acceptance runner now supports production as an explicit separat
 ## Phase 13 private Telegram verification succeeded (operator-provided, 2026-10-25)
 
 The user successfully completed the no-send local recipient discovery and reported the read-only verifier output `bot verified: true` / `private chat verified: true`. Reporting remains OFF and no Telegram message or live acceptance run occurred. The token/chat ID are not known to the assistant and must never be requested in logs, GitHub or chat. Next gate is a sanitized read-only live server preflight; production migration/deployment, one Telegram send and daily schedule each require separate approval.
+
+
+## 2026-11-15 V2 development handoff
+
+The current owner prompt supersedes Telegram as the target primary notification/approval channel. Read `GROWTH_AGENT_V2.md` before changing this branch. Unified requests/notifications/receipts, Admin inbox, signed private Discord callbacks, source-native conversion lineage, conservative confidence scoring, coverage/recovery and optional multi-account analytics paths are implemented for qualification. Production is not upgraded; new flags default OFF. Public health/ready endpoints passed, but timer/database/board state and historical Telegram send root cause are unverified. Preserve the existing recovery candidate and immutable old publication. Do not interpret local tests or the fixture clone as production-backup rehearsal or release authorization.

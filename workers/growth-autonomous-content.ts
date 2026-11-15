@@ -224,8 +224,14 @@ export async function runAutonomousPreparation(day: string) {
   const performance = qualifiedTranslators.length === 0 ? "UNKNOWN" :
     qualifiedTranslators.some(r => r.score >= 90 && r.confidence >= 90) ?
       "STRONG" : qualifiedTranslators.every(r => r.score < 80) ? "WEAK" : "NORMAL";
+  let qualifiedViralCount = 0;
+  if (process.env.GROWTH_V2_INTELLIGENCE_ENABLED === "true") {
+    const { prepareViralWinnerConversions } = await import("@/lib/growth/viral/conversion");
+    await prepareViralWinnerConversions(new Date());
+    qualifiedViralCount = await prisma.growthViralConversion.count({ where: { status: "PROPOSED", decisionId: { not: null } } });
+  }
   const plannedTranslator = decideDailyChannelCadence(policy.translatorCreates, {
-    eligibleOpportunities: qualifiedTranslators.length, performance,
+    eligibleOpportunities: qualifiedTranslators.length + qualifiedViralCount, performance: qualifiedViralCount ? "STRONG" : performance,
     authorizedDailyLimit: Math.min(10, settings.translatorCreatesPerDayCap),
     completedToday: translatorsCreatedToday, pendingToday: 0,
     // This is only a planning ceiling. Each paid attempt still needs
@@ -234,8 +240,27 @@ export async function runAutonomousPreparation(day: string) {
       settings.aiMonthlyBudgetCents > 0 ? remainingTranslatorCap : 0,
     operationallyReady: true,
   });
+  // Source-interest winners have priority within the SAME authorized creation
+  // target and transactional budget/content caps as ordinary opportunities.
+  let viralPrepared = 0;
+  if (process.env.GROWTH_V2_INTELLIGENCE_ENABLED === "true" && plannedTranslator.additionalPlanned > 0) {
+    const { prepareViralWinnerConversions } = await import("@/lib/growth/viral/conversion");
+    await prepareViralWinnerConversions(new Date());
+    const conversions = await prisma.growthViralConversion.findMany({
+      where: { status: "PROPOSED", decisionId: { not: null } },
+      orderBy: { createdAt: "asc" }, take: plannedTranslator.additionalPlanned,
+    });
+    for (const conversion of conversions) {
+      const decision = await prisma.growthDecision.findUnique({ where: { id: conversion.decisionId! } });
+      if (decision?.status !== "PROPOSED") continue;
+      await runScopedContentJob({ type: GrowthJobType.TRANSLATOR_AUTOPILOT_EXECUTE,
+        key: "viral-native-execute:" + conversion.id,
+        payload: { decisionId: decision.id } });
+      viralPrepared++;
+    }
+  }
   const selected = planContentOpportunities(opportunities, {
-    translator: plannedTranslator.additionalPlanned,
+    translator: Math.max(0, plannedTranslator.additionalPlanned - viralPrepared),
     idea: Math.max(0, Math.min(1,
       settings.ideaCreatesPerWeekCap - ideasCreatedThisWeek)),
   });
@@ -277,7 +302,7 @@ export async function runAutonomousPreparation(day: string) {
     // permission to publish. Publishing still requires per-Pin ADMIN approval.
     if (!decisionJob) throw Error("DECISION_JOB_MISSING");
   }
-  return { selected: selected.length, prepared };
+  return { selected: selected.length + viralPrepared, prepared: prepared + viralPrepared };
 }
 
 async function main() {

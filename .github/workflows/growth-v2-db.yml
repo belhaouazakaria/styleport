@@ -1,0 +1,68 @@
+name: Growth V2 PostgreSQL 18 qualification
+on:
+  pull_request:
+    paths:
+      - 'lib/growth/**'
+      - 'prisma/**'
+      - 'workers/**'
+      - 'tests/growth-*'
+      - 'scripts/test-growth-v2-db.sh'
+      - '.github/workflows/growth-v2-db.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: growth_v2
+          POSTGRES_PASSWORD: disposable_ci_only
+          POSTGRES_DB: saytwist_growth_v2_test
+        ports: ['55439:5432']
+        options: >-
+          --health-cmd "pg_isready -U growth_v2 -d saytwist_growth_v2_test"
+          --health-interval 5s --health-timeout 5s --health-retries 15
+    env:
+      GROWTH_V2_TEST_DATABASE_URL: postgresql://growth_v2:disposable_ci_only@127.0.0.1:55439/saytwist_growth_v2_test
+      DATABASE_URL: postgresql://growth_v2:disposable_ci_only@127.0.0.1:55439/saytwist_growth_v2_test
+      APP_BASE_URL: https://saytwist.com
+      NEXTAUTH_URL: https://saytwist.com
+      NEXTAUTH_SECRET: disposable_ci_only_not_a_production_secret
+      OPENAI_API_KEY: test_no_live_calls
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: sh scripts/test-growth-v2-db.sh
+      - name: Create additional disposable qualification databases
+        run: |
+          psql postgresql://growth_v2:disposable_ci_only@127.0.0.1:55439/postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE saytwist_growth_phase11_publishing_test'
+          psql postgresql://growth_v2:disposable_ci_only@127.0.0.1:55439/postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE saytwist_growth_phase12_2_recovery_test'
+          psql postgresql://growth_v2:disposable_ci_only@127.0.0.1:55439/postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE saytwist_growth_phase13_economics_test'
+          psql postgresql://growth_v2:disposable_ci_only@127.0.0.1:55439/postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE saytwist_growth_phase12_learning_test'
+      - name: Account analytics regression qualification
+        env:
+          GROWTH_ANALYTICS_TEST_DATABASE_URL: postgresql://growth_v2:disposable_ci_only@127.0.0.1:55439/saytwist_growth_phase4_test
+          DATABASE_URL: postgresql://growth_v2:disposable_ci_only@127.0.0.1:55439/saytwist_growth_phase4_test
+        run: |
+          psql postgresql://growth_v2:disposable_ci_only@127.0.0.1:55439/postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE saytwist_growth_phase4_test'
+          npm run prisma:deploy
+          npm run test:growth-analytics-db
+      - name: Publishing, recovery, finance and learning regression qualification
+        env:
+          GROWTH_PUBLISHING_TEST_DATABASE_URL: postgresql://growth_v2:disposable_ci_only@127.0.0.1:55439/saytwist_growth_phase11_publishing_test
+          GROWTH_ANALYTICS_RECOVERY_TEST_DATABASE_URL: postgresql://growth_v2:disposable_ci_only@127.0.0.1:55439/saytwist_growth_phase12_2_recovery_test
+          GROWTH_ECONOMICS_TEST_DATABASE_URL: postgresql://growth_v2:disposable_ci_only@127.0.0.1:55439/saytwist_growth_phase13_economics_test
+          GROWTH_LEARNING_TEST_DATABASE_URL: postgresql://growth_v2:disposable_ci_only@127.0.0.1:55439/saytwist_growth_phase12_learning_test
+        run: |
+          npm run test:growth-publishing-db
+          npm run test:growth-analytics-recovery-db
+          npm run test:growth-economics-db
+          npm run test:growth-learning-db

@@ -6,6 +6,7 @@ const install = readFileSync("workers/install-growth-daily-fresh-systemd.sh", "u
 const rotate = readFileSync("workers/rotate-growth-daily-fresh-release-systemd.sh", "utf8");
 const launch = readFileSync("workers/growth-daily-fresh-launch.cjs", "utf8");
 const worker = readFileSync("workers/growth-daily-fresh-creatives.ts", "utf8");
+const targets = readFileSync("lib/growth/viral/native-creative-targets.ts", "utf8");
 const alert = readFileSync("workers/growth-daily-fresh-alert.cjs", "utf8");
 
 describe("Phase14M daily isolated AI creative production safety", () => {
@@ -53,11 +54,13 @@ describe("Phase14M daily isolated AI creative production safety", () => {
     expect(launch).not.toContain("PINTEREST_APP_SECRET");
   });
   it("selects only distinct active translators with useful saved examples", () => {
-    expect(worker).toContain("isActive: true, archivedAt: null");
-    expect(worker).toContain("editorialExamples: { some: {} }");
+    expect(targets).toContain("isActive: true");
+    expect(targets).toContain("archivedAt: null");
+    expect(targets).toContain("editorialExamples: { some: {} }");
     expect(worker).toContain("target.editorialExamples[0]?.originalText.trim().length");
     expect(worker).toContain("target.editorialExamples[0]?.transformedText.trim().length");
-    expect(worker).toContain("growthPinCandidates: { none: {} }");
+    expect(targets).toContain("growthPinCandidates: { none: {} }");
+    expect(worker).toContain("bindNativeCampaignJob");
     expect(worker).toContain("MIN_DESCRIPTION_LENGTH = 40");
     expect(worker).toContain("GrowthCreativeArchetype.BEFORE_AFTER");
     expect(worker).toContain("useAiExample: false");

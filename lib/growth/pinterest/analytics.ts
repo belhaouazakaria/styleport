@@ -319,7 +319,7 @@ export async function syncPinterestPinInventory(params: {
 }
 
 export async function syncPinterestAccountAnalytics(params: {
-  accountId: string; startDate: string; endDate: string; fetchImpl?: typeof fetch;
+  accountId: string; startDate: string; endDate: string; includeTopPins?: boolean; fetchImpl?: typeof fetch;
 }) {
   try {
     const accountResponse = await getPinterestAccountAnalytics(params);
@@ -343,7 +343,7 @@ export async function syncPinterestAccountAnalytics(params: {
 
     let topCount = 0;
     let finalRateLimit = accountResponse.rateLimit;
-    if (!lowPinterestRateLimit(accountResponse.rateLimit)) {
+    if (params.includeTopPins !== false && !lowPinterestRateLimit(accountResponse.rateLimit)) {
       const topResponse = await getPinterestTopPinsAnalytics(params);
       finalRateLimit = topResponse.rateLimit;
       topCount = topResponse.data.pins.length;

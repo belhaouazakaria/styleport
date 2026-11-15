@@ -104,7 +104,7 @@ function utcDayInterval(date: Date) {
 
 export async function approveOriginalSourcePin(
   input: SourcePinApprovalInput, userId: string,
-  now = new Date(),
+  now = new Date(), transaction?: Prisma.TransactionClient,
 ) {
   if (!userId || !input.confirmation || !input.draftId ||
       !input.accountId || !input.boardId ||
@@ -117,7 +117,7 @@ export async function approveOriginalSourcePin(
     throw Error("SOURCE_APPROVAL_SCHEDULE_INVALID");
   }
   const { start, end } = utcDayInterval(scheduled);
-  return prisma.$transaction(async tx => {
+  const apply = async (tx: Prisma.TransactionClient) => {
     // Serialize all channels against the SAME daily portfolio quota lock.
     // A separate SOURCE-only lock permits concurrent cross-channel overbooking.
     await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${VIRAL_PORTFOLIO_APPROVAL_LOCK}))`);
@@ -234,5 +234,6 @@ export async function approveOriginalSourcePin(
       scheduledAt: scheduled.toISOString(), pinterestWrites: 0 };
   // READ COMMITTED takes the post-lock committed view of both channels.
   // SERIALIZABLE could retain a stale pre-wait snapshot despite the shared lock.
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, timeout: 10000 });
+  };
+  return transaction ? apply(transaction) : prisma.$transaction(apply, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, timeout: 10000 });
 }

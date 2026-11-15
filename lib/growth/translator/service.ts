@@ -448,6 +448,8 @@ async function executeTranslatorDecisionAttempt(
   }
 
   const prepared = await loadGenerationRequest(decisionId);
+  const { assertViralConversionEligible } = await import("@/lib/growth/viral/conversion");
+  if (prepared.decision.idempotencyKey.startsWith("viral-native:")) await assertViralConversionEligible(decisionId);
   const provider = options.provider || new OpenAITranslatorGenerationProvider(decisionId);
   const beforeChecksum = prepared.current?.checksum || null;
   if (prepared.decision.type === GrowthDecisionType.IMPROVE_TRANSLATOR && (!prepared.current || !prepared.expectedTargetChecksum || prepared.current.checksum !== prepared.expectedTargetChecksum)) {
@@ -587,6 +589,7 @@ async function executeTranslatorDecisionAttempt(
         throw new ExecutionBlockedError(GrowthDecisionStatus.WAITING_DATA, DECISION_REASON.SOURCE_OPPORTUNITY_CHANGED);
       }
     }
+    if (decision.idempotencyKey.startsWith("viral-native:")) await assertViralConversionEligible(decisionId, tx);
     const safeCategories = await tx.category.findMany({ where: { id: { in: input.categoryIds }, isActive: true, archivedAt: null }, select: { id: true } });
     if (safeCategories.length !== input.categoryIds.length || !input.primaryCategoryId || !safeCategories.some((item) => item.id === input.primaryCategoryId)) {
       throw new ExecutionBlockedError(GrowthDecisionStatus.WAITING_DATA, DECISION_REASON.CATEGORY_CHANGED_BEFORE_APPLY);

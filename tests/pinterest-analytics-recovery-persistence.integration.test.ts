@@ -219,7 +219,7 @@ databaseDescribe("Pinterest Phase 12.2 recovery persistence", () => {
       endDate: "2026-10-04",
       now: new Date("2026-10-16T12:00:00Z"),
     });
-    await enqueuePinterestAnalyticsRecovery({
+    const queued = await enqueuePinterestAnalyticsRecovery({
       accountId: account.id,
       adminUserId: admin.id,
       startDate: preview.startDate,
@@ -232,7 +232,7 @@ databaseDescribe("Pinterest Phase 12.2 recovery persistence", () => {
     ).resolves.toMatchObject({ status: "DISABLED", claimed: 0 });
     await prisma.growthSettings.update({
       where: { id: "global" },
-      data: { enabled: true, workerBatchSize: 1 },
+      data: { enabled: true, workerBatchSize: 1, workerActivationExpiresAt: new Date(Date.now() + 180000) },
     });
     const fetchMock = vi.fn().mockImplementation(() =>
       Promise.resolve(
@@ -241,8 +241,8 @@ databaseDescribe("Pinterest Phase 12.2 recovery persistence", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
     const results = await Promise.all([
-      runGrowthWorker({ workerId: "recovery-left", batchSize: 1 }),
-      runGrowthWorker({ workerId: "recovery-right", batchSize: 1 }),
+      runGrowthWorker({ workerId: "recovery-left", batchSize: 1, onlyJobId: queued.job.id, rolloutConfig: { GROWTH_WORKER_RUN_ENABLED: "true", GROWTH_ROLLOUT_MODE: "RECOVER", GROWTH_AUTOMATIC_BACKFILL_SCOPE: "true" } }),
+      runGrowthWorker({ workerId: "recovery-right", batchSize: 1, onlyJobId: queued.job.id, rolloutConfig: { GROWTH_WORKER_RUN_ENABLED: "true", GROWTH_ROLLOUT_MODE: "RECOVER", GROWTH_AUTOMATIC_BACKFILL_SCOPE: "true" } }),
     ]);
     expect(results.reduce((sum, result) => sum + result.claimed, 0)).toBe(1);
     expect(results.reduce((sum, result) => sum + result.succeeded, 0)).toBe(1);
@@ -875,7 +875,7 @@ databaseDescribe("Pinterest Phase 12.2 recovery persistence", () => {
 
     await prisma.growthSettings.update({
       where: { id: "global" },
-      data: { enabled: true, workerBatchSize: 1 },
+      data: { enabled: true, workerBatchSize: 1, workerActivationExpiresAt: new Date(Date.now() + 180000) },
     });
     const fetchMock = vi
       .fn()
@@ -884,7 +884,7 @@ databaseDescribe("Pinterest Phase 12.2 recovery persistence", () => {
       );
     vi.stubGlobal("fetch", fetchMock);
     await expect(
-      runGrowthWorker({ workerId: "replacement-worker", batchSize: 1 }),
+      runGrowthWorker({ workerId: "replacement-worker", batchSize: 1, onlyJobId: queued.job.id, rolloutConfig: { GROWTH_WORKER_RUN_ENABLED: "true", GROWTH_ROLLOUT_MODE: "RECOVER", GROWTH_AUTOMATIC_BACKFILL_SCOPE: "true" } }),
     ).resolves.toMatchObject({ claimed: 1, succeeded: 1 });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(

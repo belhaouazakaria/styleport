@@ -1077,6 +1077,11 @@ model GrowthViralMetricObservation {
   outboundClicks       BigInt?
   baselineSaveRate     Float?
   baselineOutboundRate Float?
+  baselineImpressions  BigInt?
+  baselineSaves        BigInt?
+  baselineOutboundClicks BigInt?
+  windowStart          DateTime?
+  windowEnd            DateTime?
   createdAt            DateTime           @default(now())
   pinTest              GrowthViralPinTest @relation(fields: [pinTestId], references: [id], onDelete: Restrict)
 
@@ -2243,4 +2248,112 @@ model IndexingLog {
   @@index([status, createdAt])
   @@index([source, createdAt])
   @@index([provider, createdAt])
+}
+
+// Provider-independent permission evidence; external deliveries never own consent.
+model GrowthApprovalRequest {
+  id               String   @id @default(cuid())
+  kind             String   @db.VarChar(32)
+  subjectId        String   @db.VarChar(191)
+  dedupeKey        String   @unique @db.VarChar(191)
+  ownerUserId      String
+  snapshot         Json
+  snapshotChecksum String   @db.VarChar(64)
+  status           String   @default("PENDING") @db.VarChar(24)
+  expiresAt        DateTime
+  decidedAt        DateTime?
+  decidedById      String?
+  decisionChannel  String?  @db.VarChar(16)
+  result           Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  notifications    GrowthNotification[]
+  interactions     GrowthDiscordInteraction[]
+
+  @@index([status, expiresAt])
+  @@index([kind, subjectId])
+}
+
+model GrowthNotification {
+  id               String   @id @default(cuid())
+  dedupeKey        String   @unique @db.VarChar(191)
+  requestId        String?
+  payload          Json
+  status           String   @default("QUEUED") @db.VarChar(24)
+  attempts         Int      @default(0)
+  nextAttemptAt    DateTime @default(now())
+  attemptedAt      DateTime?
+  providerMessageId String?
+  providerChannelId String?
+  lastErrorCode    String?  @db.VarChar(64)
+  finalizedAt      DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  request          GrowthApprovalRequest? @relation(fields: [requestId], references: [id], onDelete: Restrict)
+
+  @@index([status, nextAttemptAt])
+}
+
+// Signed callbacks are acknowledged after durable receipt, before execution.
+// No Discord interaction tokens or raw bodies are persisted.
+model GrowthDiscordInteraction {
+  id          String   @id @db.VarChar(24)
+  requestId   String
+  action      String   @db.VarChar(16)
+  receivedAt  DateTime @default(now())
+  processedAt DateTime?
+  request     GrowthApprovalRequest @relation(fields: [requestId], references: [id], onDelete: Restrict)
+
+  @@index([processedAt, receivedAt])
+}
+
+model GrowthViralConversion {
+  id                String   @id @default(cuid())
+  conceptId         String   @unique
+  winningPinTestId  String
+  evidence          Json
+  decisionId        String?  @unique
+  translatorId      String?
+  campaignJobId     String?  @unique
+  status            String   @default("PROPOSED") @db.VarChar(32)
+  lastErrorCode     String?  @db.VarChar(64)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([status, updatedAt])
+}
+
+model GrowthAnalyticsCoverage {
+  id               String   @id @default(cuid())
+  source           String   @db.VarChar(24)
+  accountId        String
+  metricType       String   @db.VarChar(24)
+  windowStart      DateTime
+  windowEnd        DateTime
+  supportedDays    Int
+  status           String   @db.VarChar(32)
+  missingPeriods   Json
+  qualityFlags     String[]
+  lastSuccessfulSyncAt DateTime?
+  lastErrorCode    String?  @db.VarChar(64)
+  rateLimit        Json
+  recoveryId       String?
+  observedAt       DateTime @default(now())
+
+  @@unique([source, accountId, metricType])
+  @@index([status, observedAt])
+}
+
+model GrowthExternalAnalyticsDaily {
+  id           String   @id @default(cuid())
+  source       String   @db.VarChar(24)
+  accountId    String
+  metricDate   DateTime
+  providerTimeZone String @db.VarChar(80)
+  metrics      Json
+  qualityFlags String[]
+  fetchedAt    DateTime @default(now())
+
+  @@unique([source, accountId, metricDate])
+  @@index([source, metricDate])
 }

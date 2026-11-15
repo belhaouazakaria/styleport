@@ -54,6 +54,13 @@ export async function prepareDailySourceCreativeDrafts(now: Date) {
   })).filter(item => item.rating.decision === "PRIORITY")
     .sort((a, b) => b.rating.score - a.rating.score ||
       a.sourceUrl.localeCompare(b.sourceUrl));
+  if (process.env.GROWTH_V2_INTELLIGENCE_ENABLED === "true") {
+    const { readNativeThemeOutcomes, nativeThemeAdjustment } = await import("./theme-learning");
+    const outcomes = await readNativeThemeOutcomes(now);
+    ranked.sort((a,b) => (b.rating.score + nativeThemeAdjustment(b.title, outcomes).adjustment) - (a.rating.score + nativeThemeAdjustment(a.title, outcomes).adjustment) || a.sourceUrl.localeCompare(b.sourceUrl));
+    await prisma.growthActivity.create({ data: { actorKind: "SYSTEM", entityType: "GrowthViralSource", entityId: day,
+      action: "NATIVE_THEME_RESEARCH_RANKING_APPLIED", summary: { modelVersion: "native-theme-feedback-v1", selected: ranked.slice(0, remaining).map(c => ({ conceptId: c.id, editorialScore: c.rating.score, feedback: nativeThemeAdjustment(c.title, outcomes) })), permissionOrBudgetChanges: false } } });
+  }
   let created = 0;
   for (const concept of ranked.slice(0, remaining)) {
     // Null system actor intentionally: a draft is not an admin approval.

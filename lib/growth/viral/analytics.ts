@@ -1,7 +1,7 @@
 import { GrowthActivityActorKind, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { canonicalSourceTranslatorUrl } from "@/lib/growth/viral/catalog";
-import { evaluateViralWinner } from "@/lib/growth/viral/winners";
+import { classifyViralOpportunity } from "@/lib/growth/viral/winners";
 import { planNicheExpansion } from "@/lib/growth/viral/niche";
 
 /** Register only a Pin already known to belong to our connected Pinterest
@@ -103,7 +103,7 @@ export async function evaluateTrackedViralPins(now = new Date()) {
       where: { pinterestPinId: test.pinterestPinId! },
       select: { accountId: true, isActive: true, destinationUrl: true,
         publishedAt: true,
-        summaryFetchedAt: true, summaryEndDate: true,
+        summaryFetchedAt: true, summaryStartDate: true, summaryEndDate: true,
         summaryImpressions: true, summarySaves: true,
         summaryOutboundClicks: true },
     });
@@ -123,16 +123,17 @@ export async function evaluateTrackedViralPins(now = new Date()) {
     if (existing) continue;
     const days = await prisma.growthPinterestAccountMetricDaily.findMany({
       where: { accountId: pin.accountId, dataStatus: "READY",
-        metricDate: { gte: new Date(now.getTime() - 7 * 86400000),
-          lte: now }, fetchedAt: { gte: new Date(now.getTime() - 48 * 3600000) } },
+        metricDate: { gte: pin.summaryStartDate ?? new Date(now.getTime() - 7 * 86400000),
+          lte: pin.summaryEndDate ?? now }, fetchedAt: { gte: new Date(now.getTime() - 48 * 3600000) } },
       select: { impressions: true, saves: true, outboundClicks: true },
-      take: 8,
+      take: 91,
     });
     const totals = days.reduce((a, day) => ({
       impressions: a.impressions + day.impressions,
       saves: a.saves + day.saves, outbound: a.outbound + day.outboundClicks,
     }), { impressions: BigInt(0), saves: BigInt(0), outbound: BigInt(0) });
-    const baseline = days.length >= 3 && totals.impressions > BigInt(0) &&
+    const windowDays = pin.summaryStartDate && pin.summaryEndDate ? Math.round((pin.summaryEndDate.getTime() - pin.summaryStartDate.getTime()) / 86400000) + 1 : 0;
+    const baseline = windowDays > 0 && days.length === windowDays && totals.impressions >= BigInt(1000) &&
       totals.impressions <= BigInt(Number.MAX_SAFE_INTEGER);
     const bSave = baseline ? Number(totals.saves) / Number(totals.impressions) : null;
     const bOutbound = baseline ? Number(totals.outbound) / Number(totals.impressions) : null;
@@ -145,16 +146,30 @@ export async function evaluateTrackedViralPins(now = new Date()) {
       outboundClicks: safeCount(pin.summaryOutboundClicks),
       measuredAt: pin.summaryFetchedAt, publishedAt: pin.publishedAt,
       baselineSaveRate: bSave, baselineOutboundRate: bOutbound,
+      baselineImpressions: baseline ? safeCount(totals.impressions) : null, baselineSaves: baseline ? safeCount(totals.saves) : null, baselineOutboundClicks: baseline ? safeCount(totals.outbound) : null,
       pinterestDataStatus: status,
     };
-    const decision = evaluateViralWinner(evidence, now);
+    const previous = await prisma.growthViralMetricObservation.findFirst({
+      where: { pinTestId: test.id, observedAt: { lte: new Date(pin.summaryFetchedAt.getTime() - 86400000) } },
+      orderBy: { observedAt: "desc" },
+    });
+    const classified = classifyViralOpportunity(evidence, previous ? {
+      impressions: safeCount(previous.impressions), saves: safeCount(previous.saves),
+      outboundClicks: safeCount(previous.outboundClicks), measuredAt: previous.observedAt,
+      publishedAt: pin.publishedAt, baselineSaveRate: previous.baselineSaveRate,
+      baselineOutboundRate: previous.baselineOutboundRate,
+      baselineImpressions: safeCount(previous.baselineImpressions), baselineSaves: safeCount(previous.baselineSaves), baselineOutboundClicks: safeCount(previous.baselineOutboundClicks),
+      pinterestDataStatus: previous.pinterestDataStatus === "READY" ? "READY" : "MISSING",
+    } : null, now);
+    const decision = classified.decision;
     try {
       await prisma.growthViralMetricObservation.create({
         data: { pinTestId: test.id, observedAt: pin.summaryFetchedAt,
           pinterestDataStatus: status,
           impressions: pin.summaryImpressions, saves: pin.summarySaves,
           outboundClicks: pin.summaryOutboundClicks,
-          baselineSaveRate: bSave, baselineOutboundRate: bOutbound },
+          baselineSaveRate: bSave, baselineOutboundRate: bOutbound,
+          baselineImpressions: baseline ? totals.impressions : null, baselineSaves: baseline ? totals.saves : null, baselineOutboundClicks: baseline ? totals.outbound : null, windowStart: pin.summaryStartDate, windowEnd: pin.summaryEndDate },
       });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -162,7 +177,7 @@ export async function evaluateTrackedViralPins(now = new Date()) {
       throw error;
     }
     observed++;
-    if (decision.status !== "WINNER") { incomplete++; continue; }
+    if (classified.stage !== "HIGH_CONFIDENCE_WINNER") { incomplete++; continue; }
     const changed = await prisma.growthViralConcept.updateMany({
       where: { id: test.conceptId,
         status: { in: ["DISCOVERED", "REVIEW", "TESTING"] } },
@@ -175,7 +190,7 @@ export async function evaluateTrackedViralPins(now = new Date()) {
         action: "OWNED_PIN_WINNER_DETECTED",
         correlationKey: "viral-winner:" + test.id + ":" +
           pin.summaryFetchedAt.toISOString(),
-        summary: { pinTestId: test.id, decision: decision.status,
+        summary: { pinTestId: test.id, decision: decision.status, stage: classified.stage,
           source: "OFFICIAL_SAVED_OWNED_PIN_ANALYTICS",
           saveRate: decision.saveRate, outboundRate: decision.outboundRate,
           saveLift: decision.saveLift, outboundLift: decision.outboundLift,

@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { prisma } from "@/lib/prisma";
 import {
   executeEvergreenPreparation,
@@ -219,8 +219,15 @@ async function fixture(now: Date) {
   return { translator, admin };
 }
 
-beforeEach(clean);
+beforeEach(async () => {
+  if (enabled) {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-15T12:00:00Z"));
+  }
+  await clean();
+});
 afterAll(async () => {
+  vi.useRealTimers();
   if (enabled) await clean();
   await prisma.$disconnect();
 });
