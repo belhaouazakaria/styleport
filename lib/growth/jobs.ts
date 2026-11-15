@@ -216,10 +216,10 @@ export async function enqueueGrowthJob(input: EnqueueGrowthJobInput) {
   }
 }
 
-export async function promoteDueGrowthRetries(now = new Date(), limit = 25, allowedTypes?: GrowthJobType[]) {
+export async function promoteDueGrowthRetries(now = new Date(), limit = 25, allowedTypes?: GrowthJobType[], onlyJobId?: string) {
   if (allowedTypes?.length === 0) return 0;
   const due = await prisma.growthJob.findMany({
-    where: { status: GrowthJobStatus.FAILED_RETRYABLE, runAfter: { lte: now }, ...(allowedTypes ? { type: { in: allowedTypes } } : {}) },
+    where: { status: GrowthJobStatus.FAILED_RETRYABLE, runAfter: { lte: now }, ...(allowedTypes ? { type: { in: allowedTypes } } : {}), ...(onlyJobId ? { id: onlyJobId } : {}) },
     select: { id: true, idempotencyKey: true, attemptCount: true, maxAttempts: true },
     orderBy: [{ runAfter: "asc" }, { createdAt: "asc" }],
     take: Math.min(100, Math.max(1, limit)),

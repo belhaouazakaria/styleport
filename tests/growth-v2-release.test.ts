@@ -36,7 +36,11 @@ describe("Growth V2 protected release", () => {
     expect(release).toContain('restore) [[ "$MIGRATIONS" == 40 ]]');
     expect(release).toMatch(/migration_name IN[^\n]+== 4/);
     expect(migration).toContain('"$db_names" == "$source_names"');
-    expect(release).toContain('NOT EXISTS(SELECT 1 FROM "GrowthJob"');
+    expect(release).toContain("queue.n=0 OR (queue.n=4 AND queue.verified)");
+    expect(release).toContain('"$QUEUE_FINGERPRINT" == "${BASH_REMATCH[1]}"');
+    expect(release).toContain("queue=%s");
+    expect(release).toContain("cmwgfd45e0011a54w9jnuohxv");
+    expect(release).toContain("a.status='APPROVED'");
   });
   it("requires protected root copies, owner approvals and a held timer state", () => {
     for (const script of [release, migration])

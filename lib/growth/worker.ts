@@ -36,7 +36,7 @@ export async function runGrowthWorker(options: {
   const rollout = resolveGrowthRollout(options.rolloutConfig);
   // PREPARE is never a broad worker mode, even if an operator accidentally
   // enables the flags. A single explicit persisted job ID is compulsory.
-  if ((rollout.mode === "PREPARE" || rollout.mode === "ANALYTICS" || rollout.mode === "RECOVER") && !options.onlyJobId) {
+  if ((rollout.mode === "PREPARE" || rollout.mode === "ANALYTICS" || rollout.mode === "RECOVER" || rollout.mode === "INVENTORY") && !options.onlyJobId) {
     return { status: "DISABLED", claimed: 0, succeeded: 0, failed: 0 };
   }
   if (rollout.mode === "OFF") return { status: "DISABLED", claimed: 0, succeeded: 0, failed: 0 };
@@ -77,6 +77,10 @@ export async function runGrowthWorker(options: {
     if (!options.onlyJobId) {
       await promoteDueGrowthRetries(startedAt, batchSize, rollout.allowedTypes);
       await recoverStaleGrowthJobs(startedAt, batchSize, rollout.allowedTypes);
+    } else if (rollout.mode === "RECOVER" || rollout.mode === "INVENTORY") {
+      // Read-only retries retain their exact ID and attempt/error history.
+      // No scoped publishing/preparation invocation promotes any other job.
+      await promoteDueGrowthRetries(startedAt, 1, rollout.allowedTypes, options.onlyJobId);
     }
     const beforeClaim = await getGrowthSettings();
     if (!isGrowthWorkerActivationValid(beforeClaim) ||

@@ -1,3 +1,6 @@
+import { consumeQueuedPinterestInventory } from "@/lib/growth/pinterest/queued-inventory";
+import { encryptPinterestCredentials } from "@/lib/growth/pinterest/credentials";
+import { promoteDueGrowthRetries } from "@/lib/growth/jobs";
 // @vitest-environment node
 import { synchronizeGoogleAnalytics } from "@/lib/growth/google/sync";
 import { createHash, generateKeyPairSync, randomUUID } from "node:crypto";
@@ -207,6 +210,193 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 suite("Unified owner consent with PostgreSQL 18", () => {
+  it("consumes an existing inventory pair through real leases and workers using GET-only provider mocks", async () => {
+    const account = await prisma.growthPinterestAccount.create({
+      data: {
+        pinterestAccountId: "inventory-v2",
+        publicationRole: "SAYTWIST_PLAYGROUND",
+        activeRole: "SAYTWIST_PLAYGROUND",
+        username: "inventory-v2",
+        apiEnvironment: "PRODUCTION",
+        connectionStatus: "CONNECTED",
+        grantedScopes: [
+          "boards:read",
+          "user_accounts:read",
+          "boards:write",
+          "pins:read",
+          "pins:write",
+        ],
+        encryptedCredentials: encryptPinterestCredentials({
+          accessToken: "mock-access",
+          refreshToken: "mock-refresh",
+        }),
+        accessTokenExpiresAt: new Date(+now + 3600000),
+      },
+    });
+    const jobs = [];
+    for (const kind of ["board", "account"] as const)
+      jobs.push(
+        await prisma.growthJob.create({
+          data: {
+            type:
+              kind === "board"
+                ? "PINTEREST_BOARD_SYNC"
+                : "PINTEREST_ACCOUNT_SYNC",
+            payload: { accountId: account.id },
+            idempotencyKey: `pinterest:${kind}-sync:${account.id}:${Math.floor(Date.now() / 60000)}`,
+            runAfter: new Date(+now - 1000),
+          },
+        }),
+      );
+    const fetcher = vi.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        expect(init?.method ?? "GET").toBe("GET");
+        const url = String(input);
+        if (url === "https://api.pinterest.com/v5/boards?page_size=100")
+          return Response.json({
+            items: [
+              {
+                id: "11111111",
+                name: "Text Style",
+                owner: { username: "inventory-v2" },
+                privacy: "PUBLIC",
+              },
+            ],
+          });
+        if (url === "https://api.pinterest.com/v5/user_account")
+          return Response.json({
+            id: "inventory-v2",
+            username: "inventory-v2",
+            account_type: "BUSINESS",
+          });
+        throw Error("Unexpected provider request: " + url);
+      },
+    );
+    const environment = process.env.PINTEREST_API_ENVIRONMENT;
+    process.env.PINTEREST_API_ENVIRONMENT = "production";
+    vi.stubGlobal("fetch", fetcher);
+    try {
+      expect(await consumeQueuedPinterestInventory()).toMatchObject({
+        status: "COMPLETED",
+        succeeded: 1,
+        failed: 0,
+      });
+      expect(await consumeQueuedPinterestInventory()).toMatchObject({
+        status: "COMPLETED",
+        succeeded: 1,
+        failed: 0,
+      });
+      expect(fetcher).toHaveBeenCalledTimes(2);
+      expect(
+        await prisma.growthJob.findMany({
+          where: { id: { in: jobs.map((j) => j.id) }, status: "SUCCEEDED" },
+        }),
+      ).toHaveLength(2);
+      expect(
+        await prisma.growthPinterestBoard.count({
+          where: { accountId: account.id, isActive: true },
+        }),
+      ).toBe(1);
+      expect(
+        await prisma.growthSettings.findUniqueOrThrow({
+          where: { id: "global" },
+        }),
+      ).toMatchObject({
+        enabled: false,
+        attributionEnabled: false,
+        workerActivationExpiresAt: null,
+      });
+      expect(await prisma.growthPinPublication.count()).toBe(0);
+    } finally {
+      vi.unstubAllGlobals();
+      process.env.PINTEREST_API_ENVIRONMENT = environment;
+    }
+  });
+  it("promotes only the exact due read retry without resetting attempts or touching Pin retries", async () => {
+    const data = {
+      status: "FAILED_RETRYABLE" as const,
+      attemptCount: 1,
+      maxAttempts: 3,
+      runAfter: new Date(+now - 1000),
+      lastError: "transient",
+    };
+    const read = await prisma.growthJob.create({
+      data: {
+        ...data,
+        type: "PINTEREST_BOARD_SYNC",
+        idempotencyKey: "exact-read-" + randomUUID(),
+      },
+    });
+    const other = await prisma.growthJob.create({
+      data: {
+        ...data,
+        type: "PINTEREST_BOARD_SYNC",
+        idempotencyKey: "other-read-" + randomUUID(),
+      },
+    });
+    const pin = await prisma.growthJob.create({
+      data: {
+        ...data,
+        type: "PINTEREST_PIN_PUBLISH",
+        idempotencyKey: "pin-retry-" + randomUUID(),
+      },
+    });
+    expect(
+      await promoteDueGrowthRetries(now, 1, ["PINTEREST_BOARD_SYNC"], read.id),
+    ).toBe(1);
+    expect(
+      await prisma.growthJob.findUniqueOrThrow({ where: { id: read.id } }),
+    ).toMatchObject({
+      status: "PENDING",
+      attemptCount: 1,
+      lastError: "transient",
+    });
+    expect(
+      (await prisma.growthJob.findUniqueOrThrow({ where: { id: other.id } }))
+        .status,
+    ).toBe("FAILED_RETRYABLE");
+    expect(
+      (await prisma.growthJob.findUniqueOrThrow({ where: { id: pin.id } }))
+        .status,
+    ).toBe("FAILED_RETRYABLE");
+  });
+  it("persists the legacy expiry state without changing its original candidate", async () => {
+    const { candidate, review } = await fixture();
+    const snapshot = review.snapshot as {
+      boardId: string;
+      scheduledAt: string;
+    };
+    const legacy = await prisma.growthTelegramPinReview.create({
+      data: {
+        candidateId: candidate.id,
+        candidateRevision: candidate.revision,
+        contentHash: candidate.contentHash,
+        assetChecksum: "a".repeat(64),
+        accountId: candidate.accountId!,
+        boardId: snapshot.boardId,
+        scheduledAt: new Date(snapshot.scheduledAt),
+        ownerUserId: config.ownerUserId,
+        expiresAt: now,
+        status: "SENT",
+      },
+    });
+    await prisma.growthTelegramPinReview.update({
+      where: { id: legacy.id },
+      data: { status: "EXPIRED", actedAt: now },
+    });
+    expect(
+      (
+        await prisma.growthTelegramPinReview.findUniqueOrThrow({
+          where: { id: legacy.id },
+        })
+      ).status,
+    ).toBe("EXPIRED");
+    expect(
+      await prisma.growthPinCandidate.findUniqueOrThrow({
+        where: { id: candidate.id },
+      }),
+    ).toEqual(candidate);
+  });
   it("atomically converges simultaneous Admin/Discord approval to one publication", async () => {
     const { review } = await fixture();
     const input = {

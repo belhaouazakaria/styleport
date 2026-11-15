@@ -102,3 +102,10 @@ export function resolveCreativeAssetFile(filename: string) {
   if (!filename || filename.length > 191 || !/^creative-[a-f0-9]{64}\.png$/.test(filename)) return null;
   return path.join(storageDirectory, filename);
 }
+
+/** Resolve only the exact managed public route; never accept a URL, traversal,
+ * query string or an arbitrary basename extracted from an untrusted path. */
+export function resolveCreativeAssetPublicPath(publicPath: string) {
+  const match = /^\/generated\/growth-creatives\/(creative-[a-f0-9]{64}\.png)$/.exec(publicPath);
+  return match ? resolveCreativeAssetFile(match[1]) : null;
+}

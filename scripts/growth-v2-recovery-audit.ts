@@ -3,7 +3,7 @@ import { inspectCreativeVisualEvidence } from "@/lib/growth/creative/visual-evid
 import { prisma } from "@/lib/prisma";
 import {
   creativeAssetChecksum,
-  resolveCreativeAssetFile,
+  resolveCreativeAssetPublicPath,
   validateCreativePng,
 } from "@/lib/growth/creative/storage";
 import { createNativePinReview } from "@/lib/growth/approvals/service";
@@ -24,7 +24,7 @@ export async function auditFailedPinRecovery(ownerUserId?: string) {
     },
     include: { asset: true },
   });
-  const file = resolveCreativeAssetFile(recovery.asset.publicPath);
+  const file = resolveCreativeAssetPublicPath(recovery.asset.publicPath);
   if (!file) throw Error("RECOVERY_ASSET_PATH_INVALID");
   const bytes = await readFile(file);
   validateCreativePng(bytes);
@@ -39,8 +39,12 @@ export async function auditFailedPinRecovery(ownerUserId?: string) {
     recovery.description !== original.description ||
     recovery.destinationPath !== original.destinationPath ||
     recovery.accountId !== original.accountId ||
-    recovery.boardId !== original.boardId ||
-    !original.publications.some((p) => p.status === "FAILED_TERMINAL")
+    !original.publications.some(
+      (p) =>
+        p.status === "FAILED_TERMINAL" &&
+        p.accountId === recovery.accountId &&
+        p.boardId === recovery.boardId,
+    )
   )
     throw Error("RECOVERY_EVIDENCE_MISMATCH");
   const review = ownerUserId

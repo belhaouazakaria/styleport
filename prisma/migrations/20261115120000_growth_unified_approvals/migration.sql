@@ -95,3 +95,9 @@ BEGIN
 END $$;
 CREATE TRIGGER "growth_approval_evidence_guard" BEFORE UPDATE OR DELETE ON "GrowthApprovalRequest"
  FOR EACH ROW EXECUTE FUNCTION growth_approval_evidence_guard();
+
+-- Preserve optional legacy expiry cleanup: its deployed writer already emits
+-- EXPIRED, but migration 36 omitted that terminal value from its constraint.
+ALTER TABLE "GrowthTelegramPinReview" DROP CONSTRAINT "GrowthTelegramPinReview_status_check";
+ALTER TABLE "GrowthTelegramPinReview" ADD CONSTRAINT "GrowthTelegramPinReview_status_check"
+ CHECK ("status" IN ('QUEUED','SENT','PROCESSING','APPROVED','REJECTED','FAILED','UNKNOWN','EXPIRED'));
