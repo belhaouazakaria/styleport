@@ -101,7 +101,9 @@ def main():
         p = pathlib.Path(q[file_key]); trusted(p, 0o600)
         assert hashlib.file_digest(p.open("rb"), "sha256").hexdigest() == q[digest_key]
     history = json.loads(run(["runuser", "-u", "postgres", "--", "/usr/lib/postgresql/18/bin/psql", "-p", "5433", "-d", "saytwist", "-X", "-qAt", "-v", "ON_ERROR_STOP=1", "-c", 'SELECT json_agg(json_build_object(\'name\',migration_name,\'checksum\',checksum)) FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL;']))
-    assert len(history) == (41 if mode == "restore" else 40)
+    # Additive migration 41 remains compatible with the old release. Recovery
+    # must work after either a failed migration or a failed subsequent deploy.
+    assert len(history) in ({41} if mode == "restore" else {40, 41} if mode == "recover" else {40})
     for row in history:
         assert re.fullmatch(r"\d{14}_[a-z0-9_]+", row["name"])
         assert hashlib.sha256((source / "prisma/migrations" / row["name"] / "migration.sql").read_bytes()).hexdigest() == row["checksum"]
