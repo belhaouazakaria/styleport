@@ -46,7 +46,7 @@ it("requires AI and never falls back to template art when disabled", async () =>
 });
 it("uses the stable attempt identity, selected account direction and credited source", async () => {
   vi.stubEnv("GROWTH_AI_IMAGE_ENABLED", "true");
-  await createOriginalSourceAsset(
+  const result = await createOriginalSourceAsset(
     "Royal English Translator",
     url,
     "source-concept1",
@@ -57,11 +57,15 @@ it("uses the stable attempt identity, selected account direction and credited so
     expect.objectContaining({
       mode: "TOPIC_SPOTLIGHT",
       publicationRole: "SAYTWIST_IDEAS",
-      domain: "anythingtranslate.com",
+      brandName: "SayTwist",
+      domain: "saytwist.com",
       beforeLabel: "",
       afterText: "",
     }),
   );
+  expect(JSON.stringify(m.generate.mock.calls[0][1])).not.toMatch(/anything\s*translate/i);
+  expect(result.title).toContain("SayTwist");
+  expect(result.description).toContain("SayTwist");
   expect(m.store).toHaveBeenCalledExactlyOnceWith(Buffer.from("AI output"));
   expect(m.release).toHaveBeenCalledExactlyOnceWith("/private/lease");
 });
@@ -77,4 +81,10 @@ it("retains the failure without generating or storing fallback artwork", async (
   ).rejects.toThrow("IMAGE_DAILY_LIMIT");
   expect(m.generate).toHaveBeenCalledTimes(1);
   expect(m.store).not.toHaveBeenCalled();
+});
+it("keeps provenance branding out of the AI topic and all visible copy", async () => {
+  vi.stubEnv("GROWTH_AI_IMAGE_ENABLED", "true");
+  await createOriginalSourceAsset("AnythingTranslate Royal English Translator", url, "source-brand-policy", "SAYTWIST_IDEAS");
+  expect(m.generate.mock.calls[0][1].topic).toBe("Royal English Translator");
+  expect(JSON.stringify(m.generate.mock.calls[0][1])).not.toMatch(/anything\s*translate/i);
 });

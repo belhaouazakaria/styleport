@@ -72,9 +72,25 @@ export function layoutGenZHeadline(title: string, upright: UprightFont, raw: Par
   }
   throw Error("GENZ_HEADLINE_CANNOT_FIT_WITHOUT_CLIPPING");
 }
-export async function compositeGenZEditorial(background: Buffer, title: string, font: UprightFont, raw: Partial<GenZTypography> = {}) {
+function sayTwistBrandSvg(upright: UprightFont, config: GenZTypography) {
+  const m = measure(upright.font, "SayTwist", 48);
+  const stroke = effectiveGenZStroke(48, config.strokeWidthPercent);
+  const x = 70 + stroke / 2 - m.minX, baseline = 130 - m.bottom - stroke / 2;
+  let penX = 0, penY = 0;
+  const paths = m.run.glyphs.map((glyph, i) => {
+    const p = m.run.positions[i];
+    const result = `<path transform="translate(${x} ${baseline}) scale(${m.scale} ${-m.scale}) translate(${penX + p.xOffset} ${penY + p.yOffset})" d="${glyph.path.toSVG()}"/>`;
+    penX += p.xAdvance; penY += p.yAdvance;
+    return result;
+  }).join("");
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1500"><title>SayTwist</title><defs><g id="brand">${paths}</g></defs><use href="#brand" fill="none" stroke="#000000" stroke-width="${stroke / m.scale}" stroke-linejoin="round"/><use href="#brand" fill="#FFFFFF"/></svg>`;
+}
+
+export async function compositeGenZEditorial(background: Buffer, title: string, font: UprightFont, raw: Partial<GenZTypography> = {}, includeSayTwistBrand = false) {
   const config = genzTypographySchema.parse(raw), layout = layoutGenZHeadline(title, font, config);
-  const pipeline = sharp(background, { limitInputPixels: 40_000_000 }).rotate().resize(1000, 1500, { fit: "cover", position: "attention" }).composite([{ input: Buffer.from(layout.svg) }]);
+  const overlays = [{ input: Buffer.from(layout.svg) }];
+  if (includeSayTwistBrand) overlays.push({ input: Buffer.from(sayTwistBrandSvg(font, config)) });
+  const pipeline = sharp(background, { limitInputPixels: 40_000_000 }).rotate().resize(1000, 1500, { fit: "cover", position: "attention" }).composite(overlays);
   const png = await pipeline.clone().png().toBuffer(); validateCreativePng(png);
   const webp = await pipeline.clone().webp({ quality: config.webpQuality, effort: 5 }).toBuffer();
   return { png, webp, layout, fontChecksum: font.checksum, config };

@@ -18,14 +18,16 @@ const sql = readFileSync(
 );
 const web = readFileSync("app/api/admin/growth/viral/route.ts", "utf8");
 
-describe("Original non-SayTwist source Pin creative", () => {
-  it("renders 1000x1500 PNG with original code and truthful source copy", async () => {
+describe("SayTwist-branded source discovery creative", () => {
+  it("renders 1000x1500 PNG with SayTwist public copy and separately validated source provenance", async () => {
     const original = originalSourceCreativeCopy(
       "Royal English Translator",
       "https://anythingtranslate.com/translators/royal-english-translator/",
     );
-    expect(original.footerDomain).toBe("anythingtranslate.com");
-    expect(original.description).toContain("AnythingTranslate");
+    expect(original.footerDomain).toBe("saytwist.com");
+    expect(original.title).toContain("SayTwist");
+    expect(original.description).toContain("SayTwist");
+    expect(JSON.stringify(original)).not.toMatch(/anything\s*translate/i);
     const image = await renderOriginalSourcePin(original);
     expect(readPngDimensions(image)).toEqual({ width: 1000, height: 1500 });
     expect(image.length).toBeGreaterThan(2000);
@@ -40,7 +42,7 @@ describe("Original non-SayTwist source Pin creative", () => {
     const valid = originalSourceCreativeCopy("Royal English Translator",
       "https://anythingtranslate.com/translators/royal-english/");
     await expect(renderOriginalSourcePin({ ...valid,
-      footerDomain: "saytwist.com" as "anythingtranslate.com" })).rejects.toThrow();
+      footerDomain: "anythingtranslate.com" as "saytwist.com" })).rejects.toThrow();
   });
 });
 

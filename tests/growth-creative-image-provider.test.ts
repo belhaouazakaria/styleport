@@ -87,7 +87,8 @@ describe("Creative Lab OpenAI image provider", () => {
   it("designs a credited topic spotlight without inventing transformation proof", () => {
     const prompt = buildCreativeImagePrompt({ ...fullCreativeInput, mode: "TOPIC_SPOTLIGHT", publicationRole: "SAYTWIST_PLAYGROUND",
       domain: "anythingtranslate.com", beforeText: "Explore a different language style.", beforeLabel: "", afterLabel: "", afterText: "" });
-    expect(prompt).toContain("anythingtranslate.com");
+    expect(prompt).toContain("saytwist.com");
+    expect(prompt).not.toContain("anythingtranslate.com");
     expect(prompt).toContain("Do not invent a translation example");
     expect(prompt).toContain("Entertainment and curiosity");
     expect(prompt).not.toContain(fullCreativeInput.afterText);
@@ -114,6 +115,14 @@ describe("Creative Lab OpenAI image provider", () => {
     expect(prompt).toContain(fullCreativeInput.beforeText);
     expect(prompt).toContain(fullCreativeInput.afterText);
     expect(prompt).not.toContain("SOURCE DISCOVERY RULE");
+  });
+
+  it("enforces SayTwist-only source branding independently of caller brand and footer", () => {
+    const prompt = buildCreativeImagePrompt({ ...fullCreativeInput, mode: "TOPIC_SPOTLIGHT", brandName: "AnythingTranslate", domain: "anythingtranslate.com" });
+    const copy = JSON.parse(prompt.split("\n").find(line => line.startsWith('{"brand":'))!);
+    expect(copy.brand).toBe("SayTwist");
+    expect(copy.domain).toBe("saytwist.com");
+    expect(prompt).not.toMatch(/anything\s*translate/i);
   });
 
 });

@@ -26,11 +26,12 @@ function xml(value: string): string {
 }
 
 export type SourceCreativeCopy = {
+  topic: string;
   title: string;
   description: string;
   headline: string;
   subline: string;
-  footerDomain: "anythingtranslate.com";
+  footerDomain: "saytwist.com";
 };
 
 export function originalSourceCreativeCopy(
@@ -45,20 +46,22 @@ export function originalSourceCreativeCopy(
     .trim();
   if (!/^[A-Za-z0-9 &,'-]{8,80}$/.test(title) || !/\btranslator\b/i.test(title))
     throw Error("SOURCE_CREATIVE_TOPIC_INVALID");
-  const label = title.replace(/\s+translator$/i, "").trim();
+  const topic = title.replace(/\banything\s*translate\b/gi, "").replace(/\s+/g, " ").trim();
+  const label = topic.replace(/\s*translator$/i, "").trim();
+  if (!label) throw Error("SOURCE_CREATIVE_TOPIC_INVALID");
   const headline = "Explore " + label + " wording";
   const subline = "Explore a different way to express the same message.";
   const description =
-    "Curious about " +
+    "Discover " +
     label +
-    " wording? Explore this translation style at AnythingTranslate. " +
-    "Independent topic spotlight.";
+    " wording with SayTwist. Explore a different way to express the same message.";
   return {
-    title: ("Explore " + label + " Wording").slice(0, 100),
+    topic,
+    title: ("Explore " + label + " Wording | SayTwist").slice(0, 100),
     description: description.slice(0, 500),
     headline,
     subline,
-    footerDomain: "anythingtranslate.com",
+    footerDomain: "saytwist.com",
   };
 }
 
@@ -66,7 +69,7 @@ export async function renderOriginalSourcePin(
   raw: SourceCreativeCopy,
 ): Promise<Buffer> {
   if (
-    raw.footerDomain !== "anythingtranslate.com" ||
+    raw.footerDomain !== "saytwist.com" ||
     raw.title.length > 100 ||
     raw.description.length > 500 ||
     raw.headline.length > 150 ||
@@ -105,8 +108,8 @@ export async function renderOriginalSourcePin(
     subline +
     "</text>" +
     '<rect x="90" y="1245" width="820" height="125" rx="30" fill="#5EEAD4"/>' +
-    '<text x="500" y="1322" fill="#0F172A" text-anchor="middle" font-family="Arial, sans-serif" font-size="36" font-weight="800">Explore at anythingtranslate.com</text>' +
-    '<text x="94" y="1445" fill="#94A3B8" font-family="Arial, sans-serif" font-size="21">Independent editorial spotlight · Original illustration</text>' +
+    '<text x="500" y="1322" fill="#0F172A" text-anchor="middle" font-family="Arial, sans-serif" font-size="36" font-weight="800">Discover with SayTwist</text>' +
+    '<text x="94" y="1445" fill="#94A3B8" font-family="Arial, sans-serif" font-size="21">saytwist.com · Original illustration</text>' +
     "</svg>";
   const bytes = await sharp(Buffer.from(svg)).png().toBuffer();
   validateCreativePng(bytes);
@@ -124,7 +127,7 @@ export async function createOriginalSourceAsset(
     throw Error("SOURCE_AI_DESIGN_REQUIRED");
   const copy = originalSourceCreativeCopy(topic, sourceUrl);
   if (publicationRole === "SAYTWIST" && mainPinDesignDefault() === "genz_editorial") {
-    const rendered = await generateGenZEditorial({ name: topic, description: copy.description, purpose: "An independent, clearly credited language-style discovery. Depict the translator's identity without inventing a transformation example." }, new OpenAICreativeImageProvider(attemptId));
+    const rendered = await generateGenZEditorial({ name: copy.topic, description: copy.description, purpose: "A SayTwist language-style discovery. Depict the translator's identity without inventing a transformation example." }, new OpenAICreativeImageProvider(attemptId), {}, undefined, true);
     const stored = await persistCreativeAssetFile(rendered.png);
     let webp: Awaited<ReturnType<typeof persistCreativeAssetFile>> | null = null;
     try {
@@ -137,7 +140,7 @@ export async function createOriginalSourceAsset(
   }
   const generated = await new OpenAICreativeImageProvider(attemptId).generate({
     mode: "TOPIC_SPOTLIGHT",
-    topic,
+    topic: copy.topic,
     publicationRole,
     direction: "COLLAGE",
     brandName: "SayTwist",
