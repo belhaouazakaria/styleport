@@ -447,6 +447,7 @@ export async function preparePendingOwnerReviews(
     prisma.growthPinCandidate.findMany({
       where: {
         status: "READY",
+        ...(process.env.NODE_ENV === "production" ? { asset: { generationKind: "AI" as const } } : {}),
         createdAt: { gte: new Date(now.getTime() - 72 * 3600000) },
         approvals: { none: { status: "APPROVED" } },
       },
