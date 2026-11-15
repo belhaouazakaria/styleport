@@ -140,7 +140,7 @@ def main():
     target = OLD if mode == "recover" else new
     assert (APP / ".deployed-release").read_text().strip() == target
     configs(OLD, False); assert digest_configs() == state["configDigests"]; ready(); mutating = True
-    # Only release pins and the bounded fresh-runner timeout change here.
+    # Rotate release pins, the bounded fresh-runner timeout and V2 startup triggers.
     # Budget decisions and template retirement happen after restoration.
     for p in FILES:
         if mode == "recover":
@@ -149,6 +149,11 @@ def main():
         if p.name == "saytwist-growth-daily-fresh.service":
             assert "TimeoutStartSec=900" in s
             s = s.replace("TimeoutStartSec=900", "TimeoutStartSec=1200")
+        if p.name in {"saytwist-growth-v2-courier.timer", "saytwist-growth-v2-intelligence.timer"}:
+            # Seed recurrence after every timer activation, even when the
+            # service no longer has an in-memory last-inactive timestamp.
+            assert s.count("OnBootSec=180") == 1 and "OnActiveSec=" not in s
+            s = s.replace("OnBootSec=180", "OnActiveSec=180")
         tmp = p.with_suffix(p.suffix + ".v2-followup-tmp")
         tmp.write_text(s); os.chmod(tmp, 0o600 if p in PRIVATE else 0o644); os.replace(tmp, p)
     subprocess.run(["systemctl", "daemon-reload"], check=True)

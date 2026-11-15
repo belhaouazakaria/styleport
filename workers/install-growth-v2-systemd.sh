@@ -42,7 +42,7 @@ EOF_UNIT
 [Unit]
 Description=SayTwist V2 ${mode} cadence (installed disabled)
 [Timer]
-OnBootSec=180
+OnActiveSec=180
 OnUnitInactiveSec=$cadence
 Persistent=true
 [Install]

@@ -20,6 +20,17 @@ describe("Growth V2 protected release", () => {
       execFileSync("node", ["--check", "workers/growth-v2-launch.cjs"]),
     ).not.toThrow();
   });
+  it("seeds V2 recurrence on timer activation and upgrades existing units only during protected restoration", () => {
+    const installer = readFileSync("workers/install-growth-v2-systemd.sh", "utf8");
+    const coordinator = readFileSync("workers/coordinate-growth-ai-design-release.py", "utf8");
+    expect(installer).toContain("OnActiveSec=180");
+    expect(installer).toContain("OnUnitInactiveSec=$cadence");
+    expect(installer).not.toContain("OnBootSec=");
+    expect(coordinator).toContain('s.count("OnBootSec=180") == 1');
+    expect(coordinator).toContain('s.replace("OnBootSec=180", "OnActiveSec=180")');
+    expect(coordinator.indexOf('if mode == "recover":')).toBeLessThan(coordinator.indexOf('s.replace("OnBootSec=180"'));
+    expect(coordinator.indexOf('digest_configs() == state["configDigests"]')).toBeLessThan(coordinator.indexOf('s.replace("OnBootSec=180"'));
+  });
   it("pins the actual known release and all four exact additive migrations", () => {
     for (const script of [release, migration])
       expect(script).toContain("a5d93f7e50a87007e046dbac34976b46304b98a9");
