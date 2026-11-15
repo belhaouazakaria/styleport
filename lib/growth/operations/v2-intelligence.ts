@@ -1,3 +1,5 @@
+import { PinterestGlobalBudgetBlocked } from "@/lib/growth/pinterest/global-budget";
+import { RetryableGrowthJobError } from "@/lib/growth/errors";
 import { consumeQueuedPinterestInventory } from "@/lib/growth/pinterest/queued-inventory";
 import { synchronizeGoogleAnalytics } from "@/lib/growth/google/sync";
 import { learnViralNativeOutcomes } from "@/lib/growth/viral/native-learning";
@@ -80,7 +82,33 @@ export async function runGrowthV2Intelligence(
   for (const [name, run] of stages) {
     try {
       outcomes[name] = await run();
-    } catch {
+    } catch (error) {
+      if (
+        (error instanceof PinterestGlobalBudgetBlocked &&
+          ["GLOBAL_QUOTA_EXHAUSTED", "PROVIDER_COOLDOWN"].includes(
+            error.code,
+          )) ||
+        error instanceof RetryableGrowthJobError
+      ) {
+        outcomes[name] = { status: "RETRY_LATER", safeToRetryReads: true };
+        await prisma.growthActivity.create({
+          data: {
+            actorKind: "SYSTEM",
+            entityType: "GrowthV2Stage",
+            entityId: name,
+            action: "GROWTH_V2_STAGE_DEFERRED",
+            summary: {
+              stage: name,
+              reason:
+                error instanceof PinterestGlobalBudgetBlocked
+                  ? error.code
+                  : "TRANSIENT_READ",
+              safeToRetryReads: true,
+            },
+          },
+        });
+        continue;
+      }
       outcomes[name] = { status: "BLOCKED" };
       const dedupeKey =
         "growth-incident:" + name + ":" + now.toISOString().slice(0, 10);

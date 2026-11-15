@@ -1,3 +1,4 @@
+import { hasPinterestMaintenanceCapacity } from "@/lib/growth/pinterest/global-budget";
 import { prisma } from "@/lib/prisma";
 import { runGrowthWorker } from "@/lib/growth/worker";
 import { revokeGrowthWorkerActivation } from "@/lib/growth/settings";
@@ -39,7 +40,8 @@ export async function runAutomaticAnalyticsRecovery(now = new Date()) {
       )
         return null;
       const next = recoveryJobs.find((j) => j.runAfter <= now);
-      if (!next) return null;
+      if (!next || !(await hasPinterestMaintenanceCapacity(tx, now)))
+        return null;
       await tx.growthSettings.update({
         where: { id: "global" },
         data: {

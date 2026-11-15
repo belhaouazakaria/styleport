@@ -9,6 +9,10 @@ const m = vi.hoisted(() => ({
   update: vi.fn(),
   worker: vi.fn(),
   revoke: vi.fn(),
+  capacity: vi.fn(),
+}));
+vi.mock("@/lib/growth/pinterest/global-budget", () => ({
+  hasPinterestMaintenanceCapacity: m.capacity,
 }));
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -55,6 +59,7 @@ function job(overrides: Partial<GrowthJob> = {}) {
 }
 beforeEach(() => {
   vi.clearAllMocks();
+  m.capacity.mockResolvedValue(true);
   m.settings.mockResolvedValue({
     enabled: false,
     attributionEnabled: false,
@@ -80,6 +85,15 @@ beforeEach(() => {
   m.worker.mockResolvedValue({ status: "COMPLETED", succeeded: 1, failed: 0 });
 });
 describe("Existing inventory reads", () => {
+  it("waits for read capacity without claiming or spending a job attempt", async () => {
+    m.capacity.mockResolvedValue(false);
+    expect(await consumeQueuedPinterestInventory(now)).toEqual({
+      status: "NOT_DUE_OR_BUSY",
+    });
+    expect(m.worker).not.toHaveBeenCalled();
+    expect(m.update).not.toHaveBeenCalled();
+    expect(m.revoke).not.toHaveBeenCalled();
+  });
   it("binds exact read type, payload, key, creation minute and inactive lease", () => {
     expect(inventoryReadAccount(job())).toBe(accountId);
     expect(

@@ -1,6 +1,29 @@
+import { hasPinterestMaintenanceCapacity } from "./global-budget";
 import { prisma } from "@/lib/prisma";
 import { syncPinterestBoards } from "./sync";
 import { hasPinterestScopes, PINTEREST_CREATE_PIN_SCOPES } from "./config";
+
+function healthOf(
+  account: {
+    connectionStatus: string;
+    grantedScopes: string[];
+    refreshTokenExpiresAt: Date | null;
+    boards: { id: string }[];
+  },
+  now: Date,
+) {
+  return account.connectionStatus === "DEGRADED"
+    ? "READ_RECOVERY_NEEDED"
+    : account.connectionStatus !== "CONNECTED"
+      ? "AUTHORIZATION_REQUIRED"
+      : !hasPinterestScopes(account.grantedScopes, PINTEREST_CREATE_PIN_SCOPES)
+        ? "MISSING_SCOPES"
+        : account.refreshTokenExpiresAt && account.refreshTokenExpiresAt <= now
+          ? "TOKEN_EXPIRED"
+          : !account.boards.length
+            ? "NO_SYNCHRONIZED_BOARDS"
+            : "READY";
+}
 
 export async function auditPinterestReadiness(
   now = new Date(),
@@ -13,33 +36,34 @@ export async function auditPinterestReadiness(
     take: 3,
   });
   let synchronized = false;
+  let quotaDeferred = false;
   const evidence = [];
   for (const account of accounts) {
-    const health =
-      account.connectionStatus !== "CONNECTED"
-        ? "AUTHORIZATION_REQUIRED"
-        : !hasPinterestScopes(
-              account.grantedScopes,
-              PINTEREST_CREATE_PIN_SCOPES,
-            )
-          ? "MISSING_SCOPES"
-          : account.refreshTokenExpiresAt &&
-              account.refreshTokenExpiresAt <= now
-            ? "TOKEN_EXPIRED"
-            : !account.boards.length
-              ? "NO_SYNCHRONIZED_BOARDS"
-              : "READY";
+    let health = healthOf(account, now);
     if (
       synchronize &&
       !synchronized &&
-      account.connectionStatus === "CONNECTED" &&
+      ["CONNECTED", "DEGRADED"].includes(account.connectionStatus) &&
       account.grantedScopes.includes("boards:read") &&
-      (!account.lastBoardSyncAt ||
+      (account.connectionStatus === "DEGRADED" ||
+        !account.lastBoardSyncAt ||
         account.lastBoardSyncAt.getTime() < now.getTime() - 24 * 3600000)
     ) {
       // Official complete-only inventory synchronization. No board creation.
-      await syncPinterestBoards(account.id);
-      synchronized = true;
+      if (await hasPinterestMaintenanceCapacity(prisma, now)) {
+        await syncPinterestBoards(account.id);
+        synchronized = true;
+        const refreshed = await prisma.growthPinterestAccount.findUniqueOrThrow(
+          {
+            where: { id: account.id },
+            include: {
+              boards: { where: { isActive: true }, select: { id: true } },
+            },
+          },
+        );
+        Object.assign(account, refreshed);
+        health = healthOf(account, now);
+      } else quotaDeferred = true;
     }
     evidence.push({
       accountId: account.id,
@@ -50,5 +74,5 @@ export async function auditPinterestReadiness(
       newBoardsCreated: 0,
     });
   }
-  return { accounts: evidence, synchronized };
+  return { accounts: evidence, synchronized, quotaDeferred };
 }

@@ -23,7 +23,7 @@ describe("persistent Pinterest quota", () => {
     expect(PINTEREST_GLOBAL_HOURLY_CEILING).toBe(4);
     await reservePinterestGlobalAttempt();
     expect(mock.lock).toHaveBeenCalledOnce();
-    expect(mock.count).toHaveBeenCalledTimes(3);
+    expect(mock.count).toHaveBeenCalledTimes(4);
     expect(mock.record).toHaveBeenCalledWith(expect.objectContaining({
       action: "PINTEREST_GLOBAL_API_REQUEST_RESERVED",
     }), expect.anything());
@@ -81,6 +81,14 @@ describe("production network admission", () => {
 });
 
 describe("persistent admission limits", () => {
+  it("keeps five daily attempts available for exact Pin writes without raising global caps", async () => {
+    // Legacy unclassified attempts conservatively count as maintenance.
+    mock.count.mockResolvedValueOnce(0).mockResolvedValueOnce(0).mockResolvedValueOnce(11).mockResolvedValueOnce(0);
+    await expect(reservePinterestGlobalAttempt()).rejects.toMatchObject({ code: "GLOBAL_QUOTA_EXHAUSTED" });
+    mock.count.mockResolvedValueOnce(0).mockResolvedValueOnce(0).mockResolvedValueOnce(11).mockResolvedValueOnce(0);
+    await reservePinterestGlobalAttempt(undefined, "PIN_WRITE");
+    expect(mock.record).toHaveBeenCalledWith(expect.objectContaining({ summary: expect.objectContaining({ requestKind: "PIN_WRITE", maintenanceCeiling: 11, globalDailyCeiling: 16 }) }), expect.anything());
+  });
   it("prevents the fifth hourly attempt", async () => {
     mock.count.mockImplementation(({ where }: { where: { action: string } }) =>
       Promise.resolve(where.action === "PINTEREST_GLOBAL_API_REQUEST_RESERVED" ? 4 : 0));
