@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 import pathlib
+import re
 import stat
 import subprocess
 import sys
@@ -89,7 +90,7 @@ def main():
     assert mode in ["audit", "hold", "restore", "recover"] and len(new) == 40 and all(c in "0123456789abcdef" for c in new) and new != OLD
     assert datetime.now(timezone.utc).hour in [0, 1, 2, 3] + list(range(15, 24))
     source = pathlib.Path(source_arg)
-    assert source.is_absolute() and not source.is_relative_to(APP) and not source.is_symlink()
+    assert source.is_absolute() and source.resolve() == source and source.is_relative_to(pathlib.Path("/root")) and not source.is_relative_to(APP) and not source.is_symlink()
     assert source.stat().st_uid == 0 and stat.S_IMODE(source.stat().st_mode) == 0o700
     assert (source / ".release-sha").read_text().strip() == new
     qualifier = source.parent / "followup-qualification.json"
@@ -102,6 +103,7 @@ def main():
     history = json.loads(run(["runuser", "-u", "postgres", "--", "/usr/lib/postgresql/18/bin/psql", "-p", "5433", "-d", "saytwist", "-X", "-qAt", "-v", "ON_ERROR_STOP=1", "-c", 'SELECT json_agg(json_build_object(\'name\',migration_name,\'checksum\',checksum)) FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL;']))
     assert len(history) == 40
     for row in history:
+        assert re.fullmatch(r"\d{14}_[a-z0-9_]+", row["name"])
         assert hashlib.sha256((source / "prisma/migrations" / row["name"] / "migration.sql").read_bytes()).hexdigest() == row["checksum"]
     listing = run(["/usr/sbin/runuser", "-u", "saytwist", "--", "env", "HOME=/home/saytwist", "PM2_HOME=/home/saytwist/.pm2", "PATH=/home/saytwist/.nvm/versions/node/v24.20.0/bin:/usr/bin:/bin", NODE, PM2, "jlist"])
     db = run([NODE, "-e", "const fs=require('fs');const a=fs.readFileSync(0,'utf8');process.stdout.write(require(process.argv[1]).validatedDatabaseUrl(a));", str(APP / "workers/growth-lease-watchdog-launch.cjs")], input=listing)
