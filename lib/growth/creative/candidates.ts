@@ -1,4 +1,4 @@
-import { GENZ_EDITORIAL_KEY, GENZ_EDITORIAL_VERSION, genzHeadline, genzTypographySchema, resolvePinDesignStyle, mainPinDesignDefault } from "./genz-editorial";
+import { GENZ_EDITORIAL_KEY, GENZ_EDITORIAL_VERSION, genzHeadline, buildGenZHeadline, genzTypographySchema, resolvePinDesignStyle, mainPinDesignDefault } from "./genz-editorial";
 import { loadUprightFont } from "./genz-font";
 import { layoutGenZHeadline } from "./genz-renderer";
 import { generateGenZEditorial } from "./genz-generation";
@@ -568,7 +568,7 @@ export async function enqueueCreativeGeneration(
   );
   if (designStyle === "genz_editorial") {
     const font = await loadUprightFont(); fontChecksum = font.checksum;
-    layoutGenZHeadline(target.displayName ?? target.title, font, { strokeWidthPercent: request.strokeWidthPercent, webpQuality: request.webpQuality });
+    layoutGenZHeadline(buildGenZHeadline(target.displayName ?? target.title), font, { strokeWidthPercent: request.strokeWidthPercent, webpQuality: request.webpQuality });
   }
   if (
     designStyle !== "genz_editorial" && request.archetype === GrowthCreativeArchetype.BEFORE_AFTER &&
@@ -676,7 +676,7 @@ export async function enqueueCreativeRegeneration(input: unknown) {
     const target = await getEligibleCreativeTarget(source.destinationKind, targetId);
     const original = creativeGenerationJobPayloadSchema.safeParse(source.generationJob?.payload);
     const config = genzTypographySchema.parse(original.success ? { strokeWidthPercent: original.data.strokeWidthPercent, webpQuality: original.data.webpQuality } : {});
-    const font = await loadUprightFont(); layoutGenZHeadline(target.displayName ?? target.title, font, config);
+    const font = await loadUprightFont(); layoutGenZHeadline(buildGenZHeadline(target.displayName ?? target.title), font, config);
     const latest = await prisma.growthPinCandidate.findFirst({ where: { rendererKey: GENZ_EDITORIAL_KEY, destinationPath: source.destinationPath, accountId: source.accountId }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], select: { id: true } });
     const nonce = hash({ source: source.id, previous: latest?.id ?? source.id, target: target.sourceFingerprint, font: font.checksum, config }).slice(0, 24);
     const payload: CreativeGenerationJobPayload = { targetKind: source.destinationKind, targetId, accountId: source.accountId, archetype: original.success ? original.data.archetype : GrowthCreativeArchetype.MINIMAL_STATEMENT,
@@ -1197,7 +1197,7 @@ export async function generateCreativeCandidate(
     const font = await loadUprightFont();
     if (payload.fontChecksum && font.checksum !== payload.fontChecksum) throw Error("UPRIGHT_FONT_CHANGED_AFTER_QUEUEING");
     const config = genzTypographySchema.parse({ strokeWidthPercent: payload.strokeWidthPercent, webpQuality: payload.webpQuality });
-    layoutGenZHeadline(target.displayName ?? target.title, font, config);
+    layoutGenZHeadline(buildGenZHeadline(target.displayName ?? target.title), font, config);
     definition = { rendererKey: GENZ_EDITORIAL_KEY, rendererVersion: GENZ_EDITORIAL_VERSION + ":" + font.checksum.slice(0, 12), templateId: "genz_editorial-s" + config.strokeWidthPercent + "-q" + config.webpQuality + (payload.regenerationNonce ? "-r" + payload.regenerationNonce : ""), headlinePattern: "translator-display-name", ctaPattern: "none", visualTreatment: "genz-photography-upright" };
   }
   const creativeContext = await validateCreativeContext(
@@ -1215,7 +1215,7 @@ export async function generateCreativeCandidate(
   );
   if (isGenZ) {
     copy.title = clamp(genzHeadline(target.displayName ?? target.title), 100);
-    copy.headline = clamp(genzHeadline(target.displayName ?? target.title), 90);
+    copy.headline = clamp(buildGenZHeadline(target.displayName ?? target.title), 90);
     copy.description = clamp(target.excerpt.replace(/\u2014/g, " - "), 500);
   }
   const contentHash = hash({
@@ -1646,7 +1646,7 @@ export async function generateCreativeCandidate(
             exampleCompletionTokens: exampleMetadata?.completionTokens ?? null,
             exampleTotalTokens: exampleMetadata?.totalTokens ?? null,
             creativeDirection: payload.creativeDirection || null,
-            ...(isGenZ ? { designStyle: "genz_editorial", fontChecksum: payload.fontChecksum ?? null, strokeWidthPercent: payload.strokeWidthPercent ?? 190, webpQuality: payload.webpQuality ?? 92, webpPublicPath: webpStored?.publicPath ?? null } : {}),
+            ...(isGenZ ? { designStyle: "genz_editorial", fontChecksum: payload.fontChecksum ?? null, strokeWidthPercent: payload.strokeWidthPercent ?? 250, webpQuality: payload.webpQuality ?? 92, webpPublicPath: webpStored?.publicPath ?? null } : {}),
             regenerationOfCandidateId:
               payload.regenerationOfCandidateId || null,
             regenerationReason: payload.regenerationReason || null,

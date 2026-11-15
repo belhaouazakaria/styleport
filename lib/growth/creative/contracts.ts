@@ -26,7 +26,7 @@ const creativeGenerationFields = {
   targetKind: z.nativeEnum(GrowthCreativeDestinationKind),
   targetId: identifier,
   designStyle: z.enum(["genz_editorial", "legacy"]).optional(),
-  strokeWidthPercent: z.number().min(180).max(200).optional(),
+  strokeWidthPercent: z.number().min(180).max(300).optional(),
   webpQuality: z.number().int().min(90).max(95).optional(),
   archetype: z.enum([
     GrowthCreativeArchetype.V1_CONTROL,

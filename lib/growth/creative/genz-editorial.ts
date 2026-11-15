@@ -1,18 +1,18 @@
 import { z } from "zod";
 
 export const GENZ_EDITORIAL_KEY = "genz-editorial";
-export const GENZ_EDITORIAL_VERSION = "genz_editorial_v1";
+export const GENZ_EDITORIAL_VERSION = "genz_editorial_v2";
 export const PIN_DESIGN_STYLES = [
   { id: "genz_editorial", name: "Gen-Z Editorial", description: "Translator-specific AI photography with Upright lettering and bold black outlines", isDefault: true, accountRole: "SAYTWIST" },
   { id: "legacy", name: "Existing AI styles", description: "Existing poster and transformation designs", isDefault: false },
 ] as const;
 export type PinDesignStyle = "genz_editorial" | "legacy";
 export const genzTypographySchema = z.object({
-  strokeWidthPercent: z.number().min(180).max(200).default(190),
+  strokeWidthPercent: z.number().min(180).max(300).default(250),
   webpQuality: z.number().int().min(90).max(95).default(92),
 }).strict();
 export type GenZTypography = z.output<typeof genzTypographySchema>;
-export const GENZ_TYPOGRAPHY = { fontFamily: "Upright", fontWeight: "normal", fillColor: "#FFFFFF", strokeColor: "#000000", strokeWidthPercent: 190, strokeWidthMinPercent: 180, strokeWidthMaxPercent: 200, strokeAlignment: "outside", strokeLinejoin: "round", textAlign: "center" } as const;
+export const GENZ_TYPOGRAPHY = { fontFamily: "Upright", fontWeight: "normal", fillColor: "#FFFFFF", strokeColor: "#000000", strokeWidthPercent: 250, strokeWidthMinPercent: 180, strokeWidthMaxPercent: 300, strokeAlignment: "outside", strokeLinejoin: "round", textAlign: "center" } as const;
 export const GENZ_LAYOUT = { canvasWidth: 1000, canvasHeight: 1500, headlineMaxWidth: 860, headlineRegionStartY: 980, headlineRegionEndY: 1410, horizontalSafeMargin: 70, bottomSafeMargin: 90, lineSpacingMultiplier: 0.92 } as const;
 
 export function mainPinDesignDefault(): PinDesignStyle {
@@ -24,7 +24,7 @@ export function resolvePinDesignStyle(role: string | null | undefined, explicit?
   if (explicit === "genz_editorial" && role !== "SAYTWIST") throw Error("Gen-Z Editorial is available only for the main SayTwist account.");
   return explicit ?? (role === "SAYTWIST" ? mainDefault : "legacy");
 }
-export function effectiveGenZStroke(fontSize: number, percent = 190) {
+export function effectiveGenZStroke(fontSize: number, percent = 250) {
   genzTypographySchema.parse({ strokeWidthPercent: percent });
   return fontSize * 0.03 * percent / 100;
 }
@@ -32,6 +32,10 @@ export function genzHeadline(value: string) {
   const result = value.normalize("NFC").replace(/\u2014/g, " - ").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
   if (!result || [...result].length > 200) throw Error("GENZ_HEADLINE_INVALID");
   return result;
+}
+/** Shared by preflight, layout and cache identity; no extra text-model call. */
+export function buildGenZHeadline(displayName: string) {
+  return genzHeadline("Click to translate your text with " + genzHeadline(displayName));
 }
 export interface GenZIdentity { name: string; description: string; category?: string; purpose?: string; tone?: string }
 function data(value: string | undefined, maximumBytes: number) {

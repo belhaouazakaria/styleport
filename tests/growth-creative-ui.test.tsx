@@ -135,7 +135,7 @@ describe("Main-account Gen-Z Editorial controls", () => {
     render(<CreativeGenerationForm translators={[{ id: "cat", name: "Cat Translator", slug: "cat" }]} ideas={[]} accounts={accounts} experiments={[]} aiImageEnabled uprightReady uprightMessage="Upright Regular verified." />);
     const photo = screen.getByRole("radio", { name: /Gen-Z Editorial/ });
     expect(photo).toBeChecked();
-    expect(screen.getByRole("slider", { name: "Stroke width percentage" })).toHaveValue("190");
+    expect(screen.getByRole("slider", { name: "Stroke width percentage" })).toHaveValue("250");
     await user.selectOptions(screen.getByRole("combobox", { name: "Pinterest account" }), "ideas");
     expect(photo).toBeDisabled(); expect(photo).not.toBeChecked();
     expect(screen.queryByRole("slider", { name: "Stroke width percentage" })).not.toBeInTheDocument();
@@ -147,11 +147,11 @@ describe("Main-account Gen-Z Editorial controls", () => {
   it("queues the selected outline and export quality without approving or publishing", async () => {
     const fetcher = vi.fn(async () => ({ ok: true, json: async () => ({ ok: true }) }) as Response); vi.stubGlobal("fetch", fetcher);
     render(<CreativeGenerationForm translators={[{ id: "cat", name: "Cat Translator", slug: "cat" }]} ideas={[]} accounts={accounts} experiments={[]} aiImageEnabled uprightReady />);
-    fireEvent.change(screen.getByRole("slider", { name: "Stroke width percentage" }), { target: { value: "200" } });
+    fireEvent.change(screen.getByRole("slider", { name: "Stroke width percentage" }), { target: { value: "300" } });
     fireEvent.change(screen.getByRole("spinbutton", { name: /WebP export quality/ }), { target: { value: "95" } });
     fireEvent.click(screen.getByRole("button", { name: "Generate one candidate" }));
     await waitFor(() => expect(fetcher).toHaveBeenCalledOnce());
-    expect(JSON.parse(String(fetcher.mock.calls[0][1]?.body))).toMatchObject({ accountId: "main", designStyle: "genz_editorial", strokeWidthPercent: 200, webpQuality: 95 });
+    expect(JSON.parse(String(fetcher.mock.calls[0][1]?.body))).toMatchObject({ accountId: "main", designStyle: "genz_editorial", strokeWidthPercent: 300, webpQuality: 95 });
     expect(String(fetcher.mock.calls[0][0])).toBe("/api/admin/growth/creative/generate");
   });
   it("does not pretend the exact font is ready when it is unavailable", () => {

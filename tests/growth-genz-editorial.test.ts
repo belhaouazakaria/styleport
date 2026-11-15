@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import sharp from "sharp";
-import { GENZ_TYPOGRAPHY, PIN_DESIGN_STYLES, buildGenZBackgroundPrompt, effectiveGenZStroke, genzTypographySchema, resolvePinDesignStyle } from "@/lib/growth/creative/genz-editorial";
+import { GENZ_TYPOGRAPHY, buildGenZHeadline, PIN_DESIGN_STYLES, buildGenZBackgroundPrompt, effectiveGenZStroke, genzTypographySchema, resolvePinDesignStyle } from "@/lib/growth/creative/genz-editorial";
 import { loadUprightFont } from "@/lib/growth/creative/genz-font";
 import { compositeGenZEditorial, layoutGenZHeadline } from "@/lib/growth/creative/genz-renderer";
 import { generateGenZEditorial } from "@/lib/growth/creative/genz-generation";
@@ -33,17 +33,22 @@ describe("Main account Gen-Z style and dynamic photographic planning", () => {
       expect(Buffer.byteLength(prompt, "utf8")).toBeLessThan(7000);
     }
   });
+  it("creates an invitation while retaining the Translator identity", () => {
+    expect(buildGenZHeadline("Cat Translator")).toBe("Click to translate your text with Cat Translator");
+    expect(buildGenZHeadline("Shakespeare Translator")).toBe("Click to translate your text with Shakespeare Translator");
+    expect(buildGenZHeadline("Cat — Translator")).not.toContain("—");
+  });
   it("bounds quoted metadata while preserving the subject identity", () => {
     const prompt = buildGenZBackgroundPrompt({ name: "Robot Translator", description: "Robotic phrasing ".repeat(1000), purpose: "Mechanical expression ".repeat(1000) });
     expect(Buffer.byteLength(prompt)).toBeLessThan(7000);
     expect(prompt).toContain("untrusted quoted JSON");
     expect(Buffer.byteLength(buildGenZBackgroundPrompt({ name: "Robot Translator", description: "你好🌍".repeat(1000), purpose: "你好🌍".repeat(1000) }))).toBeLessThan(7000);
   });
-  it("validates the 190% baseline conversion and quality settings", () => {
+  it("validates the 250% baseline conversion and quality settings", () => {
     expect(GENZ_TYPOGRAPHY.fillColor).toBe("#FFFFFF"); expect(GENZ_TYPOGRAPHY.strokeColor).toBe("#000000");
-    expect(genzTypographySchema.parse({})).toEqual({ strokeWidthPercent: 190, webpQuality: 92 });
-    expect(effectiveGenZStroke(160)).toBeCloseTo(9.12);
-    for (const n of [179, 201]) expect(() => genzTypographySchema.parse({ strokeWidthPercent: n })).toThrow();
+    expect(genzTypographySchema.parse({})).toEqual({ strokeWidthPercent: 250, webpQuality: 92 });
+    expect(effectiveGenZStroke(160)).toBeCloseTo(12);
+    for (const n of [179, 301]) expect(() => genzTypographySchema.parse({ strokeWidthPercent: n })).toThrow();
     for (const n of [89, 96]) expect(() => genzTypographySchema.parse({ webpQuality: n })).toThrow();
     expect(creativeGenerationJobPayloadSchema.safeParse({ targetKind: "TRANSLATOR", targetId: "cat", creativeModelVersion: "creative_lab_v1" }).success).toBe(false);
     expect(creativeGenerationRequestSchema.parse({ targetKind: "TRANSLATOR", targetId: "cat", creativeModelVersion: "creative_lab_v1", designStyle: "genz_editorial" })).toMatchObject({ archetype: "MINIMAL_STATEMENT" });
@@ -70,9 +75,10 @@ describe.skipIf(!existsSync(fontPath))("Actual Upright glyph geometry and output
   });
   it.each(["Cat Translator", "Shakespearean English Translator for Everyday Messages", "The Unnecessarily Dramatic Medieval English Translator for Entirely Ordinary Conversations", "Café Translator"])("wraps %s with all words and stroke inside safe margins", async title => {
     const font = await loadUprightFont({ forPreview: true });
-    for (const strokeWidthPercent of [180, 190, 200]) {
-      const layout = layoutGenZHeadline(title, font, { strokeWidthPercent });
-      expect(layout.lines.join(" ")).toBe(title);
+    for (const strokeWidthPercent of [180, 190, 250, 300]) {
+      const headline = buildGenZHeadline(title);
+      const layout = layoutGenZHeadline(headline, font, { strokeWidthPercent });
+      expect(layout.lines.join(" ")).toBe(headline);
       expect(layout.lines.length).toBeLessThanOrEqual(4);
       expect(layout.bounds.left).toBeGreaterThanOrEqual(70); expect(layout.bounds.right).toBeLessThanOrEqual(930);
       expect(layout.bounds.top).toBeGreaterThanOrEqual(700); expect(layout.bounds.bottom).toBeLessThanOrEqual(1410);
