@@ -71,11 +71,11 @@ async function sendMarketResearchAlert({
   return "SUBMITTED";
 }
 if (require.main === module) {
-  sendDailyAccountAnalyticsAlert().then(result => {
+  sendMarketResearchAlert().then(result => {
     process.stdout.write("MARKET_RESEARCH_ALERT=" + result + "\n");
   }).catch(() => {
     process.stderr.write("MARKET_RESEARCH_ALERT=ERROR\n");
     process.exitCode = 1;
   });
 }
-module.exports = { sendDailyAccountAnalyticsAlert };
+module.exports = { sendMarketResearchAlert };

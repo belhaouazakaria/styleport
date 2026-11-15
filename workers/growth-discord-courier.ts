@@ -24,7 +24,21 @@ export async function runGrowthDiscordCourier() {
   await expireGrowthReviews();
   if (process.env.GROWTH_AUTOMATIC_REVIEW_PREPARATION_ENABLED === "true")
     await preparePendingOwnerReviews(config.ownerUserId);
-  return runDiscordOutbox(config);
+  const result = await runDiscordOutbox(config);
+  // Decisions and independent deliveries are already processed. Surface real
+  // unresolved transport incidents to systemd's independent alert channel.
+  const incidents = await prisma.growthNotification.count({
+    where: {
+      status: { in: ["UNKNOWN", "DEAD"] },
+      attemptedAt: { gte: new Date(Date.now() - 24 * 3600000) },
+      OR: [
+        { lastErrorCode: null },
+        { lastErrorCode: { not: "REVIEW_CLOSED_BEFORE_DELIVERY" } },
+      ],
+    },
+  });
+  if (incidents) throw Error("DISCORD_DELIVERY_REQUIRES_RECONCILIATION");
+  return result;
 }
 if (process.env.GROWTH_DISCORD_COURIER_ENTRYPOINT === "true") {
   runGrowthDiscordCourier()
