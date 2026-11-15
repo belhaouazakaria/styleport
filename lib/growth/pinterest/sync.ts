@@ -1,3 +1,5 @@
+import { PinterestGlobalBudgetBlocked } from "@/lib/growth/pinterest/global-budget";
+import { RetryableGrowthJobError } from "@/lib/growth/errors";
 
 import { GrowthActivityActorKind, GrowthPinterestConnectionStatus } from "@prisma/client";
 
@@ -104,8 +106,9 @@ export async function syncPinterestBoards(
 
 async function recordSyncFailure(accountId: string, action: string, error: unknown) {
   const safeError = toSafeGrowthError(error);
+  const deferred = error instanceof PinterestGlobalBudgetBlocked || error instanceof RetryableGrowthJobError;
   await prisma.$transaction(async (tx) => {
-    if (!(error instanceof PinterestConfigurationError)) {
+    if (!deferred && !(error instanceof PinterestConfigurationError)) {
       await tx.growthPinterestAccount.updateMany({ where: {
         id: accountId,
         connectionStatus: { notIn: [GrowthPinterestConnectionStatus.DISCONNECTED, GrowthPinterestConnectionStatus.REAUTH_REQUIRED] },
@@ -114,7 +117,7 @@ async function recordSyncFailure(accountId: string, action: string, error: unkno
       } });
     }
     await recordGrowthActivity({ actorKind: GrowthActivityActorKind.WORKER,
-      entityType: "GrowthPinterestAccount", entityId: accountId, action,
+      entityType: "GrowthPinterestAccount", entityId: accountId, action: deferred ? action.replace("_FAILED", "_DEFERRED") : action,
       summary: { error: safeError },
     }, tx);
   });

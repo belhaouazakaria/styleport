@@ -1,3 +1,4 @@
+import { hasPinterestMaintenanceCapacity } from "@/lib/growth/pinterest/global-budget";
 import { missingPinterestScopes } from "@/lib/growth/pinterest/config";
 import { GrowthJob, GrowthJobStatus, GrowthJobType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -129,7 +130,8 @@ export async function consumeQueuedPinterestInventory(now = new Date()) {
       )
         return null;
       const next = jobs.find((j) => j.runAfter <= now);
-      if (!next) return null;
+      if (!next || !(await hasPinterestMaintenanceCapacity(tx, now)))
+        return null;
       await tx.growthSettings.update({
         where: { id: "global" },
         data: {

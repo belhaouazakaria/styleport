@@ -1,3 +1,4 @@
+import { reservePinterestGlobalAttempt } from "@/lib/growth/pinterest/global-budget";
 import {
   readFreshCreativeTargets,
   bindNativeCampaignJob,
@@ -315,6 +316,39 @@ suite("Unified owner consent with PostgreSQL 18", () => {
       vi.unstubAllGlobals();
       process.env.PINTEREST_API_ENVIRONMENT = environment;
     }
+  });
+  it("protects five daily Pin attempts from background maintenance while keeping the four/hour cap", async () => {
+    const where = {
+      entityType: "GrowthPinterestProviderBudget",
+      entityId: "production-global",
+      action: "PINTEREST_GLOBAL_API_REQUEST_RESERVED",
+    };
+    expect(await prisma.growthActivity.count({ where })).toBe(0);
+    await prisma.growthActivity.createMany({
+      data: Array.from({ length: 11 }, () => ({
+        ...where,
+        actorKind: "SYSTEM" as const,
+        createdAt: new Date(Date.now() - 2 * 3600000),
+        summary: {},
+      })),
+    });
+    await expect(
+      reservePinterestGlobalAttempt(prisma, "OTHER"),
+    ).rejects.toMatchObject({ code: "GLOBAL_QUOTA_EXHAUSTED" });
+    for (let i = 0; i < 4; i++)
+      await reservePinterestGlobalAttempt(prisma, "PIN_WRITE");
+    await expect(
+      reservePinterestGlobalAttempt(prisma, "PIN_WRITE"),
+    ).rejects.toMatchObject({ code: "GLOBAL_QUOTA_EXHAUSTED" });
+    expect(await prisma.growthActivity.count({ where })).toBe(15);
+    expect(
+      await prisma.growthActivity.count({
+        where: {
+          ...where,
+          summary: { path: ["requestKind"], equals: "PIN_WRITE" },
+        },
+      }),
+    ).toBe(4);
   });
   it("promotes only the exact due read retry without resetting attempts or touching Pin retries", async () => {
     const data = {
