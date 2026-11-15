@@ -236,6 +236,11 @@ async function createOneSource() {
   }
 }
 
+export function isFreshCapacityLimit(error: unknown) {
+  return error instanceof GrowthBudgetBlockedError &&
+    ["IMAGE_DAILY_LIMIT", "DAILY_LIMIT", "MONTHLY_LIMIT"].includes(error.reason);
+}
+
 export async function executeDailyFreshCreativeCycle(day: string, mode: string) {
   const { planned, targets, accountId } = await buildBatch(day);
   const selectedTargets = selectDailyFreshTargetsForMode(targets, mode);
@@ -256,7 +261,7 @@ export async function executeDailyFreshCreativeCycle(day: string, mode: string) 
     }
   } catch (error) {
     await requireIdle();
-    if (!(error instanceof GrowthBudgetBlockedError)) throw error;
+    if (!isFreshCapacityLimit(error)) throw error;
     return { status: created ? "PASSED" as const : "PAUSED" as const, created, aiCalls: created, pinsPublished: 0 };
   }
   await requireIdle();
