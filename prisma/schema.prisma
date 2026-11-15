@@ -1036,6 +1036,7 @@ model GrowthViralConcept {
 /// One immutable Pin destination per experiment. A new SayTwist variant is a
 /// separate Pin test rather than an edit to a third-party destination.
 model GrowthViralPinTest {
+  designGenerationKind String? @db.VarChar(24)
   id                    String                         @id @default(cuid())
   conceptId             String
   channel               String                         @db.VarChar(10)
@@ -2286,6 +2287,7 @@ model GrowthNotification {
   providerMessageId String?
   providerChannelId String?
   lastErrorCode    String?  @db.VarChar(64)
+  reviewCardVersion Int @default(0)
   finalizedAt      DateTime?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
@@ -2300,6 +2302,7 @@ model GrowthDiscordInteraction {
   id          String   @id @db.VarChar(24)
   requestId   String
   action      String   @db.VarChar(16)
+  selectionValue String? @db.VarChar(100)
   receivedAt  DateTime @default(now())
   processedAt DateTime?
   request     GrowthApprovalRequest @relation(fields: [requestId], references: [id], onDelete: Restrict)

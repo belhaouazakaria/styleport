@@ -50,7 +50,8 @@ const interactionSchema = z.object({
   channel: z.object({ type: z.literal(1) }),
   message: z.object({ id: z.string().regex(discordSnowflake) }),
   data: z.object({
-    component_type: z.literal(2),
+    component_type: z.union([z.literal(2), z.literal(3)]),
+    values: z.array(z.string().min(1).max(100)).length(1).optional(),
     custom_id: z.string().max(100),
   }),
 });
@@ -70,10 +71,18 @@ export async function receiveDiscordDecision(
     i.user.id !== config.ownerDiscordId
   )
     return false;
-  const match = /^growth:([a-z0-9]{20,35}):(APPROVE|REJECT)$/.exec(
-    i.data.custom_id,
-  );
+  const match =
+    /^growth:([a-z0-9]{20,35}):(APPROVE|REJECT|PLAN_ACCOUNT|PLAN_BOARD|PLAN_SITE)$/.exec(
+      i.data.custom_id,
+    );
   if (!match) return false;
+  const selection = match[2].startsWith("PLAN_");
+  if (
+    selection
+      ? i.data.component_type !== 3 || !i.data.values
+      : i.data.component_type !== 2 || i.data.values !== undefined
+  )
+    return false;
   const notification = await prisma.growthNotification.findFirst({
     where: {
       requestId: match[1],
@@ -91,6 +100,7 @@ export async function receiveDiscordDecision(
         id: i.id,
         requestId: notification.requestId,
         action: match[2],
+        selectionValue: selection ? i.data.values![0] : null,
         receivedAt: now,
       },
     });

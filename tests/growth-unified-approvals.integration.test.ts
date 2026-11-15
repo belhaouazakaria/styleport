@@ -1,3 +1,5 @@
+import { readReviewChoices, replaceReviewPlan } from "@/lib/growth/approvals/choices";
+import { discordReviewCard } from "@/lib/growth/discord/outbox";
 import { reservePinterestGlobalAttempt } from "@/lib/growth/pinterest/global-budget";
 import { executeDailyObservation } from "@/workers/growth-daily-observe";
 import { readDailyRotation } from "@/lib/growth/portfolio/daily-rotation-store";
@@ -1207,4 +1209,61 @@ suite("Unified owner consent with PostgreSQL 18", () => {
       }),
     ).toBe(0);
   });
+  it("durably accepts single-value private selects and rejects forged component types", async () => {
+    const { review, notification } = await fixture();
+    await prisma.growthNotification.update({ where: { id: notification.id }, data: {
+      status: "SENT", providerChannelId: "32345678901234567", providerMessageId: "42345678901234567",
+    } });
+    const body = { id: "82345678901234567", application_id: config.applicationId, type: 3,
+      user: { id: config.ownerDiscordId }, channel_id: "32345678901234567", channel: { type: 1 },
+      message: { id: "42345678901234567" }, data: { component_type: 3, custom_id: "growth:" + review.id + ":PLAN_SITE", values: ["saytwist.com"] } };
+    expect(await receiveDiscordDecision(body, config)).toBe(true);
+    expect(await receiveDiscordDecision(body, config)).toBe(true);
+    expect(await prisma.growthDiscordInteraction.count({ where: { id: body.id } })).toBe(1);
+    expect((await prisma.growthDiscordInteraction.findUniqueOrThrow({ where: { id: body.id } })).selectionValue).toBe("saytwist.com");
+    expect(await receiveDiscordDecision({ ...body, data: { ...body.data, component_type: 2 } }, config)).toBe(false);
+    expect(await receiveDiscordDecision({ ...body, data: { ...body.data, values: ["saytwist.com", "evil.test"] } }, config)).toBe(false);
+    expect(await receiveDiscordDecision({ ...body, user: { id: "92345678901234567" } }, config)).toBe(false);
+    await prisma.growthDiscordInteraction.update({ where: { id: body.id }, data: { processedAt: new Date() } });
+  });
+  it("replaces a native website plan atomically without approval or extending expiry", async () => {
+    const { review, candidate } = await fixture();
+    const replacement = await replaceReviewPlan({ requestId: review.id, action: "PLAN_SITE", value: "translator.whattypeof.com" }, config.ownerUserId);
+    expect(replacement.id).not.toBe(review.id);
+    expect(replacement.status).toBe("PENDING");
+    expect(replacement.expiresAt.getTime()).toBeLessThanOrEqual(review.expiresAt.getTime());
+    expect(replacement.snapshot).toMatchObject({ destinationDomain: "translator.whattypeof.com" });
+    expect((await prisma.growthApprovalRequest.findUniqueOrThrow({ where: { id: review.id } })).snapshot).toEqual(review.snapshot);
+    expect((await prisma.growthApprovalRequest.findUniqueOrThrow({ where: { id: review.id } })).status).toBe("STALE");
+    expect(await prisma.growthPinApproval.count({ where: { candidateId: candidate.id } })).toBe(0);
+    expect(await decideGrowthReview({ requestId: review.id, action: "APPROVE", snapshotChecksum: review.snapshotChecksum }, config.ownerUserId, "DISCORD")).toMatchObject({ status: "STALE" });
+    expect((await replaceReviewPlan({ requestId: review.id, action: "PLAN_SITE", value: "saytwist.com" }, config.ownerUserId)).id).toBe(review.id);
+    await expect(replaceReviewPlan({ requestId: replacement.id, action: "PLAN_SITE", value: "evil.test" }, config.ownerUserId)).rejects.toThrow("CHOICE_UNAVAILABLE");
+    const choices = await readReviewChoices(replacement);
+    const card = discordReviewCard(replacement, undefined, choices);
+    expect(JSON.stringify(card)).toContain("PLAN_SITE");
+    expect(JSON.stringify(card)).toContain("translator.whattypeof.com");
+  });
+
+  it("offers only active boards on the chosen production account and binds the candidate revision", async () => {
+    const { review, candidate } = await fixture();
+    const targetAccount = await prisma.growthPinterestAccount.findFirstOrThrow({ where: { apiEnvironment: "PRODUCTION", activeRole: "SAYTWIST_IDEAS" } });
+    await prisma.growthPinterestAccount.update({ where: { id: targetAccount.id }, data: { grantedScopes: ["pins:read", "pins:write", "boards:read", "boards:write"] } });
+    await prisma.growthPinterestBoard.create({ data: { accountId: targetAccount.id, pinterestBoardId: "choice-board", name: "Choice Board", isActive: true, lastSeenAt: now, lastSyncedAt: now } });
+    const choices = await readReviewChoices(review);
+    expect(choices.accounts.length).toBeGreaterThan(0);
+    const account = choices.accounts[0];
+    const replacement = await replaceReviewPlan({ requestId: review.id, action: "PLAN_ACCOUNT", value: account.value }, config.ownerUserId);
+    const snapshot = replacement.snapshot as { accountId: string; boardId: string; revision: number };
+    const changed = await prisma.growthPinCandidate.findUniqueOrThrow({ where: { id: candidate.id } });
+    expect(changed.accountId).toBe(account.value);
+    expect(changed.boardId).toBe(snapshot.boardId);
+    expect(changed.revision).toBe(candidate.revision + 1);
+    expect(snapshot.revision).toBe(changed.revision);
+    const available = await readReviewChoices(replacement);
+    expect(available.boards.some(b => b.value === snapshot.boardId)).toBe(true);
+    await expect(replaceReviewPlan({ requestId: replacement.id, action: "PLAN_BOARD", value: "unknown-board" }, config.ownerUserId)).rejects.toThrow("CHOICE_UNAVAILABLE");
+    expect(await prisma.growthPinPublication.count({ where: { candidateId: candidate.id } })).toBe(0);
+  });
+
 });

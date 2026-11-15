@@ -1113,11 +1113,12 @@ export async function generateCreativeCandidate(
       "Before-and-after creatives require a Translator destination.",
     );
   const baseDefinition: CreativeDefinition =
-    payload.archetype === GrowthCreativeArchetype.SCENE_BASED
+    (payload.archetype === GrowthCreativeArchetype.SCENE_BASED ||
+      (process.env.NODE_ENV === "production" && !(payload.archetype === GrowthCreativeArchetype.BEFORE_AFTER && payload.creativeDirection)))
       ? {
           rendererKey: "ai-scene",
           rendererVersion: CREATIVE_LAB_VERSION,
-          templateId: "scene-based-v1",
+          templateId: "ai-topic-spotlight-v1",
           headlinePattern: "scene-topic-promise",
           ctaPattern: "destination-action",
           visualTreatment: "generated-scene",
@@ -1180,7 +1181,7 @@ export async function generateCreativeCandidate(
   };
   const [preexistingExactContent, history] = await Promise.all([
     prisma.growthPinCandidate.findFirst({
-      where: { contentHash },
+      where: { contentHash, ...(process.env.NODE_ENV === "production" ? { asset: { generationKind: GrowthAssetGenerationKind.AI } } : {}) },
       orderBy: { createdAt: "desc" },
       include: { asset: true },
     }),
@@ -1217,7 +1218,8 @@ export async function generateCreativeCandidate(
   } | null = null;
   if (
     !preexistingExactContent &&
-    payload.archetype === GrowthCreativeArchetype.V1_CONTROL
+    payload.archetype === GrowthCreativeArchetype.V1_CONTROL &&
+    process.env.NODE_ENV !== "production"
   ) {
     const control = await ensureTranslatorShareImageById(target.id, {
       throwOnError: true,
@@ -1323,17 +1325,21 @@ export async function generateCreativeCandidate(
     generationKind = GrowthAssetGenerationKind.AI;
   } else if (
     !preexistingExactContent &&
-    payload.archetype === GrowthCreativeArchetype.SCENE_BASED
+    (payload.archetype === GrowthCreativeArchetype.SCENE_BASED || process.env.NODE_ENV === "production")
   ) {
     const enabled =
       options.aiEnabled ?? process.env.GROWTH_AI_IMAGE_ENABLED === "true";
-    if (!enabled || !options.aiProvider)
+    if (!enabled)
       throw new NonRetryableGrowthJobError(
         "Creative AI image generation is disabled.",
       );
     const budget = createCreativeAiImageBudget(1);
     budget.consume();
-    const generated = await options.aiProvider.generate({
+    const settings = await prisma.growthSettings.findUnique({ where: { id: GROWTH_SETTINGS_ID }, select: { enabled: true } });
+    if (!settings?.enabled) throw new NonRetryableGrowthJobError("Growth is disabled before AI design generation.");
+    const imageProvider = options.aiProvider || new OpenAICreativeImageProvider(jobId || "");
+    const generated = await imageProvider.generate({
+      mode: "TOPIC_SPOTLIGHT",
       topic: copy.topic,
       direction: "BOLD_POSTER",
       brandName: "SayTwist",
@@ -1425,6 +1431,7 @@ export async function generateCreativeCandidate(
         tx.growthPinCandidate.findFirst({
           where: {
             contentHash,
+            ...(process.env.NODE_ENV === "production" ? { asset: { generationKind: GrowthAssetGenerationKind.AI } } : {}),
             candidateKey: groupKey,
             accountId: payload.accountId || null,
           },
@@ -1432,12 +1439,12 @@ export async function generateCreativeCandidate(
           include: { asset: true },
         }),
         tx.growthPinCandidate.findFirst({
-          where: { contentHash },
+          where: { contentHash, ...(process.env.NODE_ENV === "production" ? { asset: { generationKind: GrowthAssetGenerationKind.AI } } : {}) },
           orderBy: { createdAt: "desc" },
           include: { asset: true },
         }),
         tx.growthAsset.findFirst({
-          where: { checksum: visualChecksum },
+          where: { checksum: visualChecksum, ...(process.env.NODE_ENV === "production" ? { generationKind: GrowthAssetGenerationKind.AI } : {}) },
           orderBy: { createdAt: "desc" },
           include: { candidates: { orderBy: { createdAt: "desc" }, take: 1 } },
         }),

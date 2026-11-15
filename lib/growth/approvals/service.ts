@@ -35,6 +35,7 @@ export async function createNativePinReview(
   ]);
   if (
     candidate.status !== "READY" ||
+    (process.env.NODE_ENV === "production" && candidate.asset.generationKind !== "AI") ||
     candidate.asset.state !== "READY" ||
     candidate.asset.mimeType !== "image/png" ||
     candidate.asset.width !== 1000 ||
@@ -103,6 +104,7 @@ export async function createSourcePinReview(
   ]);
   if (
     draft.status !== "PLANNED" ||
+    (process.env.NODE_ENV === "production" && draft.designGenerationKind !== "AI") ||
     draft.channel !== "SOURCE" ||
     !draft.rightsVerified ||
     !draft.title ||
@@ -281,6 +283,7 @@ export async function decideGrowthReview(
           if (
             !c ||
             c.status !== "READY" ||
+            (process.env.NODE_ENV === "production" && c.asset.generationKind !== "AI") ||
             c.revision !== s.revision ||
             c.contentHash !== s.contentHash ||
             c.asset.checksum !== s.assetChecksum ||
@@ -332,6 +335,7 @@ export async function decideGrowthReview(
           if (
             !d ||
             d.status !== "PLANNED" ||
+            (process.env.NODE_ENV === "production" && d.designGenerationKind !== "AI") ||
             d.assetChecksum !== s.assetChecksum ||
             d.destinationUrl !== s.destinationUrl ||
             d.title !== s.title ||
@@ -451,7 +455,7 @@ export async function preparePendingOwnerReviews(
       take: 30,
     }),
     prisma.growthViralPinTest.findMany({
-      where: { channel: "SOURCE", status: "PLANNED", rightsVerified: true },
+      where: { channel: "SOURCE", status: "PLANNED", rightsVerified: true, ...(process.env.NODE_ENV === "production" ? { designGenerationKind: "AI" } : {}) },
       select: { id: true },
       orderBy: { createdAt: "asc" },
       take: 30,

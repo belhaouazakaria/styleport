@@ -1,3 +1,9 @@
+import { retirePendingTemplateReviews } from "@/lib/growth/approvals/ai-design-policy";
+import {
+  readReviewChoices,
+  replaceReviewPlan,
+  type ReviewChoices,
+} from "@/lib/growth/approvals/choices";
 import { prisma } from "@/lib/prisma";
 import {
   decideGrowthReview,
@@ -17,6 +23,7 @@ export function discordReviewCard(
     pinId: string | null;
     errorCode: string | null;
   },
+  choices?: ReviewChoices,
 ) {
   const operation = budgetChangeSchema.safeParse(review.snapshot);
   if (operation.success) {
@@ -114,7 +121,7 @@ export function discordReviewCard(
           {
             name: "On approval",
             value:
-              "Schedule this exact Pin. Publication revalidates your approved snapshot. No other Pin is authorized.",
+              "Schedule this exact Pin. Changing a selector sends a new review; approve the latest complete plan. Publication revalidates your approved snapshot.",
           },
         ],
         footer: {
@@ -126,6 +133,44 @@ export function discordReviewCard(
       },
     ],
     components: [
+      ...(pending && choices
+        ? (
+            [
+              [
+                "PLAN_ACCOUNT",
+                "Pinterest account",
+                choices.accounts,
+                s.accountId,
+              ],
+              ["PLAN_BOARD", "Pinterest board", choices.boards, s.boardId],
+              [
+                "PLAN_SITE",
+                "Destination website",
+                choices.sites,
+                s.destinationDomain ?? "SOURCE_ORIGINAL",
+              ],
+            ] as const
+          )
+            .filter(([, , options]) => options.length > 0)
+            .map(([action, placeholder, options, selected]) => ({
+              type: 1,
+              components: [
+                {
+                  type: 3,
+                  custom_id: "growth:" + review.id + ":" + action,
+                  placeholder,
+                  min_values: 1,
+                  max_values: 1,
+                  disabled: options.length === 1,
+                  options: options.map((option) => ({
+                    ...option,
+                    label: option.label.slice(0, 100),
+                    default: option.value === selected,
+                  })),
+                },
+              ],
+            }))
+        : []),
       {
         type: 1,
         components: [
@@ -169,16 +214,27 @@ export async function processDiscordDecisions(
   for (const receipt of receipts) {
     if (receipt.request.ownerUserId !== config.ownerUserId) continue;
     try {
-      await decideGrowthReview(
-        {
-          requestId: receipt.requestId,
-          action: receipt.action as "APPROVE" | "REJECT",
-          snapshotChecksum: receipt.request.snapshotChecksum,
-        },
-        config.ownerUserId,
-        "DISCORD",
-        now,
-      );
+      if (receipt.action.startsWith("PLAN_") && receipt.selectionValue) {
+        await replaceReviewPlan(
+          {
+            requestId: receipt.requestId,
+            action: receipt.action,
+            value: receipt.selectionValue,
+          },
+          config.ownerUserId,
+          now,
+        );
+      } else
+        await decideGrowthReview(
+          {
+            requestId: receipt.requestId,
+            action: receipt.action as "APPROVE" | "REJECT",
+            snapshotChecksum: receipt.request.snapshotChecksum,
+          },
+          config.ownerUserId,
+          "DISCORD",
+          now,
+        );
       await prisma.growthDiscordInteraction.update({
         where: { id: receipt.id },
         data: { processedAt: now },
@@ -216,6 +272,7 @@ export async function runDiscordOutbox(
   fetcher: typeof fetch = fetch,
   now = new Date(),
 ) {
+  await retirePendingTemplateReviews(now);
   await expireGrowthReviews(now);
   const processed = await processDiscordDecisions(config, now);
   await prisma.growthNotification.updateMany({
@@ -273,7 +330,13 @@ export async function runDiscordOutbox(
       )
         throw new DiscordTransportError("REJECTED");
       const payload = row.request
-        ? discordReviewCard(row.request)
+        ? discordReviewCard(
+            row.request,
+            undefined,
+            row.request.kind === "PROTECTED_OPERATION"
+              ? undefined
+              : await readReviewChoices(row.request),
+          )
         : row.payload;
       dispatchingMessage = true;
       const message = await discordRequest(
@@ -294,6 +357,7 @@ export async function runDiscordOutbox(
         where: { id: row.id },
         data: {
           status: "SENT",
+          reviewCardVersion: 1,
           providerMessageId: message.id,
           providerChannelId: dm.id,
           lastErrorCode: null,
@@ -322,6 +386,54 @@ export async function runDiscordOutbox(
             now.getTime() +
               Math.max(error.retryAfterMs, 1000 * 2 ** (row.attempts + 1)),
           ),
+        },
+      });
+    }
+  }
+  // Upgrade already-delivered pending cards through an idempotent PATCH.
+  const outdated = await prisma.growthNotification.findMany({
+    where: {
+      status: "SENT",
+      reviewCardVersion: 0,
+      nextAttemptAt: { lte: now },
+      request: {
+        status: "PENDING",
+        kind: { in: ["NATIVE_PIN", "SOURCE_PIN"] },
+        ownerUserId: config.ownerUserId,
+      },
+    },
+    include: { request: true },
+    take: 10,
+    orderBy: { createdAt: "asc" },
+  });
+  for (const row of outdated) {
+    if (!row.request || !row.providerChannelId || !row.providerMessageId)
+      continue;
+    try {
+      await discordRequest(
+        "/channels/" +
+          row.providerChannelId +
+          "/messages/" +
+          row.providerMessageId,
+        "PATCH",
+        discordReviewCard(
+          row.request,
+          undefined,
+          await readReviewChoices(row.request),
+        ),
+        config,
+        fetcher,
+      );
+      await prisma.growthNotification.update({
+        where: { id: row.id },
+        data: { reviewCardVersion: 1, lastErrorCode: null },
+      });
+    } catch {
+      await prisma.growthNotification.update({
+        where: { id: row.id },
+        data: {
+          lastErrorCode: "CARD_REFRESH_PENDING",
+          nextAttemptAt: new Date(now.getTime() + 60_000),
         },
       });
     }

@@ -40,7 +40,9 @@ export async function prepareOriginalSourcePinDraft(conceptId: string, userId: s
   const rating = rateSourceTranslator(concept.title, concept.sourceUrl);
   if (rating.decision === "WITHDRAW") throw Error("SOURCE_DRAFT_QUALITY_WITHDRAWN");
 
-  const creative = await createOriginalSourceAsset(concept.title, concept.sourceUrl);
+  const rotation = await readDailyRotation(new Date());
+  if (!rotation.accountId || !rotation.publicationRole) throw Error("SOURCE_AI_ACCOUNT_NOT_QUALIFIED");
+  const creative = await createOriginalSourceAsset(concept.title, concept.sourceUrl, "source-" + concept.id, rotation.publicationRole);
   try {
     const draft = await prisma.$transaction(async tx => {
       await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext('growth-viral-source-draft-v1'))`);
@@ -56,7 +58,7 @@ export async function prepareOriginalSourcePinDraft(conceptId: string, userId: s
       }
       const record = await tx.growthViralPinTest.create({
         data: {
-          conceptId, channel: "SOURCE", status: "PLANNED",
+          conceptId, channel: "SOURCE", status: "PLANNED", designGenerationKind: "AI",
           destinationUrl: concept.sourceUrl, title: creative.title,
           description: creative.description, assetChecksum: creative.checksum,
           assetPublicPath: creative.publicPath, rightsVerified: true,
@@ -72,6 +74,7 @@ export async function prepareOriginalSourcePinDraft(conceptId: string, userId: s
           summary: {
             assetChecksum: creative.checksum, sourceDomain: "anythingtranslate.com",
             sourceImageUsed: false, copiedThirdPartyDescription: false,
+            designGeneration: "AI", aiProvider: "OPENAI", aiModel: "gpt-image-2", aiCalls: 1,
             pinPublished: false, ownerApprovalRequired: true,
             rating: { score: rating.score, decision: rating.decision,
               version: SOURCE_RATING_VERSION },
@@ -156,6 +159,7 @@ export async function approveOriginalSourcePin(
       throw Error("SOURCE_APPROVAL_GLOBAL_OFF_REQUIRED");
     }
     if (!draft || draft.status !== "PLANNED" || draft.channel !== "SOURCE" ||
+        (process.env.NODE_ENV === "production" && draft.designGenerationKind !== "AI") ||
         !draft.rightsVerified || !draft.assetChecksum || !draft.assetPublicPath ||
         !draft.title || !draft.description ||
         canonicalSourceTranslatorUrl(draft.destinationUrl) !== draft.concept.sourceUrl) {

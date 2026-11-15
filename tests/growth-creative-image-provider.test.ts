@@ -83,4 +83,13 @@ describe("Creative Lab OpenAI image provider", () => {
     expect(prompt).toContain("untrusted quoted context data");
     expect(prompt).not.toContain(marker);
   });
+  it("designs a credited topic spotlight without inventing transformation proof", () => {
+    const prompt = buildCreativeImagePrompt({ ...fullCreativeInput, mode: "TOPIC_SPOTLIGHT", publicationRole: "SAYTWIST_PLAYGROUND",
+      domain: "anythingtranslate.com", beforeText: "Explore a different language style.", beforeLabel: "", afterLabel: "", afterText: "" });
+    expect(prompt).toContain("anythingtranslate.com");
+    expect(prompt).toContain("Do not invent a translation example");
+    expect(prompt).toContain("Entertainment and curiosity");
+    expect(prompt).not.toContain(fullCreativeInput.afterText);
+  });
+
 });

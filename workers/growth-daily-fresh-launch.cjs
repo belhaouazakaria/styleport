@@ -86,7 +86,7 @@ function run() {
     "node_modules/tsx/dist/cli.mjs",
     "workers/growth-daily-fresh-creatives.ts",
   ], {
-    cwd: APP, encoding: "utf8", timeout: 810_000, maxBuffer: 4096,
+    cwd: APP, encoding: "utf8", timeout: 1_080_000, maxBuffer: 4096,
     env: {
       NODE_ENV: "production", HOME: "/home/saytwist",
       PATH: NODEDIR + ":/usr/local/bin:/usr/bin:/bin",
@@ -114,7 +114,7 @@ function run() {
   const lines = (child.stdout || "").trim().split("\n");
   if (child.error || child.status !== 0 ||
       lines.length !== 5 || !ALLOWED.has(lines[0]) ||
-      !/^GROWTH_DAILY_FRESH_CREATED=[0-3]$/.test(lines[1]) ||
+      !/^GROWTH_DAILY_FRESH_CREATED=[0-5]$/.test(lines[1]) ||
       lines[2] !== lines[1].replace("GROWTH_DAILY_FRESH_CREATED=", "GROWTH_DAILY_FRESH_AI_CALLS=") ||
       lines[3] !== "GROWTH_DAILY_FRESH_PINS_PUBLISHED=0" ||
       lines[4] !== "GROWTH_DAILY_FRESH_GROWTH=OFF" ||
