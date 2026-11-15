@@ -48,13 +48,13 @@ async function readApprovalCandidate(tx: Prisma.TransactionClient, candidateId: 
   return tx.growthPinCandidate.findFirst({ where: { id: candidateId, status: GrowthPinCandidateStatus.READY }, include: { asset: true } });
 }
 
-export async function approvePinCandidate(raw: unknown, adminUserId: string, now = new Date()) {
+export async function approvePinCandidate(raw: unknown, adminUserId: string, now = new Date(), transaction?: Prisma.TransactionClient) {
   const input = approvePinSchema.parse(raw);
   const requestedAt = new Date(input.scheduledAt);
   if (requestedAt < new Date(now.getTime() - 60_000) || requestedAt > new Date(now.getTime() + 366 * 86_400_000)) throw new Error("Scheduled time is outside the allowed window.");
   const recommendation = await recommendPublicationTiming(input.accountId, input.candidateId, now);
   const timingMode = Math.abs(recommendation.scheduledAt.getTime() - requestedAt.getTime()) < 1000 ? recommendation.mode : GrowthPublicationTimingMode.ADMIN_OVERRIDE;
-  return prisma.$transaction(async (tx) => {
+  const apply = async (tx: Prisma.TransactionClient) => {
     await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`pin-approval:${input.candidateId}`}))`);
     const candidate = await readApprovalCandidate(tx, input.candidateId);
     if (!candidate) throw new Error("Only a READY creative candidate can be approved.");
@@ -101,7 +101,8 @@ export async function approvePinCandidate(raw: unknown, adminUserId: string, now
     await tx.growthPinPublication.update({ where: { id: publication.id }, data: { publishJobId: job.id } });
     await recordGrowthActivity({ actorKind: GrowthActivityActorKind.USER, actorUserId: adminUserId, entityType: "GrowthPinApproval", entityId: approval.id, action: "PIN_APPROVED", toState: GrowthPinApprovalStatus.APPROVED, summary: { candidateId: candidate.id, accountId: account.id, boardId: board.id, scheduledAt: requestedAt.toISOString(), snapshotChecksum, timingMode }, correlationKey: publication.idempotencyKey }, tx);
     return { approval, publication: { ...publication, publishJobId: job.id }, created: true };
-  });
+  };
+  return transaction ? apply(transaction) : prisma.$transaction(apply);
 }
 
 
@@ -163,9 +164,9 @@ export async function approvePinCandidateAutomatically(
   }, adminUserId, now);
 }
 
-export async function rejectPinCandidate(raw: unknown, adminUserId: string, now = new Date()) {
+export async function rejectPinCandidate(raw: unknown, adminUserId: string, now = new Date(), transaction?: Prisma.TransactionClient) {
   const input = rejectPinSchema.parse(raw);
-  return prisma.$transaction(async (tx) => {
+  const apply = async (tx: Prisma.TransactionClient) => {
     await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`pin-approval:${input.candidateId}`}))`);
     const candidate = await readApprovalCandidate(tx, input.candidateId);
     if (!candidate) throw new Error("Only a READY creative candidate can be rejected.");
@@ -179,7 +180,8 @@ export async function rejectPinCandidate(raw: unknown, adminUserId: string, now 
     await recordGrowthActivity({ actorKind: GrowthActivityActorKind.USER, actorUserId: adminUserId, entityType: "GrowthPinCandidate", entityId: candidate.id, action: "PIN_CANDIDATE_REJECTED", fromState: GrowthPinCandidateStatus.READY, toState: GrowthPinCandidateStatus.REJECTED, summary: { approvalId: approval.id } }, tx);
     await recordGrowthActivity({ actorKind: GrowthActivityActorKind.USER, actorUserId: adminUserId, entityType: "GrowthPinApproval", entityId: approval.id, action: "PIN_REJECTED", toState: GrowthPinApprovalStatus.REJECTED, summary: { candidateId: candidate.id, reason: input.reason || null } }, tx);
     return approval;
-  });
+  };
+  return transaction ? apply(transaction) : prisma.$transaction(apply);
 }
 
 async function enqueueReconcile(tx: Prisma.TransactionClient, publicationId: string, now = new Date()) {

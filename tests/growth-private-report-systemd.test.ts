@@ -6,7 +6,7 @@ const installPath = "workers/install-growth-private-report-systemd.sh";
 const install = readFileSync(installPath, "utf8");
 const launch = readFileSync("workers/growth-private-report-launch.cjs", "utf8");
 
-describe("private Telegram reporting timer: disabled-by-default host isolation", () => {
+describe("private reporting timer: disabled-by-default host isolation", () => {
   it("has valid shell and Node syntax", () => {
     expect(() => execFileSync("bash", ["-n", installPath])).not.toThrow();
     expect(() => execFileSync("node", ["--check", "workers/growth-private-report-launch.cjs"]))
@@ -28,7 +28,9 @@ describe("private Telegram reporting timer: disabled-by-default host isolation",
     expect(launch).toContain("validatedDatabaseUrl");
     expect(launch).toContain('GROWTH_PRIVATE_REPORT_APPROVAL');
     expect(launch).toContain('GROWTH_DAILY_REPORT_SCHEDULE_ENABLED: "true"');
-    expect(launch).toContain('TELEGRAM_REPORTS_ENABLED: "true"');
+    expect(launch).toContain('TELEGRAM_REPORTS_ENABLED: discord ? "false" : "true"');
+    expect(launch).toContain('GROWTH_NOTIFICATION_PROVIDER: discord ? "DISCORD" : "TELEGRAM"');
+    expect(launch).toContain('TELEGRAM_BOT_TOKEN: discord ? "" : token');
     expect(launch).toContain('GROWTH_WORKER_RUN_ENABLED: "false"');
     expect(launch).toContain('GROWTH_ROLLOUT_MODE: "OFF"');
     expect(launch).not.toContain("PINTEREST_APP_SECRET");

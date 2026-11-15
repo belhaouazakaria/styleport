@@ -821,7 +821,7 @@ async function validateCreativeContext(
           id: payload.accountId,
           connectionStatus: GrowthPinterestConnectionStatus.CONNECTED,
         },
-        select: { id: true },
+        select: { id: true, publicationRole: true },
       })
     : null;
   if (payload.accountId && !account)
@@ -1149,7 +1149,7 @@ export async function generateCreativeCandidate(
     payload.targetKind,
     payload.targetId,
   );
-  await validateCreativeContext(
+  const creativeContext = await validateCreativeContext(
     prisma as unknown as CreativeReadClient,
     payload,
     target,
@@ -1259,6 +1259,7 @@ export async function generateCreativeCandidate(
       );
     const generated = await provider.generate({
       topic: target.topic,
+      publicationRole: creativeContext.account?.publicationRole,
       direction: payload.creativeDirection,
       avoidDirections: payload.avoidDirections,
       brandName: "SayTwist",

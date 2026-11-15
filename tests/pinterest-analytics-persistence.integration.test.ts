@@ -195,4 +195,13 @@ databaseDescribe("Pinterest Phase 4 PostgreSQL persistence", () => {
     expect(report.pins.map((pin) => pin.pinterestPinId)).toEqual(["601", "600"]);
     expect(report.pins[0].outboundClickRate).toBe(0);
   });
+  it("refreshes a portfolio account baseline with one GET and no top-Pin fan-out", async () => {
+    const account = await createAccount();
+    await enqueuePinterestAnalyticsSync(account.id, new Date("2026-10-05T12:00:00Z"));
+    const fetcher = vi.fn().mockResolvedValue(response({ all: { daily_metrics: [{ date: "2026-10-05", data_status: "READY", metrics: { IMPRESSION: 1000, SAVE: 20, PIN_CLICK: 15, OUTBOUND_CLICK: 10, ENGAGEMENT: 45 } }] } }));
+    await syncPinterestAccountAnalytics({ accountId: account.id, startDate: "2026-10-05", endDate: "2026-10-05", includeTopPins: false, fetchImpl: fetcher });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect((await prisma.growthPinterestAccountMetricDaily.findFirstOrThrow({ where: { accountId: account.id } })).impressions).toBe(BigInt(1000));
+  });
+
 });

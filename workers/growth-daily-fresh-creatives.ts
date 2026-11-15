@@ -130,6 +130,14 @@ async function buildBatch(day: string, now = new Date()) {
     target.shortDescription.trim().length >= MIN_DESCRIPTION_LENGTH &&
     (target.editorialExamples[0]?.originalText.trim().length ?? 0) >= 8 &&
     (target.editorialExamples[0]?.transformedText.trim().length ?? 0) >= 8);
+  if (process.env.GROWTH_V2_INTELLIGENCE_ENABLED === "true") {
+    const conversions = await prisma.growthViralConversion.findMany({
+      where: { status: { in: ["NATIVE_READY", "EXISTING_TRANSLATOR"] }, translatorId: { not: null } },
+      select: { translatorId: true }, orderBy: { createdAt: "asc" }, take: 100,
+    });
+    const promoted = new Set(conversions.map(c => c.translatorId));
+    qualified.sort((a,b) => Number(promoted.has(b.id)) - Number(promoted.has(a.id)));
+  }
   const parsedPolicy = policy
     ? { mode: policy.pinMode, minimum: policy.pinMinimum,
       maximum: policy.pinMaximum, fixed: policy.pinFixed }

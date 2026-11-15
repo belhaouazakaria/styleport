@@ -104,6 +104,7 @@ function run() {
       TELEGRAM_REPORTS_ENABLED: "false",
       GROWTH_ATTRIBUTION_COLLECTION_ENABLED: "false",
       GROWTH_AI_IMAGE_ENABLED: "true",
+        GROWTH_V2_INTELLIGENCE_ENABLED: process.env.GROWTH_V2_INTELLIGENCE_ENABLED === "true" ? "true" : "false",
       GROWTH_OPENAI_API_KEY: growthKey,
       GROWTH_OPENAI_PROJECT_ID: growthProject,
       GROWTH_OPENAI_IMAGE_MODEL: "gpt-image-2",

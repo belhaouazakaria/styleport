@@ -426,6 +426,7 @@ function parsePinterestAnalyticsPayload(
       startDate: z.string(),
       endDate: z.string(),
       runStartedAt: z.string().datetime({ offset: true }),
+      includeTopPins: z.boolean().optional(),
       batch: z.number().int().min(0).max(10_000).optional(),
       relevancePrepared: z.boolean().optional(),
     })

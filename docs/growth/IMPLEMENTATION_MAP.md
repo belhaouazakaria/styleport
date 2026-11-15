@@ -196,3 +196,16 @@ Phase 12.1 v2 subsequently ran successfully in production but remained `PARTIAL`
 ## Phase14L market research files (draft, stacked PR)
 
 `lib/growth/market-research/pinterest-trends.ts` is the explicit owner-approved official trends GET adapter reusing global Pinterest quota + one daily research reservation. `gaps.ts` reads existing Translator/Idea catalog for conservative novelty and appends a bounded review event; `cadence.ts` chooses 24-hour shortage and 72-hour proactive scan timing as a pure function. `app/api/admin/growth/market-research/route.ts` and `app/(admin)/admin/growth/market-research/page.tsx` plus `components/admin/market-research-panel.tsx` surface an administrator-only manual opt-in scan and cached source summary. `tests/growth-market-research.test.ts` covers core novelty/staleness and proactive trigger. No schema migration or recurring systemd modification. See `MARKET_RESEARCH.md`.
+
+
+## V2 integration map (2026-11-15, source only)
+
+- `lib/growth/approvals`, `/admin/growth/approvals`, `/api/admin/growth/approvals`: shared owner inbox and transactional decisions.
+- `lib/growth/discord`, `/api/growth/discord-interactions`, `workers/growth-discord-courier.ts`: signature/identity verification, durable receipts, bounded safe delivery and original-message finalization.
+- `lib/growth/viral/{conversion,source-analytics,native-learning}.ts`: official source evidence, original native decision lineage and matched-window comparison. Existing content/fresh-creative workers accept separate V2 opt-ins.
+- `lib/growth/pinterest/{coverage,automatic-recovery,account-readiness}.ts`: availability ledger, exact-ID recovery and official board readiness reads.
+- `/admin/growth/intelligence`: actual lineage, coverage, publication and activity evidence.
+- `workers/growth-v2-*`, disabled-only installer and protected V2 release/migration scripts: exact-SHA isolated runtime and deployment preparation.
+- `tests/growth-*v2*`, unified approval/security/confidence/learning suites and `growth-v2-db.yml`: fixture and real PG18 qualification, not live acceptance.
+
+Read `GROWTH_AGENT_V2.md` for current evidence and explicit incomplete capabilities.

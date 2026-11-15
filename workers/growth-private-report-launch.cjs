@@ -13,10 +13,11 @@ const PM2 = "/home/saytwist/.npm/_npx/5f7878ce38f1eb13/node_modules/pm2/bin/pm2"
 function run() {
   const sha = process.env.EXPECTED_RELEASE || "";
   const now = new Date();
+  const discord = process.env.GROWTH_NOTIFICATION_PROVIDER === "DISCORD";
   if (!/^[a-f0-9]{40}$/.test(sha) ||
       process.env.GROWTH_PRIVATE_REPORT_LAUNCH !== "true" ||
       process.env.GROWTH_PRIVATE_REPORT_APPROVAL !== "SAYTWIST_PRIVATE_DAILY_REPORT:" + sha ||
-      process.env.TELEGRAM_REPORTS_ENABLED !== "true" ||
+      (discord ? process.env.GROWTH_DISCORD_ENABLED !== "true" : process.env.TELEGRAM_REPORTS_ENABLED !== "true") ||
       process.env.GROWTH_DAILY_REPORT_SCHEDULE_ENABLED !== "true" ||
       now.getUTCHours() !== 5 || now.getUTCMinutes() >= 20 ||
       !fs.existsSync(APP + "/workers/growth-report-runner.ts") ||
@@ -26,8 +27,8 @@ function run() {
       process.getuid?.() === 0 || process.execPath !== NODE) throw Error("REPORT_HOST_INVALID");
   const token = process.env.TELEGRAM_BOT_TOKEN || "";
   const chat = process.env.TELEGRAM_REPORT_CHAT_ID || "";
-  if (!/^[1-9][0-9]{5,14}:[A-Za-z0-9_-]{30,}$/.test(token) ||
-      !/^[1-9][0-9]{4,15}$/.test(chat)) throw Error("REPORT_PRIVATE_CREDENTIALS_INVALID");
+  if (!discord && (!/^[1-9][0-9]{5,14}:[A-Za-z0-9_-]{30,}$/.test(token) ||
+      !/^[1-9][0-9]{4,15}$/.test(chat))) throw Error("REPORT_PRIVATE_CREDENTIALS_INVALID");
   const ps = spawnSync(PM2, ["jlist"], {
     cwd: APP, encoding: "utf8", timeout: 10000, maxBuffer: 16 * 1024 * 1024,
     env: { PM2_HOME: "/home/saytwist/.pm2", HOME: "/home/saytwist",
@@ -49,9 +50,16 @@ function run() {
       PATH: NODEDIR + ":/usr/local/bin:/usr/bin:/bin",
       DATABASE_URL: db, APP_BASE_URL: "https://saytwist.com",
       GROWTH_DAILY_REPORT_SCHEDULE_ENABLED: "true",
-      TELEGRAM_REPORTS_ENABLED: "true",
-      TELEGRAM_BOT_TOKEN: token,
-      TELEGRAM_REPORT_CHAT_ID: chat,
+      GROWTH_NOTIFICATION_PROVIDER: discord ? "DISCORD" : "TELEGRAM",
+      GROWTH_DISCORD_ENABLED: discord ? "true" : "false",
+      DISCORD_APPLICATION_ID: discord ? process.env.DISCORD_APPLICATION_ID || "" : "",
+      DISCORD_PUBLIC_KEY: discord ? process.env.DISCORD_PUBLIC_KEY || "" : "",
+      DISCORD_OWNER_USER_ID: discord ? process.env.DISCORD_OWNER_USER_ID || "" : "",
+      GROWTH_DISCORD_OWNER_USER_ID: discord ? process.env.GROWTH_DISCORD_OWNER_USER_ID || "" : "",
+      DISCORD_BOT_TOKEN: discord ? process.env.DISCORD_BOT_TOKEN || "" : "",
+      TELEGRAM_REPORTS_ENABLED: discord ? "false" : "true",
+      TELEGRAM_BOT_TOKEN: discord ? "" : token,
+      TELEGRAM_REPORT_CHAT_ID: discord ? "" : chat,
       GROWTH_TELEGRAM_PIN_APPROVALS_ENABLED: process.env.GROWTH_TELEGRAM_PIN_APPROVALS_ENABLED === "true" ? "true" : "false",
       GROWTH_TELEGRAM_PIN_OWNER_USER_ID: process.env.GROWTH_TELEGRAM_PIN_OWNER_USER_ID || "",
       GROWTH_TELEGRAM_PIN_WEBHOOK_SECRET: process.env.GROWTH_TELEGRAM_PIN_WEBHOOK_SECRET || "",
@@ -62,7 +70,7 @@ function run() {
   });
   // Never print child output: errors can include provider text or IDs.
   if (child.error || child.status !== 0) throw Error("REPORT_CHILD_FAILED");
-  if (!/^\[growth-report\] (SUBMITTED|ALREADY_SENT)\n?$/.test(child.stdout || "")) {
+  if (!/^\[growth-report\] (SUBMITTED|ALREADY_SENT|QUEUED)\n?$/.test(child.stdout || "")) {
     throw Error("REPORT_UNEXPECTED_RESULT");
   }
   process.stdout.write("GROWTH_PRIVATE_REPORT=ACCEPTED_OR_PREVIOUSLY_SENT\n");

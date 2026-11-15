@@ -1,0 +1,685 @@
+// @vitest-environment node
+import { createHash, randomUUID } from "node:crypto";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { prisma } from "@/lib/prisma";
+import { evidenceChecksum } from "@/lib/growth/approvals/contracts";
+import {
+  createBudgetChangeReview,
+  decideGrowthReview,
+} from "@/lib/growth/approvals/service";
+import {
+  processDiscordDecisions,
+  runDiscordOutbox,
+} from "@/lib/growth/discord/outbox";
+import {
+  prepareViralWinnerConversions,
+  qualifiedViralEvidence,
+} from "@/lib/growth/viral/conversion";
+import { receiveDiscordDecision } from "@/lib/growth/discord/interactions";
+
+const enabled = process.env.RUN_GROWTH_V2_DB_TESTS === "1";
+if (enabled) {
+  const u = new URL(process.env.DATABASE_URL || "");
+  if (
+    u.hostname !== "127.0.0.1" ||
+    u.port !== "55439" ||
+    u.pathname !== "/saytwist_growth_v2_test"
+  )
+    throw Error("Unsafe V2 test database");
+}
+const suite = enabled ? describe.sequential : describe.skip;
+const config = {
+  applicationId: "12345678901234567",
+  ownerDiscordId: "22345678901234567",
+  ownerUserId: "owner-v2",
+  publicKey: "a".repeat(64),
+  token: "a".repeat(40),
+};
+const now = new Date();
+async function fixture() {
+  const id = randomUUID();
+  const t = await prisma.translator.create({
+    data: {
+      name: "Original Warm " + id,
+      slug: "warm-" + id,
+      title: "Warm",
+      subtitle: "Warm",
+      shortDescription: "Original warm rewrite",
+      sourceLabel: "Before",
+      targetLabel: "After",
+      promptSystem: "Rewrite",
+      promptInstructions: "Keep meaning",
+      isActive: true,
+    },
+  });
+  const account = await prisma.growthPinterestAccount.findFirstOrThrow({
+    where: { apiEnvironment: "SANDBOX" },
+  });
+  const board = await prisma.growthPinterestBoard.findFirstOrThrow();
+  const asset = await prisma.growthAsset.create({
+    data: {
+      publicPath:
+        "/generated/growth-creatives/creative-" +
+        createHash("sha256").update(id).digest("hex") +
+        ".png",
+      checksum: "a".repeat(64),
+      mimeType: "image/png",
+      width: 1000,
+      height: 1500,
+      byteSize: 1000,
+      rendererKey: "test",
+      rendererVersion: "v1",
+      templateId: "test",
+      generationKind: "DETERMINISTIC",
+      state: "READY",
+    },
+  });
+  const candidate = await prisma.growthPinCandidate.create({
+    data: {
+      candidateKey: id,
+      revision: 1,
+      translatorId: t.id,
+      accountId: account.id,
+      destinationKind: "TRANSLATOR",
+      title: "Warm Translator",
+      description: "Try an original warm rewrite.",
+      destinationPath: "/translators/" + t.slug,
+      assetId: asset.id,
+      rendererKey: "test",
+      rendererVersion: "v1",
+      templateId: "test",
+      archetype: "MINIMAL_STATEMENT",
+      headlinePattern: "warm",
+      ctaPattern: "try",
+      visualTreatment: "warm",
+      topic: "warm",
+      contentHash: "b".repeat(64),
+      similarityModelVersion: "v1",
+      similarityResult: "DISTINCT",
+      similarityFlags: {},
+      status: "READY",
+    },
+  });
+  const snapshot = {
+    title: candidate.title,
+    description: candidate.description,
+    assetUrl: "https://saytwist.com" + asset.publicPath,
+    assetChecksum: asset.checksum,
+    contentHash: candidate.contentHash,
+    revision: 1,
+    destinationUrl: "https://saytwist.com" + candidate.destinationPath,
+    destinationDomain: "saytwist.com",
+    accountId: account.id,
+    accountName: "saytwist",
+    boardId: board.id,
+    boardName: "Warm",
+    scheduledAt: new Date(now.getTime() + 86400000).toISOString(),
+    reason: "Promote an original tool",
+    risks: "Public Pin",
+    estimatedCostCents: 0,
+  };
+  const review = await prisma.growthApprovalRequest.create({
+    data: {
+      kind: "NATIVE_PIN",
+      subjectId: candidate.id,
+      dedupeKey: id,
+      ownerUserId: config.ownerUserId,
+      snapshot,
+      snapshotChecksum: evidenceChecksum(snapshot),
+      expiresAt: new Date(now.getTime() + 3600000),
+    },
+  });
+  const notification = await prisma.growthNotification.create({
+    data: {
+      dedupeKey: id,
+      requestId: review.id,
+      payload: { kind: "APPROVAL" },
+    },
+  });
+  return { review, notification, candidate };
+}
+beforeAll(async () => {
+  if (!enabled) return;
+  process.env.APP_BASE_URL = "https://saytwist.com";
+  process.env.PINTEREST_APP_ID = "test";
+  process.env.PINTEREST_APP_SECRET = "test";
+  process.env.PINTEREST_REDIRECT_URI =
+    "https://saytwist.com/api/admin/growth/pinterest/oauth/callback";
+  process.env.PINTEREST_API_ENVIRONMENT = "sandbox";
+  process.env.GROWTH_CREDENTIAL_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString(
+    "base64",
+  );
+  // Only this exact disposable database can be reset.
+  await prisma.$executeRawUnsafe(
+    'TRUNCATE "GrowthViralProgramSettings", "GrowthViralConcept", "GrowthViralConversion", "GrowthAnalyticsCoverage", "GrowthApprovalRequest", "GrowthNotification", "GrowthDiscordInteraction", "GrowthPinCandidate", "GrowthPinApproval", "GrowthPinPublication", "GrowthPinterestAccount", "GrowthSettings", "User", "Translator" CASCADE',
+  );
+  await prisma.user.create({
+    data: {
+      id: config.ownerUserId,
+      email: "v2-owner@test.local",
+      passwordHash: "test",
+      role: "ADMIN",
+    },
+  });
+  await prisma.user.create({
+    data: {
+      id: "other-v2",
+      email: "v2-other@test.local",
+      passwordHash: "test",
+      role: "ADMIN",
+    },
+  });
+  await prisma.growthSettings.create({
+    data: { id: "global", enabled: false },
+  });
+  const account = await prisma.growthPinterestAccount.create({
+    data: {
+      pinterestAccountId: "v2",
+      publicationRole: "SAYTWIST",
+      activeRole: "SAYTWIST",
+      username: "saytwist",
+      apiEnvironment: "SANDBOX",
+      connectionStatus: "CONNECTED",
+      grantedScopes: [
+        "user_accounts:read",
+        "boards:read",
+        "boards:write",
+        "pins:read",
+        "pins:write",
+      ],
+      encryptedCredentials: "not-used-by-approval",
+      refreshTokenExpiresAt: new Date(now.getTime() + 864000000),
+    },
+  });
+  await prisma.growthPinterestBoard.create({
+    data: {
+      accountId: account.id,
+      pinterestBoardId: "v2-board",
+      name: "Warm",
+      isActive: true,
+      lastSeenAt: now,
+      lastSyncedAt: now,
+    },
+  });
+});
+afterAll(async () => {
+  await prisma.$disconnect();
+});
+suite("Unified owner consent with PostgreSQL 18", () => {
+  it("atomically converges simultaneous Admin/Discord approval to one publication", async () => {
+    const { review } = await fixture();
+    const input = {
+      requestId: review.id,
+      action: "APPROVE" as const,
+      snapshotChecksum: review.snapshotChecksum,
+    };
+    const before = await prisma.growthPinPublication.count();
+    const result = await Promise.all([
+      decideGrowthReview(input, config.ownerUserId, "ADMIN"),
+      decideGrowthReview(input, config.ownerUserId, "DISCORD"),
+    ]);
+    expect(result.map((x) => x.status)).toEqual(["APPROVED", "APPROVED"]);
+    expect(result.filter((x) => !x.reused)).toHaveLength(1);
+    expect(await prisma.growthPinPublication.count()).toBe(before + 1);
+  });
+  it("rolls back the entire decision when board eligibility fails", async () => {
+    const { review } = await fixture();
+    await prisma.growthPinterestBoard.updateMany({ data: { isActive: false } });
+    await expect(
+      decideGrowthReview(
+        {
+          requestId: review.id,
+          action: "APPROVE",
+          snapshotChecksum: review.snapshotChecksum,
+        },
+        config.ownerUserId,
+        "ADMIN",
+      ),
+    ).rejects.toThrow();
+    expect(
+      (
+        await prisma.growthApprovalRequest.findUniqueOrThrow({
+          where: { id: review.id },
+        })
+      ).status,
+    ).toBe("PENDING");
+    expect(
+      await prisma.growthPinApproval.count({
+        where: { candidateId: review.subjectId },
+      }),
+    ).toBe(0);
+    await prisma.growthPinterestBoard.updateMany({ data: { isActive: true } });
+  });
+  it("rejects unauthorized Admin and changed snapshot checksum", async () => {
+    const { review } = await fixture();
+    const input = {
+      requestId: review.id,
+      action: "REJECT" as const,
+      snapshotChecksum: review.snapshotChecksum,
+    };
+    await expect(
+      decideGrowthReview(input, "other-v2", "ADMIN"),
+    ).rejects.toThrow("UNAUTHORIZED");
+    await expect(
+      decideGrowthReview(
+        { ...input, snapshotChecksum: "f".repeat(64) },
+        config.ownerUserId,
+        "ADMIN",
+      ),
+    ).rejects.toThrow("MISMATCH");
+    expect(
+      (await decideGrowthReview(input, config.ownerUserId, "ADMIN")).status,
+    ).toBe("REJECTED");
+    expect(
+      (
+        await decideGrowthReview(
+          { ...input, action: "APPROVE" },
+          config.ownerUserId,
+          "DISCORD",
+        )
+      ).status,
+    ).toBe("REJECTED");
+  });
+  it("closes expired and stale creatives without scheduling", async () => {
+    const stale = await fixture();
+    await prisma.growthPinCandidate.update({
+      where: { id: stale.candidate.id },
+      data: { contentHash: "c".repeat(64) },
+    });
+    expect(
+      (
+        await decideGrowthReview(
+          {
+            requestId: stale.review.id,
+            action: "APPROVE",
+            snapshotChecksum: stale.review.snapshotChecksum,
+          },
+          config.ownerUserId,
+          "ADMIN",
+        )
+      ).status,
+    ).toBe("STALE");
+    const expired = await fixture();
+    expect(
+      (
+        await decideGrowthReview(
+          {
+            requestId: expired.review.id,
+            action: "APPROVE",
+            snapshotChecksum: expired.review.snapshotChecksum,
+          },
+          config.ownerUserId,
+          "ADMIN",
+          new Date(now.getTime() + 7200000),
+        )
+      ).status,
+    ).toBe("EXPIRED");
+  });
+  it("protects request evidence and terminal decisions at the database layer", async () => {
+    const { review } = await fixture();
+    await expect(
+      prisma.growthApprovalRequest.update({
+        where: { id: review.id },
+        data: { snapshot: {} },
+      }),
+    ).rejects.toThrow("immutable");
+    await decideGrowthReview(
+      {
+        requestId: review.id,
+        action: "REJECT",
+        snapshotChecksum: review.snapshotChecksum,
+      },
+      config.ownerUserId,
+      "ADMIN",
+    );
+    await expect(
+      prisma.growthApprovalRequest.update({
+        where: { id: review.id },
+        data: { status: "PENDING", decidedAt: null },
+      }),
+    ).rejects.toThrow("terminal");
+  });
+  it("keeps Admin usable during Discord outage, with no repeated uncertain POST", async () => {
+    await prisma.growthNotification.updateMany({
+      where: { status: "QUEUED" },
+      data: { status: "DEAD" },
+    });
+    const { review, notification } = await fixture();
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({
+          id: "32345678901234567",
+          type: 1,
+          recipients: [{ id: config.ownerDiscordId }],
+        }),
+      )
+      .mockRejectedValueOnce(Error("offline"));
+    await runDiscordOutbox(config, fetcher);
+    expect(
+      (
+        await prisma.growthNotification.findUniqueOrThrow({
+          where: { id: notification.id },
+        })
+      ).status,
+    ).toBe("UNKNOWN");
+    await runDiscordOutbox(config, fetcher);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(
+      (
+        await decideGrowthReview(
+          {
+            requestId: review.id,
+            action: "REJECT",
+            snapshotChecksum: review.snapshotChecksum,
+          },
+          config.ownerUserId,
+          "ADMIN",
+        )
+      ).status,
+    ).toBe("REJECTED");
+  });
+  it("binds signed receipts to owner, DM, exact message and single interaction ID", async () => {
+    const { review, notification } = await fixture();
+    const channel = "32345678901234567",
+      message = "42345678901234567";
+    await prisma.growthNotification.update({
+      where: { id: notification.id },
+      data: {
+        status: "SENT",
+        providerChannelId: channel,
+        providerMessageId: message,
+      },
+    });
+    const interaction = {
+      id: "52345678901234567",
+      application_id: config.applicationId,
+      type: 3,
+      user: { id: config.ownerDiscordId },
+      channel_id: channel,
+      channel: { type: 1 },
+      message: { id: message },
+      data: { component_type: 2, custom_id: "growth:" + review.id + ":REJECT" },
+    };
+    expect(
+      await receiveDiscordDecision(
+        { ...interaction, user: { id: "62345678901234567" } },
+        config,
+      ),
+    ).toBe(false);
+    expect(
+      await receiveDiscordDecision(
+        { ...interaction, guild_id: "72345678901234567" },
+        config,
+      ),
+    ).toBe(false);
+    expect(
+      await receiveDiscordDecision(
+        { ...interaction, message: { id: "82345678901234567" } },
+        config,
+      ),
+    ).toBe(false);
+    expect(await receiveDiscordDecision(interaction, config)).toBe(true);
+    expect(await receiveDiscordDecision(interaction, config)).toBe(true);
+    expect(
+      await prisma.growthDiscordInteraction.count({
+        where: { id: interaction.id },
+      }),
+    ).toBe(1);
+    await processDiscordDecisions(config);
+    await processDiscordDecisions(config);
+    expect(
+      (
+        await prisma.growthApprovalRequest.findUniqueOrThrow({
+          where: { id: review.id },
+        })
+      ).status,
+    ).toBe("REJECTED");
+  });
+  it("promotes a persistent source winner to one original decision with immutable lineage", async () => {
+    await prisma.growthViralProgramSettings.upsert({
+      where: { id: "global" },
+      update: { mode: "ACTIVE" },
+      create: {
+        id: "global",
+        mode: "ACTIVE",
+        sourceSharePercent: 50,
+        maxPinsPerDay: 5,
+      },
+    });
+    const account = await prisma.growthPinterestAccount.create({
+      data: {
+        pinterestAccountId: "viral-prod-test",
+        encryptedCredentials: "unused-test-credential",
+        grantedScopes: [],
+        username: "source-test",
+        publicationRole: "SAYTWIST_IDEAS",
+        activeRole: "SAYTWIST_IDEAS",
+        apiEnvironment: "PRODUCTION",
+        connectionStatus: "CONNECTED",
+      },
+    });
+    const concept = await prisma.growthViralConcept.create({
+      data: {
+        title: "Royal English Translator",
+        normalizedKey: "royal-english-v2",
+        sourceUrl: "https://anythingtranslate.com/translators/royal-english/",
+        status: "TESTING",
+      },
+    });
+    const publishedAt = new Date(now.getTime() - 14 * 86400000);
+    const source = await prisma.growthViralPinTest.create({
+      data: {
+        conceptId: concept.id,
+        channel: "SOURCE",
+        destinationUrl: concept.sourceUrl,
+        status: "TRACKED",
+        pinterestPinId: "92345678901234567",
+        publishedAt,
+        accountId: account.id,
+      },
+    });
+    await prisma.growthPinterestPin.create({
+      data: {
+        pinterestPinId: source.pinterestPinId!,
+        accountId: account.id,
+        destinationUrl: source.destinationUrl,
+        isActive: true,
+        lastSeenAt: now,
+        lastSyncedAt: now,
+        publishedAt,
+      },
+    });
+    for (const previous of [true, false])
+      await prisma.growthViralMetricObservation.create({
+        data: {
+          pinTestId: source.id,
+          observedAt: new Date(now.getTime() - (previous ? 86400000 : 0)),
+          pinterestDataStatus: "READY",
+          impressions: previous ? 2000 : 3000,
+          saves: previous ? 120 : 180,
+          outboundClicks: previous ? 60 : 90,
+          baselineSaveRate: 0.01,
+          baselineOutboundRate: 0.005,
+          baselineImpressions: 100000,
+          baselineSaves: 1000,
+          baselineOutboundClicks: 500,
+          windowStart: publishedAt,
+          windowEnd: new Date(now.getTime() - (previous ? 2 : 1) * 86400000),
+        },
+      });
+    expect(await qualifiedViralEvidence(source.id, now)).not.toBeNull();
+    expect((await prepareViralWinnerConversions(now)).prepared).toBe(1);
+    expect((await prepareViralWinnerConversions(now)).prepared).toBe(0);
+    const conversion = await prisma.growthViralConversion.findUniqueOrThrow({
+      where: { conceptId: concept.id },
+    });
+    expect(conversion.winningPinTestId).toBe(source.id);
+    expect(
+      (
+        await prisma.growthDecision.findUniqueOrThrow({
+          where: { id: conversion.decisionId! },
+        })
+      ).type,
+    ).toBe("CREATE_TRANSLATOR");
+    expect(
+      (
+        await prisma.growthViralPinTest.findUniqueOrThrow({
+          where: { id: source.id },
+        })
+      ).destinationUrl,
+    ).toBe(concept.sourceUrl);
+    await prisma.growthPinterestPin.update({
+      where: { pinterestPinId: source.pinterestPinId! },
+      data: {
+        destinationUrl: "https://saytwist.com/translators/royal-english",
+      },
+    });
+    expect(await qualifiedViralEvidence(source.id, now)).toBeNull();
+  });
+  it("retries only confirmed Discord rate limits and finalizes closed cards by PATCH", async () => {
+    await prisma.growthNotification.updateMany({
+      where: { status: { in: ["QUEUED", "RETRY"] } },
+      data: { status: "DEAD" },
+    });
+    const { notification, review } = await fixture();
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({
+          id: "32345678901234567",
+          type: 1,
+          recipients: [{ id: config.ownerDiscordId }],
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({ retry_after: 1 }, { status: 429 }),
+      );
+    await runDiscordOutbox(config, fetcher, new Date(now.getTime() + 60000));
+    expect(
+      (
+        await prisma.growthNotification.findUniqueOrThrow({
+          where: { id: notification.id },
+        })
+      ).status,
+    ).toBe("RETRY");
+    const sent = vi
+      .fn()
+      .mockImplementation(async (url: string, init: RequestInit) => {
+        if (url.endsWith("/users/@me/channels"))
+          return Response.json({
+            id: "32345678901234567",
+            type: 1,
+            recipients: [{ id: config.ownerDiscordId }],
+          });
+        if (init.method === "PATCH")
+          return Response.json({ id: "42345678901234567" });
+        return Response.json({
+          id: "42345678901234567",
+          channel_id: "32345678901234567",
+        });
+      });
+    await runDiscordOutbox(config, sent, new Date(now.getTime() + 65000));
+    expect(
+      (
+        await prisma.growthNotification.findUniqueOrThrow({
+          where: { id: notification.id },
+        })
+      ).status,
+    ).toBe("SENT");
+    await decideGrowthReview(
+      {
+        requestId: review.id,
+        action: "REJECT",
+        snapshotChecksum: review.snapshotChecksum,
+      },
+      config.ownerUserId,
+      "ADMIN",
+    );
+    sent.mockClear();
+    await runDiscordOutbox(config, sent, new Date(now.getTime() + 70000));
+    expect(sent.mock.calls.every(([, init]) => init.method === "PATCH")).toBe(
+      true,
+    );
+    const payload = JSON.parse(sent.mock.calls[0][1].body);
+    expect(
+      payload.components[0].components
+        .filter((c: { style: number }) => c.style !== 5)
+        .every((c: { disabled: boolean }) => c.disabled),
+    ).toBe(true);
+    expect(
+      (
+        await prisma.growthNotification.findUniqueOrThrow({
+          where: { id: notification.id },
+        })
+      ).finalizedAt,
+    ).not.toBeNull();
+  });
+
+  it("applies only specifically approved budget values and rejects stale policy", async () => {
+    const settings = await prisma.growthSettings.findUniqueOrThrow({
+      where: { id: "global" },
+    });
+    const snapshot = {
+      action: "CHANGE_AI_BUDGET",
+      configVersion: settings.configVersion,
+      before: {
+        dailyCents: settings.aiDailyBudgetCents,
+        monthlyCents: settings.aiMonthlyBudgetCents,
+        imagesPerDay: settings.aiImagesPerDayCap,
+      },
+      after: { dailyCents: 210, monthlyCents: 3100, imagesPerDay: 3 },
+      reason: "Owner budget review",
+      benefits: "Explicit controlled capacity",
+      risks: "Maximum additional exposure of 10 cents/day and 100 cents/month",
+    };
+    const review = await createBudgetChangeReview(snapshot, config.ownerUserId);
+    expect(
+      (
+        await prisma.growthSettings.findUniqueOrThrow({
+          where: { id: "global" },
+        })
+      ).aiDailyBudgetCents,
+    ).toBe(settings.aiDailyBudgetCents);
+    await decideGrowthReview(
+      {
+        requestId: review.id,
+        action: "APPROVE",
+        snapshotChecksum: review.snapshotChecksum,
+      },
+      config.ownerUserId,
+      "DISCORD",
+    );
+    expect(
+      (
+        await prisma.growthSettings.findUniqueOrThrow({
+          where: { id: "global" },
+        })
+      ).aiDailyBudgetCents,
+    ).toBe(210);
+    const stale = await createBudgetChangeReview(
+      { ...snapshot, after: { ...snapshot.after, dailyCents: 220 } },
+      config.ownerUserId,
+    );
+    expect(
+      (
+        await decideGrowthReview(
+          {
+            requestId: stale.id,
+            action: "APPROVE",
+            snapshotChecksum: stale.snapshotChecksum,
+          },
+          config.ownerUserId,
+          "ADMIN",
+        )
+      ).status,
+    ).toBe("STALE");
+    expect(
+      (
+        await prisma.growthSettings.findUniqueOrThrow({
+          where: { id: "global" },
+        })
+      ).aiDailyBudgetCents,
+    ).toBe(210);
+  });
+});
