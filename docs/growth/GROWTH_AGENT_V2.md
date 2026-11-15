@@ -153,3 +153,13 @@ Required external gates:
 4. Google analytics is optional and remains OFF until the owner grants a service account read access to the intended properties and authorizes enablement. Source/native winner calibration, generated content quality and learning effectiveness require actual observed campaigns; mocks cannot establish them.
 
 No production database writes, external provider requests, Pin decisions, timer changes, migration, merge or deployment were performed in this mission. The new code is TESTED, while production integration acceptance remains BLOCKED on the specified external gates. The read-only VPS audit is LIVE-VERIFIED evidence of the existing deployment's state, not a live verification of V2 execution.
+
+### Production finalization — November 15 follow-up
+
+The follow-up rechecked production at `a5d93f7...` and found eight services with failed latest results, twelve enabled/active timers and the same protected queue. Root access is now available through a dedicated expiring SSH key; no privilege boundary was bypassed.
+
+Two PR review findings were corrected before release: source analytics advances a bounded attempt cursor past invalid, already-reserved or failed experiments, and conversion-specific creatives can revisit previously promoted Translators. Conversion jobs are bound before paid dispatch, retain one-attempt admission across days/accounts, and reconcile only their explicitly bound READY candidate and successful generation job. Ordinary exploration keeps its never-promoted filter. Regression qualification passed 1,068 default tests and 50 V2 checks, including 16 real PostgreSQL cases.
+
+A fresh private PostgreSQL 18 custom backup was created on the VPS and verified with `pg_restore --list` and SHA-256. An off-host RSA-OAEP-SHA256/AES-256-GCM encrypted copy was stored outside the repository, with its private key retained only locally. Authenticated decryption reproduced the 6,001,412-byte dump and checksum `a0323b9d3911140069f080cc7d3fcb0bdd15c9440f319f02177522a962d07549`. This verifies the off-host artifact; the isolated full restore and exact migration rehearsal must also pass before protected release approval.
+
+A root-only hidden-input Discord provisioning helper was staged outside the application at `/root/saytwist-v2-finalize/provision-discord.py`. It writes only a mode-0600 staging file and does not enable the integration. The owner must create the application and enter its identity/token there, never in chat or logs. Protected release and per-Pin approvals remain separate requirements.

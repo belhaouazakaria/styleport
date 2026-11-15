@@ -1,3 +1,7 @@
+import {
+  readFreshCreativeTargets,
+  bindNativeCampaignJob,
+} from "@/lib/growth/viral/native-creative-targets";
 import { consumeQueuedPinterestInventory } from "@/lib/growth/pinterest/queued-inventory";
 import { encryptPinterestCredentials } from "@/lib/growth/pinterest/credentials";
 import { promoteDueGrowthRetries } from "@/lib/growth/jobs";
@@ -626,6 +630,93 @@ suite("Unified owner consent with PostgreSQL 18", () => {
         })
       ).status,
     ).toBe("REJECTED");
+  });
+  it("admits a conversion-specific campaign for an old promoted Translator and binds one paid attempt", async () => {
+    await prisma.growthViralProgramSettings.upsert({
+      where: { id: "global" },
+      update: { mode: "ACTIVE" },
+      create: { id: "global", mode: "ACTIVE" },
+    });
+    const { candidate } = await fixture();
+    await prisma.translatorEditorialExample.create({
+      data: {
+        translatorId: candidate.translatorId!,
+        originalText: "Could you send it today?",
+        transformedText: "Would you kindly send that today?",
+      },
+    });
+    const conversion = await prisma.growthViralConversion.create({
+      data: {
+        conceptId: randomUUID(),
+        winningPinTestId: randomUUID(),
+        translatorId: candidate.translatorId!,
+        status: "EXISTING_TRANSLATOR",
+        evidence: {},
+        createdAt: new Date(Date.now() + 1),
+      },
+    });
+    expect(
+      (await readFreshCreativeTargets(false)).some(
+        (t) => t.id === candidate.translatorId,
+      ),
+    ).toBe(false);
+    expect(await readFreshCreativeTargets(true)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: candidate.translatorId,
+          conversionId: conversion.id,
+        }),
+      ]),
+    );
+    const job = await prisma.growthJob.create({
+      data: {
+        type: "CREATIVE_LAB_GENERATE",
+        idempotencyKey: "native-first-" + randomUUID(),
+        payload: { targetKind: "TRANSLATOR", targetId: candidate.translatorId },
+        maxAttempts: 1,
+      },
+    });
+    expect(
+      await bindNativeCampaignJob(
+        conversion.id,
+        candidate.translatorId!,
+        job.id,
+      ),
+    ).toBe(true);
+    expect(
+      (await readFreshCreativeTargets(true)).some(
+        (t) => t.id === candidate.translatorId,
+      ),
+    ).toBe(false);
+    const duplicate = await prisma.growthJob.create({
+      data: {
+        type: "CREATIVE_LAB_GENERATE",
+        idempotencyKey: "native-duplicate-" + randomUUID(),
+        payload: { targetKind: "TRANSLATOR", targetId: candidate.translatorId },
+        maxAttempts: 1,
+      },
+    });
+    expect(
+      await bindNativeCampaignJob(
+        conversion.id,
+        candidate.translatorId!,
+        duplicate.id,
+      ),
+    ).toBe(false);
+    expect(
+      (
+        await prisma.growthJob.findUniqueOrThrow({
+          where: { id: duplicate.id },
+        })
+      ).status,
+    ).toBe("CANCELLED");
+    expect(
+      (
+        await prisma.growthViralConversion.findUniqueOrThrow({
+          where: { id: conversion.id },
+        })
+      ).campaignJobId,
+    ).toBe(job.id);
   });
   it("promotes a persistent source winner to one original decision with immutable lineage", async () => {
     await prisma.growthViralProgramSettings.upsert({

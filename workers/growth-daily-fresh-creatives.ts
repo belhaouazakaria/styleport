@@ -1,3 +1,4 @@
+import { bindNativeCampaignJob, readFreshCreativeTargets } from "@/lib/growth/viral/native-creative-targets";
 import { readFileSync } from "node:fs";
 import os from "node:os";
 import {
@@ -105,24 +106,7 @@ async function buildBatch(day: string, now = new Date()) {
       select: { id: true },
       orderBy: { completedAt: "desc" },
     }),
-    prisma.translator.findMany({
-      where: {
-        isActive: true, archivedAt: null,
-        editorialExamples: { some: {} },
-        growthPinCandidates: { none: {} },
-      },
-      select: { id: true, slug: true, shortDescription: true,
-        isFeatured: true, sortOrder: true,
-        editorialExamples: {
-          select: { originalText: true, transformedText: true },
-          orderBy: { sortOrder: "asc" }, take: 1,
-        },
-      },
-      orderBy: [
-        { isFeatured: "desc" }, { sortOrder: "asc" }, { slug: "asc" },
-      ],
-      take: 150,
-    }),
+    readFreshCreativeTargets(process.env.GROWTH_V2_INTELLIGENCE_ENABLED === "true"),
   ]);
   // The full-image renderer uses TranslatorEditorialExample, not TranslatorExample.
   // Its first saved before/after pair must be meaningful before spending anything.
@@ -130,14 +114,6 @@ async function buildBatch(day: string, now = new Date()) {
     target.shortDescription.trim().length >= MIN_DESCRIPTION_LENGTH &&
     (target.editorialExamples[0]?.originalText.trim().length ?? 0) >= 8 &&
     (target.editorialExamples[0]?.transformedText.trim().length ?? 0) >= 8);
-  if (process.env.GROWTH_V2_INTELLIGENCE_ENABLED === "true") {
-    const conversions = await prisma.growthViralConversion.findMany({
-      where: { status: { in: ["NATIVE_READY", "EXISTING_TRANSLATOR"] }, translatorId: { not: null } },
-      select: { translatorId: true }, orderBy: { createdAt: "asc" }, take: 100,
-    });
-    const promoted = new Set(conversions.map(c => c.translatorId));
-    qualified.sort((a,b) => Number(promoted.has(b.id)) - Number(promoted.has(a.id)));
-  }
   const parsedPolicy = policy
     ? { mode: policy.pinMode, minimum: policy.pinMinimum,
       maximum: policy.pinMaximum, fixed: policy.pinFixed }
@@ -152,7 +128,7 @@ async function buildBatch(day: string, now = new Date()) {
   return { planned, targets: qualified.slice(0, planned.additional), accountId: rotation.accountId };
 }
 
-async function createOne(target: { id: string; slug: string }, day: string, accountId: string) {
+async function createOne(target: { id: string; slug: string; conversionId?: string }, day: string, accountId: string) {
   await requireIdle();
   const request = {
     targetKind: GrowthCreativeDestinationKind.TRANSLATOR,
@@ -164,13 +140,16 @@ async function createOne(target: { id: string; slug: string }, day: string, acco
   };
   const queued = await enqueueCreativeGeneration(request, {
     runAfter: new Date(Date.now() - 1000),
-    idempotencyScope: "daily-ai-fresh-v2:" + day + ":" + target.slug,
+    idempotencyScope: target.conversionId ? "native-conversion:" + target.conversionId : "daily-ai-fresh-v2:" + day + ":" + target.slug,
   });
   if (!queued.created || queued.job.status !== GrowthJobStatus.PENDING ||
       queued.job.type !== GrowthJobType.CREATIVE_LAB_GENERATE) {
     throw Error("FRESH_JOB_NOT_UNIQUE");
   }
   const jobId = queued.job.id;
+  if (target.conversionId && !(await bindNativeCampaignJob(target.conversionId, target.id, jobId))) {
+    throw Error("FRESH_CONVERSION_CHANGED");
+  }
   const updated = await prisma.growthJob.updateMany({
     where: { id: jobId, status: GrowthJobStatus.PENDING,
       type: GrowthJobType.CREATIVE_LAB_GENERATE },

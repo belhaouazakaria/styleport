@@ -309,7 +309,7 @@ export async function reconcileViralConversions(now = new Date()) {
           },
         });
       });
-      if (!t.isActive) continue;
+      if (!t.isActive || !row.campaignJobId) continue;
       // The existing daily fresh-creative worker owns budgeted generation.
       // Reconcile its new candidate instead of leaving an orphan generation job
       // that would block other protected timers.
@@ -317,21 +317,30 @@ export async function reconcileViralConversions(now = new Date()) {
         where: {
           translatorId,
           createdAt: { gte: row.createdAt, lte: now },
-          generationJobId: { not: null },
+          generationJobId: row.campaignJobId,
         },
         orderBy: { createdAt: "asc" },
-        select: { generationJobId: true },
+        select: {
+          generationJobId: true,
+          status: true,
+          asset: { select: { state: true } },
+          generationJob: { select: { status: true } },
+        },
       });
       if (!candidate?.generationJobId) continue;
+      const ready =
+        candidate.status === "READY" &&
+        candidate.asset.state === "READY" &&
+        candidate.generationJob?.status === "SUCCEEDED";
       await prisma.growthViralConversion.update({
         where: { id: row.id },
         data: {
           campaignJobId: candidate.generationJobId,
-          status: "CAMPAIGN_PREPARED",
-          lastErrorCode: null,
+          status: ready ? "CAMPAIGN_PREPARED" : "NATIVE_READY",
+          lastErrorCode: ready ? null : "NATIVE_CREATIVE_REQUIRES_REVIEW",
         },
       });
-      reconciled++;
+      if (ready) reconciled++;
     } catch {
       await prisma.growthViralConversion.update({
         where: { id: row.id },
