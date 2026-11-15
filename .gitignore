@@ -52,3 +52,7 @@ next-env.d.ts
 
 # Runtime generated assets
 /public/generated/
+
+# Operator-provided licensed font binaries and permission records
+/storage/fonts/
+/output/genz-editorial/

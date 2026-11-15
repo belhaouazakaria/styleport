@@ -54,4 +54,11 @@ describe("Phase 10 Creative Lab admin boundaries", () => {
     expect((await regeneratePost(new Request(url, { method: "POST", body: JSON.stringify({ candidateId: "candidate-1" }) }))).status).toBe(202);
     expect(mocks.regenerate).toHaveBeenCalledWith({ candidateId: "candidate-1" });
   });
+  it("preserves omitted style/archetype for account-aware defaults after validation", async () => {
+    const input = { targetKind: "TRANSLATOR", targetId: "translator", accountId: "main", creativeModelVersion: "creative_lab_v1" };
+    expect((await generatePost(new Request("https://saytwist.com/api/admin/growth/creative/generate", { method: "POST", body: JSON.stringify(input) }))).status).toBe(202);
+    expect(mocks.enqueue).toHaveBeenCalledWith(input);
+    expect(mocks.enqueue.mock.calls[0][0]).not.toHaveProperty("archetype");
+  });
+
 });

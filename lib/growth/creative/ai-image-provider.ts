@@ -1,3 +1,4 @@
+import { buildGenZBackgroundPrompt, type GenZIdentity } from "./genz-editorial";
 import OpenAI from "openai";
 import { ACCOUNT_CREATIVE_DIRECTION, type CreativePublicationRole } from "./account-direction";
 import sharp from "sharp";
@@ -28,7 +29,8 @@ export interface CreativeAiImageResult {
 
 export interface CreativeAiImageInput {
   topic: string;
-  mode?: "TOPIC_SPOTLIGHT";
+  mode?: "TOPIC_SPOTLIGHT" | "GENZ_BACKGROUND";
+  visualIdentity?: GenZIdentity;
   publicationRole?: CreativePublicationRole;
   direction: CreativeDirection;
   avoidDirections?: CreativeDirection[];
@@ -64,6 +66,7 @@ function boundedFullCreativeInput(input: CreativeAiImageInput): CreativeAiImageI
   return {
     topic: bounded(input.topic, 120),
     mode: input.mode,
+    visualIdentity: input.visualIdentity,
     publicationRole: input.publicationRole && Object.hasOwn(ACCOUNT_CREATIVE_DIRECTION, input.publicationRole) ? input.publicationRole : undefined,
     direction: input.direction,
     avoidDirections: (input.avoidDirections || []).filter((direction) => direction !== input.direction).slice(0, 4),
@@ -80,6 +83,10 @@ function boundedFullCreativeInput(input: CreativeAiImageInput): CreativeAiImageI
 
 export function buildCreativeImagePrompt(rawInput: CreativeAiImageInput) {
   const input = boundedFullCreativeInput(rawInput);
+  if (input.mode === "GENZ_BACKGROUND") {
+    if (!input.visualIdentity) throw Error("GENZ_VISUAL_IDENTITY_REQUIRED");
+    return buildGenZBackgroundPrompt(input.visualIdentity);
+  }
   if (input.mode === "TOPIC_SPOTLIGHT") {
     return [
       "Design a complete original 2:3 Pinterest editorial poster, 1024x1536, with all typography, illustration and composition designed by you.",

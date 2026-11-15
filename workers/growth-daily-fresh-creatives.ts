@@ -114,8 +114,9 @@ async function buildBatch(day: string, now = new Date()) {
   // Its first saved before/after pair must be meaningful before spending anything.
   const qualified = available.filter(target =>
     target.shortDescription.trim().length >= MIN_DESCRIPTION_LENGTH &&
-    (target.editorialExamples[0]?.originalText.trim().length ?? 0) >= 8 &&
-    (target.editorialExamples[0]?.transformedText.trim().length ?? 0) >= 8);
+    (rotation.publicationRole === "SAYTWIST" ||
+      ((target.editorialExamples[0]?.originalText.trim().length ?? 0) >= 8 &&
+      (target.editorialExamples[0]?.transformedText.trim().length ?? 0) >= 8)));
   const parsedPolicy = policy
     ? { mode: policy.pinMode, minimum: policy.pinMinimum,
       maximum: policy.pinMaximum, fixed: policy.pinFixed }
@@ -141,6 +142,7 @@ async function createOne(target: { id: string; slug: string; conversionId?: stri
     creativeModelVersion: CREATIVE_LAB_VERSION,
   };
   const queued = await enqueueCreativeGeneration(request, {
+    useAccountDefaultStyle: true,
     runAfter: new Date(Date.now() - 1000),
     idempotencyScope: target.conversionId ? "native-conversion:" + target.conversionId : "daily-ai-fresh-v2:" + day + ":" + target.slug,
   });

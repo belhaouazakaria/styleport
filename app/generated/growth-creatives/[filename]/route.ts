@@ -16,7 +16,7 @@ export async function GET(_request: Request, context: { params: Promise<{ filena
   if (!filePath) return new NextResponse("Not Found", { status: 404 });
   try {
     const bytes = await readFile(filePath);
-    return new NextResponse(bytes, { headers: { ...assetHeaders, "Content-Length": String(bytes.length) } });
+    return new NextResponse(bytes, { headers: { ...assetHeaders, "Content-Type": filename.endsWith(".webp") ? "image/webp" : "image/png", "Content-Length": String(bytes.length) } });
   } catch {
     return new NextResponse("Not Found", { status: 404 });
   }
@@ -28,7 +28,7 @@ export async function HEAD(_request: Request, context: { params: Promise<{ filen
   if (!filePath) return new NextResponse(null, { status: 404 });
   try {
     const bytes = await readFile(filePath);
-    return new NextResponse(null, { headers: { ...assetHeaders, "Content-Length": String(bytes.length) } });
+    return new NextResponse(null, { headers: { ...assetHeaders, "Content-Type": filename.endsWith(".webp") ? "image/webp" : "image/png", "Content-Length": String(bytes.length) } });
   } catch {
     return new NextResponse(null, { status: 404 });
   }

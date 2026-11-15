@@ -64,6 +64,7 @@ export async function approvePinCandidate(raw: unknown, adminUserId: string, now
     }
     if (candidate.asset.state !== GrowthAssetState.READY || candidate.asset.mimeType !== "image/png" || candidate.asset.width !== 1000 || candidate.asset.height !== 1500) throw new Error("Creative asset is not publishable.");
     const account = await tx.growthPinterestAccount.findFirst({ where: { id: input.accountId, connectionStatus: GrowthPinterestConnectionStatus.CONNECTED }, select: { id: true, publicationRole: true, apiEnvironment: true, grantedScopes: true, encryptedCredentials: true, refreshTokenExpiresAt: true } });
+    if (candidate.rendererKey === "genz-editorial" && account?.publicationRole !== "SAYTWIST") throw Error("Gen-Z Editorial belongs only to the main SayTwist account.");
     const config = requirePinterestConfiguration();
     if (!account || account.apiEnvironment !== config.apiEnvironment || !hasPinterestScopes(account.grantedScopes, PINTEREST_CREATE_PIN_SCOPES) || !account.encryptedCredentials || (account.refreshTokenExpiresAt && account.refreshTokenExpiresAt <= now)) throw new Error("Pinterest account is not eligible for publishing.");
     const board = await tx.growthPinterestBoard.findFirst({ where: { id: input.boardId, accountId: account.id, isActive: true }, select: { id: true } });

@@ -126,3 +126,37 @@ describe("Creative Lab target picker", () => {
     expect(await screen.findByText("Pin reapproved with a new publication.")).toBeInTheDocument();
   });
 });
+
+
+describe("Main-account Gen-Z Editorial controls", () => {
+  const accounts = [{ id: "main", label: "@saytwist", publicationRole: "SAYTWIST" }, { id: "ideas", label: "@saytwistideas", publicationRole: "SAYTWIST_IDEAS" }, { id: "play", label: "@saytwistplayground", publicationRole: "SAYTWIST_PLAYGROUND" }];
+  it("defaults only Main to Gen-Z and preserves explicit legacy selections", async () => {
+    const user = userEvent.setup();
+    render(<CreativeGenerationForm translators={[{ id: "cat", name: "Cat Translator", slug: "cat" }]} ideas={[]} accounts={accounts} experiments={[]} aiImageEnabled uprightReady uprightMessage="Upright Regular verified." />);
+    const photo = screen.getByRole("radio", { name: /Gen-Z Editorial/ });
+    expect(photo).toBeChecked();
+    expect(screen.getByRole("slider", { name: "Stroke width percentage" })).toHaveValue("250");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Pinterest account" }), "ideas");
+    expect(photo).toBeDisabled(); expect(photo).not.toBeChecked();
+    expect(screen.queryByRole("slider", { name: "Stroke width percentage" })).not.toBeInTheDocument();
+    await user.selectOptions(screen.getByRole("combobox", { name: "Pinterest account" }), "main");
+    expect(photo).toBeChecked();
+    await user.click(screen.getByRole("radio", { name: /Minimal poster/ }));
+    expect(photo).not.toBeChecked();
+  });
+  it("queues the selected outline and export quality without approving or publishing", async () => {
+    const fetcher = vi.fn(async () => ({ ok: true, json: async () => ({ ok: true }) }) as Response); vi.stubGlobal("fetch", fetcher);
+    render(<CreativeGenerationForm translators={[{ id: "cat", name: "Cat Translator", slug: "cat" }]} ideas={[]} accounts={accounts} experiments={[]} aiImageEnabled uprightReady />);
+    fireEvent.change(screen.getByRole("slider", { name: "Stroke width percentage" }), { target: { value: "300" } });
+    fireEvent.change(screen.getByRole("spinbutton", { name: /WebP export quality/ }), { target: { value: "95" } });
+    fireEvent.click(screen.getByRole("button", { name: "Generate one candidate" }));
+    await waitFor(() => expect(fetcher).toHaveBeenCalledOnce());
+    expect(JSON.parse(String(fetcher.mock.calls[0][1]?.body))).toMatchObject({ accountId: "main", designStyle: "genz_editorial", strokeWidthPercent: 300, webpQuality: 95 });
+    expect(String(fetcher.mock.calls[0][0])).toBe("/api/admin/growth/creative/generate");
+  });
+  it("does not pretend the exact font is ready when it is unavailable", () => {
+    render(<CreativeGenerationForm translators={[{ id: "cat", name: "Cat Translator", slug: "cat" }]} ideas={[]} accounts={accounts} experiments={[]} aiImageEnabled uprightReady={false} uprightMessage="Upright permission is unverified." />);
+    expect(screen.getByRole("alert")).toHaveTextContent("Upright permission is unverified");
+    expect(screen.getByRole("button", { name: "Generate one candidate" })).toBeDisabled();
+  });
+});

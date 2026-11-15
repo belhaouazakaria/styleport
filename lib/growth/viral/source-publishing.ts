@@ -1,3 +1,4 @@
+import { sourceUsesGenZ } from "@/lib/growth/creative/genz-account-scope";
 import {
   GrowthActivityActorKind, GrowthPublicationStatus, Prisma,
 } from "@prisma/client";
@@ -42,7 +43,8 @@ export async function prepareOriginalSourcePinDraft(conceptId: string, userId: s
 
   const rotation = await readDailyRotation(new Date());
   if (!rotation.accountId || !rotation.publicationRole) throw Error("SOURCE_AI_ACCOUNT_NOT_QUALIFIED");
-  const creative = await createOriginalSourceAsset(concept.title, concept.sourceUrl, "source-" + concept.id, rotation.publicationRole);
+  const selectedAccount = await prisma.growthPinterestAccount.findUniqueOrThrow({ where: { id: rotation.accountId }, select: { publicationRole: true } });
+  const creative = await createOriginalSourceAsset(concept.title, concept.sourceUrl, "source-" + concept.id, selectedAccount.publicationRole);
   try {
     const draft = await prisma.$transaction(async tx => {
       await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext('growth-viral-source-draft-v1'))`);
@@ -74,6 +76,7 @@ export async function prepareOriginalSourcePinDraft(conceptId: string, userId: s
           summary: {
             assetChecksum: creative.checksum, sourceDomain: "anythingtranslate.com",
             sourceImageUsed: false, copiedThirdPartyDescription: false,
+            designStyle: creative.designStyle, fontChecksum: creative.fontChecksum, webpPublicPath: creative.webpPublicPath,
             designGeneration: "AI", aiProvider: "OPENAI", aiModel: "gpt-image-2", aiCalls: 1,
             pinPublished: false, ownerApprovalRequired: true,
             rating: { score: rating.score, decision: rating.decision,
@@ -134,7 +137,7 @@ export async function approveOriginalSourcePin(
       }),
       tx.growthPinterestAccount.findUnique({
         where: { id: input.accountId },
-        select: { id: true, connectionStatus: true,
+        select: { id: true, publicationRole: true, connectionStatus: true,
           apiEnvironment: true, encryptedCredentials: true, grantedScopes: true },
       }),
       tx.growthPinterestBoard.findUnique({
@@ -181,6 +184,7 @@ export async function approveOriginalSourcePin(
         !board?.isActive || board.accountId !== input.accountId) {
       throw Error("SOURCE_APPROVAL_ACCOUNT_UNAVAILABLE");
     }
+    if (account.publicationRole !== "SAYTWIST" && await sourceUsesGenZ(draft.id, tx)) throw Error("Gen-Z Editorial belongs only to the main SayTwist account.");
     const rotation = await readDailyRotation(scheduled, tx);
     assertActiveRotationAccount(rotation, input.accountId);
     if (policy.sourceSharePercent !== 50 ||

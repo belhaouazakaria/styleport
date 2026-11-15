@@ -13,7 +13,7 @@ export async function POST(request: Request) {
   const parsed = creativeGenerationRequestSchema.safeParse(input);
   if (!parsed.success) return apiError(400, "VALIDATION_ERROR", "Invalid Creative Lab generation request.");
   try {
-    const result = await enqueueCreativeGeneration(parsed.data);
+    const result = await enqueueCreativeGeneration(input);
     return apiOk({ jobId: result.job.id, created: result.created }, result.created ? 202 : 200);
   } catch (error) {
     return apiError(400, "VALIDATION_ERROR", error instanceof Error ? error.message : "Creative target is unavailable.");
