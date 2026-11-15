@@ -1,3 +1,5 @@
+import { prepareDailySourceCreativeDrafts } from "@/lib/growth/viral/daily-source-drafts";
+import { GrowthBudgetBlockedError } from "@/lib/growth/economics/reservations";
 import { bindNativeCampaignJob, readFreshCreativeTargets } from "@/lib/growth/viral/native-creative-targets";
 import { readFileSync } from "node:fs";
 import os from "node:os";
@@ -185,6 +187,7 @@ async function createOne(target: { id: string; slug: string; conversionId?: stri
       await completeGrowthJob(job, workerId, summary);
     } catch (error) {
       await failGrowthJob(job, workerId, error);
+      if (error instanceof GrowthBudgetBlockedError) throw error;
       throw Error("FRESH_GENERATION_FAILED");
     }
   } finally {
@@ -218,20 +221,52 @@ export function selectDailyFreshTargetsForMode<T>(targets: T[], mode: string): T
   throw Error("FRESH_MODE_INVALID");
 }
 
+async function createOneSource() {
+  await requireIdle();
+  const deadline = new Date(Date.now() + LEASE_MS);
+  const admitted = await prisma.growthSettings.updateMany({
+    where: { id: "global", enabled: false, attributionEnabled: false, workerActivationExpiresAt: null },
+    data: { enabled: true, workerActivationExpiresAt: deadline, configVersion: { increment: 1 } },
+  });
+  if (admitted.count !== 1) throw Error("FRESH_LEASE_RACE");
+  try {
+    return await prepareDailySourceCreativeDrafts(new Date(), true);
+  } finally {
+    await revokeGrowthWorkerActivation(deadline);
+  }
+}
+
+export function isFreshCapacityLimit(error: unknown) {
+  return error instanceof GrowthBudgetBlockedError &&
+    ["IMAGE_DAILY_LIMIT", "DAILY_LIMIT", "MONTHLY_LIMIT"].includes(error.reason);
+}
+
 export async function executeDailyFreshCreativeCycle(day: string, mode: string) {
   const { planned, targets, accountId } = await buildBatch(day);
-  if (planned.additional === 0) {
-    await requireIdle();
-    return { status: planned.status, created: 0, aiCalls: 0, pinsPublished: 0 };
-  }
   const selectedTargets = selectDailyFreshTargetsForMode(targets, mode);
   let created = 0;
-  for (const target of selectedTargets) {
-    await createOne(target, day, accountId);
-    created++;
+  try {
+    for (const target of selectedTargets) {
+      await createOne(target, day, accountId);
+      created++;
+    }
+    // Trial retains its one-image authorization. Scheduled preparation shares
+    // the SAME financial/image ledger across native and credited source art.
+    if (mode === "SCHEDULED" && planned.status !== "PAUSED") {
+      for (let i = 0; i < 3 && created < 5; i++) {
+        const result = await createOneSource();
+        if (!result.created) break;
+        created += result.created;
+      }
+    }
+  } catch (error) {
+    await requireIdle();
+    if (!isFreshCapacityLimit(error)) throw error;
+    return { status: created ? "PASSED" as const : "PAUSED" as const, created, aiCalls: created, pinsPublished: 0 };
   }
   await requireIdle();
-  return { status: "PASSED" as const, created, aiCalls: created, pinsPublished: 0 };
+  return { status: created ? "PASSED" as const : planned.status === "READY" ? "NO_QUALIFIED_TARGET" as const : planned.status,
+    created, aiCalls: created, pinsPublished: 0 };
 }
 
 async function main() {

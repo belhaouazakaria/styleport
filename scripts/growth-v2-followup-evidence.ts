@@ -27,7 +27,7 @@ export async function readV2FollowupEvidence() {
         'publications', (SELECT COALESCE(jsonb_agg(to_jsonb(p) ORDER BY p.id),'[]') FROM "GrowthPinPublication" p),
         'approvals', (SELECT COALESCE(jsonb_agg(to_jsonb(a) ORDER BY a.id),'[]') FROM "GrowthPinApproval" a),
         'candidates', (SELECT COALESCE(jsonb_agg(to_jsonb(c) ORDER BY c.id),'[]') FROM "GrowthPinCandidate" c),
-        'sources', (SELECT COALESCE(jsonb_agg(to_jsonb(s) ORDER BY s.id),'[]') FROM "GrowthViralPinTest" s)
+        'sources', (SELECT COALESCE(jsonb_agg(to_jsonb(s) - 'designGenerationKind' ORDER BY s.id),'[]') FROM "GrowthViralPinTest" s)
       ) AS evidence`;
       return {
         safe: true,

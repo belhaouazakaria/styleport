@@ -58,6 +58,7 @@ export async function approvePinCandidate(raw: unknown, adminUserId: string, now
     await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`pin-approval:${input.candidateId}`}))`);
     const candidate = await readApprovalCandidate(tx, input.candidateId);
     if (!candidate) throw new Error("Only a READY creative candidate can be approved.");
+    if (process.env.NODE_ENV === "production" && candidate.asset.generationKind !== "AI") throw Error("New Pin approvals require an AI design.");
     if (candidate.accountId && candidate.accountId !== input.accountId) {
       throw new Error("This design was prepared for a different Pinterest account.");
     }

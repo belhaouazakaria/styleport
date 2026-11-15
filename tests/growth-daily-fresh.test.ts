@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { planDailyFreshCreatives } from "@/lib/growth/operations/daily-fresh-creative-plan";
-import { assertDailyFreshRuntime, selectDailyFreshTargetsForMode } from "@/workers/growth-daily-fresh-creatives";
+import { assertDailyFreshRuntime, selectDailyFreshTargetsForMode, isFreshCapacityLimit } from "@/workers/growth-daily-fresh-creatives";
 
 const sha = "a".repeat(40);
 const identity = {
@@ -136,4 +136,11 @@ describe("Phase14M daily budgeted AI Pinterest drafts", () => {
       ...env, GROWTH_ROLLOUT_MODE: "RECOMMEND",
     }, sha, identity, new Date("2026-11-07T07:03:00Z"))).toThrow();
   });
+});
+
+import { GrowthBudgetBlockedError } from "@/lib/growth/economics/reservations";
+it("pauses only on exhausted capacity and preserves provider/ledger incidents", () => {
+  for (const reason of ["IMAGE_DAILY_LIMIT", "DAILY_LIMIT", "MONTHLY_LIMIT"]) expect(isFreshCapacityLimit(new GrowthBudgetBlockedError(reason))).toBe(true);
+  for (const reason of ["IMAGE_PROVIDER_OUTCOME_UNKNOWN", "AI_USAGE_LEDGER_WRITE_FAILED", "UNVERIFIED_IMAGE_PRICE", "IMAGE_REQUEST_ALREADY_ATTEMPTED"]) expect(isFreshCapacityLimit(new GrowthBudgetBlockedError(reason))).toBe(false);
+  expect(isFreshCapacityLimit(Error("MONTHLY_LIMIT"))).toBe(false);
 });

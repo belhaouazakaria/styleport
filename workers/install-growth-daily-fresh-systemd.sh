@@ -73,7 +73,7 @@ Environment=EXPECTED_RELEASE=$SHA
 Environment=GROWTH_DAILY_FRESH_LAUNCH=true
 EnvironmentFile=$AI_ENV
 ExecStart=/home/saytwist/.nvm/versions/node/v24.20.0/bin/node $APP/workers/growth-daily-fresh-launch.cjs
-TimeoutStartSec=900
+TimeoutStartSec=1200
 NoNewPrivileges=true
 UMask=0077
 EOF
