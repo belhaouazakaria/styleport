@@ -2343,3 +2343,17 @@ model GrowthAnalyticsCoverage {
   @@unique([source, accountId, metricType])
   @@index([status, observedAt])
 }
+
+model GrowthExternalAnalyticsDaily {
+  id           String   @id @default(cuid())
+  source       String   @db.VarChar(24)
+  accountId    String
+  metricDate   DateTime
+  providerTimeZone String @db.VarChar(80)
+  metrics      Json
+  qualityFlags String[]
+  fetchedAt    DateTime @default(now())
+
+  @@unique([source, accountId, metricDate])
+  @@index([source, metricDate])
+}

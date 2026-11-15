@@ -1,5 +1,6 @@
 // @vitest-environment node
-import { createHash, randomUUID } from "node:crypto";
+import { synchronizeGoogleAnalytics } from "@/lib/growth/google/sync";
+import { createHash, generateKeyPairSync, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { prisma } from "@/lib/prisma";
 import { evidenceChecksum } from "@/lib/growth/approvals/contracts";
@@ -151,7 +152,7 @@ beforeAll(async () => {
   );
   // Only this exact disposable database can be reset.
   await prisma.$executeRawUnsafe(
-    'TRUNCATE "GrowthViralProgramSettings", "GrowthViralConcept", "GrowthViralConversion", "GrowthAnalyticsCoverage", "GrowthApprovalRequest", "GrowthNotification", "GrowthDiscordInteraction", "GrowthPinCandidate", "GrowthPinApproval", "GrowthPinPublication", "GrowthPinterestAccount", "GrowthSettings", "User", "Translator" CASCADE',
+    'TRUNCATE "GrowthExternalAnalyticsDaily", "GrowthViralProgramSettings", "GrowthViralConcept", "GrowthViralConversion", "GrowthAnalyticsCoverage", "GrowthApprovalRequest", "GrowthNotification", "GrowthDiscordInteraction", "GrowthPinCandidate", "GrowthPinApproval", "GrowthPinPublication", "GrowthPinterestAccount", "GrowthSettings", "User", "Translator" CASCADE',
   );
   await prisma.user.create({
     data: {
@@ -681,5 +682,160 @@ suite("Unified owner consent with PostgreSQL 18", () => {
         })
       ).aiDailyBudgetCents,
     ).toBe(210);
+  });
+  it("persists Google property date labels once without fabricating omitted dates", async () => {
+    const key = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const config = {
+      GROWTH_GOOGLE_ANALYTICS_ENABLED: "true",
+      GROWTH_GA4_PROPERTY_ID: "123",
+      GROWTH_GOOGLE_SERVICE_ACCOUNT_JSON: JSON.stringify({
+        type: "service_account",
+        client_email: "growth@test.iam.gserviceaccount.com",
+        private_key: key.privateKey
+          .export({ type: "pkcs8", format: "pem" })
+          .toString(),
+        token_uri: "https://oauth2.googleapis.com/token",
+      }),
+    };
+    const date = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) -
+        3 * 86400000,
+    )
+      .toISOString()
+      .slice(0, 10);
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({
+          access_token: "fake",
+          token_type: "Bearer",
+          expires_in: 3600,
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          dimensionHeaders: [{ name: "date" }],
+          metricHeaders: ["sessions", "activeUsers", "keyEvents"].map(
+            (name) => ({ name, type: "TYPE_INTEGER" }),
+          ),
+          rows: [
+            {
+              dimensionValues: [{ value: date.replaceAll("-", "") }],
+              metricValues: [{ value: "8" }, { value: "7" }, { value: "1" }],
+            },
+          ],
+          rowCount: 1,
+          metadata: { timeZone: "America/New_York" },
+        }),
+      );
+    expect(
+      (await synchronizeGoogleAnalytics(now, config, fetcher)).synchronized,
+    ).toBe(1);
+    expect(
+      (await synchronizeGoogleAnalytics(now, config, fetcher)).synchronized,
+    ).toBe(0);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    const rows = await prisma.growthExternalAnalyticsDaily.findMany({
+      where: { source: "GA4", accountId: "123" },
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].providerTimeZone).toBe("America/New_York");
+    expect(rows[0].metrics).toEqual({
+      sessions: "8",
+      activeUsers: "7",
+      keyEvents: "1",
+    });
+    const ledger = await prisma.growthAnalyticsCoverage.findUniqueOrThrow({
+      where: {
+        source_accountId_metricType: {
+          source: "GA4",
+          accountId: "123",
+          metricType: "PROVIDER_DAILY",
+        },
+      },
+    });
+    expect(ledger.status).toBe("COVERED_WITH_OMISSIONS");
+    expect((ledger.missingPeriods as unknown[]).length).toBe(89);
+    fetcher
+      .mockResolvedValueOnce(
+        Response.json({
+          access_token: "fake",
+          token_type: "Bearer",
+          expires_in: 3600,
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          dimensionHeaders: [{ name: "date" }],
+          metricHeaders: ["sessions", "activeUsers", "keyEvents"].map(
+            (name) => ({ name, type: "TYPE_INTEGER" }),
+          ),
+          rows: [],
+          rowCount: 0,
+          metadata: { timeZone: "America/New_York" },
+        }),
+      );
+    await synchronizeGoogleAnalytics(
+      new Date(now.getTime() + 86400000),
+      config,
+      fetcher,
+    );
+    const refreshed =
+      await prisma.growthExternalAnalyticsDaily.findFirstOrThrow({
+        where: { accountId: "123" },
+      });
+    expect(refreshed.qualityFlags).toContain("PROVIDER_OMITTED_ON_REFRESH");
+    expect(refreshed.metrics).toEqual({
+      sessions: "8",
+      activeUsers: "7",
+      keyEvents: "1",
+    });
+    const after = await prisma.growthAnalyticsCoverage.findUniqueOrThrow({
+      where: {
+        source_accountId_metricType: {
+          source: "GA4",
+          accountId: "123",
+          metricType: "PROVIDER_DAILY",
+        },
+      },
+    });
+    expect((after.missingPeriods as unknown[]).length).toBe(90);
+  });
+  it("records revoked Google authorization and retries neither credentials nor metrics immediately", async () => {
+    const key = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const config = {
+      GROWTH_GOOGLE_ANALYTICS_ENABLED: "true",
+      GROWTH_GA4_PROPERTY_ID: "456",
+      GROWTH_GOOGLE_SERVICE_ACCOUNT_JSON: JSON.stringify({
+        type: "service_account",
+        client_email: "growth@test.iam.gserviceaccount.com",
+        private_key: key.privateKey
+          .export({ type: "pkcs8", format: "pem" })
+          .toString(),
+        token_uri: "https://oauth2.googleapis.com/token",
+      }),
+    };
+    const fetcher = vi
+      .fn()
+      .mockResolvedValue(new Response("private failure body", { status: 403 }));
+    await synchronizeGoogleAnalytics(now, config, fetcher);
+    await synchronizeGoogleAnalytics(now, config, fetcher);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    const ledger = await prisma.growthAnalyticsCoverage.findUniqueOrThrow({
+      where: {
+        source_accountId_metricType: {
+          source: "GA4",
+          accountId: "456",
+          metricType: "PROVIDER_DAILY",
+        },
+      },
+    });
+    expect(ledger.status).toBe("AUTHORIZATION_REQUIRED");
+    expect(ledger.lastErrorCode).toBe("AUTHORIZATION");
+    expect(
+      await prisma.growthExternalAnalyticsDaily.count({
+        where: { accountId: "456" },
+      }),
+    ).toBe(0);
   });
 });

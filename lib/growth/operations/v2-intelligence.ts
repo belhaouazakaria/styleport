@@ -1,3 +1,4 @@
+import { synchronizeGoogleAnalytics } from "@/lib/growth/google/sync";
 import { learnViralNativeOutcomes } from "@/lib/growth/viral/native-learning";
 import { auditPinterestReadiness } from "@/lib/growth/pinterest/account-readiness";
 import { prisma } from "@/lib/prisma";
@@ -23,6 +24,7 @@ export async function runGrowthV2Intelligence(
   });
   const viralActive = program?.mode === "ACTIVE";
   const stages: [string, () => Promise<unknown>][] = [
+    ["googleAnalytics", () => synchronizeGoogleAnalytics(now, config)],
     [
       "accountReadiness",
       () =>

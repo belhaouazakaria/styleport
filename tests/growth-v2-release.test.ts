@@ -20,20 +20,21 @@ describe("Growth V2 protected release", () => {
       execFileSync("node", ["--check", "workers/growth-v2-launch.cjs"]),
     ).not.toThrow();
   });
-  it("pins the actual known release and all three exact additive migrations", () => {
+  it("pins the actual known release and all four exact additive migrations", () => {
     for (const script of [release, migration])
       expect(script).toContain("a5d93f7e50a87007e046dbac34976b46304b98a9");
     for (const name of [
       "20261115120000_growth_unified_approvals",
       "20261115130000_growth_intelligence_coverage",
       "20261115140000_growth_viral_evidence_windows",
+      "20261115150000_growth_google_analytics",
     ]) {
       expect(release).toContain(name);
       expect(migration).toContain(name);
     }
     expect(release).toContain('audit|hold) [[ "$MIGRATIONS" == 36 ]]');
-    expect(release).toContain('restore) [[ "$MIGRATIONS" == 39 ]]');
-    expect(release).toMatch(/migration_name IN[^\n]+== 3/);
+    expect(release).toContain('restore) [[ "$MIGRATIONS" == 40 ]]');
+    expect(release).toMatch(/migration_name IN[^\n]+== 4/);
     expect(migration).toContain('"$db_names" == "$source_names"');
     expect(release).toContain('NOT EXISTS(SELECT 1 FROM "GrowthJob"');
   });

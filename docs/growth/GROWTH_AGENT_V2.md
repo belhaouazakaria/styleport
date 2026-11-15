@@ -39,18 +39,20 @@ Learning compares source/native outbound rates over the same seven completed UTC
 
 The V2 account-analytics path processes up to three connected production accounts independently and refreshes 28 completed dates per account. Existing one-account behavior remains the default until V2 opt-in. The readiness stage can synchronize one stale account's boards per run using complete-only official reads; it never creates a board. Publication rotation, quotas and approved account identity remain unchanged.
 
-The existing official transport quotas (including the 4/hour and 16/day controls), provider headers, reservations and watchdog still apply. Failed analytics remain unavailable; they are not zeros. GA4 and Search Console ingestion are **not implemented/connected by this change**. The dashboard explicitly identifies that absence. History outside the existing supported Pinterest 90-day window is recorded as unavailable.
+The existing official transport quotas (including the 4/hour and 16/day controls), provider headers, reservations and watchdog still apply. Failed analytics remain unavailable; they are not zeros. GA4 and Search Console have separately opt-in read-only service-account adapters and daily observation storage. They are not live-connected or provider-verified. Date labels retain GA4 property time zones and finalized Search Console Pacific dates; key events are not assumed to be qualified translations. Initial reads cover a policy-bounded 90 days and daily refreshes cover seven dates, with three bounded transient attempts/day, delayed rate-limit retries and explicit omitted-date flags. History outside the existing supported Pinterest 90-day window is recorded as unavailable.
 
 ## Runtime and configuration
 
 All new runtime work is default-off. Credentials belong in root-managed secret environment files, never repository files, chat, command arguments, public variables or logs.
 
-Web callback and courier need:
+Web callback and courier need the following identity settings:
 
 - `GROWTH_DISCORD_ENABLED=true`
-- `DISCORD_APPLICATION_ID`, `DISCORD_PUBLIC_KEY`, `DISCORD_BOT_TOKEN`
+- `DISCORD_APPLICATION_ID`, `DISCORD_PUBLIC_KEY`
 - `DISCORD_OWNER_USER_ID` (the verified human's Discord ID)
 - `GROWTH_DISCORD_OWNER_USER_ID` (that owner's existing ADMIN database user ID)
+
+The bot token `DISCORD_BOT_TOKEN` is required only by the private courier/report transport, not by the web callback.
 
 Discord's Interactions Endpoint URL is `https://saytwist.com/api/growth/discord-interactions`. Signature-checked PING is supported. Configure private DMs with the intended owner and verify actual delivery before cutover. No guild approvals, privileged message-content intent or public command channel is needed.
 
@@ -78,15 +80,16 @@ The historical Telegram failure's actual provider root cause is **unknown**. The
 
 ## Database and release gates
 
-Three additive migrations follow the existing 36-migration baseline:
+Four additive migrations follow the existing 36-migration baseline:
 
 1. `20261115120000_growth_unified_approvals`
 2. `20261115130000_growth_intelligence_coverage`
 3. `20261115140000_growth_viral_evidence_windows`
+4. `20261115150000_growth_google_analytics`
 
-Disposable PostgreSQL 18.3 qualification applies all 39 migrations. A separate populated fixture rehearsal applied the original 36 migrations, restored fixture data and upgraded to 39 while preserving counts of 9 Translators, 9 candidates, 6 approvals and 1 publication. This is **not** a rehearsal against a current production backup. A fresh restricted production backup, full isolated restore, invariant verification and exact-artifact rehearsal remain mandatory before production approval.
+Disposable PostgreSQL 18.3 qualification applies all 40 migrations. A separate populated fixture rehearsal applied the original 36 migrations, restored fixture data and upgraded to 39; the final four-migration artifact is rehearsed separately below while preserving counts of 9 Translators, 9 candidates, 6 approvals and 1 publication. This is **not** a rehearsal against a current production backup. A fresh restricted production backup, full isolated restore, invariant verification and exact-artifact rehearsal remain mandatory before production approval.
 
-`workers/coordinate-growth-v2-release.sh` pins OLD to `a5d93f7...`, holds/restores the twelve existing timers, requires 36 migrations before hold and all three exact migrations/39 total before restore, and refuses an active queue. It never discards approved/failed/completed history. If future approved Pins remain, wait for an appropriate quiet window or prepare a separately reviewed exact-publication hold; do not cancel them to satisfy this guard.
+`workers/coordinate-growth-v2-release.sh` pins OLD to `a5d93f7...`, holds/restores the twelve existing timers, requires 36 migrations before hold and all four exact migrations/40 total before restore, and refuses an active queue. It never discards approved/failed/completed history. If future approved Pins remain, wait for an appropriate quiet window or prepare a separately reviewed exact-publication hold; do not cancel them to satisfy this guard.
 
 `scripts/hostinger-prepare-growth-v2-migrations.sh` requires a root-owned reviewed source bundle outside the app, matching release SHA, held timers, exact old migration inventory, separate `APPLY growth-v2-20261115` owner approval and a verified private PG18 backup. It does not deploy application code. Owner acceptance of the production-backup clone rehearsal is required before invoking it. The existing Hostinger guarded deployment and subsequent timer verification remain separate. New V2 timers must remain disabled until Discord recipient/interaction/Admin acceptance and independent monitoring checks pass.
 
@@ -98,15 +101,36 @@ Local authenticated browser checks verified the Approval Center at desktop and 3
 
 Automated coverage includes real Ed25519 signatures, stale/tampered requests, owner/DM/message identity, replay, Admin boundaries, concurrent cross-channel decisions, transaction rollback, stale/expired snapshots, terminal rejection, DB evidence immutability, Discord outage/429/unknown sends/finalization, budget-change consent, statistical winner qualification, original conversion lineage, scoped recovery, account-specific image prompts and source/native comparison.
 
-Pending acceptance is explicit: fresh live VPS audit and board synchronization; actual Discord owner provisioning and DM/button receipt; protected production-backup clone rehearsal/release; the failed-Pin recovery review and owner's exact decision; a real Pinterest result and post-publication metrics; source/native generation quality against real provider outputs; real pending-Pin visual and browser interaction acceptance; GA4/Search Console adapters; live cohort policy calibration acceptance. Passing mocks or fixture tests does not establish these outcomes.
+Pending acceptance is explicit: fresh live VPS audit and board synchronization; actual Discord owner provisioning and DM/button receipt; protected production-backup clone rehearsal/release; the failed-Pin recovery review and owner's exact decision; a real Pinterest result and post-publication metrics; source/native generation quality against real provider outputs; real pending-Pin visual and browser interaction acceptance; Google service-account/property authorization and live acceptance; live cohort policy calibration acceptance. Passing mocks or fixture tests does not establish these outcomes.
 
 ### Recorded local qualification results
 
 - Full default suite: 201 files / 1,050 passing tests at the recorded full run; 18 opt-in suites / 200 tests skipped in that invocation.
-- V2 qualification command: 23 passing checks, including 10 real PostgreSQL integration cases plus 13 pure/security checks.
-- Existing PostgreSQL regressions: publishing 17/17, analytics recovery 14/14, finance/concurrency 8/8, learning 14/14. Together with V2, 63 real database integration cases passed. A further account-analytics regression suite covers the one-GET portfolio path.
+- V2 qualification command after Google integration: 32 passing checks, including 12 real PostgreSQL integration cases plus 20 pure/security checks.
+- Existing PostgreSQL regressions: publishing 17/17, analytics recovery 14/14, finance/concurrency 8/8, learning 14/14. Account analytics passed 9/9, including the one-GET portfolio path. Together with V2, 74 real database integration cases passed.
 - Typecheck and production build passed. ESLint reported no errors and 16 existing warnings at the recorded pass.
 - Existing learning fixtures now pin their intended October evaluation clock. Recovery tests now explicitly provide the required activation lease and exact-ID RECOVER scope. Production kill switches and authorization rules were not relaxed to satisfy old tests.
 - V2 account refresh omits optional top-Pin fan-out so three account baselines use three GETs, fitting the existing four-request/hour ceiling before any separate provider quota admission. Source Pin analytics and normal pin-maintenance supply individual evidence independently.
 
 These results do not establish real Discord delivery, third-party generation quality, production backup compatibility or a successful live Pin publication.
+
+
+## Google authorization and source references
+
+The Google stage is separately disabled unless `GROWTH_GOOGLE_ANALYTICS_ENABLED=true`. The restricted intelligence environment needs `GROWTH_GOOGLE_SERVICE_ACCOUNT_JSON` from an owner-provisioned service account and either/both `GROWTH_GA4_PROPERTY_ID` and `GROWTH_SEARCH_CONSOLE_SITE`. Approved Search Console targets are `sc-domain:saytwist.com`, `https://saytwist.com/`, or `https://www.saytwist.com/`. Enable the official Analytics Data and Search Console APIs and grant this service account read access to the intended GA4 property and verified Search Console property. Do not enable domain-wide impersonation. Store the JSON only in the root-managed secret environment file. The web app/courier receive no Google private key.
+
+The adapter signs short-lived RS256 assertions with one read-only scope per source and a fixed Google token endpoint, rejects external token endpoints, schema drift, truncated/thresholded GA4 data, duplicate/out-of-range dates and invalid metric values. Date-only reports have at most 90 rows under a 100-row request limit; an unexpected larger count fails closed rather than silently truncating. Missing report dates remain unavailable; no synthetic zeros or translation conversions are created.
+
+Verified primary references during implementation:
+
+- [Discord signed interaction requests](https://docs.discord.com/developers/interactions/receiving-and-responding)
+- [Discord message transport and nonce semantics](https://docs.discord.com/developers/resources/message)
+- [Pinterest developer publication guidelines](https://policy.pinterest.com/en/developer-guidelines)
+- [Google Analytics Data API reports](https://developers.google.com/analytics/devguides/reporting/data/v1/basics)
+- [Search Console query and finalized Pacific date semantics](https://developers.google.com/webmaster-tools/v1/searchanalytics/query)
+- [Google service-account OAuth assertions](https://developers.google.com/identity/protocols/oauth2/service-account)
+
+
+### Final artifact qualification addendum
+
+The four-migration populated fixture rehearsal completed **36 → 40** migrations and preserved 9 Translators, 9 candidates, 6 approvals and 1 publication. Default-suite qualification after the Google adapters passed **1,057 tests / 202 files** (202 opt-in tests skipped). The callback configuration was subsequently narrowed to public identity/signature settings, with its own regression check, so the bot token need not enter the web process. Exact-head CI must pass before owner release review.

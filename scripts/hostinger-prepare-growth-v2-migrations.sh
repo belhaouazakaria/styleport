@@ -9,7 +9,7 @@ NODE_DIR=/home/saytwist/.nvm/versions/node/v24.20.0/bin
 MIGRATION_ROOT="${HOSTINGER_MIGRATION_ROOT:-}"
 RELEASE_SHA="${HOSTINGER_RELEASE_SHA:-}"
 APPROVED_MIGRATION="growth-v2-20261115"
-APPROVED_DIRECTORIES=(20261115120000_growth_unified_approvals 20261115130000_growth_intelligence_coverage 20261115140000_growth_viral_evidence_windows)
+APPROVED_DIRECTORIES=(20261115120000_growth_unified_approvals 20261115130000_growth_intelligence_coverage 20261115140000_growth_viral_evidence_windows 20261115150000_growth_google_analytics)
 APPROVAL="${HOSTINGER_MIGRATION_APPROVAL:-}"
 PG_DUMP_BIN="/usr/lib/postgresql/18/bin/pg_dump"
 PG_RESTORE_BIN="/usr/lib/postgresql/18/bin/pg_restore"
@@ -175,7 +175,7 @@ validate_exact_pending_migration() {
     -c 'SELECT migration_name FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL ORDER BY migration_name;')" ||
       fail "Could not inspect applied migrations."
   source_names="$(find "$MIGRATION_ROOT/prisma/migrations" -mindepth 1 -maxdepth 1 \
-    -type d ! -name "${APPROVED_DIRECTORIES[0]}" ! -name "${APPROVED_DIRECTORIES[1]}" ! -name "${APPROVED_DIRECTORIES[2]}" -printf '%f\n' | LC_ALL=C sort)" ||
+    -type d ! -name "${APPROVED_DIRECTORIES[0]}" ! -name "${APPROVED_DIRECTORIES[1]}" ! -name "${APPROVED_DIRECTORIES[2]}" ! -name "${APPROVED_DIRECTORIES[3]}" -printf '%f\n' | LC_ALL=C sort)" ||
       fail "Could not inspect reviewed migration source."
   [[ "$db_names" == "$source_names" ]] ||
     fail "Applied production migrations do not match reviewed migration source."

@@ -1,4 +1,4 @@
-import { getDiscordConfig } from "@/lib/growth/discord/config";
+import { getDiscordInteractionConfig } from "@/lib/growth/discord/config";
 import {
   receiveDiscordDecision,
   verifyDiscordSignature,
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   let config;
   try {
-    config = getDiscordConfig();
+    config = getDiscordInteractionConfig();
   } catch {
     return new Response(null, { status: 404 });
   }

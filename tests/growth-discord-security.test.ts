@@ -2,7 +2,10 @@
 import { generateKeyPairSync, sign } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { verifyDiscordSignature } from "@/lib/growth/discord/interactions";
-import { getDiscordConfig } from "@/lib/growth/discord/config";
+import {
+  getDiscordConfig,
+  getDiscordInteractionConfig,
+} from "@/lib/growth/discord/config";
 import {
   discordRequest,
   DiscordTransportError,
@@ -74,4 +77,16 @@ describe("Discord interaction trust boundary", () => {
     ).rejects.toEqual(new DiscordTransportError("UNKNOWN"));
     expect(failure).toHaveBeenCalledTimes(1);
   });
+});
+
+it("keeps the Discord bot token out of the web callback configuration", () => {
+  const env = {
+    GROWTH_DISCORD_ENABLED: "true",
+    DISCORD_APPLICATION_ID: config.applicationId,
+    DISCORD_OWNER_USER_ID: config.ownerDiscordId,
+    GROWTH_DISCORD_OWNER_USER_ID: config.ownerUserId,
+    DISCORD_PUBLIC_KEY: config.publicKey,
+  };
+  expect(getDiscordInteractionConfig(env)).not.toHaveProperty("token");
+  expect(() => getDiscordConfig(env)).toThrow("CONFIGURATION");
 });

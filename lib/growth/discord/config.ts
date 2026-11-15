@@ -1,5 +1,5 @@
 export const discordSnowflake = /^[1-9][0-9]{16,23}$/;
-export function getDiscordConfig(
+export function getDiscordInteractionConfig(
   env: Record<string, string | undefined> = process.env,
 ) {
   if (env.GROWTH_DISCORD_ENABLED !== "true") throw Error("DISCORD_DISABLED");
@@ -7,15 +7,26 @@ export function getDiscordConfig(
   const ownerDiscordId = env.DISCORD_OWNER_USER_ID || "";
   const ownerUserId = env.GROWTH_DISCORD_OWNER_USER_ID || "";
   const publicKey = env.DISCORD_PUBLIC_KEY || "";
-  const token = env.DISCORD_BOT_TOKEN || "";
   if (
     !discordSnowflake.test(applicationId) ||
     !discordSnowflake.test(ownerDiscordId) ||
     !/^[a-zA-Z0-9_-]{1,191}$/.test(ownerUserId) ||
-    !/^[a-fA-F0-9]{64}$/.test(publicKey) ||
-    !/^[A-Za-z0-9_.-]{30,256}$/.test(token)
+    !/^[a-fA-F0-9]{64}$/.test(publicKey)
   )
     throw Error("DISCORD_CONFIGURATION_INVALID");
-  return { applicationId, ownerDiscordId, ownerUserId, publicKey, token };
+  return { applicationId, ownerDiscordId, ownerUserId, publicKey };
 }
 export type DiscordConfig = ReturnType<typeof getDiscordConfig>;
+
+export function getDiscordConfig(
+  env: Record<string, string | undefined> = process.env,
+) {
+  const identity = getDiscordInteractionConfig(env);
+  const token = env.DISCORD_BOT_TOKEN || "";
+  if (!/^[A-Za-z0-9_.-]{30,256}$/.test(token))
+    throw Error("DISCORD_CONFIGURATION_INVALID");
+  return { ...identity, token };
+}
+export type DiscordInteractionConfig = ReturnType<
+  typeof getDiscordInteractionConfig
+>;

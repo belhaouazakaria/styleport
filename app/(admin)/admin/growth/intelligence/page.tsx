@@ -5,33 +5,38 @@ import { AdminTopbar } from "@/components/admin/admin-topbar";
 export const dynamic = "force-dynamic";
 export default async function GrowthIntelligencePage() {
   await requireAdminRoute();
-  const [coverage, conversions, publications, activity] = await Promise.all([
-    prisma.growthAnalyticsCoverage.findMany({
-      orderBy: { observedAt: "desc" },
-      take: 12,
-    }),
-    prisma.growthViralConversion.findMany({
-      orderBy: { createdAt: "desc" },
-      take: 30,
-    }),
-    prisma.growthPinPublication.findMany({
-      orderBy: { scheduledAt: "desc" },
-      take: 30,
-      select: {
-        id: true,
-        candidate: { select: { title: true } },
-        scheduledAt: true,
-        status: true,
-        pinterestPinId: true,
-        lastErrorCode: true,
-      },
-    }),
-    prisma.growthActivity.findMany({
-      orderBy: { createdAt: "desc" },
-      take: 25,
-      select: { id: true, action: true, entityId: true, createdAt: true },
-    }),
-  ]);
+  const [coverage, conversions, publications, activity, externalAnalytics] =
+    await Promise.all([
+      prisma.growthAnalyticsCoverage.findMany({
+        orderBy: { observedAt: "desc" },
+        take: 12,
+      }),
+      prisma.growthViralConversion.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 30,
+      }),
+      prisma.growthPinPublication.findMany({
+        orderBy: { scheduledAt: "desc" },
+        take: 30,
+        select: {
+          id: true,
+          candidate: { select: { title: true } },
+          scheduledAt: true,
+          status: true,
+          pinterestPinId: true,
+          lastErrorCode: true,
+        },
+      }),
+      prisma.growthActivity.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 25,
+        select: { id: true, action: true, entityId: true, createdAt: true },
+      }),
+      prisma.growthExternalAnalyticsDaily.findMany({
+        orderBy: [{ metricDate: "desc" }, { source: "asc" }],
+        take: 20,
+      }),
+    ]);
   return (
     <>
       <AdminTopbar
@@ -108,8 +113,9 @@ export default async function GrowthIntelligencePage() {
             Analytics coverage
           </h2>
           <p className="text-muted-ink text-sm">
-            GA4 and Search Console ingestion are not connected to this ledger.
-            Their metrics are unavailable here.
+            Google sources require separately authorized service account access.
+            Provider date labels and time zones remain attached to each
+            observation.
           </p>
           <div className="grid gap-4 md:grid-cols-2">
             {coverage.map((c) => (
@@ -186,6 +192,59 @@ export default async function GrowthIntelligencePage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </section>
+        <section className="space-y-4">
+          <h2 className="font-display text-2xl font-bold">
+            Google provider observations
+          </h2>
+          <p className="text-muted-ink text-sm">
+            Key events are not assumed to be qualified translation completions.
+            Omitted dates remain unavailable.
+          </p>
+          <div className="overflow-x-auto rounded-2xl border bg-white">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr>
+                  {[
+                    "Source",
+                    "Provider date",
+                    "Time zone",
+                    "Reported metrics",
+                  ].map((h) => (
+                    <th key={h} className="p-4">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {externalAnalytics.map((row) => (
+                  <tr key={row.id} className="border-t">
+                    <td className="p-4">{row.source}</td>
+                    <td className="p-4">
+                      {row.metricDate.toISOString().slice(0, 10)}
+                    </td>
+                    <td className="p-4">{row.providerTimeZone}</td>
+                    <td className="p-4">
+                      {row.qualityFlags.includes("PROVIDER_OMITTED_ON_REFRESH")
+                        ? "Unavailable (provider omitted on refresh)"
+                        : Object.entries(row.metrics as Record<string, string>)
+                            .map(([key, value]) => key + ": " + value)
+                            .join(" · ")}
+                      <p className="text-muted-ink mt-1 text-xs">
+                        Retrieved {row.fetchedAt.toISOString()}
+                      </p>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {!externalAnalytics.length ? (
+              <p className="p-5 text-sm">
+                No Google provider observations have been collected.
+              </p>
+            ) : null}
           </div>
         </section>
         <section>

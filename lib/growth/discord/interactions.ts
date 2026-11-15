@@ -2,7 +2,7 @@ import { createPublicKey, verify } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { discordSnowflake, type DiscordConfig } from "./config";
+import { discordSnowflake, type DiscordInteractionConfig } from "./config";
 
 export function verifyDiscordSignature(
   raw: string,
@@ -59,7 +59,7 @@ const interactionSchema = z.object({
  * publication execution may delay Discord's three-second acknowledgement. */
 export async function receiveDiscordDecision(
   body: unknown,
-  config: DiscordConfig,
+  config: DiscordInteractionConfig,
   now = new Date(),
 ) {
   const parsed = interactionSchema.safeParse(body);

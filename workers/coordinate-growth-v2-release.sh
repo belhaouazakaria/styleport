@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 # Exact OLD-SHA, 12-timer production hold / restore / recover coordinator.
-# This release adds exactly three independently approved, additive Prisma migrations.
+# This release adds exactly four independently approved, additive Prisma migrations.
 # Deploy must never apply migrations; stop at operator-controlled rehearsal and backup.
 # Must be copied outside the application tree as root:root mode 0700.
 fail() { echo 'GROWTH_TWELVE_RELEASE=BLOCKED' >&2; exit 1; }
@@ -129,11 +129,11 @@ MIGRATIONS="$(count_migrations)" || fail
 [[ "$MIGRATIONS" =~ ^[0-9]+$ ]] || fail
 case "$MODE" in
   audit|hold) [[ "$MIGRATIONS" == 36 ]] || fail ;;
-  restore) [[ "$MIGRATIONS" == 39 ]] || fail ;;
-  recover) [[ "$MIGRATIONS" == 36 || "$MIGRATIONS" == 39 ]] || fail ;;
+  restore) [[ "$MIGRATIONS" == 40 ]] || fail ;;
+  recover) [[ "$MIGRATIONS" == 36 || "$MIGRATIONS" == 40 ]] || fail ;;
 esac
 if [[ "$MODE" == restore ]]; then
-  [[ "$(db "SELECT count(*) FROM \"_prisma_migrations\" WHERE migration_name IN ('20261115120000_growth_unified_approvals','20261115130000_growth_intelligence_coverage','20261115140000_growth_viral_evidence_windows') AND finished_at IS NOT NULL AND rolled_back_at IS NULL;")" == 3 ]] || fail
+  [[ "$(db "SELECT count(*) FROM \"_prisma_migrations\" WHERE migration_name IN ('20261115120000_growth_unified_approvals','20261115130000_growth_intelligence_coverage','20261115140000_growth_viral_evidence_windows','20261115150000_growth_google_analytics') AND finished_at IS NOT NULL AND rolled_back_at IS NULL;")" == 4 ]] || fail
 fi
 safe_db
 if [[ "$MODE" == audit || "$MODE" == hold ]]; then
