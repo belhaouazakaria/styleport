@@ -100,13 +100,14 @@ export async function getPinterestAnalyticsOverview() {
       select: { status: true, lastSuccessfulSyncAt: true,
         lastAccountAnalyticsSyncAt: true, lastInventorySyncAt: true,
         lastPinAnalyticsSyncAt: true, backfillCompletedAt: true,
-        backfillPinsProcessed: true, backfillPinsTotal: true },
+        backfillPinsProcessed: true, backfillPinsTotal: true, lastError: true },
       orderBy: { lastSuccessfulSyncAt: "desc" },
     }),
   ]);
   return {
     pinsInventoried, analyticsRelevantPins,
-    status: states.some((state) => state.status === "BACKFILLING") ? "BACKFILLING" : effectiveStatus(states[0], analyticsRelevantPins, new Date(), recentlySyncedPinCount),
+    status: states.length ? ["FAILED", "WAITING_FOR_CAPACITY", "BACKFILLING", "NEVER_SYNCED", "PARTIAL", "STALE", "FRESH"]
+      .find(status => states.some(state => effectiveStatus(state, undefined, new Date(), recentlySyncedPinCount < analyticsRelevantPins ? 0 : undefined) === status)) || "PARTIAL" : "NEVER_SYNCED",
     lastSuccessfulSyncAt: states[0]?.lastSuccessfulSyncAt || null,
     backfillPinsProcessed: states.reduce((sum, state) => sum + state.backfillPinsProcessed, 0),
     backfillPinsTotal: states.reduce((sum, state) => sum + state.backfillPinsTotal, 0),
@@ -115,6 +116,7 @@ export async function getPinterestAnalyticsOverview() {
 
 type FreshnessState = {
   status: string;
+  lastError?: string | null;
   lastSuccessfulSyncAt: Date | null;
   lastAccountAnalyticsSyncAt?: Date | null;
   lastInventorySyncAt?: Date | null;
@@ -137,6 +139,7 @@ export function effectiveStatus(
   recentlySyncedPinCount?: number,
 ) {
   if (!state) return "NEVER_SYNCED";
+  if (state.lastError && ["GLOBAL_QUOTA_EXHAUSTED", "PROVIDER_COOLDOWN"].includes(state.lastError)) return "WAITING_FOR_CAPACITY";
   if (state.status !== "FRESH") return state.status;
   const current = now.getTime();
   const old = (value: Date | null | undefined, maxAge: number) =>

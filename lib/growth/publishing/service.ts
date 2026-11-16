@@ -1,3 +1,4 @@
+import { assertPublicationSpacing } from "@/lib/growth/approvals/spacing";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import {
@@ -33,7 +34,7 @@ function rateFields(rateLimit: { limit: string | null; remaining: string | null;
   return { lastRateLimitLimit: bounded(rateLimit.limit, 64), lastRateLimitRemaining: bounded(rateLimit.remaining, 64), lastRateLimitReset: bounded(rateLimit.reset, 128) };
 }
 
-export async function recommendPublicationTiming(accountId: string, stableKey: string, now = new Date()) {
+export async function recommendPublicationTiming(accountId: string, stableKey: string, now = new Date(), reservations: { scheduledAt: Date }[] = []) {
   const [pins, collisions, learningRun] = await Promise.all([
     prisma.growthPinterestPin.findMany({ where: { accountId, publishedAt: { gte: new Date(now.getTime() - 90 * 86_400_000) } }, select: { publishedAt: true, summaryImpressions: true, summaryOutboundClicks: true, summarySaves: true }, orderBy: { publishedAt: "desc" }, take: 500 }),
     prisma.growthPinPublication.findMany({ where: { accountId, status: { notIn: [GrowthPublicationStatus.CANCELLED, GrowthPublicationStatus.FAILED_TERMINAL] }, scheduledAt: { gte: new Date(now.getTime() - 90 * 60_000) } }, select: { scheduledAt: true }, orderBy: { scheduledAt: "asc" }, take: 100 }),
@@ -41,7 +42,7 @@ export async function recommendPublicationTiming(accountId: string, stableKey: s
   ]);
   const learnedChoice = learningRun ? chooseLearnedWindow({ stableKey, windows: learningRun.scheduleWindows.map((window) => ({ ...window, impressions: Number(window.impressions), outboundClicks: Number(window.outboundClicks), saves: Number(window.saves), timeZone: "America/New_York", mode: GrowthPublicationTimingMode.EXPLOIT, reasonCodes: [], outboundRate: window.impressions > BigInt(0) ? Number(window.outboundClicks) / Number(window.impressions) : null, conversionRate: null })) }) : null;
   const learned = learningRun && learnedChoice?.localHour != null ? { localHour: learnedChoice.localHour, mode: learnedChoice.mode, confidence: learningRun.scheduleWindows.find((window) => window.localHour === learnedChoice.localHour)?.confidence || 0, runId: learningRun.id } : null;
-  return planPublicationTiming({ stableKey, now, history: pins.map((pin) => ({ publishedAt: pin.publishedAt, impressions: pin.summaryImpressions, outboundClicks: pin.summaryOutboundClicks, saves: pin.summarySaves })), collisions, learned });
+  return planPublicationTiming({ stableKey, now, history: pins.map((pin) => ({ publishedAt: pin.publishedAt, impressions: pin.summaryImpressions, outboundClicks: pin.summaryOutboundClicks, saves: pin.summarySaves })), collisions: [...collisions, ...reservations], learned });
 }
 
 async function readApprovalCandidate(tx: Prisma.TransactionClient, candidateId: string) {
@@ -86,6 +87,7 @@ export async function approvePinCandidate(raw: unknown, adminUserId: string, now
     // Default PAUSED: no change to existing publication behavior. Once ACTIVE,
     // serialize both source and SayTwist approvals against one shared daily quota.
     await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${VIRAL_PORTFOLIO_APPROVAL_LOCK}))`);
+    await assertPublicationSpacing(tx, requestedAt);
     await assertViralPortfolioApproval(tx, "SAYTWIST", requestedAt, input.accountId);
 
     const approvalId = randomUUID();

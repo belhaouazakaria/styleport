@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   assessPinterestRecoveryRateLimit,
+  remainingPinterestRecoveryRange,
   canProbePinterestRecoveryQuota,
   defaultPinterestRecoveryRange,
   detectPinterestAnalyticsGaps,
@@ -276,4 +277,12 @@ describe("Pinterest analytics gap recovery planning", () => {
       reason: "RATE_LIMIT_METADATA_MISSING",
     });
   });
+});
+
+it("clips queued recovery requests as the provider window advances without losing expired-gap evidence", () => {
+  const now = new Date("2026-11-16T04:20:00Z");
+  const oldest = defaultPinterestRecoveryRange(now).startDate;
+  expect(remainingPinterestRecoveryRange(new Date("2026-08-01Z"), new Date("2026-09-01Z"), now))
+    .toEqual({ startDate: oldest, endDate: "2026-09-01" });
+  expect(remainingPinterestRecoveryRange(new Date("2026-07-01Z"), new Date("2026-07-31Z"), now)).toBeNull();
 });

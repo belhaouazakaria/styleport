@@ -6,11 +6,13 @@ import { Button } from "@/components/ui/button";
 export function GrowthReviewActions({
   requestId,
   snapshotChecksum,
-  label = "Approve this exact Pin",
+  label = "Approve Pin",
+  canReschedule = false,
 }: {
   requestId: string;
   snapshotChecksum: string;
   label?: string;
+  canReschedule?: boolean;
 }) {
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
@@ -24,11 +26,9 @@ export function GrowthReviewActions({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ requestId, snapshotChecksum, action }),
       });
-      if (!response.ok)
-        throw Error(
-          "Decision could not be applied. Refresh and check account, board and schedule eligibility.",
-        );
-      setMessage("Decision recorded.");
+      const result = await response.json();
+      if (!response.ok) throw Error(result.error?.message || "Decision could not be applied.");
+      setMessage(result.status === "APPROVED" ? "Approved." : result.status === "REJECTED" ? "Rejected." : "Review closed: " + String(result.status).toLowerCase() + ". Refresh to see the current plan.");
       router.refresh();
     } catch (e) {
       setMessage(
@@ -37,6 +37,21 @@ export function GrowthReviewActions({
     } finally {
       setPending(false);
     }
+  }
+  async function reschedule() {
+    setPending(true);
+    setMessage("");
+    try {
+      const response = await fetch("/api/admin/growth/approvals", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ kind: "RESCHEDULE", requestId }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw Error(result.error?.message || "Could not find a new time.");
+      setMessage("New plan ready. Review it before approving.");
+      router.refresh();
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Could not find a new time."); }
+    finally { setPending(false); }
   }
   return (
     <div className="space-y-2">
@@ -51,6 +66,7 @@ export function GrowthReviewActions({
         >
           Reject
         </Button>
+        {canReschedule ? <Button variant="ghost" disabled={pending} onClick={reschedule}>Find a new time</Button> : null}
       </div>
       <p role="status" aria-live="polite" className="text-muted-ink text-sm">
         {message}
@@ -80,10 +96,8 @@ export function PrepareGrowthReview({
             : { kind: "NATIVE_PIN", candidateId },
         ),
       });
-      if (!response.ok)
-        throw Error(
-          "Review preparation blocked. Check account, board and timing in Creative Lab.",
-        );
+      const result = await response.json();
+      if (!response.ok) throw Error(result.error?.message || "Review preparation failed.");
       router.refresh();
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "Review preparation failed.");

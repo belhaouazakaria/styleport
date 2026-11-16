@@ -34,6 +34,7 @@ import {
 import { toSafeGrowthError } from "@/lib/growth/safe-data";
 import { getGrowthSettings } from "@/lib/growth/settings";
 import { prisma } from "@/lib/prisma";
+import { PinterestGlobalBudgetBlocked } from "./global-budget";
 
 function continuationKey(parts: string[]) {
   const digest = createHash("sha256").update(parts.join(":"), "utf8").digest("hex").slice(0, 24);
@@ -370,14 +371,18 @@ export async function syncPinterestAccountAnalytics(params: {
         }
       });
     }
+    const state = await prisma.growthPinterestAnalyticsState.findUnique({ where: { accountId: params.accountId } });
     await prisma.growthPinterestAnalyticsState.update({
       where: { accountId: params.accountId },
-      data: { lastAccountAnalyticsSyncAt: fetchedAt, lastSuccessfulSyncAt: fetchedAt, lastError: null, ...pinterestRateLimitData(finalRateLimit, fetchedAt) },
+      data: { status: state?.inventoryBookmark || state?.inventoryStartedAt || !state?.backfillCompletedAt
+          ? GrowthPinterestAnalyticsStatus.PARTIAL : GrowthPinterestAnalyticsStatus.FRESH,
+        lastAccountAnalyticsSyncAt: fetchedAt, lastSuccessfulSyncAt: fetchedAt, lastError: null, ...pinterestRateLimitData(finalRateLimit, fetchedAt) },
     });
     await recordGrowthActivity({
       actorKind: GrowthActivityActorKind.WORKER, entityType: "GrowthPinterestAccount", entityId: params.accountId,
       action: "PINTEREST_ACCOUNT_ANALYTICS_SYNC_COMPLETED", summary: { dailyRows: rows.length, topPins: topCount, startDate: params.startDate, endDate: params.endDate },
     });
+    await reconcilePinterestAnalyticsProgress(params.accountId);
     return { dailyRows: rows.length, topPins: topCount };
   } catch (error) {
     await markAnalyticsFailure(params.accountId, error);
@@ -482,6 +487,9 @@ async function markAnalyticsFailure(
   status: GrowthPinterestAnalyticsStatus = GrowthPinterestAnalyticsStatus.FAILED,
 ) {
   const message = toSafeGrowthError(error);
+  const waiting = error instanceof PinterestGlobalBudgetBlocked &&
+    ["GLOBAL_QUOTA_EXHAUSTED", "PROVIDER_COOLDOWN"].includes(error.code);
+  if (waiting) status = GrowthPinterestAnalyticsStatus.PARTIAL;
   await prisma.growthPinterestAnalyticsState.upsert({
     where: { accountId },
     create: { accountId, status, lastAttemptAt: new Date(), lastError: message },
@@ -489,6 +497,6 @@ async function markAnalyticsFailure(
   });
   await recordGrowthActivity({
     actorKind: GrowthActivityActorKind.WORKER, entityType: "GrowthPinterestAccount", entityId: accountId,
-    action: "PINTEREST_ANALYTICS_SYNC_FAILED", summary: { error: message },
+    action: waiting ? "PINTEREST_ANALYTICS_SYNC_DEFERRED" : "PINTEREST_ANALYTICS_SYNC_FAILED", summary: { error: message },
   });
 }

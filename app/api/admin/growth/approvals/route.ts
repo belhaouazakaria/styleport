@@ -8,8 +8,11 @@ import {
   createNativePinReview,
   createSourcePinReview,
   decideGrowthReview,
+  rescheduleGrowthReview,
 } from "@/lib/growth/approvals/service";
+import { growthReviewErrorMessage } from "@/lib/growth/approvals/messages";
 const createSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("RESCHEDULE"), requestId: z.string().min(1).max(191) }).strict(),
   z
     .object({
       kind: z.literal("NATIVE_PIN"),
@@ -45,6 +48,7 @@ export async function POST(request: Request) {
   if (!input.success)
     return apiError(400, "VALIDATION_ERROR", "Invalid review request.");
   try {
+    if (input.data.kind === "RESCHEDULE") return apiOk(await rescheduleGrowthReview(input.data.requestId, auth.actor!));
     const review =
       input.data.kind === "NATIVE_PIN"
         ? await createNativePinReview(input.data.candidateId, auth.actor!)
@@ -63,12 +67,8 @@ export async function POST(request: Request) {
               auth.actor!,
             );
     return apiOk({ requestId: review.id, status: review.status });
-  } catch {
-    return apiError(
-      409,
-      "VALIDATION_ERROR",
-      "This Pin cannot be offered. Check account, board, time and review history.",
-    );
+  } catch (error) {
+    return apiError(409, "VALIDATION_ERROR", growthReviewErrorMessage(error));
   }
 }
 export async function PATCH(request: Request) {
@@ -85,11 +85,7 @@ export async function PATCH(request: Request) {
     );
   try {
     return apiOk(await decideGrowthReview(input.data, auth.actor!, "ADMIN"));
-  } catch {
-    return apiError(
-      409,
-      "VALIDATION_ERROR",
-      "Decision was not applied. Refresh the inbox and check publication eligibility.",
-    );
+  } catch (error) {
+    return apiError(409, "VALIDATION_ERROR", growthReviewErrorMessage(error));
   }
 }

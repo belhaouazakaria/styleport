@@ -77,7 +77,7 @@ export async function runGrowthWorker(options: {
     if (!options.onlyJobId) {
       await promoteDueGrowthRetries(startedAt, batchSize, rollout.allowedTypes);
       await recoverStaleGrowthJobs(startedAt, batchSize, rollout.allowedTypes);
-    } else if (rollout.mode === "RECOVER" || rollout.mode === "INVENTORY") {
+    } else if (rollout.mode === "RECOVER" || rollout.mode === "INVENTORY" || rollout.mode === "ANALYTICS" || rollout.mode === "OBSERVE") {
       // Read-only retries retain their exact ID and attempt/error history.
       // No scoped publishing/preparation invocation promotes any other job.
       await promoteDueGrowthRetries(startedAt, 1, rollout.allowedTypes, options.onlyJobId);

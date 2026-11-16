@@ -44,12 +44,6 @@ export default async function GrowthIntelligencePage() {
         subtitle="Source experiments, native campaigns and operational evidence."
       />
       <main className="mx-auto max-w-7xl space-y-8 p-4 sm:p-8">
-        <nav className="flex flex-wrap gap-5 text-sm font-bold underline underline-offset-4">
-          <Link href="/admin/growth/approvals">Approval Center</Link>
-          <Link href="/admin/growth/accounts">Account readiness</Link>
-          <Link href="/admin/growth/spend">Finance</Link>
-          <Link href="/admin/growth/reports">Daily reports</Link>
-        </nav>
         <section className="space-y-4">
           <h1 className="font-display text-3xl font-bold">
             Evidence before expansion.

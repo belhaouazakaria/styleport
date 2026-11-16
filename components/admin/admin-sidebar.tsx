@@ -12,7 +12,6 @@ import {
   Menu,
   MessageCircleMore,
   MessageSquareText,
-  PlusSquare,
   ScrollText,
   ShieldAlert,
   Sparkles,
@@ -33,8 +32,6 @@ const links = [
   { href: "/admin", label: "Overview", icon: BarChart3 },
   { href: "/admin/growth", label: "Growth", icon: Gauge },
   { href: "/admin/translators", label: "Translators", icon: Sparkles },
-  { href: "/admin/translators/new", label: "Create Translator", icon: PlusSquare },
-  { href: "/admin/translators/ai/new", label: "Create With AI", icon: Sparkles },
   { href: "/admin/categories", label: "Categories", icon: FolderTree },
   { href: "/admin/requests", label: "Create Submissions", icon: MessageSquareText },
   { href: "/admin/comments", label: "Comments", icon: MessageCircleMore },
@@ -74,7 +71,7 @@ export function AdminSidebar(props: AdminSidebarProps) {
           <Link
             key={item.href}
             href={item.href}
-            className={`flex min-h-11 items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold transition ${pathname === item.href ? "bg-brand-500 text-white" : "text-white/65 hover:bg-white/10 hover:text-white"}`}
+            className={`flex min-h-11 items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold transition ${(pathname === item.href || (item.href === "/admin/growth" && pathname.startsWith("/admin/growth/"))) ? "bg-brand-500 text-white" : "text-white/65 hover:bg-white/10 hover:text-white"}`}
           >
             <item.icon className="h-4 w-4" />
             <span>{item.label}</span>
@@ -113,7 +110,7 @@ export function AdminMobileNav(props: AdminSidebarProps) {
             </div>
             <nav className="space-y-1" aria-label="Admin navigation">
               {links.map((item) => (
-                <Link key={item.href} href={item.href} onClick={() => setOpen(false)} className={`flex min-h-12 items-center gap-3 rounded-xl px-3 text-sm font-bold ${pathname === item.href ? "bg-brand-500 text-white" : "text-white/70 hover:bg-white/10"}`}>
+                <Link key={item.href} href={item.href} onClick={() => setOpen(false)} className={`flex min-h-12 items-center gap-3 rounded-xl px-3 text-sm font-bold ${(pathname === item.href || (item.href === "/admin/growth" && pathname.startsWith("/admin/growth/"))) ? "bg-brand-500 text-white" : "text-white/70 hover:bg-white/10"}`}>
                   <item.icon className="h-4 w-4" />
                   <span>{item.label}</span>
                   {linkBadgeCount(item.href, props) > 0 ? <span className="ml-auto rounded-full bg-accent-500 px-2 py-0.5 text-xs text-white">{linkBadgeCount(item.href, props)}</span> : null}

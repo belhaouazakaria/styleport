@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   source: vi.fn(),
   automaticSource: vi.fn(),
   decide: vi.fn(),
+  reschedule: vi.fn(),
 }));
 vi.mock("@/lib/permissions", () => ({
   adminRouteGuard: mocks.guard,
@@ -20,6 +21,7 @@ vi.mock("@/lib/growth/approvals/service", () => ({
   createNativePinReview: mocks.native,
   createSourcePinReview: mocks.source,
   decideGrowthReview: mocks.decide,
+  rescheduleGrowthReview: mocks.reschedule,
 }));
 vi.mock("@/lib/growth/approvals/source-plan", () => ({
   prepareSourceReviewAutomatically: mocks.automaticSource,
@@ -99,4 +101,15 @@ describe("Approval Center authorization", () => {
       "ADMIN",
     );
   });
+});
+
+it("returns a useful scheduling conflict and prepares a replacement without approving", async () => {
+  mocks.decide.mockRejectedValue(new Error("REVIEW_SCHEDULE_COLLISION"));
+  const response = await PATCH(request({ requestId: "review", action: "APPROVE", snapshotChecksum: "a".repeat(64) }));
+  expect(response.status).toBe(409);
+  expect((await response.json()).error.message).toContain("Find a new time");
+  mocks.reschedule.mockResolvedValue({ requestId: "replacement", status: "PENDING" });
+  const result = await POST(request({ kind: "RESCHEDULE", requestId: "review" }));
+  expect(result.status).toBe(200);
+  expect(mocks.reschedule).toHaveBeenCalledWith("review", "verified-session-owner");
 });

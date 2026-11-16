@@ -1,288 +1,53 @@
-import { AdminTopbar } from "@/components/admin/admin-topbar";
-import { GrowthSettingsForm } from "@/components/admin/growth-settings-form";
-import { KpiCard } from "@/components/admin/kpi-card";
-import { buttonVariants } from "@/components/ui/button";
 import Link from "next/link";
-import { cn } from "@/lib/utils";
+import { AdminTopbar } from "@/components/admin/admin-topbar";
+import { KpiCard } from "@/components/admin/kpi-card";
 import { requireAdminRoute } from "@/lib/auth";
 import { getGrowthFoundationOverview } from "@/lib/growth/admin";
-
+import { prisma } from "@/lib/prisma";
 export const dynamic = "force-dynamic";
-
-function formatDate(value: Date | null | undefined) {
-  return value
-    ? new Intl.DateTimeFormat("en", {
-        dateStyle: "medium",
-        timeStyle: "short",
-      }).format(value)
-    : "Never";
-}
-
+const date = (value: Date | null | undefined) => value ? new Intl.DateTimeFormat("en", {
+  dateStyle: "medium", timeStyle: "short", timeZone: "UTC", hour12: false,
+}).format(value) + " UTC" : "Not yet";
 export default async function AdminGrowthPage() {
   await requireAdminRoute();
-  const overview = await getGrowthFoundationOverview();
-  const activeJobs = overview.jobs.claimed + overview.jobs.running;
-  const failedJobs = overview.jobs.retryable + overview.jobs.terminalFailed;
-
-  return (
-    <>
-      <AdminTopbar
-        title="Growth"
-        subtitle="Growth controls, bounded jobs, Pinterest connection, and organic analytics health."
-      />
-      <main className="space-y-6 p-4 sm:p-6">
-        <div className="flex flex-wrap justify-end gap-3">
-          <Link href="/admin/growth/intelligence" className={cn(buttonVariants({ variant: "outline" }))}>Growth Intelligence</Link>
-          <Link href="/admin/growth/approvals" className={cn(buttonVariants({ variant: "outline" }))}>Approval Center</Link>
-          <Link href="/admin/growth/viral" className={cn(buttonVariants({ variant: "outline" }))}>
-            Viral Pin Intelligence
-          </Link>
-          <Link href="/admin/growth/market-research" className={cn(buttonVariants({ variant: "outline" }))}>
-            External market discovery
-          </Link>
-          <Link href="/admin/growth/cadence" className={cn(buttonVariants({ variant: "outline" }))}>
-            Daily creative &amp; translator targets
-          </Link>
-          <Link href="/admin/growth/spend" className={cn(buttonVariants({ variant: "outline" }))}>
-            AI usage & cost coverage
-          </Link>
-          <Link href="/admin/growth/warnings" className={cn(buttonVariants({ variant: "outline" }))}>
-            Budget warning review
-          </Link>
-          <Link href="/admin/growth/reports" className={cn(buttonVariants({ variant: "outline" }))}>
-            Archived daily reports
-          </Link>
-          <Link
-            href="/admin/growth/learning"
-            className={cn(buttonVariants({ variant: "outline" }))}
-          >
-            Evergreen & learning
-          </Link>
-          <Link
-            href="/admin/growth/creative"
-            className={cn(buttonVariants({ variant: "outline" }))}
-          >
-            Creative Lab
-          </Link>
-          <Link
-            href="/admin/growth/ideas"
-            className={cn(buttonVariants({ variant: "outline" }))}
-          >
-            SayTwist Ideas
-          </Link>
-          <Link
-            href="/admin/growth/translators"
-            className={cn(buttonVariants({ variant: "outline" }))}
-          >
-            Translator Autopilot
-          </Link>
-          <Link
-            href="/admin/growth/opportunities"
-            className={cn(buttonVariants({ variant: "outline" }))}
-          >
-            Opportunity intelligence
-          </Link>
-          <Link
-            href="/admin/growth/strategy"
-            className={cn(buttonVariants({ variant: "outline" }))}
-          >
-            Account strategy
-          </Link>
-          <Link
-            href="/admin/growth/attribution"
-            className={cn(buttonVariants({ variant: "outline" }))}
-          >
-            Attribution
-          </Link>
-          <Link
-            href="/admin/growth/analytics"
-            className={cn(buttonVariants({ variant: "outline" }))}
-          >
-            Pinterest analytics
-          </Link>
-          <Link
-            href="/admin/growth/accounts"
-            className={cn(buttonVariants({ variant: "outline" }))}
-          >
-            Pinterest accounts
-          </Link>
-        </div>
-        <div className="border-brand-200 bg-brand-50 text-brand-950 rounded-2xl border p-4 text-sm leading-6">
-          Pinterest account, board, Pin inventory, organic analytics,
-          first-party attribution, and deterministic account strategy
-          infrastructure are available. Public attribution collection remains
-          inactive unless both attribution gates are enabled. SayTwist Ideas and
-          Translator Autopilot are available only through explicit bounded jobs
-          with immutable versions and rollback. Pinterest publishing requires individual approval of each Pin and a separately authorized worker.
-        </div>
-
-        <section
-          className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
-          aria-label="Growth foundation status"
-        >
-          <KpiCard
-            label="Growth state"
-            value={overview.settings.enabled ? "Enabled" : "Disabled"}
-            hint="Global execution kill switch"
-          />
-          <KpiCard
-            label="Queued jobs"
-            value={overview.jobs.queued.toLocaleString()}
-            hint={
-              overview.jobs.oldestRunnableJob
-                ? `Oldest due ${formatDate(overview.jobs.oldestRunnableJob.runAfter)}`
-                : "No runnable work"
-            }
-          />
-          <KpiCard
-            label="Active jobs"
-            value={activeJobs.toLocaleString()}
-            hint={`${overview.jobs.claimed} claimed · ${overview.jobs.running} running`}
-          />
-          <KpiCard
-            label="Failed jobs"
-            value={failedJobs.toLocaleString()}
-            hint={`${overview.jobs.retryable} retryable · ${overview.jobs.terminalFailed} terminal`}
-          />
-        </section>
-
-        <section
-          className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
-          aria-label="Pinterest analytics status"
-        >
-          <KpiCard
-            label="Analytics state"
-            value={overview.pinterestAnalytics.status}
-            hint="Across connected Pinterest accounts"
-          />
-          <KpiCard
-            label="Inventoried Pins"
-            value={overview.pinterestAnalytics.pinsInventoried.toLocaleString()}
-            hint="Active locally synchronized Pins"
-          />
-          <KpiCard
-            label="Analytics-relevant Pins"
-            value={overview.pinterestAnalytics.analyticsRelevantPins.toLocaleString()}
-            hint="Active Pins linking to owned domains"
-          />
-          <KpiCard
-            label="Pin backfill"
-            value={`${overview.pinterestAnalytics.backfillPinsProcessed}/${overview.pinterestAnalytics.backfillPinsTotal}`}
-            hint="Detailed Pin history progress"
-          />
-          <KpiCard
-            label="Analytics retrieved"
-            value={formatDate(overview.pinterestAnalytics.lastSuccessfulSyncAt)}
-            hint="Latest successful API retrieval"
-          />
-        </section>
-
-        <div className="border-border text-ink rounded-2xl border bg-white p-4 text-sm">
-          <strong>Attribution collection:</strong>{" "}
-          {overview.attribution.state.replaceAll("_", " ").toLowerCase()} ·
-          Server gate{" "}
-          {overview.attribution.environmentEnabled ? "enabled" : "disabled"} ·
-          Growth setting{" "}
-          {overview.attribution.settingEnabled ? "enabled" : "disabled"}
-        </div>
-
-        <GrowthSettingsForm
-          initial={{
-            enabled: overview.settings.enabled,
-            intensity: overview.settings.intensity,
-            workerBatchSize: overview.settings.workerBatchSize,
-            ownedDomains: overview.settings.ownedDomains,
-            defaultPinterestDestinationDomain: overview.settings.defaultPinterestDestinationDomain === "translator.whattypeof.com" ? "translator.whattypeof.com" : "saytwist.com",
-            attributionEnabled: overview.settings.attributionEnabled,
-            attributionWindowDays: overview.settings.attributionWindowDays,
-            attributionSessionRetentionDays:
-              overview.settings.attributionSessionRetentionDays,
-            attributionEventRetentionDays:
-              overview.settings.attributionEventRetentionDays,
-            evergreenCooldownDays:
-              overview.settings.evergreenCooldownDays,
-            aiDailyBudgetCents: overview.settings.aiDailyBudgetCents,
-            aiMonthlyBudgetCents: overview.settings.aiMonthlyBudgetCents,
-            aiImagesPerDayCap: overview.settings.aiImagesPerDayCap,
-            translatorCreatesPerDayCap: overview.settings.translatorCreatesPerDayCap,
-            translatorUpdatesPerDayCap: overview.settings.translatorUpdatesPerDayCap,
-            ideaCreatesPerWeekCap: overview.settings.ideaCreatesPerWeekCap,
-          }}
-        />
-
-        <section className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
-          <div className="border-border rounded-2xl border bg-white p-5 sm:p-6">
-            <p className="section-kicker">Worker</p>
-            <h2 className="font-display text-ink mt-1 text-2xl font-bold">
-              Last bounded run
-            </h2>
-            <dl className="mt-5 space-y-3 text-sm">
-              <div className="flex justify-between gap-4">
-                <dt className="text-muted-ink">Status</dt>
-                <dd className="text-ink font-bold">
-                  {overview.worker?.status || "Never run"}
-                </dd>
-              </div>
-              <div className="flex justify-between gap-4">
-                <dt className="text-muted-ink">Heartbeat</dt>
-                <dd className="text-ink text-right font-medium">
-                  {formatDate(overview.worker?.heartbeatAt)}
-                </dd>
-              </div>
-              <div className="flex justify-between gap-4">
-                <dt className="text-muted-ink">Completed</dt>
-                <dd className="text-ink text-right font-medium">
-                  {formatDate(overview.worker?.completedAt)}
-                </dd>
-              </div>
-              <div className="flex justify-between gap-4">
-                <dt className="text-muted-ink">Batch ceiling</dt>
-                <dd className="text-ink font-bold">
-                  {overview.settings.workerBatchSize}
-                </dd>
-              </div>
-            </dl>
-          </div>
-
-          <div className="border-border rounded-2xl border bg-white p-5 sm:p-6">
-            <p className="section-kicker">Audit trail</p>
-            <h2 className="font-display text-ink mt-1 text-2xl font-bold">
-              Recent Growth activity
-            </h2>
-            <div className="mt-5 space-y-3">
-              {overview.recentActivity.length ? (
-                overview.recentActivity.map((activity) => (
-                  <div
-                    key={activity.id}
-                    className="border-border rounded-xl border p-4"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-ink text-sm font-bold">
-                        {activity.action.replaceAll("_", " ")}
-                      </p>
-                      <time className="text-muted-ink text-xs">
-                        {formatDate(activity.createdAt)}
-                      </time>
-                    </div>
-                    <p className="text-muted-ink mt-1 text-xs">
-                      {activity.entityType} · {activity.entityId}
-                    </p>
-                    {activity.toState ? (
-                      <p className="text-ink mt-2 text-sm">
-                        {activity.fromState || "—"} → {activity.toState}
-                      </p>
-                    ) : null}
-                  </div>
-                ))
-              ) : (
-                <p className="border-border text-muted-ink rounded-xl border border-dashed p-5 text-sm">
-                  No Growth activity has been recorded yet.
-                </p>
-              )}
-            </div>
-          </div>
-        </section>
-      </main>
-    </>
-  );
+  const now = new Date();
+  const [overview, pending, native, sources, accounts] = await Promise.all([
+    getGrowthFoundationOverview(),
+    prisma.growthApprovalRequest.count({ where: { status: "PENDING", expiresAt: { gt: now } } }),
+    prisma.growthPinPublication.findMany({ where: { scheduledAt: { gte: now }, status: "SCHEDULED" },
+      select: { id: true, scheduledAt: true, candidate: { select: { title: true } }, account: { select: { username: true } } },
+      orderBy: { scheduledAt: "asc" }, take: 10 }),
+    prisma.growthViralPinTest.findMany({ where: { status: "APPROVED", scheduledAt: { gte: now } },
+      select: { id: true, scheduledAt: true, title: true, accountId: true },
+      orderBy: { scheduledAt: "asc" }, take: 10 }),
+    prisma.growthPinterestAccount.findMany({ select: { id: true, username: true }, take: 10 }),
+  ]);
+  const analyticsLabel = overview.pinterestAnalytics.status === "WAITING_FOR_CAPACITY" ? "Queued"
+    : overview.pinterestAnalytics.status.replaceAll("_", " ").toLowerCase();
+  const upcoming = [...native.map(p => ({ ...p, title: p.candidate.title })), ...sources.map(p => ({ ...p, account: accounts.find(a => a.id === p.accountId) }))]
+    .sort((a,b) => a.scheduledAt!.getTime() - b.scheduledAt!.getTime()).slice(0,10);
+  return <><AdminTopbar title="Growth" subtitle="Review Pins, follow your schedule and track results." />
+    <main className="mx-auto max-w-7xl space-y-8 p-4 sm:p-8">
+      <section className="flex flex-wrap items-center justify-between gap-6 rounded-2xl bg-[#173e35] p-6 text-white sm:p-8">
+        <div><p className="text-xs font-semibold tracking-widest text-[#a9cdb8] uppercase">Your publishing desk</p>
+          <h2 className="font-display mt-3 text-3xl font-bold">{pending ? `${pending} reviews need your eye.` : "You're up to date."}</h2>
+          <p className="mt-2 text-sm text-[#d4e4d9]">Every Pin is reviewed by you before it is scheduled.</p></div>
+        <Link href="/admin/growth/approvals" className="rounded-full bg-white px-5 py-3 text-sm font-bold text-[#173e35]">Open reviews →</Link>
+      </section>
+      <section aria-label="Growth status" className="grid gap-4 sm:grid-cols-3">
+        <KpiCard label="Scheduled Pins" value={String(upcoming.length)} hint="Upcoming approved publications" />
+        <KpiCard label="Analytics" value={analyticsLabel} hint={"Last retrieved " + date(overview.pinterestAnalytics.lastSuccessfulSyncAt)} />
+        <KpiCard label="Pin history" value={`${overview.pinterestAnalytics.backfillPinsProcessed}/${overview.pinterestAnalytics.backfillPinsTotal}`} hint="Detailed analytics progress" />
+      </section>
+      <section className="overflow-hidden rounded-2xl border border-border bg-white">
+        <div className="flex items-center justify-between border-b border-border p-5"><h2 className="font-display text-xl font-bold">Coming up</h2><Link href="/admin/growth/creative" className="text-sm font-semibold underline underline-offset-4">Open studio</Link></div>
+        {upcoming.length ? <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-muted-surface text-muted-ink"><tr><th className="p-4">Pin</th><th className="p-4">Account</th><th className="p-4">Publishing time (UTC)</th></tr></thead><tbody>
+          {upcoming.map(p => <tr key={p.id} className="border-t border-border"><td className="max-w-md p-4 font-medium">{p.title}</td><td className="p-4">@{p.account?.username}</td><td className="whitespace-nowrap p-4">{date(p.scheduledAt)}</td></tr>)}
+        </tbody></table></div> : <p className="text-muted-ink p-8 text-sm">No upcoming Pins. Approve a review to add one to the schedule.</p>}
+      </section>
+      <details className="rounded-2xl border border-border bg-white p-5"><summary className="cursor-pointer text-sm font-semibold">Recent system activity</summary>
+        <div className="mt-4 divide-y divide-border">{overview.recentActivity.slice(0,8).map(a => <div key={a.id} className="flex flex-wrap justify-between gap-2 py-3 text-sm"><span>{a.action.replaceAll("_", " ").toLowerCase()}</span><time className="text-muted-ink">{date(a.createdAt)}</time></div>)}</div>
+        <Link href="/admin/growth/intelligence" className="mt-4 inline-block text-sm underline">View operations</Link>
+      </details>
+    </main></>;
 }

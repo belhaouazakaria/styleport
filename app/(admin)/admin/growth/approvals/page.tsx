@@ -14,7 +14,8 @@ import {
   PrepareGrowthReview,
 } from "@/components/admin/growth-review-actions";
 export const dynamic = "force-dynamic";
-export default async function GrowthApprovalsPage() {
+export default async function GrowthApprovalsPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
+  const historyView = (await searchParams).view === "history";
   await requireAdminRoute();
   const session = await getSessionOrNull();
   if (!session?.user?.id) return null;
@@ -44,43 +45,17 @@ export default async function GrowthApprovalsPage() {
   return (
     <>
       <AdminTopbar
-        title="Approval Center"
+        title="Reviews"
         subtitle="Your decisions. One exact Pin at a time."
       />
       <main className="mx-auto max-w-7xl space-y-8 p-4 sm:p-8">
-        <section className="rounded-3xl bg-[#173e35] p-6 text-white sm:p-9">
-          <p className="text-xs font-bold tracking-[0.2em] text-[#a9cdb8] uppercase">
-            SayTwist / Owner desk
-          </p>
-          <div className="mt-4 flex flex-wrap items-end justify-between gap-5">
-            <div>
-              <h1 className="font-display text-4xl font-bold">
-                Ready for your eye.
-              </h1>
-              <p className="mt-3 max-w-xl text-sm leading-6 text-[#d4e4d9]">
-                Review the creative, destination and publishing plan below. Your
-                decision is saved here even when Discord is offline.
-              </p>
-            </div>
-            <div>
-              <strong className="font-display text-5xl">
-                {pending.length}
-              </strong>
-              <p className="mt-1 text-sm text-[#d4e4d9]">awaiting a decision</p>
-            </div>
-          </div>
-        </section>
-        <nav
-          aria-label="Growth workspace"
-          className="flex flex-wrap gap-5 text-sm font-bold underline underline-offset-4"
-        >
-          <Link href="/admin/growth">Overview</Link>
-          <Link href="/admin/growth/creative">Creative Studio</Link>
-          <Link href="/admin/growth/viral">Source experiments</Link>
-          <Link href="/admin/growth/analytics">Analytics coverage</Link>
-        </nav>
+        <div className="flex flex-wrap items-end justify-between gap-4 border-b border-border pb-5">
+          <div><h2 className="font-display text-3xl font-bold">{historyView ? "Review history" : "Ready for review"}</h2>
+          <p className="text-muted-ink mt-2 text-sm">{pending.length} awaiting your decision. Check the creative, destination and time.</p></div>
+          <Link href={historyView ? "/admin/growth/approvals" : "/admin/growth/approvals?view=history"} className="text-sm font-semibold underline underline-offset-4">{historyView ? "Back to pending reviews" : "View history"}</Link>
+        </div>
         <div className="space-y-6">
-          {reviews.map((review) => {
+          {(historyView ? reviews.filter(r => !pending.includes(r)) : pending).map((review) => {
             const operation = budgetChangeSchema.safeParse(review.snapshot);
             if (operation.success)
               return (
@@ -204,6 +179,7 @@ export default async function GrowthApprovalsPage() {
                     <GrowthReviewActions
                       requestId={review.id}
                       snapshotChecksum={review.snapshotChecksum}
+                      canReschedule
                     />
                   ) : (
                     <p className="text-sm font-bold">
@@ -216,13 +192,13 @@ export default async function GrowthApprovalsPage() {
               </article>
             );
           })}
-          {reviews.length === 0 && (
+          {(historyView ? reviews.filter(r => !pending.includes(r)).length === 0 : pending.length === 0) && (
             <p className="border-border rounded-2xl border border-dashed p-8 text-center text-sm">
-              No reviews yet. Prepare a candidate below to see its exact
-              publishing plan.
+              {historyView ? "No review history yet." : "All caught up. Prepare a creative in Studio when you’re ready."}
             </p>
           )}
         </div>
+        {!historyView && <details className="rounded-2xl border border-border bg-white p-5"><summary className="cursor-pointer font-semibold">Prepare more reviews</summary><div className="mt-5 space-y-6">
         <section className="space-y-4">
           <h2 className="font-display text-2xl font-bold">
             Prepared creatives
@@ -262,6 +238,7 @@ export default async function GrowthApprovalsPage() {
               ))}
           </div>
         </section>
+        </div></details>}
       </main>
     </>
   );
