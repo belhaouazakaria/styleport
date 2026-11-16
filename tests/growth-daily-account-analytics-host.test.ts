@@ -29,7 +29,7 @@ describe("daily account analytics installed only as disabled owner opt-in", () =
     expect(launcher).not.toContain("TELEGRAM_BOT_TOKEN");
     expect(launcher).not.toContain("console.log(child.stderr)");
     expect(runner).toContain("onlyJobId: jobId");
-    expect(runner).toContain("maxAttempts: 1");
+    expect(runner).toContain("maxAttempts: 3");
     expect(runner).toContain("countBlockingGrowthJobs(tx)");
     expect(runner).toContain("revokeGrowthWorkerActivation(deadline)");
     expect(runner).not.toContain("PINTEREST_PIN_PUBLISH");
