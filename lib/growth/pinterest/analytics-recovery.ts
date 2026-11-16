@@ -555,6 +555,7 @@ export async function recoverPinterestAnalyticsGaps(params: {
   batch: number;
   fetchImpl?: typeof fetch;
 }) {
+  const executionStartedAt = Date.now();
   const recovery = await prisma.growthPinterestAnalyticsRecovery.findUnique({
     where: { id: params.recoveryId },
   });
@@ -592,6 +593,9 @@ export async function recoverPinterestAnalyticsGaps(params: {
   let quotaProbes = 0;
 
   for (const task of tasks) {
+    // Leave room in the intelligence service deadline for other stages. A
+    // slow read resumes its unchanged task list instead of being killed.
+    if (Date.now() - executionStartedAt >= 15000) break;
     // Plans are immutable evidence. Only the actual request is clipped as the
     // provider window advances; expired dates remain explicitly unresolved.
     const range = remainingPinterestRecoveryRange(task.startDate, task.endDate);
