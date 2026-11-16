@@ -1,3 +1,4 @@
+import { unavailablePinterestAnalyticsPins } from "./analytics-access";
 import { ratePercent } from "@/lib/growth/pinterest/analytics-contract";
 import { prisma } from "@/lib/prisma";
 
@@ -14,6 +15,7 @@ export async function getPinterestAnalyticsDashboard(params: {
   const selected = accounts.find((account) => account.id === params.accountId) || accounts[0] || null;
   if (!selected) return { accounts, selected: null, freshnessStatus: "NEVER_SYNCED", totals: emptyMetrics(), trend: [], pins: [], pinCount: 0, analyticsRelevantPinCount: 0, rangeStart: null, rangeEnd: null };
 
+  const unavailable = await unavailablePinterestAnalyticsPins(selected.id);
   const rangeEnd = new Date();
   rangeEnd.setUTCHours(0, 0, 0, 0);
   const rangeStart = new Date(rangeEnd);
@@ -66,6 +68,7 @@ export async function getPinterestAnalyticsDashboard(params: {
   });
   return {
     accounts, selected, pinCount, analyticsRelevantPinCount, rangeStart, rangeEnd,
+    unavailablePinCount: unavailable.size,
     freshnessStatus: effectiveStatus(selected.analyticsState, analyticsRelevantPinCount, new Date(), recentlySyncedPinCount),
     totals: normalizedMetrics(accountAggregate._sum),
     trend: trend.map((row) => ({ ...row, date: row.metricDate.toISOString().slice(0, 10) })),

@@ -28,6 +28,8 @@ import {
   getPinterestUserAccount,
   type PinterestRateLimitMetadata,
 } from "@/lib/growth/pinterest/api";
+import { recordUnavailablePinterestAnalytics } from "./analytics-access";
+import { PinterestPinAnalyticsUnavailableError } from "./api";
 import { prisma } from "@/lib/prisma";
 
 export const PINTEREST_RECOVERY_MAX_PINS = 500;
@@ -688,13 +690,22 @@ export async function recoverPinterestAnalyticsGaps(params: {
       continue;
     }
     const { startDate, endDate } = range;
-    const response = await getPinterestPinAnalytics({
-      accountId: recovery.accountId,
-      pinterestPinId: pin.pinterestPinId,
-      startDate,
-      endDate,
-      fetchImpl: params.fetchImpl,
-    });
+    let response: Awaited<ReturnType<typeof getPinterestPinAnalytics>>;
+    try {
+      response = await getPinterestPinAnalytics({ accountId: recovery.accountId,
+        pinterestPinId: pin.pinterestPinId, startDate, endDate, fetchImpl: params.fetchImpl });
+    } catch (error) {
+      if (!(error instanceof PinterestPinAnalyticsUnavailableError)) throw error;
+      await recordUnavailablePinterestAnalytics(recovery.accountId, pin.id);
+      await prisma.growthPinterestAnalyticsRecoveryTask.update({ where: { id: task.id }, data: {
+        status: GrowthPinterestAnalyticsRecoveryTaskStatus.COMPLETED, responseRowCount: 0,
+        unresolvedDateCount: new Set([...task.missingDates, ...task.processingDates]).size,
+        completedAt: new Date(),
+      } });
+      await prisma.growthPinterestAnalyticsRecovery.update({ where: { id: recovery.id }, data: { requestsCompleted: { increment: 1 } } });
+      requests += 1;
+      continue;
+    }
     const lastRateLimit: PinterestRateLimitMetadata = response.rateLimit;
     const rows = responseRows(response.data);
     if (rows.some((row) => row.date < startDate || row.date > endDate)) {

@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ getToken: vi.fn() }));
+const mocks = vi.hoisted(() => ({ getToken: vi.fn(), accountUpdate: vi.fn() }));
 vi.mock("@/lib/growth/pinterest/tokens", async () => ({ getValidPinterestAccessToken: mocks.getToken }));
-vi.mock("@/lib/prisma", () => ({ prisma: { growthPinterestAccount: { updateMany: vi.fn() } } }));
+vi.mock("@/lib/prisma", () => ({ prisma: { growthPinterestAccount: { updateMany: mocks.accountUpdate } } }));
 
 import {
   fetchPinterestUserAccountWithToken,
@@ -12,6 +12,7 @@ import {
   getPinterestPinsPage,
   getPinterestTopPinsAnalytics,
   PinterestApiError,
+  PinterestPinAnalyticsUnavailableError,
 } from "@/lib/growth/pinterest/api";
 import { defaultRefreshRange } from "@/lib/growth/pinterest/analytics-contract";
 
@@ -19,6 +20,7 @@ const key = Buffer.alloc(32, 7).toString("base64");
 
 describe("Pinterest API adapter", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     vi.stubEnv("PINTEREST_APP_ID", "app-id");
     vi.stubEnv("PINTEREST_APP_SECRET", "app-secret");
     vi.stubEnv("PINTEREST_REDIRECT_URI", "https://saytwist.test/api/admin/growth/pinterest/oauth/callback");
@@ -145,4 +147,17 @@ describe("Pinterest API adapter", () => {
       if (status === 429) expect(error).toMatchObject({ retryAfterMs: 7_000 });
     }
   });
+  it("isolates a Pin-resource 403/29 without disconnecting the working account", async () => {
+    vi.stubEnv("PINTEREST_API_ENVIRONMENT", "production");
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ code: 29,
+      message: "You are not permitted to access that resource." }), { status: 403 }));
+    await expect(getPinterestPinAnalytics({ accountId: "account", pinterestPinId: "123",
+      ...defaultRefreshRange(), fetchImpl: fetcher })).rejects.toBeInstanceOf(PinterestPinAnalyticsUnavailableError);
+    expect(mocks.accountUpdate).not.toHaveBeenCalled();
+    const accountFetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ code: 29,
+      message: "You are not permitted to access that resource." }), { status: 403 }));
+    await expect(getPinterestAccountAnalytics({ accountId: "account", ...defaultRefreshRange(), fetchImpl: accountFetch })).rejects.toThrow();
+    expect(mocks.accountUpdate).toHaveBeenCalledOnce();
+  });
+
 });

@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 
+import { unavailablePinterestAnalyticsPins } from "./analytics-access";
 import { prisma } from "@/lib/prisma";
 
 export const DEFAULT_OWNED_PINTEREST_DOMAINS = [
@@ -67,13 +68,14 @@ export async function reconcilePinterestAnalyticsProgress(accountId: string, db:
 export async function reclassifyPinterestPins(
   accountId: string,
   ownedDomains: readonly string[],
-  db: RelevanceClient = prisma,
+  db: RelevanceClient & Pick<Prisma.TransactionClient, "$queryRaw"> = prisma,
 ) {
+  const unavailable = await unavailablePinterestAnalyticsPins(accountId, db);
   const pins = await db.growthPinterestPin.findMany({
     where: { accountId },
     select: { id: true, destinationUrl: true },
   });
-  const eligibleIds = pins.flatMap((pin) => isOwnedPinterestDestination(pin.destinationUrl, ownedDomains) ? [pin.id] : []);
+  const eligibleIds = pins.flatMap((pin) => !unavailable.has(pin.id) && isOwnedPinterestDestination(pin.destinationUrl, ownedDomains) ? [pin.id] : []);
   await db.growthPinterestPin.updateMany({ where: { accountId, analyticsEligible: true }, data: { analyticsEligible: false } });
   for (let index = 0; index < eligibleIds.length; index += RECLASSIFY_CHUNK_SIZE) {
     await db.growthPinterestPin.updateMany({
