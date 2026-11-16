@@ -6,7 +6,7 @@ import { countBlockingGrowthJobs } from "@/lib/growth/operations/approved-public
 
 /** One due recovery job, exact ID only. No generic queue sweep. Each official
  * request still passes global transport admission and provider quota gates. */
-export async function runAutomaticAnalyticsRecovery(now = new Date()) {
+async function runOneAnalyticsBatch(now = new Date()) {
   const deadline = new Date(now.getTime() + 180000);
   let leased = false;
   try {
@@ -74,4 +74,24 @@ export async function runAutomaticAnalyticsRecovery(now = new Date()) {
   } finally {
     if (leased) await revokeGrowthWorkerActivation(deadline);
   }
+}
+
+/** Advance up to three existing bounded read batches per hourly tick. Each
+ * batch acquires its own exact-job lease and every GET retains quota admission.
+ * Stop on busy, quota deferral, failure or the time budget; never sweep writes. */
+export async function runAutomaticAnalyticsRecovery(now = new Date()) {
+  const startedAt = Date.now();
+  let succeeded = 0;
+  let failed = 0;
+  let batches = 0;
+  for (; batches < 3 && Date.now() - startedAt < 45000; batches++) {
+    const result = await runOneAnalyticsBatch(batches === 0 ? now : new Date());
+    succeeded += result.succeeded || 0;
+    failed += result.failed || 0;
+    if (result.status !== "COMPLETED" || result.failed || !result.succeeded) {
+      if (!succeeded && !failed) return result;
+      return { status: "COMPLETED", succeeded, failed, batches: batches + 1 };
+    }
+  }
+  return { status: "COMPLETED", succeeded, failed, batches };
 }
