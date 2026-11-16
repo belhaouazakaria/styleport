@@ -171,7 +171,7 @@ describe("bounded Growth worker", () => {
     expect(mocks.claimGrowthJobs).toHaveBeenCalledWith(expect.objectContaining({
       limit: 1, jobId: job.id, allowedTypes: expect.arrayContaining([GrowthJobType.FOUNDATION_NOOP]),
     }));
-    expect(mocks.promoteDueGrowthRetries).not.toHaveBeenCalled();
+    expect(mocks.promoteDueGrowthRetries).toHaveBeenCalledWith(expect.any(Date), 1, expect.any(Array), job.id);
     expect(mocks.recoverStaleGrowthJobs).not.toHaveBeenCalled();
     expect(mocks.dispatchGrowthJob).toHaveBeenCalledTimes(1);
     expect(mocks.revokeGrowthWorkerActivation).toHaveBeenCalledWith(settings.workerActivationExpiresAt);

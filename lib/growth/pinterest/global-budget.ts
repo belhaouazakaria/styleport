@@ -4,18 +4,18 @@ import { recordGrowthActivity } from "@/lib/growth/activity";
 import { prisma } from "@/lib/prisma";
 
 /**
- * Deliberately conservative GLOBAL production throttle, independent of the
+ * Shared production safety ceiling, in addition to the
  * Pinterest quota headers. Shared by the web app, worker and operator probes.
  * No new table: immutable GrowthActivity rows persist across restarts.
  *
  * Admission is committed before any request. Every attempt, including a
  * network timeout, consumes its full allowance. No refunds or hidden retries.
  */
-export const PINTEREST_GLOBAL_HOURLY_CEILING = 4;
-export const PINTEREST_GLOBAL_DAILY_CEILING = 16;
-// Keep five of the same sixteen attempts available for individually approved
-// Pin writes. Analytics/backfill must not exhaust the day before publishing.
-export const PINTEREST_GLOBAL_MAINTENANCE_CEILING = 11;
+export const PINTEREST_GLOBAL_HOURLY_CEILING = 60;
+export const PINTEREST_GLOBAL_DAILY_CEILING = 800;
+// Below Pinterest's 1,000/day trial limit; real response headers remain authoritative.
+// Reserve twenty attempts for approved writes and six for daily account refresh.
+export const PINTEREST_GLOBAL_MAINTENANCE_CEILING = 774;
 const HOUR = 60 * 60_000;
 const DAY = 24 * HOUR;
 const ENTITY_TYPE = "GrowthPinterestProviderBudget";
@@ -73,13 +73,14 @@ async function readGlobalUsage(db: BudgetReader, now: Date) {
 export async function hasPinterestMaintenanceCapacity(
   db: BudgetReader = prisma,
   now = new Date(),
+  accountAnalytics = false,
 ) {
   const usage = await readGlobalUsage(db, now);
   return (
     usage.cooldowns === 0 &&
     usage.hourly < PINTEREST_GLOBAL_HOURLY_CEILING &&
     usage.daily < PINTEREST_GLOBAL_DAILY_CEILING &&
-    usage.daily - usage.pinWrites < PINTEREST_GLOBAL_MAINTENANCE_CEILING
+    usage.daily - usage.pinWrites < PINTEREST_GLOBAL_MAINTENANCE_CEILING + (accountAnalytics ? 6 : 0)
   );
 }
 
@@ -90,7 +91,7 @@ export async function hasPinterestMaintenanceCapacity(
  */
 export async function reservePinterestGlobalAttempt(
   db = prisma,
-  requestKind: "PIN_WRITE" | "OTHER" = "OTHER",
+  requestKind: "PIN_WRITE" | "ACCOUNT_ANALYTICS" | "OTHER" = "OTHER",
 ) {
   return db.$transaction(
     async (tx) => {
@@ -110,7 +111,9 @@ export async function reservePinterestGlobalAttempt(
         hourly >= PINTEREST_GLOBAL_HOURLY_CEILING ||
         daily >= PINTEREST_GLOBAL_DAILY_CEILING ||
         (requestKind !== "PIN_WRITE" &&
-          daily - pinWrites >= PINTEREST_GLOBAL_MAINTENANCE_CEILING)
+          daily - pinWrites >= (requestKind === "ACCOUNT_ANALYTICS"
+            ? PINTEREST_GLOBAL_MAINTENANCE_CEILING + 6
+            : PINTEREST_GLOBAL_MAINTENANCE_CEILING))
       ) {
         throw new PinterestGlobalBudgetBlocked("GLOBAL_QUOTA_EXHAUSTED");
       }
@@ -187,7 +190,8 @@ export async function budgetedPinterestFetch(
     new URL(typeof input === "string" ? input : input.toString()).pathname ===
       "/v5/pins" && (init?.method || "GET").toUpperCase() === "POST"
       ? "PIN_WRITE"
-      : "OTHER";
+      : new URL(typeof input === "string" ? input : input.toString()).pathname === "/v5/user_account/analytics"
+        ? "ACCOUNT_ANALYTICS" : "OTHER";
   await reservePinterestGlobalAttempt(prisma, requestKind);
   let response: Response;
   try {

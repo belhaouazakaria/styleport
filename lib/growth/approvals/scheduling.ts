@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { readDailyRotation } from "@/lib/growth/portfolio/daily-rotation-store";
 import { recommendPublicationTiming } from "@/lib/growth/publishing/service";
@@ -9,8 +10,20 @@ export async function recommendReviewSchedule(
   subjectId: string,
   channel: "NATIVE" | "SOURCE",
   now = new Date(),
+  db: Prisma.TransactionClient | typeof prisma = prisma,
+  notBeforeDate = now,
 ) {
-  const policy = await prisma.growthViralProgramSettings.findUnique({
+  const pending = await db.growthApprovalRequest.findMany({
+    where: { kind: { in: ["NATIVE_PIN", "SOURCE_PIN"] }, status: "PENDING", expiresAt: { gt: now }, subjectId: { not: subjectId } },
+    select: { kind: true, snapshot: true }, take: 201,
+  });
+  if (pending.length > 200) throw Error("REVIEW_QUEUE_TOO_LARGE");
+  const reservations = pending.flatMap(r => {
+    const snapshot = r.snapshot as { scheduledAt?: string } | null;
+    const scheduledAt = new Date(snapshot?.scheduledAt || "");
+    return Number.isFinite(scheduledAt.getTime()) ? [{ scheduledAt, kind: r.kind }] : [];
+  });
+  const policy = await db.growthViralProgramSettings.findUnique({
     where: { id: "global" },
   });
   for (let offset = 0; offset < 30; offset++) {
@@ -22,10 +35,11 @@ export async function recommendReviewSchedule(
       ),
     );
     const end = new Date(day.getTime() + 86400000);
-    const rotation = await readDailyRotation(day);
+    if (end <= notBeforeDate) continue;
+    const rotation = await readDailyRotation(day, db);
     if (policy?.mode === "ACTIVE" && rotation.accountId !== accountId) continue;
     const [native, sources] = await Promise.all([
-      prisma.growthPinPublication.findMany({
+      db.growthPinPublication.findMany({
         where: {
           scheduledAt: { gte: day, lt: end },
           status: { notIn: ["CANCELLED", "FAILED_TERMINAL"] },
@@ -33,7 +47,7 @@ export async function recommendReviewSchedule(
         select: { scheduledAt: true },
         take: 101,
       }),
-      prisma.growthViralPinTest.findMany({
+      db.growthViralPinTest.findMany({
         where: {
           scheduledAt: { gte: day, lt: end },
           status: {
@@ -44,6 +58,9 @@ export async function recommendReviewSchedule(
         take: 101,
       }),
     ]);
+    const reserved = reservations.filter(r => r.scheduledAt >= day && r.scheduledAt < end);
+    native.push(...reserved.filter(r => r.kind === "NATIVE_PIN").map(r => ({ scheduledAt: r.scheduledAt })));
+    sources.push(...reserved.filter(r => r.kind === "SOURCE_PIN").map(r => ({ scheduledAt: r.scheduledAt })));
     const cap = Math.min(
       5,
       policy?.maxPinsPerDay ?? 5,
@@ -59,24 +76,24 @@ export async function recommendReviewSchedule(
     if (native.length + sources.length >= cap || channelCount >= channelCap)
       continue;
     const notBefore = new Date(
-      Math.max(now.getTime() + 15 * 60000, day.getTime()),
+      Math.max(now.getTime() + 15 * 60000, notBeforeDate.getTime(), day.getTime()),
     );
-    const timing = await recommendPublicationTiming(
+    let timing = await recommendPublicationTiming(
       accountId,
       subjectId,
       notBefore,
+      [...native, ...sources].flatMap(p => p.scheduledAt ? [{ scheduledAt: p.scheduledAt }] : []),
     );
-    if (timing.scheduledAt < day || timing.scheduledAt >= end) continue;
-    if (
-      [...native, ...sources].some(
-        (p) =>
-          p.scheduledAt &&
-          Math.abs(p.scheduledAt.getTime() - timing.scheduledAt.getTime()) <
-            90 * 60000,
-      )
-    )
-      continue;
-    return timing.scheduledAt;
+    // Try another controlled window on the SAME day before skipping it.
+    for (let attempt = 0; attempt < 8 && timing.scheduledAt < end; attempt++) {
+      if (![...native, ...sources].some(p => p.scheduledAt &&
+          Math.abs(p.scheduledAt.getTime() - timing.scheduledAt.getTime()) < 90 * 60000)) {
+        if (timing.scheduledAt >= day) return timing.scheduledAt;
+      }
+      timing = await recommendPublicationTiming(accountId, subjectId,
+        new Date(timing.scheduledAt.getTime() + 90 * 60000));
+    }
+    continue;
   }
   throw Error("REVIEW_NO_SAFE_SLOT");
 }

@@ -1,3 +1,4 @@
+import { assertPublicationSpacing } from "@/lib/growth/approvals/spacing";
 import { sourceUsesGenZ } from "@/lib/growth/creative/genz-account-scope";
 import {
   GrowthActivityActorKind, GrowthPublicationStatus, Prisma,
@@ -174,7 +175,7 @@ export async function approveOriginalSourcePin(
     const rating = rateSourceTranslator(draft.concept.title, draft.concept.sourceUrl);
     if (rating.decision === "WITHDRAW") throw Error("SOURCE_APPROVAL_QUALITY_WITHDRAWN");
     if (rating.decision === "SCHEDULE_LATER" &&
-        scheduled.getTime() < now.getTime() +
+        scheduled.getTime() < draft.createdAt.getTime() +
         (rating.suggestedDelayDays ?? 2) * DAY) {
       throw Error("SOURCE_APPROVAL_QUALITY_DEFERRED");
     }
@@ -185,6 +186,7 @@ export async function approveOriginalSourcePin(
       throw Error("SOURCE_APPROVAL_ACCOUNT_UNAVAILABLE");
     }
     if (account.publicationRole !== "SAYTWIST" && await sourceUsesGenZ(draft.id, tx)) throw Error("Gen-Z Editorial belongs only to the main SayTwist account.");
+    await assertPublicationSpacing(tx, scheduled);
     const rotation = await readDailyRotation(scheduled, tx);
     assertActiveRotationAccount(rotation, input.accountId);
     if (policy.sourceSharePercent !== 50 ||

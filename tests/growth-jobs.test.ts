@@ -25,6 +25,7 @@ vi.mock("@/lib/prisma", () => ({
 vi.mock("@/lib/growth/activity", () => ({ recordGrowthActivity: mocks.activity }));
 
 import { claimGrowthJobs, claimNextGrowthJob, enqueueGrowthJob, failGrowthJob, recoverStaleGrowthJobs } from "@/lib/growth/jobs";
+import { PinterestGlobalBudgetBlocked } from "@/lib/growth/pinterest/global-budget";
 import { PinterestConfigurationError } from "@/lib/growth/errors";
 
 const job = {
@@ -190,4 +191,15 @@ describe("Growth job persistence", () => {
     expect(mocks.publicationUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ lastErrorCode: "PUBLISH_RETRY_EXHAUSTED" }) }));
     expect(mocks.publicationUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ lastErrorCode: "RECONCILIATION_RETRY_EXHAUSTED" }) }));
   });
+});
+
+it("defers a quota-blocked analytics read without exhausting its final attempt", async () => {
+  mocks.updateMany.mockResolvedValue({ count: 1 });
+  const read = { ...job, type: GrowthJobType.PINTEREST_ACCOUNT_ANALYTICS_SYNC,
+    status: GrowthJobStatus.RUNNING, attemptCount: 1, maxAttempts: 1 };
+  expect(await failGrowthJob(read, "worker-1", new PinterestGlobalBudgetBlocked("GLOBAL_QUOTA_EXHAUSTED")))
+    .toBe(GrowthJobStatus.FAILED_RETRYABLE);
+  expect(mocks.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+    data: expect.objectContaining({ status: "FAILED_RETRYABLE", attemptCount: 0, completedAt: null }),
+  }));
 });

@@ -7,6 +7,12 @@ const mocks = vi.hoisted(() => ({
   requireAdmin: vi.fn(),
 }));
 
+vi.mock("@/lib/prisma", () => ({ prisma: {
+  growthApprovalRequest: { count: vi.fn().mockResolvedValue(2) },
+  growthPinPublication: { findMany: vi.fn().mockResolvedValue([]) },
+  growthViralPinTest: { findMany: vi.fn().mockResolvedValue([]) },
+  growthPinterestAccount: { findMany: vi.fn().mockResolvedValue([]) },
+} }));
 vi.mock("@/lib/permissions", () => ({ adminRouteGuard: mocks.guard }));
 vi.mock("@/lib/auth", () => ({ requireAdminRoute: mocks.requireAdmin }));
 vi.mock("@/lib/growth/admin", () => ({ getGrowthFoundationOverview: mocks.overview }));
@@ -45,9 +51,9 @@ describe("Growth admin foundation", () => {
     render(await AdminGrowthPage());
     expect(mocks.requireAdmin).toHaveBeenCalledTimes(1);
     expect(screen.getByRole("heading", { name: "Growth" })).toBeInTheDocument();
-    expect(screen.getByText("Disabled")).toBeInTheDocument();
-    expect(screen.getByText("Queued jobs")).toBeInTheDocument();
-    expect(screen.getByText("2")).toBeInTheDocument();
+    expect(screen.getByText("2 reviews need your eye.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Open reviews/ })).toBeInTheDocument();
+    expect(screen.queryByText("Growth settings form")).not.toBeInTheDocument();
     expect(screen.queryByText(/outbound clicks/i)).not.toBeInTheDocument();
   });
 

@@ -7,7 +7,7 @@ import { enqueueCreativeGeneration, enqueueCreativeRegeneration, generateCreativ
 import { UPRIGHT_REFERENCE_SHA256 } from "@/lib/growth/creative/genz-font";
 import { readReviewChoices, replaceReviewPlan } from "@/lib/growth/approvals/choices";
 import { discordReviewCard } from "@/lib/growth/discord/outbox";
-import { reservePinterestGlobalAttempt } from "@/lib/growth/pinterest/global-budget";
+import { PINTEREST_GLOBAL_MAINTENANCE_CEILING, reservePinterestGlobalAttempt } from "@/lib/growth/pinterest/global-budget";
 import { executeDailyObservation } from "@/workers/growth-daily-observe";
 import { readDailyRotation } from "@/lib/growth/portfolio/daily-rotation-store";
 import { readV2FollowupEvidence } from "@/scripts/growth-v2-followup-evidence";
@@ -26,6 +26,7 @@ import { prisma } from "@/lib/prisma";
 import { evidenceChecksum } from "@/lib/growth/approvals/contracts";
 import {
   preparePendingOwnerReviews,
+  rescheduleGrowthReview,
   createBudgetChangeReview,
   decideGrowthReview,
 } from "@/lib/growth/approvals/service";
@@ -389,7 +390,7 @@ suite("Unified owner consent with PostgreSQL 18", () => {
     };
     expect(await prisma.growthActivity.count({ where })).toBe(0);
     await prisma.growthActivity.createMany({
-      data: Array.from({ length: 11 }, () => ({
+      data: Array.from({ length: PINTEREST_GLOBAL_MAINTENANCE_CEILING }, () => ({
         ...where,
         actorKind: "SYSTEM" as const,
         createdAt: new Date(Date.now() - 2 * 3600000),
@@ -399,12 +400,11 @@ suite("Unified owner consent with PostgreSQL 18", () => {
     await expect(
       reservePinterestGlobalAttempt(prisma, "OTHER"),
     ).rejects.toMatchObject({ code: "GLOBAL_QUOTA_EXHAUSTED" });
-    for (let i = 0; i < 4; i++)
+    for (let i = 0; i < 20; i++)
       await reservePinterestGlobalAttempt(prisma, "PIN_WRITE");
-    await expect(
-      reservePinterestGlobalAttempt(prisma, "PIN_WRITE"),
-    ).rejects.toMatchObject({ code: "GLOBAL_QUOTA_EXHAUSTED" });
-    expect(await prisma.growthActivity.count({ where })).toBe(15);
+    for (let i = 0; i < 6; i++) await reservePinterestGlobalAttempt(prisma, "PIN_WRITE");
+    await expect(reservePinterestGlobalAttempt(prisma, "PIN_WRITE")).rejects.toMatchObject({ code: "GLOBAL_QUOTA_EXHAUSTED" });
+    expect(await prisma.growthActivity.count({ where })).toBe(800);
     expect(
       await prisma.growthActivity.count({
         where: {
@@ -412,7 +412,7 @@ suite("Unified owner consent with PostgreSQL 18", () => {
           summary: { path: ["requestKind"], equals: "PIN_WRITE" },
         },
       }),
-    ).toBe(4);
+    ).toBe(26);
   });
   it("promotes only the exact due read retry without resetting attempts or touching Pin retries", async () => {
     const data = {
@@ -1348,6 +1348,23 @@ suite("Unified owner consent with PostgreSQL 18", () => {
       await prisma.growthJob.updateMany({ where: { id: { in: jobs } }, data: { status: "SUCCEEDED" } });
       vi.unstubAllEnvs(); await rm(temporary, { recursive: true, force: true });
     }
+  });
+
+  it("serializes replacement plans, keeps old evidence and requires new owner consent", async () => {
+    const f = await fixture();
+    const attempts = await Promise.allSettled([
+      rescheduleGrowthReview(f.review.id, config.ownerUserId, now),
+      rescheduleGrowthReview(f.review.id, config.ownerUserId, now),
+    ]);
+    expect(attempts.filter(r => r.status === "fulfilled")).toHaveLength(1);
+    expect(attempts.filter(r => r.status === "rejected")).toHaveLength(1);
+    const original = await prisma.growthApprovalRequest.findUniqueOrThrow({ where: { id: f.review.id } });
+    expect(original.status).toBe("STALE");
+    expect(original.snapshotChecksum).toBe(f.review.snapshotChecksum);
+    const requests = await prisma.growthApprovalRequest.findMany({ where: { subjectId: f.candidate.id, status: "PENDING" } });
+    expect(requests).toHaveLength(1);
+    expect(requests[0].snapshotChecksum).not.toBe(original.snapshotChecksum);
+    expect(await prisma.growthPinApproval.count({ where: { candidateId: f.candidate.id } })).toBe(0);
   });
 
 });

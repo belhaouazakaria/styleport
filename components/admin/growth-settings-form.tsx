@@ -90,7 +90,7 @@ export function GrowthSettingsForm({ initial }: GrowthSettingsFormProps) {
     <section className="rounded-2xl border border-border bg-white p-5 sm:p-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="section-kicker">Foundation controls</p>
+          <p className="section-kicker">Preferences</p>
           <h2 className="font-display mt-1 text-2xl font-bold text-ink">Growth settings</h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-ink">
             The kill switch controls autonomous Growth job execution. Read-only status remains available when disabled.
@@ -108,19 +108,6 @@ export function GrowthSettingsForm({ initial }: GrowthSettingsFormProps) {
       </div>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2">
-        <label className="space-y-2 text-sm font-semibold text-ink">
-          <span>Intensity placeholder</span>
-          <select
-            value={settings.intensity}
-            onChange={(event) => setSettings((current) => ({ ...current, intensity: event.target.value as GrowthSettingsFormProps["initial"]["intensity"] }))}
-            className="min-h-11 w-full rounded-xl border border-border bg-white px-3 text-sm"
-          >
-            <option value="LOW">Low</option>
-            <option value="BALANCED">Balanced</option>
-            <option value="AGGRESSIVE">Aggressive</option>
-            <option value="CUSTOM">Custom</option>
-          </select>
-        </label>
         <label className="space-y-2 text-sm font-semibold text-ink">
           <span>Maximum jobs per worker run</span>
           <input
@@ -172,12 +159,12 @@ export function GrowthSettingsForm({ initial }: GrowthSettingsFormProps) {
           className="min-h-11 w-full rounded-xl border border-border bg-white px-3 text-sm"
         />
         <span className="block font-normal leading-5 text-muted-ink">
-          Phase 12 defaults to 45 days and accepts a bounded 14–180 day
+          Defaults to 45 days. Choose a 14–180 day
           interval.
         </span>
       </label>
       <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm">
-        <p className="font-bold text-ink">Approved Phase 13 operating limits — configuration only</p>
+        <p className="font-bold text-ink">Operating limits</p>
         <p className="mt-1 text-muted-ink">Existing hard limits are separate from the new 1–10 daily planning targets. Budgeted AI paths and content mutations must pass their independent spend/volume gates before execution. Saving a limit does not start Growth.</p>
         <label className="mt-4 block space-y-2 text-sm font-semibold text-ink">
           <span>Hard maximum new Translators per day (0–10)</span>

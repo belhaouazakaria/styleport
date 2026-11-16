@@ -20,7 +20,7 @@ afterEach(() => vi.unstubAllEnvs());
 
 describe("persistent Pinterest quota", () => {
   it("serializes via the GrowthSettings row and records a pre-call reservation", async () => {
-    expect(PINTEREST_GLOBAL_HOURLY_CEILING).toBe(4);
+    expect(PINTEREST_GLOBAL_HOURLY_CEILING).toBe(60);
     await reservePinterestGlobalAttempt();
     expect(mock.lock).toHaveBeenCalledOnce();
     expect(mock.count).toHaveBeenCalledTimes(4);
@@ -81,17 +81,17 @@ describe("production network admission", () => {
 });
 
 describe("persistent admission limits", () => {
-  it("keeps five daily attempts available for exact Pin writes without raising global caps", async () => {
+  it("keeps twenty daily attempts available for exact Pin writes with separate daily refresh headroom", async () => {
     // Legacy unclassified attempts conservatively count as maintenance.
-    mock.count.mockResolvedValueOnce(0).mockResolvedValueOnce(0).mockResolvedValueOnce(11).mockResolvedValueOnce(0);
+    mock.count.mockResolvedValueOnce(0).mockResolvedValueOnce(0).mockResolvedValueOnce(774).mockResolvedValueOnce(0);
     await expect(reservePinterestGlobalAttempt()).rejects.toMatchObject({ code: "GLOBAL_QUOTA_EXHAUSTED" });
-    mock.count.mockResolvedValueOnce(0).mockResolvedValueOnce(0).mockResolvedValueOnce(11).mockResolvedValueOnce(0);
+    mock.count.mockResolvedValueOnce(0).mockResolvedValueOnce(0).mockResolvedValueOnce(774).mockResolvedValueOnce(0);
     await reservePinterestGlobalAttempt(undefined, "PIN_WRITE");
-    expect(mock.record).toHaveBeenCalledWith(expect.objectContaining({ summary: expect.objectContaining({ requestKind: "PIN_WRITE", maintenanceCeiling: 11, globalDailyCeiling: 16 }) }), expect.anything());
+    expect(mock.record).toHaveBeenCalledWith(expect.objectContaining({ summary: expect.objectContaining({ requestKind: "PIN_WRITE", maintenanceCeiling: 774, globalDailyCeiling: 800 }) }), expect.anything());
   });
-  it("prevents the fifth hourly attempt", async () => {
+  it("prevents the sixty-first hourly attempt", async () => {
     mock.count.mockImplementation(({ where }: { where: { action: string } }) =>
-      Promise.resolve(where.action === "PINTEREST_GLOBAL_API_REQUEST_RESERVED" ? 4 : 0));
+      Promise.resolve(where.action === "PINTEREST_GLOBAL_API_REQUEST_RESERVED" ? 60 : 0));
     await expect(reservePinterestGlobalAttempt()).rejects.toMatchObject({
       code: "GLOBAL_QUOTA_EXHAUSTED",
     });

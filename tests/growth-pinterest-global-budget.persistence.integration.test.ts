@@ -42,13 +42,13 @@ afterEach(() => vi.unstubAllEnvs());
 afterAll(async () => { if (enabled) { await clean(); await prisma.$disconnect(); } });
 
 suite("Phase14F disposable PostgreSQL 18 shared Pinterest admission", () => {
-  it("admits only four of twelve simultaneous transactions across the shared database row lock", async () => {
+  it("admits only the configured ceiling of concurrent simultaneous transactions across the shared database row lock", async () => {
     const clientA = new PrismaClient();
     const clientB = new PrismaClient();
     let results: PromiseSettledResult<void>[];
     try {
       results = await Promise.allSettled(
-        Array.from({ length: 12 }, (_, i) =>
+        Array.from({ length: PINTEREST_GLOBAL_HOURLY_CEILING + 8 }, (_, i) =>
           reservePinterestGlobalAttempt(i % 2 === 0 ? clientA : clientB)),
       );
     } finally {

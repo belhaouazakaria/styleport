@@ -24,11 +24,11 @@ export async function runAutomaticAnalyticsRecovery(now = new Date()) {
         return null;
       const recoveryJobs = await tx.growthJob.findMany({
         where: {
-          type: "PINTEREST_ANALYTICS_GAP_RECOVERY",
+          type: { in: ["PINTEREST_ACCOUNT_ANALYTICS_SYNC", "PINTEREST_PIN_INVENTORY_SYNC", "PINTEREST_PIN_ANALYTICS_SYNC", "PINTEREST_ANALYTICS_GAP_RECOVERY"] },
           status: { in: ["PENDING", "FAILED_RETRYABLE"] },
         },
-        select: { id: true, runAfter: true },
-        orderBy: { runAfter: "asc" },
+        select: { id: true, type: true, runAfter: true },
+        orderBy: [{ runAfter: "asc" }, { createdAt: "asc" }],
         take: 101,
       });
       if (
@@ -39,8 +39,9 @@ export async function runAutomaticAnalyticsRecovery(now = new Date()) {
         ))
       )
         return null;
-      const next = recoveryJobs.find((j) => j.runAfter <= now);
-      if (!next || !(await hasPinterestMaintenanceCapacity(tx, now)))
+      const next = recoveryJobs.find(j => j.runAfter <= now && j.type === "PINTEREST_ACCOUNT_ANALYTICS_SYNC")
+        || recoveryJobs.find(j => j.runAfter <= now);
+      if (!next || !(await hasPinterestMaintenanceCapacity(tx, now, next.type === "PINTEREST_ACCOUNT_ANALYTICS_SYNC")))
         return null;
       await tx.growthSettings.update({
         where: { id: "global" },
@@ -50,17 +51,18 @@ export async function runAutomaticAnalyticsRecovery(now = new Date()) {
           configVersion: { increment: 1 },
         },
       });
-      return next.id;
+      return { id: next.id, isRecovery: next.type === "PINTEREST_ANALYTICS_GAP_RECOVERY" };
     });
     if (!jobId) return { status: "NOT_DUE_OR_BUSY" };
     leased = true;
     const result = await runGrowthWorker({
-      onlyJobId: jobId,
+      onlyJobId: jobId.id,
       batchSize: 1,
       workerId: "growth-v2-analytics-recovery",
       rolloutConfig: {
         GROWTH_WORKER_RUN_ENABLED: "true",
-        GROWTH_ROLLOUT_MODE: "RECOVER",
+        GROWTH_ROLLOUT_MODE: jobId.isRecovery ? "RECOVER" : "OBSERVE",
+        GROWTH_DAILY_ANALYTICS_SCOPE: "true",
         GROWTH_AUTOMATIC_BACKFILL_SCOPE: "true",
       },
     });

@@ -1,4 +1,5 @@
 import { sourceUsesGenZ } from "@/lib/growth/creative/genz-account-scope";
+import { rateSourceTranslator } from "@/lib/growth/viral/rating";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
@@ -155,11 +156,10 @@ async function createReview(
   raw: PinReviewSnapshot,
   now: Date,
 ) {
-  const snapshot = pinReviewSnapshotSchema.parse(raw);
-  const scheduledAt = new Date(snapshot.scheduledAt);
+  let snapshot = pinReviewSnapshotSchema.parse(raw);
+  let scheduledAt = new Date(snapshot.scheduledAt);
   if (scheduledAt.getTime() <= now.getTime() + 10 * 60_000)
     throw Error("REVIEW_SLOT_TOO_SOON");
-  const checksum = evidenceChecksum(snapshot);
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"review:" + kind + ":" + subjectId}))`;
     const owner = await tx.user.findUnique({
@@ -177,6 +177,18 @@ async function createReview(
       orderBy: { createdAt: "desc" },
     });
     if (prior) return prior;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('growth-viral-portfolio-approval-v1'))`;
+    let notBefore = now;
+    if (kind === "SOURCE_PIN") {
+      const draft = await tx.growthViralPinTest.findUniqueOrThrow({ where: { id: subjectId }, include: { concept: true } });
+      const rating = rateSourceTranslator(draft.concept.title, draft.concept.sourceUrl);
+      if (rating.decision === "WITHDRAW") throw Error("SOURCE_APPROVAL_QUALITY_WITHDRAWN");
+      notBefore = new Date(Math.max(now.getTime(), draft.createdAt.getTime() + (rating.suggestedDelayDays || 0) * 86400000));
+    }
+    scheduledAt = await recommendReviewSchedule(snapshot.accountId, subjectId,
+      kind === "SOURCE_PIN" ? "SOURCE" : "NATIVE", now, tx, notBefore);
+    snapshot = { ...snapshot, scheduledAt: scheduledAt.toISOString() };
+    const checksum = evidenceChecksum(snapshot);
     const request = await tx.growthApprovalRequest.create({
       data: {
         kind,
@@ -554,4 +566,42 @@ export async function createBudgetChangeReview(
     });
     return review;
   });
+}
+
+/** A replacement is a new unapproved snapshot. Existing consent never moves. */
+export async function rescheduleGrowthReview(requestId: string, ownerUserId: string, now = new Date()) {
+  return prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT "id" FROM "GrowthApprovalRequest" WHERE "id" = ${requestId} FOR UPDATE`;
+    const review = await tx.growthApprovalRequest.findUniqueOrThrow({ where: { id: requestId } });
+    const owner = await tx.user.findUnique({ where: { id: ownerUserId }, select: { role: true } });
+    if (owner?.role !== "ADMIN" || review.ownerUserId !== ownerUserId) throw Error("REVIEW_UNAUTHORIZED");
+    if (review.status !== "PENDING" || !["NATIVE_PIN", "SOURCE_PIN"].includes(review.kind)) throw Error("REVIEW_NOT_PENDING");
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('growth-viral-portfolio-approval-v1'))`;
+    const old = pinReviewSnapshotSchema.parse(review.snapshot);
+    if (evidenceChecksum(old) !== review.snapshotChecksum) throw Error("REVIEW_EVIDENCE_MISMATCH");
+    let notBefore = new Date(Math.max(now.getTime(), Date.parse(old.scheduledAt) + 1));
+    if (review.kind === "SOURCE_PIN") {
+      const draft = await tx.growthViralPinTest.findUniqueOrThrow({ where: { id: review.subjectId }, include: { concept: true } });
+      const rating = rateSourceTranslator(draft.concept.title, draft.concept.sourceUrl);
+      if (rating.decision === "WITHDRAW") throw Error("SOURCE_APPROVAL_QUALITY_WITHDRAWN");
+      notBefore = new Date(Math.max(notBefore.getTime(), draft.createdAt.getTime() + (rating.suggestedDelayDays || 0) * 86400000));
+    }
+    const scheduledAt = await recommendReviewSchedule(old.accountId, review.subjectId,
+      review.kind === "SOURCE_PIN" ? "SOURCE" : "NATIVE", now, tx, notBefore);
+    const snapshot = { ...old, scheduledAt: scheduledAt.toISOString() };
+    const checksum = evidenceChecksum(snapshot);
+    await tx.growthApprovalRequest.update({ where: { id: review.id }, data: { status: "STALE", decidedAt: now, decidedById: ownerUserId, decisionChannel: "ADMIN", result: { reason: "OWNER_REQUESTED_NEW_TIME" } } });
+    const replacement = await tx.growthApprovalRequest.create({ data: {
+      kind: review.kind, subjectId: review.subjectId, ownerUserId,
+      snapshot: snapshot as Prisma.InputJsonValue, snapshotChecksum: checksum,
+      dedupeKey: review.kind + ":" + review.subjectId + ":" + checksum,
+      expiresAt: new Date(Math.min(now.getTime() + 24 * 3600000, scheduledAt.getTime() - 10 * 60000)),
+    } });
+    await tx.growthNotification.create({ data: { dedupeKey: "review:" + replacement.id,
+      requestId: replacement.id, payload: { kind: "APPROVAL" } } });
+    await tx.growthActivity.create({ data: { actorKind: "USER", actorUserId: ownerUserId,
+      entityType: "GrowthApprovalRequest", entityId: review.id, action: "REVIEW_TIME_REPLACED",
+      summary: { replacementId: replacement.id, scheduledAt: scheduledAt.toISOString(), approved: false } } });
+    return { requestId: replacement.id, status: replacement.status };
+  }, { timeout: 20000 });
 }

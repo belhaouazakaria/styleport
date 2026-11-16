@@ -79,9 +79,10 @@ export function completedUtcAnalyticsWindow(day: string, days: 7 | 28 = 7) {
   };
 }
 
-/** At most one exact job per UTC day, with no worker sweep or retry.
+/** At most one exact job per UTC day, with no worker sweep.
+ * Deferred reads resume through the scoped hourly analytics runner.
  * The global Pinterest transport reserves each actual GET in the shared
- * 4/hour, 16/day API budget and enforces provider header safeguards.
+ * shared API budget and enforces provider header safeguards.
  */
 export async function runDailyAccountAnalytics(day: string, selectedAccountId?: string) {
   const range = completedUtcAnalyticsWindow(day, selectedAccountId ? 28 : 7);
@@ -135,7 +136,7 @@ export async function runDailyAccountAnalytics(day: string, selectedAccountId?: 
       if (previous) throw Error("DAILY_ANALYTICS_ALREADY_ATTEMPTED");
       const job = await tx.growthJob.create({
         data: { type: GrowthJobType.PINTEREST_ACCOUNT_ANALYTICS_SYNC,
-          idempotencyKey: key, maxAttempts: 1,
+          idempotencyKey: key, maxAttempts: 3,
           payload: { accountId: account.id, ...range,
             ...(selectedAccountId ? { includeTopPins: false } : {}),
             runStartedAt: new Date().toISOString() } },
@@ -153,7 +154,7 @@ export async function runDailyAccountAnalytics(day: string, selectedAccountId?: 
         entityType: "GrowthJob", entityId: job.id,
         action: "DAILY_ACCOUNT_ANALYTICS_ADMITTED",
         correlationKey: key,
-        summary: { mode: "ONE_ACCOUNT_READ_ONLY", maxAttempts: 1,
+        summary: { mode: "ONE_ACCOUNT_READ_ONLY", maxAttempts: 3,
           startDate: range.startDate, endDate: range.endDate },
       }, tx);
       return job.id;

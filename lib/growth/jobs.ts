@@ -19,6 +19,7 @@ import { recordGrowthActivity } from "@/lib/growth/activity";
 import { NonRetryableGrowthJobError, RetryableGrowthJobError } from "@/lib/growth/errors";
 import { toSafeGrowthError, toSafeGrowthPayload } from "@/lib/growth/safe-data";
 import { prisma } from "@/lib/prisma";
+import { PinterestGlobalBudgetBlocked } from "@/lib/growth/pinterest/global-budget";
 
 export interface EnqueueGrowthJobInput {
   type: GrowthJobType;
@@ -560,10 +561,17 @@ export async function failGrowthJob(job: GrowthJob, workerId: string, error: unk
     });
     if (ambiguous) return GrowthJobStatus.FAILED_TERMINAL;
   }
-  const retryable = !(error instanceof NonRetryableGrowthJobError) && job.attemptCount < job.maxAttempts;
+  // Admission denied before a read is a pause, not a failed provider attempt.
+  // Never apply this rule to publication jobs or ambiguous external writes.
+  const deferredRead = ([GrowthJobType.PINTEREST_ACCOUNT_ANALYTICS_SYNC,
+    GrowthJobType.PINTEREST_PIN_ANALYTICS_SYNC, GrowthJobType.PINTEREST_PIN_INVENTORY_SYNC,
+    GrowthJobType.PINTEREST_ANALYTICS_GAP_RECOVERY] as GrowthJobType[]).includes(job.type) &&
+    error instanceof PinterestGlobalBudgetBlocked &&
+    ["GLOBAL_QUOTA_EXHAUSTED", "PROVIDER_COOLDOWN"].includes(error.code);
+  const retryable = deferredRead || (!(error instanceof NonRetryableGrowthJobError) && job.attemptCount < job.maxAttempts);
   const status = retryable ? GrowthJobStatus.FAILED_RETRYABLE : GrowthJobStatus.FAILED_TERMINAL;
   const now = new Date();
-  const retryDelayMs = error instanceof RetryableGrowthJobError && error.retryAfterMs
+  const retryDelayMs = deferredRead ? 60 * 60_000 : error instanceof RetryableGrowthJobError && error.retryAfterMs
     ? Math.min(30 * 60_000, Math.max(30_000, error.retryAfterMs))
     : Math.min(30 * 60_000, 30_000 * 2 ** Math.max(0, job.attemptCount - 1));
   const safeError = toSafeGrowthError(error);
@@ -572,6 +580,7 @@ export async function failGrowthJob(job: GrowthJob, workerId: string, error: unk
       where: { id: job.id, status: GrowthJobStatus.RUNNING, workerId },
       data: {
         status,
+        ...(deferredRead ? { attemptCount: Math.max(0, job.attemptCount - 1) } : {}),
         runAfter: retryable ? new Date(now.getTime() + retryDelayMs) : job.runAfter,
         completedAt: retryable ? null : now,
         leaseUntil: null,

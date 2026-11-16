@@ -145,6 +145,17 @@ export async function countBlockingGrowthJobs(
       .filter((r) => verifiedRecoveryIds.has(r.recoveryId))
       .map((r) => r.jobId),
   );
+  // Dormant official analytics reads do not hold an execution lease. Exact-ID
+  // runners still recheck authorization and can never claim a publication.
+  for (const job of jobs) {
+    const payload = job.payload as { accountId?: unknown; startDate?: unknown; endDate?: unknown } | null;
+    if (([GrowthJobType.PINTEREST_ACCOUNT_ANALYTICS_SYNC, GrowthJobType.PINTEREST_PIN_INVENTORY_SYNC,
+      GrowthJobType.PINTEREST_PIN_ANALYTICS_SYNC] as GrowthJobType[]).includes(job.type) &&
+      [GrowthJobStatus.PENDING, GrowthJobStatus.FAILED_RETRYABLE].includes(job.status as "PENDING" | "FAILED_RETRYABLE") &&
+      payload && typeof payload.accountId === "string" && /^[a-z0-9]{10,40}$/.test(payload.accountId) &&
+      typeof payload.startDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(payload.startDate) &&
+      typeof payload.endDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(payload.endDate)) safeReadJobs.add(job.id);
+  }
   let blockers = 0;
   for (const job of jobs) {
     if (safeReadJobs.has(job.id)) continue;

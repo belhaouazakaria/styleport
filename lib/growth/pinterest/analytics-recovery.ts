@@ -543,6 +543,13 @@ async function recoveryRequestGate(accountId: string, recoveryId: string) {
   return assessPinterestRecoveryRateLimit(state);
 }
 
+export function remainingPinterestRecoveryRange(start: Date, end: Date, now = new Date()) {
+  const supported = defaultPinterestRecoveryRange(now);
+  const startDate = utcDateOnly(start) < supported.startDate ? supported.startDate : utcDateOnly(start);
+  const endDate = utcDateOnly(end) > supported.endDate ? supported.endDate : utcDateOnly(end);
+  return startDate <= endDate ? { startDate, endDate } : null;
+}
+
 export async function recoverPinterestAnalyticsGaps(params: {
   recoveryId: string;
   batch: number;
@@ -559,10 +566,6 @@ export async function recoverPinterestAnalyticsGaps(params: {
   if (isTerminalRecoveryStatus(recovery.status)) {
     return { recoveryId: recovery.id, complete: true, reused: true };
   }
-  pinterestRecoveryDateRange({
-    startDate: utcDateOnly(recovery.startDate),
-    endDate: utcDateOnly(recovery.endDate),
-  });
   await prisma.growthPinterestAnalyticsRecovery.updateMany({
     where: {
       id: recovery.id,
@@ -589,6 +592,18 @@ export async function recoverPinterestAnalyticsGaps(params: {
   let quotaProbes = 0;
 
   for (const task of tasks) {
+    // Plans are immutable evidence. Only the actual request is clipped as the
+    // provider window advances; expired dates remain explicitly unresolved.
+    const range = remainingPinterestRecoveryRange(task.startDate, task.endDate);
+    if (!range) {
+      await prisma.growthPinterestAnalyticsRecoveryTask.update({
+        where: { id: task.id },
+        data: { status: GrowthPinterestAnalyticsRecoveryTaskStatus.COMPLETED,
+          unresolvedDateCount: new Set([...task.missingDates, ...task.processingDates]).size,
+          responseRowCount: 0, completedAt: new Date() },
+      });
+      continue;
+    }
     let gate = await recoveryRequestGate(recovery.accountId, recovery.id);
     if (gate.status === "TERMINAL") {
       return { recoveryId: recovery.id, complete: true, reused: true, requests };
@@ -668,8 +683,7 @@ export async function recoverPinterestAnalyticsGaps(params: {
       });
       continue;
     }
-    const startDate = utcDateOnly(task.startDate);
-    const endDate = utcDateOnly(task.endDate);
+    const { startDate, endDate } = range;
     const response = await getPinterestPinAnalytics({
       accountId: recovery.accountId,
       pinterestPinId: pin.pinterestPinId,
