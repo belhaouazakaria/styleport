@@ -34,6 +34,8 @@ import {
 import { toSafeGrowthError } from "@/lib/growth/safe-data";
 import { getGrowthSettings } from "@/lib/growth/settings";
 import { prisma } from "@/lib/prisma";
+import { recordUnavailablePinterestAnalytics } from "./analytics-access";
+import { PinterestPinAnalyticsUnavailableError } from "./api";
 import { PinterestGlobalBudgetBlocked } from "./global-budget";
 
 function continuationKey(parts: string[]) {
@@ -420,7 +422,13 @@ export async function syncPinterestPinAnalytics(params: {
     let processed = 0;
     let lastRateLimit: PinterestRateLimitMetadata = { limit: null, remaining: null, reset: null };
     for (const pin of pins) {
-      const response = await getPinterestPinAnalytics({ ...params, pinterestPinId: pin.pinterestPinId });
+      let response: Awaited<ReturnType<typeof getPinterestPinAnalytics>>;
+      try { response = await getPinterestPinAnalytics({ ...params, pinterestPinId: pin.pinterestPinId }); }
+      catch (error) {
+        if (!(error instanceof PinterestPinAnalyticsUnavailableError)) throw error;
+        await recordUnavailablePinterestAnalytics(params.accountId, pin.id);
+        continue;
+      }
       lastRateLimit = response.rateLimit;
       const rows = blockDailyMetrics(response.data);
       assertRowsInRange(rows, params.startDate, params.endDate);
@@ -446,6 +454,7 @@ export async function syncPinterestPinAnalytics(params: {
       processed += 1;
       if (lowPinterestRateLimit(lastRateLimit)) break;
     }
+    await reconcilePinterestAnalyticsProgress(params.accountId);
     const remaining = await prisma.growthPinterestPin.count({
       where: { accountId: params.accountId, isActive: true, analyticsEligible: true, ...analyticsDue },
     });

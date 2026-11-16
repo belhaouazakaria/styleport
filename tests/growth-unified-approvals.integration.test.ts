@@ -1,3 +1,5 @@
+import { recordUnavailablePinterestAnalytics, unavailablePinterestAnalyticsPins } from "@/lib/growth/pinterest/analytics-access";
+import { reclassifyPinterestPins } from "@/lib/growth/pinterest/relevance";
 import { existsSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -1365,6 +1367,25 @@ suite("Unified owner consent with PostgreSQL 18", () => {
     expect(requests).toHaveLength(1);
     expect(requests[0].snapshotChecksum).not.toBe(original.snapshotChecksum);
     expect(await prisma.growthPinApproval.count({ where: { candidateId: f.candidate.id } })).toBe(0);
+  });
+
+  it("keeps denied Pin analytics unavailable across reclassification until reauthorization", async () => {
+    const f = await fixture();
+    const snapshot = f.review.snapshot as { accountId: string };
+    const pin = await prisma.growthPinterestPin.create({ data: {
+      pinterestPinId: "access-" + randomUUID(), accountId: snapshot.accountId,
+      destinationUrl: "https://saytwist.com/translators/test", analyticsEligible: true,
+      lastSeenAt: now, lastSyncedAt: now,
+    } });
+    await recordUnavailablePinterestAnalytics(snapshot.accountId, pin.id);
+    expect(await unavailablePinterestAnalyticsPins(snapshot.accountId)).toContain(pin.id);
+    await reclassifyPinterestPins(snapshot.accountId, ["saytwist.com"]);
+    expect((await prisma.growthPinterestPin.findUniqueOrThrow({ where: { id: pin.id } })).analyticsEligible).toBe(false);
+    expect(await prisma.growthPinterestPinMetricDaily.count({ where: { pinId: pin.id } })).toBe(0);
+    await prisma.growthPinterestAccount.update({ where: { id: snapshot.accountId }, data: { credentialVersion: { increment: 1 } } });
+    expect(await unavailablePinterestAnalyticsPins(snapshot.accountId)).not.toContain(pin.id);
+    await reclassifyPinterestPins(snapshot.accountId, ["saytwist.com"]);
+    expect((await prisma.growthPinterestPin.findUniqueOrThrow({ where: { id: pin.id } })).analyticsEligible).toBe(true);
   });
 
 });
