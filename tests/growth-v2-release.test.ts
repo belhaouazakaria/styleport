@@ -20,6 +20,14 @@ describe("Growth V2 protected release", () => {
       execFileSync("node", ["--check", "workers/growth-v2-launch.cjs"]),
     ).not.toThrow();
   });
+  it("loads only validated Pinterest runtime settings into the Discord courier child", () => {
+    const launcher = readFileSync("workers/growth-v2-launch.cjs", "utf8");
+    expect(launcher).toContain('if (mode === "courier") Object.assign(env, loadPinterestRuntimeEnv(APP));');
+    expect(launcher).toContain('require("./growth-one-account-sync-launch.cjs")');
+    const courierKeys = launcher.split('const keys = mode === "courier" ? [')[1]?.split("]")[0] || "";
+    expect(courierKeys).not.toContain("PINTEREST_");
+    expect(courierKeys).not.toContain("GROWTH_CREDENTIAL_ENCRYPTION_KEY");
+  });
   it("seeds V2 recurrence on timer activation and upgrades existing units only during protected restoration", () => {
     const installer = readFileSync("workers/install-growth-v2-systemd.sh", "utf8");
     const coordinator = readFileSync("workers/coordinate-growth-ai-design-release.py", "utf8");
