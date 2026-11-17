@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const { spawnSync } = require("node:child_process");
 const { validatedDatabaseUrl } = require("./growth-lease-watchdog-launch.cjs");
+const { loadPinterestRuntimeEnv } = require("./growth-one-account-sync-launch.cjs");
 const APP = "/home/saytwist/htdocs/saytwist.com";
 const NODEDIR = "/home/saytwist/.nvm/versions/node/v24.20.0/bin";
 const PM2 = "/home/saytwist/.npm/_npx/5f7878ce38f1eb13/node_modules/pm2/bin/pm2";
@@ -16,9 +17,10 @@ function run() {
   if (snapshot.error || snapshot.status !== 0) throw Error("V2_PM2_GUARD");
   const env = { NODE_ENV: "production", HOME: "/home/saytwist", PATH: NODEDIR + ":/usr/local/bin:/usr/bin:/bin", DATABASE_URL: validatedDatabaseUrl(JSON.parse(snapshot.stdout)), APP_BASE_URL: "https://saytwist.com", EXPECTED_RELEASE: sha,
     GROWTH_WORKER_RUN_ENABLED: "false", GROWTH_ROLLOUT_MODE: "OFF", GROWTH_ATTRIBUTION_COLLECTION_ENABLED: "false", TELEGRAM_REPORTS_ENABLED: "false" };
-  const keys = mode === "courier" ? ["GROWTH_AUTOMATIC_REVIEW_PREPARATION_ENABLED", "GROWTH_DISCORD_ENABLED", "GROWTH_DISCORD_COURIER_ENABLED", "DISCORD_APPLICATION_ID", "DISCORD_PUBLIC_KEY", "DISCORD_OWNER_USER_ID", "DISCORD_BOT_TOKEN", "GROWTH_DISCORD_OWNER_USER_ID", "PINTEREST_APP_ID", "PINTEREST_APP_SECRET", "PINTEREST_REDIRECT_URI", "PINTEREST_API_ENVIRONMENT", "GROWTH_CREDENTIAL_ENCRYPTION_KEY"]
+  const keys = mode === "courier" ? ["GROWTH_AUTOMATIC_REVIEW_PREPARATION_ENABLED", "GROWTH_DISCORD_ENABLED", "GROWTH_DISCORD_COURIER_ENABLED", "DISCORD_APPLICATION_ID", "DISCORD_PUBLIC_KEY", "DISCORD_OWNER_USER_ID", "DISCORD_BOT_TOKEN", "GROWTH_DISCORD_OWNER_USER_ID"]
     : ["GROWTH_GOOGLE_ANALYTICS_ENABLED", "GROWTH_GOOGLE_SERVICE_ACCOUNT_JSON", "GROWTH_GA4_PROPERTY_ID", "GROWTH_SEARCH_CONSOLE_SITE", "GROWTH_AUTOMATIC_BOARD_SYNC_ENABLED", "GROWTH_V2_INTELLIGENCE_ENABLED", "GROWTH_SOURCE_ANALYTICS_ENABLED", "GROWTH_AUTOMATIC_BACKFILL_ENABLED", "PINTEREST_APP_ID", "PINTEREST_APP_SECRET", "PINTEREST_REDIRECT_URI", "PINTEREST_API_ENVIRONMENT", "GROWTH_CREDENTIAL_ENCRYPTION_KEY"];
   for (const key of keys) env[key] = process.env[key] || "";
+  if (mode === "courier") Object.assign(env, loadPinterestRuntimeEnv(APP));
   env[mode === "courier" ? "GROWTH_DISCORD_COURIER_ENTRYPOINT" : "GROWTH_V2_INTELLIGENCE_ENTRYPOINT"] = "true";
   const file = mode === "courier" ? "workers/growth-discord-courier.ts" : "workers/growth-v2-intelligence.ts";
   const child = spawnSync(NODEDIR + "/node", ["node_modules/tsx/dist/cli.mjs", file], { cwd: APP, env, encoding: "utf8", timeout: 120000, maxBuffer: 4096 });
