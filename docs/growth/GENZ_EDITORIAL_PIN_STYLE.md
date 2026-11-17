@@ -4,6 +4,8 @@
 
 ## Entry points and account scope
 
+Paid Gen-Z generation has its own `GROWTH_GENZ_AI_IMAGE_ENABLED` switch, separate from the generic AI image switch. Production enables this concept without changing the generic flag. The daily fresh worker keeps its existing one-attempt job, image budget, and exact-job lease; every Pin remains pending owner review.
+
 - Creative Lab defaults to the main account when available and selects Gen-Z Editorial. Choosing another account selects its existing style. Existing poster and before/after choices remain available. Stroke percentage, WebP quality, gallery preview, WebP download and explicit regeneration use existing controls and routes.
 - New API requests with an account but no archetype/style resolve the account default. Old requests with an explicit archetype keep that choice unless they explicitly request `designStyle: "genz_editorial"`.
 - The scheduled fresh worker requests the account default. Main does not require a before/after example for photography. Other accounts retain their existing example requirements. Existing unassociated/experiment recommendations keep their explicit archetype until an account/style is selected; no account is invented.
@@ -28,11 +30,11 @@ The supplied live endpoint did not respond. The original file was recovered thro
 - SHA-256: `b4a4e229e398cee333082204aedcfc5a2f7cff1537420381983fd7c439c95824`.
 - Embedded notice: Copyright (c) 2009 by John Lopez. All rights reserved.
 
-**Commercial-use permission has not been verified.** Public download availability and embedding flags are not treated as a commercial-use license. The actual font is kept in ignored private runtime storage for local evaluation, and is not redistributed in Git or served to browsers. No substitute font is bundled. This is an activation prerequisite, not a reason to claim the style is missing visually: the local validation images use the real, checksum-verified font.
+The owner identified the archived Whisper asset above as the intended font and confirmed that it needs no separate commercial-use license. We downloaded that archived file and verified its SHA-256 matches the privately uploaded font exactly. This confirmation is scoped to the pinned checksum; a different font with the same family name still needs its own permission record. The font remains in ignored private runtime storage and is not redistributed in Git or served to browsers. No substitute font is bundled.
 
-Install the licensed file privately at `storage/fonts/upright/Upright.otf`. Optional operator environment variables are `GROWTH_UPRIGHT_FONT_PATH`, `GROWTH_UPRIGHT_FONT_SHA256` and `GROWTH_UPRIGHT_FONT_PERMISSION_PATH`. A separately supplied licensed variant must still identify itself as Upright Regular and have its expected checksum explicitly configured. Configure these values for both the web application and isolated fresh worker if overriding the default paths; the fresh launcher forwards only these specific font settings.
+Install the checksum-verified original privately at `storage/fonts/upright/Upright.otf`. Optional operator environment variables are `GROWTH_UPRIGHT_FONT_PATH`, `GROWTH_UPRIGHT_FONT_SHA256` and `GROWTH_UPRIGHT_FONT_PERMISSION_PATH`. A separately supplied font variant must still identify itself as Upright Regular, have its expected checksum explicitly configured, and include its own permission record. Configure these values for both the web application and isolated fresh worker if overriding the default paths; the fresh launcher forwards only these specific font settings.
 
-After obtaining actual permission, record its reference in the private permission file next to the font. The following is an intentionally disabled example, not a license grant:
+For a different font variant, record its permission reference in the private permission file next to the font. The following is an intentionally disabled example:
 
 ```json
 {
@@ -42,7 +44,7 @@ After obtaining actual permission, record its reference in the private permissio
 }
 ```
 
-The authorized operator supplies the actual license/permission reference and enables the record only when rights exist. Until then the UI reports the prerequisite and paid Gen-Z generation fails before a provider request. The local geometry/visual-evaluation API can load the same font in preview mode; paid generation does not expose or accept that bypass.
+The exact reference font SHA above does not require that separate file; all other variants retain the permission check. Preview mode remains available for layout evaluation.
 
 ## Typography and compositing
 
@@ -66,6 +68,6 @@ Select an existing style in Creative Lab, or send `designStyle: "legacy"` for an
 
 ## Validation
 
-The suite covers account-aware defaults, legacy selection, metadata-dependent prompts, no AI typography, exact font checks, stroke conversion/ranges, real glyph geometry, long names, unsupported Unicode, safe margins, PNG/WebP formats, immutable storage, generation failure, explicit regeneration, and cross-account review rejection. Real-font tests use the operator's private file; clean CI skips those cases when the licensed binary is absent. Local validation ran with the actual font.
+The suite covers account-aware defaults, legacy selection, metadata-dependent prompts, no AI typography, exact font checks, stroke conversion/ranges, real glyph geometry, long names, unsupported Unicode, safe margins, PNG/WebP formats, immutable storage, generation failure, explicit regeneration, and cross-account review rejection. Real-font tests use the operator's private file; clean CI skips those cases when the binary is absent. Local validation ran with the actual font.
 
 The controlled visual set uses two built-in ImageGen backgrounds: Cat Translator and Shakespearean English Translator for Everyday Messages. The initial application validation rendered each at 180%, 190% and 200% into PNG and WebP under ignored `output/genz-editorial/`; `validation.json` records exact bounds and checksums. The revised v2 previews use the same photographs with the invitation copy and a heavier 250% outline; 300% is also supported. The renderer version changed to invalidate old composition caches while preserving existing assets. No additional AI photograph requests were needed. No live Growth API key, production data, publishing approval or production deployment was used for these previews.

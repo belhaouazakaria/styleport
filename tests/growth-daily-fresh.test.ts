@@ -23,6 +23,7 @@ const env = {
   TELEGRAM_REPORTS_ENABLED: "false",
   GROWTH_ATTRIBUTION_COLLECTION_ENABLED: "false",
   GROWTH_AI_IMAGE_ENABLED: "true",
+  GROWTH_GENZ_AI_IMAGE_ENABLED: "true",
   GROWTH_OPENAI_IMAGE_MODEL: "gpt-image-2",
   GROWTH_OPENAI_API_KEY: "sk-test_growth_project_123456",
   GROWTH_OPENAI_PROJECT_ID: "proj_test_123456",
@@ -126,6 +127,7 @@ describe("Phase14M daily budgeted AI Pinterest drafts", () => {
     }
     for (const delta of [
       { GROWTH_AI_IMAGE_ENABLED: "false" },
+      { GROWTH_GENZ_AI_IMAGE_ENABLED: "false" },
       { GROWTH_OPENAI_IMAGE_MODEL: "unverified-model" },
       { GROWTH_OPENAI_API_KEY: "" },
       { GROWTH_OPENAI_PROJECT_ID: "" },

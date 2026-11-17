@@ -148,7 +148,7 @@ describe("Main-account Gen-Z Editorial controls", () => {
   });
   it("queues the selected outline and export quality without approving or publishing", async () => {
     const fetcher = vi.fn(async () => ({ ok: true, json: async () => ({ ok: true }) }) as Response); vi.stubGlobal("fetch", fetcher);
-    render(<CreativeGenerationForm translators={[{ id: "cat", name: "Cat Translator", slug: "cat" }]} ideas={[]} accounts={accounts} experiments={[]} aiImageEnabled uprightReady />);
+    render(<CreativeGenerationForm translators={[{ id: "cat", name: "Cat Translator", slug: "cat" }]} ideas={[]} accounts={accounts} experiments={[]} aiImageEnabled={false} genzAiImageEnabled uprightReady />);
     fireEvent.change(screen.getByRole("slider", { name: "Stroke width percentage" }), { target: { value: "300" } });
     fireEvent.change(screen.getByRole("spinbutton", { name: /WebP export quality/ }), { target: { value: "95" } });
     fireEvent.click(screen.getByRole("button", { name: "Generate one candidate" }));
@@ -159,6 +159,11 @@ describe("Main-account Gen-Z Editorial controls", () => {
   it("does not pretend the exact font is ready when it is unavailable", () => {
     render(<CreativeGenerationForm translators={[{ id: "cat", name: "Cat Translator", slug: "cat" }]} ideas={[]} accounts={accounts} experiments={[]} aiImageEnabled uprightReady={false} uprightMessage="Upright permission is unverified." />);
     expect(screen.getByRole("alert")).toHaveTextContent("Upright permission is unverified");
+    expect(screen.getByRole("button", { name: "Generate one candidate" })).toBeDisabled();
+  });
+  it("keeps the new paid concept separately gated from generic AI image generation", () => {
+    render(<CreativeGenerationForm translators={[{ id: "cat", name: "Cat Translator", slug: "cat" }]} ideas={[]} accounts={accounts} experiments={[]} aiImageEnabled={false} genzAiImageEnabled={false} uprightReady />);
+    expect(screen.getByText("Gen-Z paid image generation is currently disabled.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Generate one candidate" })).toBeDisabled();
   });
 });

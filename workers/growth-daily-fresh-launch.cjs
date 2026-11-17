@@ -104,11 +104,14 @@ function run() {
       TELEGRAM_REPORTS_ENABLED: "false",
       GROWTH_ATTRIBUTION_COLLECTION_ENABLED: "false",
       GROWTH_AI_IMAGE_ENABLED: "true",
+      GROWTH_GENZ_AI_IMAGE_ENABLED: "true",
         GROWTH_V2_INTELLIGENCE_ENABLED: process.env.GROWTH_V2_INTELLIGENCE_ENABLED === "true" ? "true" : "false",
       GROWTH_OPENAI_API_KEY: growthKey,
       GROWTH_OPENAI_PROJECT_ID: growthProject,
       GROWTH_OPENAI_IMAGE_MODEL: "gpt-image-2",
-      ...(process.env.GROWTH_MAIN_PIN_DESIGN_STYLE ? { GROWTH_MAIN_PIN_DESIGN_STYLE: process.env.GROWTH_MAIN_PIN_DESIGN_STYLE } : {}),
+      // The daily fresh flow uses the approved new concept for Main. Other
+      // account roles are still resolved to their existing styles.
+      GROWTH_MAIN_PIN_DESIGN_STYLE: "genz_editorial",
       ...(process.env.GROWTH_UPRIGHT_FONT_PATH ? { GROWTH_UPRIGHT_FONT_PATH: process.env.GROWTH_UPRIGHT_FONT_PATH } : {}),
       ...(process.env.GROWTH_UPRIGHT_FONT_PERMISSION_PATH ? { GROWTH_UPRIGHT_FONT_PERMISSION_PATH: process.env.GROWTH_UPRIGHT_FONT_PERMISSION_PATH } : {}),
       ...(process.env.GROWTH_UPRIGHT_FONT_SHA256 ? { GROWTH_UPRIGHT_FONT_SHA256: process.env.GROWTH_UPRIGHT_FONT_SHA256 } : {}),

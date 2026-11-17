@@ -33,6 +33,7 @@ const envSchema = z.object({
   GROWTH_OPENAI_PROJECT_ID: z.string().min(1).optional(),
   OPENAI_MODEL: z.string().min(1).optional(),
   GROWTH_AI_IMAGE_ENABLED: booleanParser,
+  GROWTH_GENZ_AI_IMAGE_ENABLED: booleanParser,
   GROWTH_OPENAI_IMAGE_MODEL: z.string().trim().min(1).max(120).optional(),
   NEXT_PUBLIC_APP_NAME: z.string().min(1).optional(),
   ALERT_ADMIN_EMAIL: z.string().optional(),
