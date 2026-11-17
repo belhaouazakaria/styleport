@@ -10,6 +10,12 @@ const messages: Record<string, string> = {
   REVIEW_NOT_PENDING: "This review is already closed. Refresh to see its current status.",
   REVIEW_NO_SAFE_SLOT: "No eligible publishing slot is available in the next 30 days. Check account readiness and daily targets.",
   SOURCE_APPROVAL_QUALITY_WITHDRAWN: "This source concept no longer meets the quality requirements.",
+  PIN_PLAN_NOT_READY: "This Pin is no longer ready for review. Refresh the page to see its current status.",
+  PIN_PLAN_ACCOUNT_AMBIGUOUS: "Choose a connected Pinterest account for this Pin, then refresh the review.",
+  PIN_PLAN_BOARD_UNAVAILABLE: "The selected Pinterest account has no active boards. Reconnect it or activate a board, then refresh.",
+  PIN_PLAN_BOARD_AMBIGUOUS: "This Pin needs a board choice. Open the review and select an active board.",
+  SOURCE_REVIEW_NO_ELIGIBLE_BOARD_OR_SLOT: "No active board or publishing time is available for this source Pin. Refresh its plan and try again.",
+  SOURCE_REVIEW_NOT_PLANNED: "This source Pin is no longer planned for review. Refresh to see its current status.",
 };
 export function growthReviewErrorMessage(error: unknown) {
   return error instanceof Error && messages[error.message] ||

@@ -109,6 +109,8 @@ describe("Creative Lab target picker", () => {
     const user = userEvent.setup();
     render(<PinApprovalPanel candidateId="candidate-1" accounts={[{ id: "account-1", label: "@saytwist", boards: [{ id: "board-1", name: "SayTwist" }] }]} existing={{ approvalStatus: "APPROVED", publicationId: "publication-old", publicationStatus: "FAILED_TERMINAL", scheduledAt: "2026-10-10T12:00:00.000Z", accountId: "account-1", boardId: "board-1", account: "@saytwist", board: "SayTwist", lastErrorCode: "PINTEREST_CREATE_REJECTED", lastErrorSummary: "Pinterest rejected the stored credential with HTTP 401." }} />);
 
+    expect(screen.queryByRole("button", { name: /send this pin to telegram/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/telegram review includes/i)).not.toBeInTheDocument();
     expect(screen.getByText(/failed terminal/i)).toBeInTheDocument();
     expect(screen.getByText(/HTTP 401/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Confirm new approval" })).not.toBeInTheDocument();

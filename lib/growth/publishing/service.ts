@@ -130,7 +130,13 @@ export async function recommendPinApprovalPlan(candidateId: string, now = new Da
     take: 4,
   });
   const usable = accounts.filter(account => hasPinterestScopes(account.grantedScopes, PINTEREST_CREATE_PIN_SCOPES));
-  const matching = candidate.accountId ? usable.filter(a => a.id === candidate.accountId) : usable;
+  // Legacy Creative Lab candidates may predate account assignment. Prefer the
+  // documented Main account when it is available; keep ambiguity explicit for
+  // accounts without a unique Main destination.
+  const mainAccounts = usable.filter(account => account.publicationRole === "SAYTWIST");
+  const matching = candidate.accountId
+    ? usable.filter(a => a.id === candidate.accountId)
+    : mainAccounts.length === 1 ? mainAccounts : usable;
   if (matching.length !== 1) throw Error("PIN_PLAN_ACCOUNT_AMBIGUOUS");
   const accountId = matching[0].id;
   const boards = await prisma.growthPinterestBoard.findMany({
