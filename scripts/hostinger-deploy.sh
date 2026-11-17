@@ -251,6 +251,9 @@ for key, value in settings.items():
     lines.append(f"{key}={value}")
 target.write_text("\n".join(lines) + "\n")
 os.chmod(target, stat.S_IMODE(source.stat().st_mode))
+if os.geteuid() == 0:
+    source_stat = source.stat()
+    os.chown(target, source_stat.st_uid, source_stat.st_gid)
 PY
   mv -- "$temp_file" "$env_file"
   log "Enabled only Gen-Z paid image generation; generic AI generation remains unchanged."

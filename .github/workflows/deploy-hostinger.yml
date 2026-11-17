@@ -261,7 +261,7 @@ jobs:
               HOSTINGER_PM2_HOME="/home/saytwist/.pm2" \
               HOSTINGER_EXPECTED_PM2_VERSION="7.0.4" \
               HOSTINGER_EXPECTED_PORT="3001" \
-              HOSTINGER_ENV_FILE="${{ secrets.HOSTINGER_APP_PATH || vars.HOSTINGER_APP_PATH }}/.env" \
+              HOSTINGER_ENV_FILE="${{ secrets.HOSTINGER_APP_PATH || vars.HOSTINGER_APP_PATH }}/.env.local" \
               HOSTINGER_EXPECT_NO_PENDING_MIGRATIONS="1" \
               HOSTINGER_RELEASE_SHA="${{ github.sha }}" \
               HOSTINGER_DEPLOY_ARCHIVE="${{ secrets.HOSTINGER_APP_PATH || vars.HOSTINGER_APP_PATH }}/release.tar.gz" \

@@ -99,7 +99,7 @@ it("keeps provenance branding out of the AI topic and all visible copy", async (
 });
 
 it("uses Gen-Z only for the enabled Main account source design", async () => {
-  vi.stubEnv("GROWTH_AI_IMAGE_ENABLED", "true");
+  vi.stubEnv("GROWTH_AI_IMAGE_ENABLED", "false");
   vi.stubEnv("GROWTH_GENZ_AI_IMAGE_ENABLED", "true");
   vi.stubEnv("GROWTH_MAIN_PIN_DESIGN_STYLE", "genz_editorial");
   const result = await createOriginalSourceAsset(
