@@ -223,6 +223,39 @@ validate_environment() {
   log "Production configuration is present and targets the approved private PostgreSQL endpoint."
 }
 
+configure_genz_generation() {
+  step "genz-generation-config"
+  ensure_file_exists "$PRODUCTION_ENV_FILE"
+  [[ "$PRODUCTION_ENV_FILE" != "$STAGING_DIR/.production-runtime.env" ]] \
+    || fail "A persistent application environment file is required to enable Gen-Z generation."
+  local env_file temp_file
+  env_file="$PRODUCTION_ENV_FILE"
+  if [[ -L "$env_file" ]]; then
+    env_file="$(readlink -f -- "$env_file")" || fail "Could not resolve the production environment file symlink."
+  fi
+  temp_file="$(mktemp "${env_file}.genz.XXXXXXXX")"
+  python3 - "$env_file" "$temp_file" <<'PY'
+import pathlib
+import os
+import stat
+import sys
+
+source, target = map(pathlib.Path, sys.argv[1:])
+lines = source.read_text().splitlines()
+settings = {
+    "GROWTH_GENZ_AI_IMAGE_ENABLED": "true",
+    "GROWTH_MAIN_PIN_DESIGN_STYLE": "genz_editorial",
+}
+for key, value in settings.items():
+    lines = [line for line in lines if not line.lstrip().startswith(key + "=")]
+    lines.append(f"{key}={value}")
+target.write_text("\n".join(lines) + "\n")
+os.chmod(target, stat.S_IMODE(source.stat().st_mode))
+PY
+  mv -- "$temp_file" "$env_file"
+  log "Enabled only Gen-Z paid image generation; generic AI generation remains unchanged."
+}
+
 validate_archive() {
   step "validate-archive"
   ensure_file_exists "$DEPLOY_ARCHIVE"
@@ -492,6 +525,7 @@ main() {
   preserve_generated_assets
   backup_current_release
   publish_release
+  configure_genz_generation
   restart_web_process
   finalize_release
 

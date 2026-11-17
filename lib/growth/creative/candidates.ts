@@ -1274,7 +1274,7 @@ export async function generateCreativeCandidate(
     estimatedCost: number | null;
   } | null = null;
   if (!preexistingExactContent && isGenZ) {
-    const enabled = options.aiEnabled ?? getServerEnv().GROWTH_AI_IMAGE_ENABLED === true;
+    const enabled = options.aiEnabled ?? getServerEnv().GROWTH_GENZ_AI_IMAGE_ENABLED === true;
     if (!enabled) throw new NonRetryableGrowthJobError("Creative AI image generation is disabled.");
     const active = await prisma.growthSettings.findUnique({ where: { id: GROWTH_SETTINGS_ID }, select: { enabled: true } });
     if (!active?.enabled) throw new NonRetryableGrowthJobError("Growth is disabled before AI photography generation.");

@@ -4,7 +4,7 @@ import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import sharp from "sharp";
 import { GENZ_TYPOGRAPHY, buildGenZHeadline, PIN_DESIGN_STYLES, buildGenZBackgroundPrompt, effectiveGenZStroke, genzTypographySchema, resolvePinDesignStyle } from "@/lib/growth/creative/genz-editorial";
-import { loadUprightFont } from "@/lib/growth/creative/genz-font";
+import { loadUprightFont, UPRIGHT_REFERENCE_SHA256 } from "@/lib/growth/creative/genz-font";
 import { compositeGenZEditorial, layoutGenZHeadline } from "@/lib/growth/creative/genz-renderer";
 import { generateGenZEditorial } from "@/lib/growth/creative/genz-generation";
 import { creativeGenerationRequestSchema, creativeGenerationJobPayloadSchema } from "@/lib/growth/creative/contracts";
@@ -53,9 +53,9 @@ describe("Main account Gen-Z style and dynamic photographic planning", () => {
     expect(creativeGenerationJobPayloadSchema.safeParse({ targetKind: "TRANSLATOR", targetId: "cat", creativeModelVersion: "creative_lab_v1" }).success).toBe(false);
     expect(creativeGenerationRequestSchema.parse({ targetKind: "TRANSLATOR", targetId: "cat", creativeModelVersion: "creative_lab_v1", designStyle: "genz_editorial" })).toMatchObject({ archetype: "MINIMAL_STATEMENT" });
   });
-  it("blocks before paid dispatch when the font or permission is unavailable", async () => {
+  it("blocks before paid dispatch when the font is unavailable", async () => {
     const generate = vi.fn();
-    vi.stubEnv("GROWTH_UPRIGHT_FONT_PERMISSION_PATH", "/nonexistent/saytwist-unit-permission.json");
+    vi.stubEnv("GROWTH_UPRIGHT_FONT_PATH", "/nonexistent/upright.otf");
     await expect(generateGenZEditorial({ name: "Cat Translator", description: "Feline speech" }, { generate })).rejects.toThrow(/Upright/);
     expect(generate).not.toHaveBeenCalled();
     vi.unstubAllEnvs();
@@ -69,9 +69,9 @@ describe("Main account Gen-Z style and dynamic photographic planning", () => {
 const fontPath = process.env.GROWTH_UPRIGHT_FONT_PATH ?? path.join(process.cwd(), "storage/fonts/upright/Upright.otf");
 describe.skipIf(!existsSync(fontPath))("Actual Upright glyph geometry and output", () => {
   it("loads the exact Upright Regular reference, without substitution", async () => {
-    const f = await loadUprightFont({ forPreview: true });
+    const f = await loadUprightFont({ permissionPath: "/nonexistent/saytwist-unit-permission.json" });
     expect(f.font.familyName).toBe("Upright"); expect(f.font.subfamilyName).toBe("Regular");
-    expect(f.checksum).toBe("b4a4e229e398cee333082204aedcfc5a2f7cff1537420381983fd7c439c95824");
+    expect(f.checksum).toBe(UPRIGHT_REFERENCE_SHA256);
   });
   it.each(["Cat Translator", "Shakespearean English Translator for Everyday Messages", "The Unnecessarily Dramatic Medieval English Translator for Entirely Ordinary Conversations", "Café Translator"])("wraps %s with all words and stroke inside safe margins", async title => {
     const font = await loadUprightFont({ forPreview: true });

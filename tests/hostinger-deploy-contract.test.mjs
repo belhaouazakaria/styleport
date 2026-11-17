@@ -127,6 +127,24 @@ describe("Hostinger PM2 process contract", () => {
     chmodSync(cli, 0o700);
     await expect(validatePm2CliPath(cli)).resolves.toBe(cli);
   });
+
+  it("enables Gen-Z generation in production without changing the generic AI flag", () => {
+    const directory = mkdtempSync(path.join(tmpdir(), "saytwist-genz-env-"));
+    temporaryDirectories.push(directory);
+    const envFile = path.join(directory, ".env");
+    writeFileSync(envFile, "OPENAI_API_KEY=untouched\nGROWTH_AI_IMAGE_ENABLED=false\nGROWTH_MAIN_PIN_DESIGN_STYLE=legacy\n");
+    const result = runSourcedBash(
+      'PRODUCTION_ENV_FILE="$TEST_ENV_FILE"\nconfigure_genz_generation',
+      { TEST_ENV_FILE: envFile },
+    );
+    expect(result.status, result.stderr).toBe(0);
+    const configured = readFileSync(envFile, "utf8");
+    expect(configured).toContain("OPENAI_API_KEY=untouched");
+    expect(configured).toContain("GROWTH_AI_IMAGE_ENABLED=false");
+    expect(configured).toContain("GROWTH_GENZ_AI_IMAGE_ENABLED=true");
+    expect(configured).toContain("GROWTH_MAIN_PIN_DESIGN_STYLE=genz_editorial");
+    expect(configured.match(/^GROWTH_GENZ_AI_IMAGE_ENABLED=/gm)).toHaveLength(1);
+  });
 });
 
 describe("Hostinger PostgreSQL backup-tool contract", () => {

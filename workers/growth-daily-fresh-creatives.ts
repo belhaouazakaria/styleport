@@ -58,6 +58,7 @@ export function assertDailyFreshRuntime(
   ]) if (env[flag] !== "false") throw Error("FRESH_OTHER_AUTOMATION_ENABLED");
   // Only a separately scoped, priced GPT Image 2 job is authorized here.
   if (env.GROWTH_AI_IMAGE_ENABLED !== "true" ||
+      env.GROWTH_GENZ_AI_IMAGE_ENABLED !== "true" ||
       env.GROWTH_OPENAI_IMAGE_MODEL !== "gpt-image-2" ||
       !/^sk-[A-Za-z0-9_-]{12,}$/.test(env.GROWTH_OPENAI_API_KEY || "") ||
       !/^proj_[A-Za-z0-9_-]{3,128}$/.test(env.GROWTH_OPENAI_PROJECT_ID || "") ||

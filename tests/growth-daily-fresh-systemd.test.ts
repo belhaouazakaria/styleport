@@ -45,6 +45,8 @@ describe("Phase14M daily isolated AI creative production safety", () => {
     expect(launch).toContain("saytwist-growth-approved-publisher.timer");
     expect(launch).toContain("GROWTH_DAILY_FRESH_APPROVAL");
     expect(launch).toContain('GROWTH_AI_IMAGE_ENABLED: "true"');
+    expect(launch).toContain('GROWTH_GENZ_AI_IMAGE_ENABLED: "true"');
+    expect(launch).toContain('GROWTH_MAIN_PIN_DESIGN_STYLE: "genz_editorial"');
     expect(launch).toContain('GROWTH_OPENAI_IMAGE_MODEL: "gpt-image-2"');
     expect(launch).toContain("GROWTH_OPENAI_PROJECT_ID");
     expect(launch).toContain("growthKey === process.env.OPENAI_API_KEY");
