@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { chmodSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -133,17 +133,25 @@ describe("Hostinger PM2 process contract", () => {
     temporaryDirectories.push(directory);
     const envFile = path.join(directory, ".env");
     writeFileSync(envFile, "OPENAI_API_KEY=untouched\nGROWTH_AI_IMAGE_ENABLED=false\nGROWTH_MAIN_PIN_DESIGN_STYLE=legacy\n");
+    chmodSync(envFile, 0o640);
+    const originalStat = statSync(envFile);
     const result = runSourcedBash(
       'PRODUCTION_ENV_FILE="$TEST_ENV_FILE"\nconfigure_genz_generation',
       { TEST_ENV_FILE: envFile },
     );
     expect(result.status, result.stderr).toBe(0);
     const configured = readFileSync(envFile, "utf8");
+    const configuredStat = statSync(envFile);
     expect(configured).toContain("OPENAI_API_KEY=untouched");
     expect(configured).toContain("GROWTH_AI_IMAGE_ENABLED=false");
     expect(configured).toContain("GROWTH_GENZ_AI_IMAGE_ENABLED=true");
     expect(configured).toContain("GROWTH_MAIN_PIN_DESIGN_STYLE=genz_editorial");
     expect(configured.match(/^GROWTH_GENZ_AI_IMAGE_ENABLED=/gm)).toHaveLength(1);
+    expect(configuredStat.mode & 0o777).toBe(originalStat.mode & 0o777);
+    if (process.getuid?.() === 0) {
+      expect(configuredStat.uid).toBe(originalStat.uid);
+      expect(configuredStat.gid).toBe(originalStat.gid);
+    }
   });
 });
 
