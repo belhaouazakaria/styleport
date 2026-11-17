@@ -126,7 +126,11 @@ export async function createOriginalSourceAsset(
   if (process.env.GROWTH_AI_IMAGE_ENABLED !== "true")
     throw Error("SOURCE_AI_DESIGN_REQUIRED");
   const copy = originalSourceCreativeCopy(topic, sourceUrl);
-  if (publicationRole === "SAYTWIST" && mainPinDesignDefault() === "genz_editorial") {
+  const mainGenZEnabled =
+    process.env.GROWTH_GENZ_AI_IMAGE_ENABLED === "true" &&
+    publicationRole === "SAYTWIST" &&
+    mainPinDesignDefault() === "genz_editorial";
+  if (mainGenZEnabled) {
     const rendered = await generateGenZEditorial({ name: copy.topic, description: copy.description, purpose: "A SayTwist language-style discovery. Depict the translator's identity without inventing a transformation example." }, new OpenAICreativeImageProvider(attemptId), {}, undefined, true);
     const stored = await persistCreativeAssetFile(rendered.png);
     let webp: Awaited<ReturnType<typeof persistCreativeAssetFile>> | null = null;
