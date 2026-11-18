@@ -5,37 +5,96 @@ const mocks = vi.hoisted(() => ({
   guard: vi.fn(),
   overview: vi.fn(),
   requireAdmin: vi.fn(),
+  publishing: vi.fn(),
 }));
 
-vi.mock("@/lib/prisma", () => ({ prisma: {
-  growthApprovalRequest: { count: vi.fn().mockResolvedValue(2) },
-  growthPinPublication: { findMany: vi.fn().mockResolvedValue([]) },
-  growthViralPinTest: { findMany: vi.fn().mockResolvedValue([]) },
-  growthPinterestAccount: { findMany: vi.fn().mockResolvedValue([]) },
-} }));
+vi.mock("@/lib/prisma", () => ({
+  prisma: {
+    growthApprovalRequest: { count: vi.fn().mockResolvedValue(2) },
+    growthPinPublication: { findMany: vi.fn().mockResolvedValue([]) },
+    growthViralPinTest: { findMany: vi.fn().mockResolvedValue([]) },
+    growthPinterestAccount: { findMany: vi.fn().mockResolvedValue([]) },
+  },
+}));
 vi.mock("@/lib/permissions", () => ({ adminRouteGuard: mocks.guard }));
 vi.mock("@/lib/auth", () => ({ requireAdminRoute: mocks.requireAdmin }));
-vi.mock("@/lib/growth/admin", () => ({ getGrowthFoundationOverview: mocks.overview }));
-vi.mock("@/lib/api-response", () => ({ apiOk: (payload: unknown) => Response.json({ ok: true, ...(payload as object) }) }));
-vi.mock("@/components/admin/admin-topbar", () => ({ AdminTopbar: ({ title }: { title: string }) => <h1>{title}</h1> }));
-vi.mock("@/components/admin/growth-settings-form", () => ({ GrowthSettingsForm: () => <div>Growth settings form</div> }));
-vi.mock("@/components/admin/kpi-card", () => ({ KpiCard: ({ label, value }: { label: string; value: string | number }) => <div><span>{label}</span><span>{value}</span></div> }));
+vi.mock("@/lib/growth/admin", () => ({
+  getGrowthFoundationOverview: mocks.overview,
+}));
+vi.mock("@/lib/growth/overview", () => ({
+  getGrowthPublishingOverview: mocks.publishing,
+}));
+vi.mock("@/components/admin/growth-overview-panels", () => ({
+  GrowthOverviewPanels: () => <div>Publishing overview</div>,
+}));
+vi.mock("@/lib/api-response", () => ({
+  apiOk: (payload: unknown) =>
+    Response.json({ ok: true, ...(payload as object) }),
+}));
+vi.mock("@/components/admin/admin-topbar", () => ({
+  AdminTopbar: ({ title }: { title: string }) => <h1>{title}</h1>,
+}));
+vi.mock("@/components/admin/growth-settings-form", () => ({
+  GrowthSettingsForm: () => <div>Growth settings form</div>,
+}));
+vi.mock("@/components/admin/kpi-card", () => ({
+  KpiCard: ({ label, value }: { label: string; value: string | number }) => (
+    <div>
+      <span>{label}</span>
+      <span>{value}</span>
+    </div>
+  ),
+}));
 
 import AdminGrowthPage from "@/app/(admin)/admin/growth/page";
 import { GET } from "@/app/api/admin/growth/route";
 
 const overview = {
-  settings: { enabled: false, intensity: "BALANCED" as const, workerBatchSize: 5, ownedDomains: ["saytwist.com"], attributionEnabled: false, attributionWindowDays: 7, attributionSessionRetentionDays: 30, attributionEventRetentionDays: 90, configVersion: 1 },
-  jobs: { queued: 2, claimed: 1, running: 0, retryable: 1, terminalFailed: 0, succeeded: 3, cancelled: 0, oldestRunnableJob: null },
+  settings: {
+    enabled: false,
+    intensity: "BALANCED" as const,
+    workerBatchSize: 5,
+    ownedDomains: ["saytwist.com"],
+    attributionEnabled: false,
+    attributionWindowDays: 7,
+    attributionSessionRetentionDays: 30,
+    attributionEventRetentionDays: 90,
+    configVersion: 1,
+  },
+  jobs: {
+    queued: 2,
+    claimed: 1,
+    running: 0,
+    retryable: 1,
+    terminalFailed: 0,
+    succeeded: 3,
+    cancelled: 0,
+    oldestRunnableJob: null,
+  },
   recentActivity: [],
   worker: null,
-  pinterestAnalytics: { pinsInventoried: 0, analyticsRelevantPins: 0, status: "NEVER_SYNCED", lastSuccessfulSyncAt: null, backfillPinsProcessed: 0, backfillPinsTotal: 0 },
-  attribution: { state: "DISABLED_BY_SERVER", environmentEnabled: false, settingEnabled: false },
+  pinterestAnalytics: {
+    pinsInventoried: 0,
+    analyticsRelevantPins: 0,
+    status: "NEVER_SYNCED",
+    lastSuccessfulSyncAt: null,
+    backfillPinsProcessed: 0,
+    backfillPinsTotal: 0,
+  },
+  attribution: {
+    state: "DISABLED_BY_SERVER",
+    environmentEnabled: false,
+    settingEnabled: false,
+  },
 };
 
 describe("Growth admin foundation", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.publishing.mockResolvedValue({
+      pendingReviews: 2,
+      scheduledCount: 12,
+    });
   });
 
   it("returns the existing admin guard response for unauthorized requests", async () => {
@@ -46,20 +105,27 @@ describe("Growth admin foundation", () => {
   });
 
   it("renders actual foundation values without fake metrics", async () => {
-    mocks.requireAdmin.mockResolvedValueOnce({ user: { id: "admin-1", role: "ADMIN" } });
+    mocks.requireAdmin.mockResolvedValueOnce({
+      user: { id: "admin-1", role: "ADMIN" },
+    });
     mocks.overview.mockResolvedValueOnce(overview);
     render(await AdminGrowthPage());
     expect(mocks.requireAdmin).toHaveBeenCalledTimes(1);
     expect(screen.getByRole("heading", { name: "Growth" })).toBeInTheDocument();
     expect(screen.getByText("2 reviews need your eye.")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Open reviews/ })).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /Open reviews/ }),
+    ).toBeInTheDocument();
     expect(screen.queryByText("Growth settings form")).not.toBeInTheDocument();
     expect(screen.queryByText(/outbound clicks/i)).not.toBeInTheDocument();
+    expect(screen.getByText("Publishing overview")).toBeInTheDocument();
+    expect(screen.getByText("12")).toBeInTheDocument();
   });
 
   it("does not load foundation data when page authorization fails", async () => {
     mocks.requireAdmin.mockRejectedValueOnce(new Error("redirect"));
     await expect(AdminGrowthPage()).rejects.toThrow("redirect");
     expect(mocks.overview).not.toHaveBeenCalled();
+    expect(mocks.publishing).not.toHaveBeenCalled();
   });
 });

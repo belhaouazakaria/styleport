@@ -451,7 +451,9 @@ export async function listGrowthReviews(ownerUserId: string) {
   return [...pending, ...history];
 }
 
-/** At most three review preparations per tick; no provider credentials needed.
+/** At most three reviews per tick; no provider credentials needed.
+ * Try the bounded native inventory until one review succeeds, so a draft with
+ * an unresolved board cannot starve every later native draft.
  * Existing requests dedupe offers, and rejected subjects are never reoffered. */
 export async function preparePendingOwnerReviews(
   ownerUserId: string,
@@ -492,25 +494,33 @@ export async function preparePendingOwnerReviews(
       .map((s) => ({ id: s.id, source: true })),
     ...native
       .filter((n) => !offered.has(n.id))
-      .slice(0, 1)
       .map((n) => ({ id: n.id, source: false })),
   ];
   const { prepareSourceReviewAutomatically } = await import("./source-plan");
   let prepared = 0;
+  let nativePrepared = false;
   for (const subject of queue) {
+    if (!subject.source && nativePrepared) break;
     try {
       if (subject.source)
         await prepareSourceReviewAutomatically(subject.id, ownerUserId, now);
       else await createNativePinReview(subject.id, ownerUserId, now);
       prepared++;
-    } catch {
+      if (!subject.source) nativePrepared = true;
+    } catch (error) {
       await prisma.growthActivity.create({
         data: {
           actorKind: "SYSTEM",
           entityType: "GrowthPinReviewPreparation",
           entityId: subject.id,
           action: "OWNER_REVIEW_PREPARATION_BLOCKED",
-          summary: { source: subject.source, providerWrites: 0 },
+          summary: {
+            source: subject.source,
+            providerWrites: 0,
+            errorCode: error instanceof Error && /^[A-Z][A-Z0-9_]{1,79}$/.test(error.message)
+              ? error.message
+              : "REVIEW_PREPARATION_FAILED",
+          },
         },
       });
     }
