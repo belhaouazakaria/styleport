@@ -120,15 +120,33 @@ export async function offerPinForTelegramReview(
   const existing = await prisma.growthTelegramPinReview.findUnique({ where: { candidateId } });
   if (plan.scheduledAt.getTime() <= now.getTime() + 2 * 60_000) throw Error("PIN_REVIEW_SLOT_TOO_SOON");
   if (existing) throw Error("PIN_REVIEW_ALREADY_ATTEMPTED");
-  const review = await prisma.growthTelegramPinReview.create({
-    data: {
-      candidateId, candidateRevision: candidate.revision,
-      contentHash: candidate.contentHash, assetChecksum: candidate.asset.checksum,
-      accountId: plan.accountId,
-      boardId: plan.boardId, scheduledAt: plan.scheduledAt,
-      ownerUserId, status: "QUEUED",
-      expiresAt: new Date(Math.min(now.getTime() + 24 * 60 * 60_000, plan.scheduledAt.getTime() - 60_000)),
-    },
+  const review = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`pin-approval:${candidateId}`}))`;
+    const current = await tx.growthPinCandidate.findUnique({
+      where: { id: candidateId }, include: { asset: true },
+    });
+    if (!current || current.status !== GrowthPinCandidateStatus.READY ||
+        current.asset.state !== GrowthAssetState.READY ||
+        current.revision !== candidate.revision || current.contentHash !== candidate.contentHash ||
+        current.asset.checksum !== candidate.asset.checksum) {
+      throw Error("PIN_REVIEW_CANDIDATE_NOT_READY");
+    }
+    if (await tx.growthPinApproval.count({ where: { candidateId, status: "APPROVED" } })) {
+      throw Error("PIN_REVIEW_ALREADY_APPROVED");
+    }
+    if (await tx.growthTelegramPinReview.findUnique({ where: { candidateId }, select: { id: true } })) {
+      throw Error("PIN_REVIEW_ALREADY_ATTEMPTED");
+    }
+    return tx.growthTelegramPinReview.create({
+      data: {
+        candidateId, candidateRevision: current.revision,
+        contentHash: current.contentHash, assetChecksum: current.asset.checksum,
+        accountId: plan.accountId,
+        boardId: plan.boardId, scheduledAt: plan.scheduledAt,
+        ownerUserId, status: "QUEUED",
+        expiresAt: new Date(Math.min(now.getTime() + 24 * 60 * 60_000, plan.scheduledAt.getTime() - 60_000)),
+      },
+    });
   });
   const caption = [
     "SayTwist Pin approval",
