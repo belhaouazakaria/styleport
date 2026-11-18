@@ -113,14 +113,21 @@ export function resolveCreativeAssetFile(filename: string) {
 /** Remove a retired, unreferenced content-addressed creative only when no
  * generation lease still holds a hard link to it. */
 export async function removeCreativeAssetFileIfUnlinked(publicPath: string) {
-  const resolved = resolveCreativeAssetPublicPath(publicPath);
-  if (!resolved) return false;
+  const result = await removeRetiredCreativeFileIfUnlinked(publicPath);
+  return result === "removed";
+}
+
+export async function removeRetiredCreativeFileIfUnlinked(publicPath: string): Promise<"removed" | "absent" | "linked" | "invalid"> {
+  const match = /^\/generated\/growth-creatives\/(creative-[a-f0-9]{64}\.(?:png|webp))$/.exec(publicPath);
+  if (!match) return "invalid";
+  const resolved = path.join(storageDirectory, match[1]);
   const root = path.resolve(storageDirectory);
-  if (!resolved.startsWith(`${root}${path.sep}`)) return false;
+  if (!resolved.startsWith(`${root}${path.sep}`)) return "invalid";
   const fileStats = await stat(resolved).catch(() => null);
-  if (!fileStats || fileStats.nlink !== 1) return false;
+  if (!fileStats) return "absent";
+  if (fileStats.nlink !== 1) return "linked";
   await rm(resolved, { force: true });
-  return true;
+  return "removed";
 }
 
 /** Resolve only the exact managed public route; never accept a URL, traversal,

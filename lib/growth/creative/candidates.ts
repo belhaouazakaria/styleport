@@ -67,6 +67,7 @@ import { parseCreativeSimilarityFlags } from "@/lib/growth/creative/presentation
 import { PINTEREST_CREATE_PIN_SCOPES } from "@/lib/growth/pinterest/config";
 import {
   cleanupCreativeAssetAfterFailure,
+  creativeAssetChecksum,
   persistCreativeAssetFile,
   readControlAsset,
   releaseCreativeAssetLease,
@@ -1468,7 +1469,13 @@ export async function generateCreativeCandidate(
       "Creative visual fingerprint is unavailable.",
     );
   try {
-    if (webpBytes) webpStored = await persistCreativeAssetFile(webpBytes, "webp");
+    if (webpBytes) {
+      const checksum = creativeAssetChecksum(webpBytes);
+      webpStored = await prisma.$transaction(async (tx) => {
+        await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`creative-asset:${checksum}`}))`);
+        return persistCreativeAssetFile(webpBytes!, "webp");
+      });
+    }
     if (options.beforePersist) await options.beforePersist();
     const result = await prisma.$transaction(async (tx) => {
       const settings = await tx.$queryRaw<Array<{ enabled: boolean }>>(
