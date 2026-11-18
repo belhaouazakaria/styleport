@@ -1,7 +1,9 @@
 import {
   GrowthAssetGenerationKind,
+  GrowthAssetState,
   GrowthCreativeArchetype,
   GrowthCreativeDestinationKind,
+  GrowthCreativeSimilarityClassification,
   GrowthExperimentDimension,
   GrowthExperimentStatus,
   GrowthIdeaStatus,
@@ -20,10 +22,12 @@ import { APP_NAME } from "@/lib/constants";
 import type { CreativeAiImageProvider } from "@/lib/growth/creative/ai-image-provider";
 import { CREATIVE_EXPERIMENT_VERSION, CREATIVE_LAB_VERSION } from "@/lib/growth/creative/constants";
 import { generateCreativeCandidate } from "@/lib/growth/creative/candidates";
+import { pruneOldCreativeDesigns } from "@/lib/growth/creative/retention";
 import { createDraftCreativeExperiment } from "@/lib/growth/creative/experiments";
 import { renderDeterministicCreative } from "@/lib/growth/creative/renderer";
-import { resolveCreativeAssetFile } from "@/lib/growth/creative/storage";
+import { persistCreativeAssetFile, releaseCreativeAssetLease, resolveCreativeAssetFile } from "@/lib/growth/creative/storage";
 import { prisma } from "@/lib/prisma";
+import sharp from "sharp";
 
 const enabled = process.env.RUN_GROWTH_CREATIVE_DB_TESTS === "1";
 const suite = enabled ? describe.sequential : describe.skip;
@@ -122,6 +126,45 @@ suite("Growth Phase 10 PostgreSQL A-R scenarios", () => {
     const second = await generateCreativeCandidate(payload(translator.id));
     expect(second.reused).toBe(true); expect(second.candidate.id).toBe(first.candidate.id);
     expect(await prisma.growthPinCandidate.count()).toBe(1); expect(await prisma.growthAsset.count()).toBe(1);
+  });
+
+  it("retires only old unlinked designs and removes their image files", async () => {
+    const translator = await seedTranslator();
+    const rows: Array<{ id: string; assetId: string; publicPath: string }> = [];
+    for (let index = 0; index < 22; index += 1) {
+      const bytes = await sharp({ create: { width: 1000, height: 1500, channels: 3, background: { r: index, g: 40, b: 120 } } }).png().toBuffer();
+      const file = await persistCreativeAssetFile(bytes);
+      const asset = await prisma.growthAsset.create({ data: {
+        publicPath: file.publicPath, checksum: file.checksum, mimeType: "image/png",
+        width: 1000, height: 1500, byteSize: file.byteSize, rendererKey: "retention-test",
+        rendererVersion: "test", templateId: "retention-test", generationKind: GrowthAssetGenerationKind.DETERMINISTIC,
+      } });
+      const createdAt = new Date(Date.now() + index * 1_000);
+      const candidate = await prisma.growthPinCandidate.create({ data: {
+        candidateKey: `retention-test-${index}`, revision: 1, destinationKind: GrowthCreativeDestinationKind.TRANSLATOR,
+        translatorId: translator.id, title: `Retention test ${index}`, description: "Test design.", destinationPath: `/translators/${translator.slug}`,
+        assetId: asset.id, rendererKey: "retention-test", rendererVersion: "test", templateId: "retention-test",
+        archetype: GrowthCreativeArchetype.MINIMAL_STATEMENT, headlinePattern: "test", ctaPattern: "none", visualTreatment: "test",
+        topic: "Testing", contentHash: createHash("sha256").update(`retention-${index}`).digest("hex"),
+        similarityModelVersion: "test", similarityResult: GrowthCreativeSimilarityClassification.DISTINCT,
+        similarityFlags: {}, status: GrowthPinCandidateStatus.READY, createdAt,
+      } });
+      await releaseCreativeAssetLease(file.leasePath);
+      rows.push({ id: candidate.id, assetId: asset.id, publicPath: asset.publicPath });
+    }
+    await prisma.growthPinApproval.create({ data: {
+      candidateId: rows[0].id, candidateRevision: 1, snapshotChecksum: "a".repeat(64),
+      snapshot: {}, approvalPolicyVersion: "retention-test",
+    } });
+
+    const result = await pruneOldCreativeDesigns();
+    expect(result).toMatchObject({ candidatesRetired: 1, assetsRetired: 1, filesRemoved: 1 });
+    expect((await prisma.growthPinCandidate.findUniqueOrThrow({ where: { id: rows[0].id } })).status).toBe(GrowthPinCandidateStatus.READY);
+    expect((await prisma.growthPinCandidate.findUniqueOrThrow({ where: { id: rows[1].id } })).status).toBe(GrowthPinCandidateStatus.CANCELLED);
+    expect((await prisma.growthAsset.findUniqueOrThrow({ where: { id: rows[0].assetId } })).state).toBe(GrowthAssetState.READY);
+    expect((await prisma.growthAsset.findUniqueOrThrow({ where: { id: rows[1].assetId } })).state).toBe(GrowthAssetState.RETIRED);
+    await expect(readFile(resolveCreativeAssetFile(path.basename(rows[1].publicPath))!)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(readFile(resolveCreativeAssetFile(path.basename(rows[0].publicPath))!)).resolves.toBeDefined();
   });
 
   it("finds an exact content duplicate older than the 100-row fuzzy window", async () => {

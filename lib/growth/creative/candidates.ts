@@ -20,6 +20,7 @@ import {
 import { createHash } from "node:crypto";
 
 import { recordGrowthActivity } from "@/lib/growth/activity";
+import { pruneOldCreativeDesigns } from "@/lib/growth/creative/retention";
 import type { CreativeAiImageProvider } from "@/lib/growth/creative/ai-image-provider";
 import {
   createCreativeAiImageBudget,
@@ -1237,11 +1238,12 @@ export async function generateCreativeCandidate(
   };
   const [preexistingExactContent, history] = await Promise.all([
     prisma.growthPinCandidate.findFirst({
-      where: { contentHash, ...(process.env.NODE_ENV === "production" ? { asset: { generationKind: GrowthAssetGenerationKind.AI } } : {}) },
+      where: { contentHash, status: { not: GrowthPinCandidateStatus.CANCELLED }, asset: { state: GrowthAssetState.READY, ...(process.env.NODE_ENV === "production" ? { generationKind: GrowthAssetGenerationKind.AI } : {}) } },
       orderBy: { createdAt: "desc" },
       include: { asset: true },
     }),
     prisma.growthPinCandidate.findMany({
+      where: { status: { not: GrowthPinCandidateStatus.CANCELLED } },
       select: {
         id: true,
         title: true,
@@ -1489,6 +1491,9 @@ export async function generateCreativeCandidate(
         );
       await validateCreativeContext(tx, payload, currentTarget, definition);
       await tx.$executeRaw(
+        Prisma.sql`SELECT pg_advisory_xact_lock(hashtext('growth-creative-retention-v1'))`,
+      );
+      await tx.$executeRaw(
         Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${candidateGroupKey(payload)}))`,
       );
       await tx.$executeRaw(
@@ -1499,7 +1504,8 @@ export async function generateCreativeCandidate(
         tx.growthPinCandidate.findFirst({
           where: {
             contentHash,
-            ...(process.env.NODE_ENV === "production" ? { asset: { generationKind: GrowthAssetGenerationKind.AI } } : {}),
+            status: { not: GrowthPinCandidateStatus.CANCELLED },
+            asset: { state: GrowthAssetState.READY, ...(process.env.NODE_ENV === "production" ? { generationKind: GrowthAssetGenerationKind.AI } : {}) },
             candidateKey: groupKey,
             accountId: payload.accountId || null,
           },
@@ -1507,14 +1513,14 @@ export async function generateCreativeCandidate(
           include: { asset: true },
         }),
         tx.growthPinCandidate.findFirst({
-          where: { contentHash, ...(process.env.NODE_ENV === "production" ? { asset: { generationKind: GrowthAssetGenerationKind.AI } } : {}) },
+          where: { contentHash, status: { not: GrowthPinCandidateStatus.CANCELLED }, asset: { state: GrowthAssetState.READY, ...(process.env.NODE_ENV === "production" ? { generationKind: GrowthAssetGenerationKind.AI } : {}) } },
           orderBy: { createdAt: "desc" },
           include: { asset: true },
         }),
         tx.growthAsset.findFirst({
-          where: { checksum: visualChecksum, ...(process.env.NODE_ENV === "production" ? { generationKind: GrowthAssetGenerationKind.AI } : {}) },
+          where: { checksum: visualChecksum, state: GrowthAssetState.READY, ...(process.env.NODE_ENV === "production" ? { generationKind: GrowthAssetGenerationKind.AI } : {}) },
           orderBy: { createdAt: "desc" },
-          include: { candidates: { orderBy: { createdAt: "desc" }, take: 1 } },
+          include: { candidates: { where: { status: { not: GrowthPinCandidateStatus.CANCELLED } }, orderBy: { createdAt: "desc" }, take: 1 } },
         }),
       ]);
       const exactContent = sameRetry || anyExactContent;
@@ -1572,7 +1578,7 @@ export async function generateCreativeCandidate(
             aiImageUnits: aiMetadata?.imageUnits,
             estimatedCost: aiMetadata?.estimatedCost,
           },
-          update: {},
+          update: { state: GrowthAssetState.READY, retainedUntil: null },
         });
       }
       const deferred =
@@ -1662,6 +1668,16 @@ export async function generateCreativeCandidate(
         prisma.growthAsset.count({ where: { publicPath: stored.publicPath } }),
       );
     }
+    if (!result.reused) {
+      try {
+        const retention = await pruneOldCreativeDesigns();
+        if (retention.candidatesRetired || retention.filesRemoved) {
+          console.info("[growth-creative-retention] applied", retention);
+        }
+      } catch (error) {
+        console.error("[growth-creative-retention] cleanup deferred", error instanceof Error ? error.name : "unknown");
+      }
+    }
     return result;
   } catch (error) {
     if (webpStored) await cleanupCreativeAssetAfterFailure(webpStored, () => prisma.growthActivity.count({ where: { summary: { path: ["webpPublicPath"], equals: webpStored!.publicPath } } }));
@@ -1680,6 +1696,10 @@ export async function getAdminCreativeOverview() {
   const [candidates, translators, ideaRows, accounts, experiments] =
     await Promise.all([
       prisma.growthPinCandidate.findMany({
+        where: {
+          status: { not: GrowthPinCandidateStatus.CANCELLED },
+          asset: { state: GrowthAssetState.READY },
+        },
         include: {
           asset: true,
           translator: { select: { name: true, slug: true } },

@@ -110,6 +110,19 @@ export function resolveCreativeAssetFile(filename: string) {
   return path.join(storageDirectory, filename);
 }
 
+/** Remove a retired, unreferenced content-addressed creative only when no
+ * generation lease still holds a hard link to it. */
+export async function removeCreativeAssetFileIfUnlinked(publicPath: string) {
+  const resolved = resolveCreativeAssetPublicPath(publicPath);
+  if (!resolved) return false;
+  const root = path.resolve(storageDirectory);
+  if (!resolved.startsWith(`${root}${path.sep}`)) return false;
+  const fileStats = await stat(resolved).catch(() => null);
+  if (!fileStats || fileStats.nlink !== 1) return false;
+  await rm(resolved, { force: true });
+  return true;
+}
+
 /** Resolve only the exact managed public route; never accept a URL, traversal,
  * query string or an arbitrary basename extracted from an untrusted path. */
 export function resolveCreativeAssetPublicPath(publicPath: string) {
