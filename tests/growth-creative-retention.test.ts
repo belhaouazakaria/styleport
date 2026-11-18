@@ -62,6 +62,15 @@ describe("Studio creative retention", () => {
       expect(await storage.removeCreativeAssetFileIfUnlinked(publicPath)).toBe(true);
       await expect(readFile(file)).rejects.toMatchObject({ code: "ENOENT" });
       expect(await storage.removeCreativeAssetFileIfUnlinked("/etc/passwd")).toBe(false);
+
+      const webpPath = `/generated/growth-creatives/creative-${"b".repeat(64)}.webp`;
+      const webpFile = path.join(directory, path.basename(webpPath));
+      await writeFile(webpFile, "webp");
+      const webpLease = `${webpFile}.lease`;
+      await link(webpFile, webpLease);
+      expect(await storage.removeRetiredCreativeFileIfUnlinked(webpPath)).toBe("linked");
+      await rm(webpLease);
+      expect(await storage.removeRetiredCreativeFileIfUnlinked(webpPath)).toBe("removed");
     } finally {
       if (previous === undefined) delete process.env.GROWTH_CREATIVE_STORAGE_DIR;
       else process.env.GROWTH_CREATIVE_STORAGE_DIR = previous;

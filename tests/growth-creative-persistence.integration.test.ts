@@ -1,6 +1,7 @@
 import {
   GrowthAssetGenerationKind,
   GrowthAssetState,
+  GrowthActivityActorKind,
   GrowthCreativeArchetype,
   GrowthCreativeDestinationKind,
   GrowthCreativeSimilarityClassification,
@@ -130,7 +131,7 @@ suite("Growth Phase 10 PostgreSQL A-R scenarios", () => {
 
   it("retires only old unlinked designs and removes their image files", async () => {
     const translator = await seedTranslator();
-    const rows: Array<{ id: string; assetId: string; publicPath: string }> = [];
+    const rows: Array<{ id: string; assetId: string; publicPath: string; webpPath?: string }> = [];
     for (let index = 0; index < 22; index += 1) {
       const bytes = await sharp({ create: { width: 1000, height: 1500, channels: 3, background: { r: index, g: 40, b: 120 } } }).png().toBuffer();
       const file = await persistCreativeAssetFile(bytes);
@@ -150,7 +151,18 @@ suite("Growth Phase 10 PostgreSQL A-R scenarios", () => {
         similarityFlags: {}, status: GrowthPinCandidateStatus.READY, createdAt,
       } });
       await releaseCreativeAssetLease(file.leasePath);
-      rows.push({ id: candidate.id, assetId: asset.id, publicPath: asset.publicPath });
+      let webpPath: string | undefined;
+      if (index === 1) {
+        const webpBytes = await sharp({ create: { width: 1000, height: 1500, channels: 3, background: { r: 180, g: 40, b: 120 } } }).webp().toBuffer();
+        const webp = await persistCreativeAssetFile(webpBytes, "webp");
+        webpPath = webp.publicPath;
+        await prisma.growthActivity.create({ data: {
+          actorKind: GrowthActivityActorKind.WORKER, entityType: "GrowthPinCandidate", entityId: candidate.id,
+          action: "CREATIVE_CANDIDATE_GENERATED", summary: { webpPublicPath: webp.publicPath },
+        } });
+        await releaseCreativeAssetLease(webp.leasePath);
+      }
+      rows.push({ id: candidate.id, assetId: asset.id, publicPath: asset.publicPath, webpPath });
     }
     await prisma.growthPinApproval.create({ data: {
       candidateId: rows[0].id, candidateRevision: 1, snapshotChecksum: "a".repeat(64),
@@ -158,13 +170,15 @@ suite("Growth Phase 10 PostgreSQL A-R scenarios", () => {
     } });
 
     const result = await pruneOldCreativeDesigns();
-    expect(result).toMatchObject({ candidatesRetired: 1, assetsRetired: 1, filesRemoved: 1 });
+    expect(result).toMatchObject({ candidatesRetired: 1, assetsRetired: 1, filesRemoved: 2 });
     expect((await prisma.growthPinCandidate.findUniqueOrThrow({ where: { id: rows[0].id } })).status).toBe(GrowthPinCandidateStatus.READY);
     expect((await prisma.growthPinCandidate.findUniqueOrThrow({ where: { id: rows[1].id } })).status).toBe(GrowthPinCandidateStatus.CANCELLED);
     expect((await prisma.growthAsset.findUniqueOrThrow({ where: { id: rows[0].assetId } })).state).toBe(GrowthAssetState.READY);
     expect((await prisma.growthAsset.findUniqueOrThrow({ where: { id: rows[1].assetId } })).state).toBe(GrowthAssetState.RETIRED);
     await expect(readFile(resolveCreativeAssetFile(path.basename(rows[1].publicPath))!)).rejects.toMatchObject({ code: "ENOENT" });
     await expect(readFile(resolveCreativeAssetFile(path.basename(rows[0].publicPath))!)).resolves.toBeDefined();
+    expect(rows[1].webpPath).toBeTruthy();
+    await expect(readFile(path.join(process.cwd(), "storage", "generated", "growth-creatives", path.basename(rows[1].webpPath!)))).rejects.toMatchObject({ code: "ENOENT" });
   });
 
   it("finds an exact content duplicate older than the 100-row fuzzy window", async () => {
