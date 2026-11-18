@@ -1,5 +1,18 @@
 # Growth Agent Roadmap
 
+**2026-11-18 Growth overview (local implementation):** Main-page account rotation,
+today's native/source publishing ledger, per-account performance charts, qualified
+period comparisons, cross-account Pin leaders, coverage and review/delivery alerts.
+Uses existing read-only data and preserves all consent and quota rules.
+See [overview behavior and evidence](GROWTH_OVERVIEW_20261118.md). Not deployed.
+
+**2026-11-18 approval queue repair:** Corrected missing boards on two
+never-approved Ideas drafts blocking native review preparation. The three
+owner-requested Main reviews were prepared and delivered through the existing
+courier. Queue protection that continues after a blocked native draft is tested
+locally and not deployed. Existing daily limits prevent scheduling all three
+additional native Pins today. See [repair evidence](NATIVE_REVIEW_QUEUE_REPAIR_20261118.md).
+
 **Total planned phases: 14**
 
 Status values:
