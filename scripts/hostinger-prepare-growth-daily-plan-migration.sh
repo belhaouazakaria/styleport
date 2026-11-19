@@ -59,7 +59,7 @@ validate_database() {
       const settings=await client.$queryRawUnsafe(`SELECT "enabled","attributionEnabled" FROM "GrowthSettings" WHERE id=$1`,"global");
       const lease=await client.$queryRawUnsafe(`SELECT count(*)::int AS count FROM "GrowthSettings" WHERE id=$1 AND "workerActivationExpiresAt" IS NULL`,"global");
       const jobs=await client.$queryRawUnsafe(`SELECT count(*)::int AS count FROM "GrowthJob" WHERE status IN ($1::"GrowthJobStatus",$2::"GrowthJobStatus",$3::"GrowthJobStatus")`,"CLAIMED","RUNNING","FAILED_RETRYABLE");
-      const pending=await client.$queryRawUnsafe(`SELECT id,type,status,"runAfter","attemptCount","maxAttempts","idempotencyKey",payload FROM "GrowthJob" WHERE status=$1 ORDER BY id`,"PENDING");
+      const pending=await client.$queryRawUnsafe(`SELECT id,type,status,"runAfter","attemptCount","maxAttempts","idempotencyKey",payload FROM "GrowthJob" WHERE status=$1::"GrowthJobStatus" ORDER BY id`,"PENDING");
       if(settings.length!==1||settings[0].enabled||settings[0].attributionEnabled||lease[0]?.count!==1||jobs[0]?.count!==0) throw Error("GROWTH_NOT_IDLE");
       const names=fs.readdirSync(path.join(root,"prisma/migrations"),{withFileTypes:true}).filter(x=>x.isDirectory()).map(x=>x.name).sort();
       if(applied.length===41){
