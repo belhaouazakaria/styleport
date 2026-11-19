@@ -78,6 +78,7 @@ jobs:
         run: |
           bash -n scripts/hostinger-deploy.sh
           bash -n scripts/hostinger-prepare-migration.sh
+          bash -n scripts/hostinger-prepare-growth-daily-plan-migration.sh
           node --check scripts/pm2-process-contract.mjs
 
       - name: Build
@@ -190,7 +191,7 @@ jobs:
           key: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
           port: ${{ secrets.HOSTINGER_SSH_PORT || vars.HOSTINGER_SSH_PORT }}
           source: >-
-            scripts/hostinger-deploy.sh,scripts/pm2-process-contract.mjs,scripts/hostinger-fetch-release.sh,scripts/hostinger-unpack-artifact.py
+            scripts/hostinger-deploy.sh,scripts/pm2-process-contract.mjs,scripts/hostinger-fetch-release.sh,scripts/hostinger-unpack-artifact.py,scripts/hostinger-prepare-growth-daily-plan-migration.sh
           target: ${{ secrets.HOSTINGER_APP_PATH || vars.HOSTINGER_APP_PATH }}
           overwrite: true
 
@@ -255,6 +256,17 @@ jobs:
             HOSTINGER_APP_PATH="${{ secrets.HOSTINGER_APP_PATH || vars.HOSTINGER_APP_PATH }}" \
               bash ./scripts/hostinger-fetch-release.sh
             unset HOSTINGER_ARTIFACT_URL HOSTINGER_ARTIFACT_ZIP_SHA256
+            MIGRATION_ROOT="/home/saytwist/.local/share/saytwist/growth-daily-plan/${{ github.sha }}"
+            mkdir -m 700 -p "$MIGRATION_ROOT"
+            tar -xzf "${{ secrets.HOSTINGER_APP_PATH || vars.HOSTINGER_APP_PATH }}/release.tar.gz" \
+              -C "$MIGRATION_ROOT" .release-sha prisma
+            HOSTINGER_APP_PATH="${{ secrets.HOSTINGER_APP_PATH || vars.HOSTINGER_APP_PATH }}" \
+              HOSTINGER_ENV_FILE="${{ secrets.HOSTINGER_APP_PATH || vars.HOSTINGER_APP_PATH }}/.env.local" \
+              HOSTINGER_MIGRATION_ROOT="$MIGRATION_ROOT" \
+              HOSTINGER_MIGRATION_APPROVAL="APPLY 20261119090000_growth_daily_plan_targets" \
+              HOSTINGER_RELEASE_SHA="${{ github.sha }}" \
+              bash ./scripts/hostinger-prepare-growth-daily-plan-migration.sh
+            rm -rf -- "$MIGRATION_ROOT"
             HOSTINGER_NODE_BIN="/home/saytwist/.nvm/versions/node/v24.20.0/bin" \
               HOSTINGER_PM2_PROCESS="saytwist" \
               HOSTINGER_PM2_CLI="$PM2_CLI" \
