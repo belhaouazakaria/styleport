@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { chmodSync, mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -335,5 +335,99 @@ rollback_application`,
 
   it("is valid Bash syntax", () => {
     expect(() => execFileSync("bash", ["-n", deployScript])).not.toThrow();
+  });
+});
+
+describe("Hostinger rollback release retention", () => {
+  function createPruneFixture() {
+    const directory = mkdtempSync(path.join(tmpdir(), "saytwist-release-prune-"));
+    temporaryDirectories.push(directory);
+    const app = path.join(directory, "app");
+    const rollbackRoot = path.join(app, ".deploy-releases");
+    const lock = path.join(app, ".deploy-lock");
+    const backups = path.join(app, ".deploy-backups");
+    mkdirSync(rollbackRoot, { recursive: true });
+    mkdirSync(lock);
+    mkdirSync(backups);
+    writeFileSync(path.join(app, "server.js"), "live app");
+    writeFileSync(path.join(backups, "db.dump"), "database backup");
+    return { app, rollbackRoot, lock, backups };
+  }
+
+  function runPrune(fixture, body = "prune_release_history", env = {}) {
+    return runSourcedBash(
+      `APP_PATH="$APP_DIR"\nROLLBACK_ROOT="$ROLLBACK_ROOT_DIR"\nLOCK_DIR="$LOCK_DIR_PATH"\nrun_pm2() { printf '%s' "$PROCESS_LIST"; }\n${body}`,
+      {
+        APP_DIR: fixture.app,
+        ROLLBACK_ROOT_DIR: fixture.rollbackRoot,
+        LOCK_DIR_PATH: fixture.lock,
+        PROCESS_LIST: "[]",
+        ...env,
+      },
+    );
+  }
+
+  it("removes valid historical releases while preserving the live app and database backups", () => {
+    const fixture = createPruneFixture();
+    const oldRelease = path.join(fixture.rollbackRoot, "20261118010203-a1b2c3d4e5f6");
+    mkdirSync(oldRelease);
+    writeFileSync(path.join(oldRelease, "server.js"), "old app");
+    const result = runPrune(fixture, undefined, {
+      PROCESS_LIST: JSON.stringify([{ name: "saytwist", pm2_env: { pm_cwd: fixture.app } }]),
+    });
+    expect(result.status, result.stderr).toBe(0);
+    expect(existsSync(oldRelease)).toBe(false);
+    expect(readFileSync(path.join(fixture.app, "server.js"), "utf8")).toBe("live app");
+    expect(readFileSync(path.join(fixture.backups, "db.dump"), "utf8")).toBe("database backup");
+    expect(existsSync(fixture.lock)).toBe(true);
+    expect(result.stdout).toContain("Removed 1 historical rollback release directory.");
+  });
+
+  it("preserves unexpected entries and symlinked release directories", () => {
+    const fixture = createPruneFixture();
+    const unexpected = path.join(fixture.rollbackRoot, "manual-keep");
+    const target = path.join(fixture.app, "outside-release-target");
+    mkdirSync(unexpected);
+    mkdirSync(target);
+    writeFileSync(path.join(target, "keep.txt"), "keep");
+    const link = path.join(fixture.rollbackRoot, "20261118010203-a1b2c3d4e5f7");
+    symlinkSync(target, link, "dir");
+    const result = runPrune(fixture);
+    expect(result.status, result.stderr).toBe(0);
+    expect(existsSync(unexpected)).toBe(true);
+    expect(lstatSync(link).isSymbolicLink()).toBe(true);
+    expect(readFileSync(path.join(target, "keep.txt"), "utf8")).toBe("keep");
+    expect(result.stderr).toContain("Preserving unexpected rollback-root entry");
+    expect(result.stderr).toContain("Preserving symlinked release entry");
+  });
+
+  it("preserves a release referenced by an active PM2 working directory", () => {
+    const fixture = createPruneFixture();
+    const activeRelease = path.join(fixture.rollbackRoot, "20261118010203-a1b2c3d4e5f8");
+    mkdirSync(activeRelease);
+    const result = runPrune(fixture, undefined, {
+      PROCESS_LIST: JSON.stringify([{ name: "another-site", pm2_env: { pm_cwd: activeRelease } }]),
+    });
+    expect(result.status, result.stderr).toBe(0);
+    expect(existsSync(activeRelease)).toBe(true);
+    expect(result.stderr).toContain("because an active PM2 process uses it");
+  });
+
+  it("keeps the deployment successful when deleting one release fails", () => {
+    const fixture = createPruneFixture();
+    const failedRelease = path.join(fixture.rollbackRoot, "20261118010203-a1b2c3d4e5f9");
+    const removableRelease = path.join(fixture.rollbackRoot, "20261118010203-a1b2c3d4e5fa");
+    mkdirSync(failedRelease);
+    mkdirSync(removableRelease);
+    const result = runPrune(
+      fixture,
+      `remove_historical_release_dir() { [[ "$1" != "$FAILED_RELEASE" ]] && rm -rf -- "$1"; }\nprune_release_history`,
+      { FAILED_RELEASE: failedRelease },
+    );
+    expect(result.status, result.stderr).toBe(0);
+    expect(existsSync(failedRelease)).toBe(true);
+    expect(existsSync(removableRelease)).toBe(false);
+    expect(result.stderr).toContain("Could not remove historical release directory");
+    expect(result.stdout).toContain("Removed 1 historical rollback release directory.");
   });
 });
