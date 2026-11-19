@@ -1,6 +1,6 @@
 import { GrowthAssetGenerationKind, GrowthAssetState, GrowthCreativeArchetype, GrowthCreativeDestinationKind, GrowthCreativeSimilarityClassification, GrowthJobStatus, GrowthJobType, GrowthPinCandidateStatus, GrowthPinterestApiEnvironment, GrowthPinterestConnectionStatus, GrowthPinterestPublicationRole, Prisma } from "@prisma/client";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { approvePinCandidate, publishApprovedPin, reconcilePinterestPublication, rejectPinCandidate } from "@/lib/growth/publishing/service";
+import { approvePinCandidate, publishApprovedPin, reconcilePinterestPublication, rejectPinCandidate, recommendPinApprovalPlan } from "@/lib/growth/publishing/service";
 import { encryptPinterestCredentials } from "@/lib/growth/pinterest/credentials";
 import { claimGrowthJobs, failGrowthJob, recoverStaleGrowthJobs } from "@/lib/growth/jobs";
 import { prisma } from "@/lib/prisma";
@@ -30,6 +30,14 @@ async function fixture(status = GrowthPinCandidateStatus.READY) {
 }
 beforeEach(async () => { await clean(); await prisma.growthSettings.create({ data: { id: "global", enabled: true } }); }); afterAll(async () => { if (enabled) await clean(); await prisma.$disconnect(); });
 suite("Phase 11 PostgreSQL publishing invariants", () => {
+  it("uses the unique canonical Translator board for a translator candidate", async () => {
+    const f = await fixture();
+    const translatorBoard = await prisma.growthPinterestBoard.create({ data: { accountId: f.account.id, pinterestBoardId: `translator-board-${Math.random()}`, name: "Translator", isActive: true, lastSeenAt: new Date(), lastSyncedAt: new Date() } });
+    const plan = await recommendPinApprovalPlan(f.candidate.id);
+    expect(plan.boardId).toBe(translatorBoard.id);
+    expect(plan.boardName).toBe("Translator");
+  });
+
   it("converges concurrent exact double approval into one publication/ref/job", async () => {
     const f = await fixture(); const scheduledAt = new Date(Date.now() + 86_400_000).toISOString(); const input = { candidateId: f.candidate.id, accountId: f.account.id, boardId: f.board.id, scheduledAt, confirmation: true as const };
     const results = await Promise.all([approvePinCandidate(input, f.admin.id), approvePinCandidate(input, f.admin.id)]);

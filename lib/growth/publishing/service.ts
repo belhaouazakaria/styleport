@@ -28,6 +28,7 @@ import { approvePinSchema, PIN_APPROVAL_POLICY_VERSION, PUBLICATION_TIMING_VERSI
 import { buildPublicCreativeAssetUrl, pinApprovalSnapshotChecksum, pinterestPublicationUrlsMatch, rebuildApprovedPinDestinationUrl } from "@/lib/growth/publishing/snapshot";
 import { domainForPinPath, pinDestinationUrl, type PinDestinationDomain } from "@/lib/growth/publishing/destinations";
 import { planPublicationTiming } from "@/lib/growth/publishing/timing";
+import { choosePinApprovalBoard } from "@/lib/growth/publishing/board-plan";
 
 function bounded(value: string | null | undefined, max: number) { return value?.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, max) || null; }
 function rateFields(rateLimit: { limit: string | null; remaining: string | null; reset: string | null }) {
@@ -112,15 +113,10 @@ export async function approvePinCandidate(raw: unknown, adminUserId: string, now
 
 // Board and scheduling are deterministic recommendations, never a blanket
 // authorization to publish. Each candidate still needs its own approval.
-function boardTerms(value: string) {
-  const stop = new Set(["a","an","and","for","how","in","of","on","the","to","your","with","translators","translator","ideas","saytwist"]);
-  return new Set((value.toLowerCase().match(/[a-z0-9]{3,}/g) || []).filter(word => !stop.has(word)));
-}
-
 export async function recommendPinApprovalPlan(candidateId: string, now = new Date()) {
   const candidate = await prisma.growthPinCandidate.findFirst({
     where: { id: candidateId, status: GrowthPinCandidateStatus.READY },
-    select: { id: true, accountId: true, boardId: true, title: true,
+    select: { id: true, accountId: true, boardId: true, destinationKind: true, title: true,
       topic: true, description: true, destinationPath: true },
   });
   if (!candidate) throw Error("PIN_PLAN_NOT_READY");
@@ -145,14 +141,8 @@ export async function recommendPinApprovalPlan(candidateId: string, now = new Da
     orderBy: [{ name: "asc" }, { id: "asc" }], take: 101,
   });
   if (!boards.length || boards.length > 100) throw Error("PIN_PLAN_BOARD_UNAVAILABLE");
-  const original = boards.find(board => board.id === candidate.boardId);
-  const desired = boardTerms(candidate.title + " " + candidate.topic + " " + candidate.description);
-  const ranked = boards.map(board => {
-    const titleWords = boardTerms(board.name);
-    const detailWords = boardTerms(board.description || "");
-    return { board, score: [...desired].reduce((n, word) => n + (titleWords.has(word) ? 3 : detailWords.has(word) ? 1 : 0), 0) };
-  }).sort((a,b) => b.score - a.score || a.board.name.localeCompare(b.board.name) || a.board.id.localeCompare(b.board.id));
-  const chosen = original || (ranked[0].score > 0 || boards.length === 1 ? ranked[0].board : null);
+  const chosen = choosePinApprovalBoard({ boards, originalBoardId: candidate.boardId,
+    destinationKind: candidate.destinationKind, candidateText: candidate.title + " " + candidate.topic + " " + candidate.description });
   if (!chosen) throw Error("PIN_PLAN_BOARD_AMBIGUOUS");
   const timing = await recommendPublicationTiming(accountId, candidateId, now);
   if (timing.scheduledAt <= now) throw Error("PIN_PLAN_TIME_INVALID");
