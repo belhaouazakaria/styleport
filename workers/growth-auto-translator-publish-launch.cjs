@@ -22,8 +22,8 @@ function run() {
   const now = new Date();
   if (!/^[a-f0-9]{40}$/.test(sha) ||
       process.env.GROWTH_AUTO_TRANSLATOR_PUBLISH_LAUNCH !== "true" ||
-      !(now.getUTCHours() === 6 && now.getUTCMinutes() >= 57 &&
-        now.getUTCMinutes() < 59) ||
+      !(now.getUTCHours() === 6 && now.getUTCMinutes() >= 30 &&
+        now.getUTCMinutes() < 32) ||
       !fs.existsSync(APP + "/workers/growth-auto-translator-publish.ts") ||
       !fs.existsSync(APP + "/node_modules/tsx/dist/cli.mjs") ||
       fs.readFileSync(APP + "/.deployed-release", "utf8").trim() !== sha ||

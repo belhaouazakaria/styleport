@@ -99,12 +99,12 @@ calendar() {
     daily-observe) echo '*-*-* 13:00:00 UTC' ;;
     autonomous-cycle) echo '*-*-* 04:30:00 UTC' ;;
     approved-publisher) echo '*-*-* *:00/5:00 UTC' ;;
-    daily-fresh) echo '*-*-* 07:02:00 UTC' ;;
+    daily-fresh) echo '*-*-* 06:45:00 UTC' ;;
     private-report) echo '*-*-* 05:05:00 UTC' ;;
-    autonomous-content) echo '*-*-* 06:30:00 UTC' ;;
+    autonomous-content) echo '*-*-* 06:00:00 UTC' ;;
     daily-account-analytics) echo '*-*-* 04:20:00 UTC' ;;
-    auto-translator-publish) echo '*-*-* 06:57:00 UTC' ;;
-    viral-discovery) echo '*-*-* 08:15:00 UTC' ;;
+    auto-translator-publish) echo '*-*-* 06:30:00 UTC' ;;
+    viral-discovery) echo '*-*-* 05:30:00 UTC' ;;
     viral-source) echo '*-*-* 15..23:17:00 UTC' ;;
     pin-maintenance) echo '*-*-* 10,12,14,16,18,20,22:45:00 UTC' ;;
     *) fail ;;

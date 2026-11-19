@@ -52,6 +52,14 @@ describe("4-5 daily Pins on only one of three rotating accounts", () => {
     expect(() => assertActiveRotationAccount(plan, other.id))
       .toThrow("ROTATION_ACCOUNT_NOT_SCHEDULED_TODAY");
   });
+  it("uses the owner-configured daily Pin mix", () => {
+    expect(planDailyRotation(day, accounts, {
+      newTranslatorPins: 1, existingTranslatorPins: 2, anythingTranslatePins: 2,
+    })).toMatchObject({ targetPins: 5, original: 3, source: 2 });
+    expect(() => planDailyRotation(day, accounts, {
+      newTranslatorPins: 5, existingTranslatorPins: 5, anythingTranslatePins: 1,
+    })).toThrow("ROTATION_MIX_INVALID");
+  });
   it("rejects duplicate role, duplicate account and impossible UTC calendar dates", () => {
     expect(() => planDailyRotation("2026-02-30", accounts)).toThrow("ROTATION_DAY_INVALID");
     expect(() => planDailyRotation(day, [accounts[0], accounts[0]])).toThrow(

@@ -79,10 +79,10 @@ UMask=0077
 EOF
 cat > "$STAGE/$TIMER" <<EOF
 [Unit]
-Description=SayTwist daily autonomous content preparation at 06:30 UTC (owner opt-in)
+Description=SayTwist daily autonomous content preparation at 06:00 UTC (owner opt-in)
 
 [Timer]
-OnCalendar=*-*-* 06:30:00 UTC
+OnCalendar=*-*-* 06:00:00 UTC
 Persistent=false
 AccuracySec=1s
 RandomizedDelaySec=0

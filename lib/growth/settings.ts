@@ -29,7 +29,7 @@ export const defaultGrowthSettings = {
   evergreenCooldownDays: DEFAULT_EVERGREEN_COOLDOWN_DAYS,
   aiDailyBudgetCents: 200,
   aiMonthlyBudgetCents: 3000,
-  aiImagesPerDayCap: 3,
+  aiImagesPerDayCap: 5,
   translatorCreatesPerDayCap: 1,
   translatorUpdatesPerDayCap: 3,
   ideaCreatesPerWeekCap: 2,

@@ -8,11 +8,11 @@ const runner = readFileSync("workers/growth-auto-translator-publish.ts", "utf8")
 const alert = readFileSync("workers/growth-auto-translator-publish-alert.cjs", "utf8");
 
 describe("auto Translator website publication safety", () => {
-  it("installs only a disabled 06:57 UTC schedule with a private alert", () => {
+  it("installs only a disabled 06:30 UTC schedule with a private alert", () => {
     execFileSync("bash", ["-n", "workers/install-growth-auto-translator-publish-systemd.sh"]);
     execFileSync("node", ["--check", "workers/growth-auto-translator-publish-launch.cjs"]);
     execFileSync("node", ["--check", "workers/growth-auto-translator-publish-alert.cjs"]);
-    expect(installer).toContain("OnCalendar=*-*-* 06:57:00 UTC");
+    expect(installer).toContain("OnCalendar=*-*-* 06:30:00 UTC");
     expect(installer).toContain("Persistent=false");
     expect(installer).toContain("OnFailure=$ALERT");
     expect(installer).toContain("GROWTH_AUTO_TRANSLATOR_PUBLISH_INSTALL=INSTALLED_DISABLED");

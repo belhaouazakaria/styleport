@@ -34,7 +34,7 @@ const complete = {
 
 describe("strict website-only autonomous Translator publication", () => {
   it("requires exact approved release, private DB, identity, UTC schedule and disabled other automation", () => {
-    const now = new Date("2026-11-08T06:57:30Z");
+    const now = new Date("2026-11-08T06:30:30Z");
     expect(assertAutoTranslatorPublishRuntime(env, sha, identity, now))
       .toEqual({ sha, day: "2026-11-08" });
     for (const patch of [

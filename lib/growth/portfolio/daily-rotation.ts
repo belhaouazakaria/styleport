@@ -27,6 +27,8 @@ export type DailyRotationPlan = {
   status: "READY" | "NO_CONNECTED_ACCOUNTS";
 };
 
+export type DailyPinMix = { newTranslatorPins: number; existingTranslatorPins: number; anythingTranslatePins: number };
+
 export function utcDayIndex(day: string): number {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) {
     throw Error("ROTATION_DAY_INVALID");
@@ -42,6 +44,7 @@ export function utcDayIndex(day: string): number {
 export function planDailyRotation(
   day: string,
   accounts: readonly EligibleRotationAccount[],
+  mix?: DailyPinMix,
 ): DailyRotationPlan {
   const dayIndex = utcDayIndex(day);
   const seenIds = new Set<string>();
@@ -68,14 +71,23 @@ export function planDailyRotation(
   // Fixed historical UTC epoch index yields deterministic rotation even if
   // the host restarts. With 1 connected account, plan that one every day.
   const account = ready[dayIndex % ready.length];
-  // 4, 5, 4, 5 ...; on five-Pin days rotate the extra editorial slot
-  // between original and source to preserve balanced long-run allocation.
-  const targetPins = dayIndex % 2 === 0 ? 4 : 5;
-  const source = Math.floor(targetPins / 2) +
-    (targetPins === 5 && Math.floor(dayIndex / 2) % 2 === 0 ? 1 : 0);
+  const targetPins = mix ? mix.newTranslatorPins + mix.existingTranslatorPins + mix.anythingTranslatePins
+    : dayIndex % 2 === 0 ? 4 : 5;
+  const fallbackSource = !mix ? Math.floor(targetPins / 2) +
+    (targetPins === 5 && Math.floor(dayIndex / 2) % 2 === 0 ? 1 : 0) : 0;
+  const selectedMix = mix ?? {
+    newTranslatorPins: 1,
+    existingTranslatorPins: targetPins - fallbackSource - 1,
+    anythingTranslatePins: fallbackSource,
+  };
+  const values = Object.values(selectedMix);
+  if (values.some(value => !Number.isSafeInteger(value) || value < 0 || value > 5) ||
+      values.reduce((sum, value) => sum + value, 0) > 10) throw Error("ROTATION_MIX_INVALID");
+  const source = selectedMix.anythingTranslatePins;
+  const configuredTarget = selectedMix.newTranslatorPins + selectedMix.existingTranslatorPins + source;
   return {
     day, accountId: account.id, publicationRole: account.role,
-    targetPins, source, original: targetPins - source,
+    targetPins: configuredTarget, source, original: selectedMix.newTranslatorPins + selectedMix.existingTranslatorPins,
     accountCount: ready.length,
     perPinOwnerApprovalRequired: true, status: "READY",
   };

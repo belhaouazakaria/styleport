@@ -189,8 +189,7 @@ export async function approveOriginalSourcePin(
     await assertPublicationSpacing(tx, scheduled);
     const rotation = await readDailyRotation(scheduled, tx);
     assertActiveRotationAccount(rotation, input.accountId);
-    if (policy.sourceSharePercent !== 50 ||
-        policy.maxPinsPerDay < rotation.targetPins) {
+    if (policy.maxPinsPerDay < rotation.targetPins) {
       throw Error("SOURCE_ROTATION_POLICY_NOT_CONFIGURED");
     }
     const dailyLimit = Math.min(AUTHORIZED_SOURCE_CAP, rotation.targetPins);

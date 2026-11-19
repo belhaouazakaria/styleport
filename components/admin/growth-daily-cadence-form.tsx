@@ -42,6 +42,10 @@ export function GrowthDailyCadenceForm({
     }));
   }
 
+  function editDailyPlan(key: keyof DailyCadencePolicy["dailyPlan"], value: number) {
+    setPolicy(previous => ({ ...previous, dailyPlan: { ...previous.dailyPlan, [key]: value } }));
+  }
+
   async function save() {
     if (!valid) return;
     setSaving(true);
@@ -161,6 +165,24 @@ export function GrowthDailyCadenceForm({
             </div>
           );
         })}
+      </div>
+
+      <div className="rounded-xl border border-border p-4">
+        <h3 className="font-bold text-ink">Daily Pin mix</h3>
+        <p className="mt-1 text-xs leading-5 text-muted-ink">Targets for preparation and approval. A target never approves or schedules a Pin automatically.</p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          {([
+            ["newTranslatorPins", "New Translator + design"],
+            ["existingTranslatorPins", "Existing Translator Pins"],
+            ["anythingTranslatePins", "AnythingTranslate Pins"],
+          ] as const).map(([key, title]) => <label key={key} className="space-y-1.5 text-sm font-semibold text-ink">
+            <span>{title}</span>
+            <input aria-label={title} type="number" min={0} max={5} step={1} value={policy.dailyPlan[key]}
+              onChange={e => editDailyPlan(key, Number(e.target.value))}
+              className="min-h-11 w-full rounded-xl border border-border bg-white px-3" />
+          </label>)}
+        </div>
+        <p className="mt-2 text-xs text-muted-ink">Total target: {Object.values(policy.dailyPlan).reduce((a, b) => a + b, 0)} / 10 Pins.</p>
       </div>
 
       <div className="rounded-xl border border-border bg-muted/20 p-4 text-sm">

@@ -29,7 +29,7 @@ export const growthSettingsSchema = z
     evergreenCooldownDays: z.number().int().min(14).max(180).default(DEFAULT_EVERGREEN_COOLDOWN_DAYS),
     aiDailyBudgetCents: z.number().int().min(1).max(10_000).default(200),
     aiMonthlyBudgetCents: z.number().int().min(1).max(300_000).default(3000),
-    aiImagesPerDayCap: z.number().int().min(0).max(100).default(3),
+    aiImagesPerDayCap: z.number().int().min(0).max(100).default(5),
     translatorCreatesPerDayCap: z.number().int().min(0).max(100).default(1),
     translatorUpdatesPerDayCap: z.number().int().min(0).max(100).default(3),
     ideaCreatesPerWeekCap: z.number().int().min(0).max(100).default(2),

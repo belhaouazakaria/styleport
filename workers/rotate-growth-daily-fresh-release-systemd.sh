@@ -36,7 +36,7 @@ done
 [[ "$(grep -Fxc "Environment=EXPECTED_RELEASE=$OLD" "$DIR/$SVC")" == 1 ]] || fail
 [[ "$(grep -Fxc 'Environment=GROWTH_DAILY_FRESH_LAUNCH=true' "$DIR/$SVC")" == 1 ]] || fail
 [[ "$(grep -Fxc "EnvironmentFile=$AI_ENV" "$DIR/$SVC")" == 1 ]] || fail
-[[ "$(grep -Fxc 'OnCalendar=*-*-* 07:02:00 UTC' "$DIR/$TIMER")" == 1 ]] || fail
+[[ "$(grep -Fxc 'OnCalendar=*-*-* 06:45:00 UTC' "$DIR/$TIMER")" == 1 ]] || fail
 [[ "$(grep -Fxc 'Persistent=false' "$DIR/$TIMER")" == 1 ]] || fail
 
 for timer in \

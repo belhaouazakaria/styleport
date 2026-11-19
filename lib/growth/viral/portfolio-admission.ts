@@ -39,8 +39,7 @@ export async function assertViralPortfolioApproval(
   }
   const rotation = await readDailyRotation(scheduledAt, tx);
   assertActiveRotationAccount(rotation, accountId);
-  if (policy.sourceSharePercent !== 50 ||
-      policy.maxPinsPerDay < rotation.targetPins) {
+  if (policy.maxPinsPerDay < rotation.targetPins) {
     throw Error("VIRAL_ROTATION_POLICY_NOT_CONFIGURED");
   }
   const dailyLimit = Math.min(AUTHORIZED_MAX_DAILY_PINS, rotation.targetPins);

@@ -22,8 +22,8 @@ export function assertViralDiscoveryRuntime(
       env.GROWTH_VIRAL_DISCOVERY_ENABLED !== "true" ||
       env.GROWTH_VIRAL_DISCOVERY_APPROVAL !== "SAYTWIST_VIRAL_DISCOVERY:" + sha ||
       env.GROWTH_VIRAL_DISCOVERY_DATE !== day ||
-      now.getUTCHours() !== 8 || now.getUTCMinutes() < 15 ||
-      now.getUTCMinutes() >= 30) throw Error("DISCOVERY_RELEASE_OR_WINDOW_INVALID");
+      now.getUTCHours() !== 5 || now.getUTCMinutes() < 30 ||
+      now.getUTCMinutes() >= 45) throw Error("DISCOVERY_RELEASE_OR_WINDOW_INVALID");
   if (identity.username !== "saytwist" || identity.uid === 0 ||
       identity.cwd !== APP || identity.node !== NODE) throw Error("DISCOVERY_IDENTITY_INVALID");
   if (env.GROWTH_WORKER_RUN_ENABLED !== "false" ||

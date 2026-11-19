@@ -80,10 +80,10 @@ EOF
 
 cat > "$TEMP/$TIMER" <<EOF
 [Unit]
-Description=SayTwist AI Pinterest draft generation 07:02 UTC (owner opt-in)
+Description=SayTwist AI Pinterest draft generation 06:45 UTC (owner opt-in)
 
 [Timer]
-OnCalendar=*-*-* 07:02:00 UTC
+OnCalendar=*-*-* 06:45:00 UTC
 Persistent=false
 AccuracySec=1s
 RandomizedDelaySec=0

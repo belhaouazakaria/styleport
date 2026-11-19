@@ -39,8 +39,8 @@ export function assertAutoTranslatorPublishRuntime(
         "SAYTWIST_AUTONOMOUS_TRANSLATOR_PUBLICATION:" + sha ||
       env.NODE_ENV !== "production" ||
       day !== now.toISOString().slice(0, 10) ||
-      !(now.getUTCHours() === 6 && now.getUTCMinutes() >= 57 &&
-        now.getUTCMinutes() < 59)) {
+      !(now.getUTCHours() === 6 && now.getUTCMinutes() >= 30 &&
+        now.getUTCMinutes() < 32)) {
     throw Error("AUTO_TRANSLATOR_PUBLISH_RELEASE_OR_CLOCK");
   }
   if (identity.username !== "saytwist" || identity.uid === 0 ||

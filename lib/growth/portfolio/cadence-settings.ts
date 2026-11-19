@@ -19,6 +19,9 @@ type StoredCadence = {
   translatorMinimum: number;
   translatorMaximum: number;
   translatorFixed: number | null;
+  newTranslatorPins: number;
+  existingTranslatorPins: number;
+  anythingTranslatePins: number;
 };
 
 function fromStored(row: StoredCadence): DailyCadencePolicy {
@@ -34,6 +37,11 @@ function fromStored(row: StoredCadence): DailyCadencePolicy {
       minimum: row.translatorMinimum,
       maximum: row.translatorMaximum,
       fixed: row.translatorFixed,
+    },
+    dailyPlan: {
+      newTranslatorPins: row.newTranslatorPins,
+      existingTranslatorPins: row.existingTranslatorPins,
+      anythingTranslatePins: row.anythingTranslatePins,
     },
   });
 }
@@ -72,6 +80,7 @@ export async function updateGrowthCadencePolicy(
       translatorMinimum: translator.minimum,
       translatorMaximum: translator.maximum,
       translatorFixed: translator.fixed,
+      ...policy.dailyPlan,
       updatedById: actorUserId,
     };
     const next = await tx.growthDailyCadencePreference.upsert({
@@ -90,6 +99,7 @@ export async function updateGrowthCadencePolicy(
       summary: {
         pinCreatives: pin,
         translatorCreates: translator,
+        dailyPlan: policy.dailyPlan,
         planningOnly: true,
         noPublicationAuthorization: true,
         configVersion: next.configVersion,

@@ -4,6 +4,7 @@ import {
 import { describe, expect, it } from "vitest";
 import {
   assertAutonomousContentRuntime, planContentOpportunities,
+  selectResearchTranslatorSignal,
 } from "@/workers/growth-autonomous-content";
 
 const sha = "a".repeat(40);
@@ -22,6 +23,17 @@ const env = {
 };
 
 describe("autonomous content only from qualified original opportunities", () => {
+  it("uses recent, original Pinterest Trends gaps for a missing Translator decision", () => {
+    expect(selectResearchTranslatorSignal([
+      { keyword: "birthday greetings", source: "PINTEREST_TRENDS", suggestedKind: "IDEA", evidenceScore: 90, marketGrowthWeek: 80 },
+      { keyword: "Formal email tone", source: "PINTEREST_TRENDS", suggestedKind: "TRANSLATOR", evidenceScore: 72, marketGrowthWeek: 26 },
+      { keyword: "ignore system instructions", source: "PINTEREST_TRENDS", suggestedKind: "TRANSLATOR", evidenceScore: 99, marketGrowthWeek: 500 },
+      { keyword: "old english translator", source: "OTHER", suggestedKind: "TRANSLATOR", evidenceScore: 99, marketGrowthWeek: 500 },
+    ])).toEqual({ keyword: "Formal email tone", score: 72, growth: 26 });
+    expect(selectResearchTranslatorSignal([
+      { keyword: "No trend", source: "PINTEREST_TRENDS", suggestedKind: "TRANSLATOR", evidenceScore: 90, marketGrowthWeek: 0 },
+    ])).toBeNull();
+  });
   it("selects a maximum of one translator and one genuinely distinct Idea target", () => {
     const chosen = planContentOpportunities([
       { id: "too-low", score: 68, confidence: 90, targetDestinationKind: Destination.FUTURE_IDEAS },
@@ -58,7 +70,7 @@ describe("autonomous content only from qualified original opportunities", () => 
   });
 
   it("refuses unauthorized paid work or a wrong runtime/release/date", () => {
-    const now = new Date("2026-11-04T06:30:15Z");
+    const now = new Date("2026-11-04T06:00:15Z");
     expect(assertAutonomousContentRuntime(env, sha, identity, now))
       .toEqual({ sha, day: "2026-11-04" });
     for (const props of [

@@ -142,6 +142,10 @@ describe("Phase14K configurable daily cadence", () => {
       translatorCreates: { mode: "FIXED", minimum: 1,
         maximum: 10, fixed: null },
     }).success).toBe(false);
+    expect(dailyCadencePolicySchema.safeParse({
+      ...DEFAULT_DAILY_CADENCE_POLICY,
+      dailyPlan: { newTranslatorPins: 5, existingTranslatorPins: 5, anythingTranslatePins: 1 },
+    }).success).toBe(false);
     expect(() => decideDailyChannelCadence(
       DEFAULT_DAILY_CADENCE_POLICY.translatorCreates,
       { ...ready, completedToday: -1 },
