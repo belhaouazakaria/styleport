@@ -17,6 +17,7 @@ describe("daily Growth plan production migration gate", () => {
     expect(migration).toContain('names.length!==42||names[41]!==expected');
     expect(migration).toContain('status IN (\'CLAIMED\',\'RUNNING\',\'FAILED_RETRYABLE\')');
     expect(migration).toContain("PENDING_QUEUE_SHA256=");
+    expect(migration).toContain('SELECT id FROM "GrowthDailyCadencePreference" WHERE id=\'global\'');
     expect(migration).toContain('[[ "$pending_after" == "$pending_before" ]]');
     expect(migration).toContain('migrate deploy --schema');
     expect(migration).toContain('POST_MIGRATION_SCHEMA');

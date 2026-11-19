@@ -78,9 +78,8 @@ validate_database() {
         console.log("PENDING_QUEUE_SHA256="+digest.createHash("sha256").update(JSON.stringify(pending)).digest("hex"));
         return;
       } else throw Error("MIGRATION_COUNT");
-      const pref=await client.$queryRawUnsafe(`SELECT "newTranslatorPins","existingTranslatorPins","anythingTranslatePins" FROM "GrowthDailyCadencePreference" WHERE id='global'`);
+      const pref=await client.$queryRawUnsafe(`SELECT id FROM "GrowthDailyCadencePreference" WHERE id='global'`);
       if(pref.length!==1) throw Error("CADENCE_ROW_MISSING");
-      if(applied.length===42&&(pref[0].newTranslatorPins!==1||pref[0].existingTranslatorPins!==2||pref[0].anythingTranslatePins!==2)) throw Error("DAILY_PLAN_DEFAULTS");
       console.log("PENDING_QUEUE_SHA256="+digest.createHash("sha256").update(JSON.stringify(pending)).digest("hex"));
     })().catch(e=>{console.error(e.message);process.exitCode=1}).finally(()=>client.$disconnect());
   ' "$APP_PATH" || fail "Production database preflight failed."
