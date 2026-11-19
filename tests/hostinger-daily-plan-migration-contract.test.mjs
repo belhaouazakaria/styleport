@@ -48,9 +48,9 @@ describe("daily Growth plan production migration gate", () => {
   it("preserves scheduled pending pins while keeping the lease watchdog active", () => {
     expect(coordinator).toContain('OLD = "35b5585b267f244f82157528789f92f955493cb9"');
     expect(coordinator.match(/database\(42\)/g)).not.toBeNull();
-    expect(coordinator).toContain('"saytwist-growth-autonomous-content.timer": ("06:30:00", "06:00:00")');
-    expect(coordinator).toContain('"saytwist-growth-auto-translator-publish.timer": ("06:57:00", "06:30:00")');
-    expect(coordinator).toContain('"saytwist-growth-daily-fresh.timer": ("07:02:00", "06:45:00")');
+    expect(coordinator).toContain('"saytwist-growth-autonomous-content.timer": ("06:00:00", "06:00:00")');
+    expect(coordinator).toContain('"saytwist-growth-auto-translator-publish.timer": ("06:30:00", "06:30:00")');
+    expect(coordinator).toContain('"saytwist-growth-daily-fresh.timer": ("06:45:00", "06:45:00")');
     expect(coordinator).toContain('"saytwist-growth-market-research.timer": ("05:10:00", "05:10:00")');
     expect(coordinator).toContain('"SAYTWIST_MARKET_RESEARCH:" + sha');
     expect(coordinator).toContain("market-research pin-maintenance");

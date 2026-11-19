@@ -28,10 +28,10 @@ PRIVATE = [pathlib.Path(p) for p in (
 FILES = [BASE / ("saytwist-growth-" + name + suffix) for name in NAMES for suffix in (".service", ".timer")]
 FILES += [BASE / "saytwist-growth-v2-alert@.service", *PRIVATE]
 CALENDARS = {
-    "saytwist-growth-auto-translator-publish.timer": ("06:57:00", "06:30:00"),
-    "saytwist-growth-autonomous-content.timer": ("06:30:00", "06:00:00"),
-    "saytwist-growth-daily-fresh.timer": ("07:02:00", "06:45:00"),
-    "saytwist-growth-viral-discovery.timer": ("08:15:00", "05:30:00"),
+    "saytwist-growth-auto-translator-publish.timer": ("06:30:00", "06:30:00"),
+    "saytwist-growth-autonomous-content.timer": ("06:00:00", "06:00:00"),
+    "saytwist-growth-daily-fresh.timer": ("06:45:00", "06:45:00"),
+    "saytwist-growth-viral-discovery.timer": ("05:30:00", "05:30:00"),
     "saytwist-growth-market-research.timer": ("05:10:00", "05:10:00"),
 }
 mutating = False
