@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 const migration = readFileSync("scripts/hostinger-prepare-growth-daily-plan-migration.sh", "utf8");
 const deploy = readFileSync(".github/workflows/deploy-hostinger.yml", "utf8");
 const qualification = readFileSync("scripts/qualify-growth-cadence-sql.sh", "utf8");
+const coordinator = readFileSync("workers/coordinate-growth-daily-plan-release.py", "utf8");
 
 describe("daily Growth plan production migration gate", () => {
   it("pins the old and target releases, exact single migration, private bundle and backup", () => {
@@ -14,7 +15,9 @@ describe("daily Growth plan production migration gate", () => {
     expect(migration).toContain('/home/saytwist/.local/share/saytwist/growth-daily-plan-migrations');
     expect(migration).toContain('applied.length===41');
     expect(migration).toContain('names.length!==42||names[41]!==expected');
-    expect(migration).toContain('status IN (\'PENDING\',\'CLAIMED\',\'RUNNING\',\'FAILED_RETRYABLE\')');
+    expect(migration).toContain('status IN (\'CLAIMED\',\'RUNNING\',\'FAILED_RETRYABLE\')');
+    expect(migration).toContain("PENDING_QUEUE_SHA256=");
+    expect(migration).toContain('[[ "$pending_after" == "$pending_before" ]]');
     expect(migration).toContain('migrate deploy --schema');
     expect(migration).toContain('POST_MIGRATION_SCHEMA');
   });
@@ -35,5 +38,13 @@ describe("daily Growth plan production migration gate", () => {
     expect(qualification).toContain("INVALID_IMAGE_CAP_MIGRATION");
     expect(qualification).toContain("newTranslatorPins");
     expect(qualification).toContain("anythingTranslatePins");
+  });
+
+  it("preserves scheduled pending pins while keeping the lease watchdog active", () => {
+    expect(coordinator).toContain("WORK_TIMERS = [timer for timer in TIMERS if timer != \"saytwist-growth-lease-watchdog.timer\"]");
+    expect(coordinator).toContain("pendingQueueSha256");
+    expect(coordinator).toContain("PENDING_QUEUE_CHANGED_DURING_DEPLOY");
+    expect(coordinator).toContain("WATCHDOG_NOT_ACTIVE_AND_ENABLED");
+    expect(coordinator).toContain("PENDING_QUEUE_CHANGED_DURING_HOLD");
   });
 });

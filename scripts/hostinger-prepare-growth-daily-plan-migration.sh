@@ -56,6 +56,11 @@ validate_database() {
       const rows=await client.$queryRawUnsafe(`SELECT migration_name,checksum,finished_at,rolled_back_at FROM "_prisma_migrations" ORDER BY started_at`);
       if(rows.some(r=>!r.finished_at&&!r.rolled_back_at)) throw Error("UNFINISHED_MIGRATION");
       const applied=rows.filter(r=>r.finished_at&&!r.rolled_back_at);
+      const settings=await client.$queryRawUnsafe(`SELECT "enabled","attributionEnabled" FROM "GrowthSettings" WHERE id='global'`);
+      const lease=await client.$queryRawUnsafe(`SELECT count(*)::int AS count FROM "GrowthSettings" WHERE id='global' AND "workerActivationExpiresAt" IS NULL`);
+      const jobs=await client.$queryRawUnsafe(`SELECT count(*)::int AS count FROM "GrowthJob" WHERE status IN ('CLAIMED','RUNNING','FAILED_RETRYABLE')`);
+      const pending=await client.$queryRawUnsafe(`SELECT id,type,status,"runAfter","attemptCount","maxAttempts","idempotencyKey",payload FROM "GrowthJob" WHERE status='PENDING' ORDER BY id`);
+      if(settings.length!==1||settings[0].enabled||settings[0].attributionEnabled||lease[0]?.count!==1||jobs[0]?.count!==0) throw Error("GROWTH_NOT_IDLE");
       const names=fs.readdirSync(path.join(root,"prisma/migrations"),{withFileTypes:true}).filter(x=>x.isDirectory()).map(x=>x.name).sort();
       if(applied.length===41){
         if(names.length!==42||names[41]!==expected) throw Error("SOURCE_MIGRATION_SET");
@@ -69,19 +74,21 @@ validate_database() {
         const plan=await client.$queryRawUnsafe(`SELECT "newTranslatorPins","existingTranslatorPins","anythingTranslatePins" FROM "GrowthDailyCadencePreference" WHERE id='global'`);
         const cap=await client.$queryRawUnsafe(`SELECT "aiImagesPerDayCap" FROM "GrowthSettings" WHERE id='global'`);
         if(columns[0]?.count!==3||plan.length!==1||plan[0].newTranslatorPins!==1||plan[0].existingTranslatorPins!==2||plan[0].anythingTranslatePins!==2||cap[0]?.aiImagesPerDayCap!==5) throw Error("POST_MIGRATION_SCHEMA");
-        console.log("ALREADY_APPLIED"); return;
+        console.log("ALREADY_APPLIED");
+        console.log("PENDING_QUEUE_SHA256="+digest.createHash("sha256").update(JSON.stringify(pending)).digest("hex"));
+        return;
       } else throw Error("MIGRATION_COUNT");
-      const settings=await client.$queryRawUnsafe(`SELECT "enabled","attributionEnabled" FROM "GrowthSettings" WHERE id='global'`);
-      const jobs=await client.$queryRawUnsafe(`SELECT count(*)::int AS count FROM "GrowthJob" WHERE status IN ('PENDING','CLAIMED','RUNNING','FAILED_RETRYABLE')`);
-      if(settings.length!==1||settings[0].enabled||settings[0].attributionEnabled||jobs[0]?.count!==0) throw Error("GROWTH_NOT_IDLE");
       const pref=await client.$queryRawUnsafe(`SELECT "newTranslatorPins","existingTranslatorPins","anythingTranslatePins" FROM "GrowthDailyCadencePreference" WHERE id='global'`);
       if(pref.length!==1) throw Error("CADENCE_ROW_MISSING");
       if(applied.length===42&&(pref[0].newTranslatorPins!==1||pref[0].existingTranslatorPins!==2||pref[0].anythingTranslatePins!==2)) throw Error("DAILY_PLAN_DEFAULTS");
+      console.log("PENDING_QUEUE_SHA256="+digest.createHash("sha256").update(JSON.stringify(pending)).digest("hex"));
     })().catch(e=>{console.error(e.message);process.exitCode=1}).finally(()=>client.$disconnect());
   ' "$APP_PATH" || fail "Production database preflight failed."
 }
 
 db_state="$(validate_database 2>&1)" || fail "Production database preflight failed."
+pending_before="$(sed -n 's/^PENDING_QUEUE_SHA256=//p' <<< "$db_state")"
+[[ "$pending_before" =~ ^[a-f0-9]{64}$ ]] || fail "Pending Growth queue fingerprint is missing."
 mkdir -p "$BACKUP_ROOT"
 chmod 700 "$BACKUP_ROOT"
 BACKUP="$BACKUP_ROOT/pre-${APPROVED_MIGRATION}-${RELEASE_SHA:0:12}.dump"
@@ -105,7 +112,9 @@ fi
   "$NODE_BIN" --env-file="$ENV_FILE" "$PRISMA_CLI" migrate deploy --schema "$MIGRATION_ROOT/prisma/schema.prisma"
   "$NODE_BIN" --env-file="$ENV_FILE" "$PRISMA_CLI" migrate status --schema "$MIGRATION_ROOT/prisma/schema.prisma"
 )
-validate_database >/dev/null || fail "Post-migration database verification failed."
+post_state="$(validate_database 2>&1)" || fail "Post-migration database verification failed."
+pending_after="$(sed -n 's/^PENDING_QUEUE_SHA256=//p' <<< "$post_state")"
+[[ "$pending_after" == "$pending_before" ]] || fail "Pending Growth queue changed during migration."
 curl -fsS --max-time 5 http://127.0.0.1:3001/api/readyz >/dev/null || fail "App readiness failed after migration."
 printf 'release_sha=%s\nmigration=%s\nbackup=%s\n' "$RELEASE_SHA" "$APPROVED_MIGRATION" "$BACKUP" > "$BACKUP_ROOT/pre-${APPROVED_MIGRATION}-${RELEASE_SHA:0:12}.record"
 chmod 600 "$BACKUP_ROOT/pre-${APPROVED_MIGRATION}-${RELEASE_SHA:0:12}.record"
