@@ -16,9 +16,10 @@ describe("daily Growth plan production migration gate", () => {
     expect(migration).toContain('applied.length===41');
     expect(migration).toContain('names.length!==42||names[41]!==expected');
     expect(migration).toContain('status IN ($1::"GrowthJobStatus",$2::"GrowthJobStatus",$3::"GrowthJobStatus")');
+    expect(migration).toContain('WHERE status=$1::"GrowthJobStatus" ORDER BY id');
     expect(migration).toContain('Production database preflight failed: $db_state');
     expect(migration).toContain('WHERE id=$1');
-    expect(migration).toContain('WHERE status=$1 ORDER BY id');
+    expect(migration).toContain('WHERE status=$1::"GrowthJobStatus" ORDER BY id');
     expect(migration).toContain("PENDING_QUEUE_SHA256=");
     expect(migration).toContain('SELECT id FROM "GrowthDailyCadencePreference" WHERE id=$1');
     expect(migration).toContain('[[ "$pending_after" == "$pending_before" ]]');
