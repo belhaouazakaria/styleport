@@ -54,10 +54,10 @@ UMask=0077
 EOF
 cat > "$TMP/$TIMER" <<EOF
 [Unit]
-Description=SayTwist daily qualified Translator publication refresh 06:57 UTC (owner opt-in)
+Description=SayTwist daily qualified Translator publication refresh 06:30 UTC (owner opt-in)
 
 [Timer]
-OnCalendar=*-*-* 06:57:00 UTC
+OnCalendar=*-*-* 06:30:00 UTC
 Persistent=false
 AccuracySec=1s
 RandomizedDelaySec=0

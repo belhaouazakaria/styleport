@@ -4,7 +4,8 @@ import {
   planDailyRotation, type DailyRotationPlan, type RotationRole,
 } from "@/lib/growth/portfolio/daily-rotation";
 
-type AccountReader = Pick<Prisma.TransactionClient, "growthPinterestAccount">;
+type AccountReader = Pick<Prisma.TransactionClient,
+  "growthPinterestAccount" | "growthDailyCadencePreference">;
 
 /**
  * The three named portfolio roles are stable. Never rotate to sandbox,
@@ -28,10 +29,18 @@ export async function readDailyRotation(
     select: { id: true, activeRole: true, publicationRole: true },
     take: 4, // More than three active slots is a fail-closed configuration error.
   });
+  const cadence = await tx.growthDailyCadencePreference.findUnique({
+    where: { id: "global" },
+    select: { newTranslatorPins: true, existingTranslatorPins: true, anythingTranslatePins: true },
+  });
   return planDailyRotation(date.toISOString().slice(0, 10), rows.map(row => ({
     id: row.id,
     role: (row.activeRole ?? row.publicationRole) as RotationRole,
     connected: true,
     hasWritableBoard: true,
-  })));
+  })), cadence ? {
+    newTranslatorPins: cadence.newTranslatorPins,
+    existingTranslatorPins: cadence.existingTranslatorPins,
+    anythingTranslatePins: cadence.anythingTranslatePins,
+  } : undefined);
 }

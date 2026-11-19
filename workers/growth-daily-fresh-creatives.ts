@@ -49,7 +49,7 @@ export function assertDailyFreshRuntime(
       identity.username !== "saytwist" || identity.uid === 0 ||
       identity.cwd !== APP || identity.node !== NODE) throw Error("FRESH_RELEASE_OR_RUNTIME_INVALID");
   if (mode === "SCHEDULED" &&
-      !(now.getUTCHours() === 7 && now.getUTCMinutes() >= 2 && now.getUTCMinutes() < 15)) {
+      !(now.getUTCHours() === 6 && now.getUTCMinutes() >= 45 && now.getUTCMinutes() < 58)) {
     throw Error("FRESH_SCHEDULE_WINDOW_INVALID");
   }
   for (const flag of [
@@ -95,7 +95,8 @@ async function buildBatch(day: string, now = new Date()) {
     prisma.growthDailyCadencePreference.findUnique({
       where: { id: "global" },
       select: { pinMode: true, pinMinimum: true,
-        pinMaximum: true, pinFixed: true },
+        pinMaximum: true, pinFixed: true, newTranslatorPins: true,
+        existingTranslatorPins: true, anythingTranslatePins: true },
     }),
     prisma.growthPinCandidate.count({ where: {
       createdAt: { gte: dayStart, lt: dayEnd },
@@ -118,6 +119,12 @@ async function buildBatch(day: string, now = new Date()) {
     (rotation.publicationRole === "SAYTWIST" ||
       ((target.editorialExamples[0]?.originalText.trim().length ?? 0) >= 8 &&
       (target.editorialExamples[0]?.transformedText.trim().length ?? 0) >= 8)));
+  const newToday = await prisma.translator.findMany({
+    where: { id: { in: qualified.map(target => target.id) }, createdAt: { gte: dayStart, lt: dayEnd } },
+    select: { id: true },
+  });
+  const newTodayIds = new Set(newToday.map(row => row.id));
+  qualified.sort((a, b) => Number(newTodayIds.has(b.id)) - Number(newTodayIds.has(a.id)));
   const parsedPolicy = policy
     ? { mode: policy.pinMode, minimum: policy.pinMinimum,
       maximum: policy.pinMaximum, fixed: policy.pinFixed }
@@ -129,7 +136,15 @@ async function buildBatch(day: string, now = new Date()) {
     verifiedRecentOpportunityEvidence: Boolean(recentEvidence),
     rotatingOwnedTarget: rotation.original,
   });
-  return { planned, targets: qualified.slice(0, planned.additional), accountId: rotation.accountId };
+  const desiredNative = rotation.original;
+  const newTargets = qualified.filter(target => newTodayIds.has(target.id));
+  const existingTargets = qualified.filter(target => !newTodayIds.has(target.id));
+  const selected = [
+    ...newTargets.slice(0, policy?.newTranslatorPins ?? 1),
+    ...existingTargets.slice(0, policy?.existingTranslatorPins ?? 2),
+  ].slice(0, Math.min(desiredNative, planned.additional));
+  return { planned, targets: selected, accountId: rotation.accountId,
+    targetNativePins: desiredNative, targetSourcePins: rotation.source };
 }
 
 async function createOne(target: { id: string; slug: string; conversionId?: string }, day: string, accountId: string) {
@@ -245,18 +260,20 @@ export function isFreshCapacityLimit(error: unknown) {
 }
 
 export async function executeDailyFreshCreativeCycle(day: string, mode: string) {
-  const { planned, targets, accountId } = await buildBatch(day);
+  const { planned, targets, accountId, targetNativePins, targetSourcePins } = await buildBatch(day);
   const selectedTargets = selectDailyFreshTargetsForMode(targets, mode);
   let created = 0;
+  let nativeCreated = 0;
   try {
     for (const target of selectedTargets) {
       await createOne(target, day, accountId);
       created++;
+      nativeCreated++;
     }
     // Trial retains its one-image authorization. Scheduled preparation shares
     // the SAME financial/image ledger across native and credited source art.
     if (mode === "SCHEDULED" && planned.status !== "PAUSED") {
-      for (let i = 0; i < 3 && created < 5; i++) {
+      for (let i = 0; i < targetSourcePins && created < targetNativePins + targetSourcePins; i++) {
         const result = await createOneSource();
         if (!result.created) break;
         created += result.created;
@@ -265,11 +282,18 @@ export async function executeDailyFreshCreativeCycle(day: string, mode: string) 
   } catch (error) {
     await requireIdle();
     if (!isFreshCapacityLimit(error)) throw error;
-    return { status: created ? "PASSED" as const : "PAUSED" as const, created, aiCalls: created, pinsPublished: 0 };
+    return { status: created ? "PASSED" as const : "PAUSED" as const, created,
+      nativeCreated, sourceCreated: Math.max(0, created - nativeCreated),
+      nativeTarget: targetNativePins, sourceTarget: targetSourcePins,
+      quotaStatus: "GAP_REQUIRES_REVIEW" as const,
+      aiCalls: created, pinsPublished: 0 };
   }
   await requireIdle();
   return { status: created ? "PASSED" as const : planned.status === "READY" ? "NO_QUALIFIED_TARGET" as const : planned.status,
-    created, aiCalls: created, pinsPublished: 0 };
+    created, nativeCreated, sourceCreated: Math.max(0, created - nativeCreated),
+    nativeTarget: targetNativePins, sourceTarget: targetSourcePins,
+    quotaStatus: created >= targetNativePins + targetSourcePins ? "FILLED" as const : "GAP_REQUIRES_REVIEW" as const,
+    aiCalls: created, pinsPublished: 0 };
 }
 
 async function main() {
@@ -286,6 +310,11 @@ async function main() {
     const result = await executeDailyFreshCreativeCycle(day, mode);
     console.log("GROWTH_DAILY_FRESH=" + result.status);
     console.log("GROWTH_DAILY_FRESH_CREATED=" + result.created);
+    console.log("GROWTH_DAILY_FRESH_NATIVE_CREATED=" + result.nativeCreated);
+    console.log("GROWTH_DAILY_FRESH_SOURCE_CREATED=" + result.sourceCreated);
+    console.log("GROWTH_DAILY_FRESH_NATIVE_TARGET=" + result.nativeTarget);
+    console.log("GROWTH_DAILY_FRESH_SOURCE_TARGET=" + result.sourceTarget);
+    console.log("GROWTH_DAILY_FRESH_QUOTA=" + result.quotaStatus);
     console.log("GROWTH_DAILY_FRESH_AI_CALLS=" + result.aiCalls);
     console.log("GROWTH_DAILY_FRESH_PINS_PUBLISHED=" + result.pinsPublished);
     console.log("GROWTH_DAILY_FRESH_GROWTH=OFF");

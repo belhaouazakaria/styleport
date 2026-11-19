@@ -13,7 +13,11 @@ import { OPPORTUNITY_INTELLIGENCE_VERSION } from "@/lib/growth/opportunity/const
 import { revokeGrowthWorkerActivation } from "@/lib/growth/settings";
 import { getGrowthCadencePolicy } from "@/lib/growth/portfolio/cadence-settings";
 import { decideDailyChannelCadence } from "@/lib/growth/portfolio/daily-cadence";
-import { TRANSLATOR_AUTOPILOT_VERSION } from "@/lib/growth/translator/constants";
+import {
+  TRANSLATOR_AUTOPILOT_VERSION,
+  TRANSLATOR_DEDUPE_VERSION,
+  TRANSLATOR_QUALITY_VERSION,
+} from "@/lib/growth/translator/constants";
 import { runGrowthWorker } from "@/lib/growth/worker";
 import { prisma } from "@/lib/prisma";
 
@@ -37,8 +41,7 @@ export function assertAutonomousContentRuntime(
       env.GROWTH_AUTONOMOUS_CONTENT_ENABLED !== "true" ||
       env.GROWTH_AUTONOMOUS_CONTENT_APPROVAL !== "SAYTWIST_CONTENT_PREPARATION:" + sha ||
       day !== now.toISOString().slice(0, 10) ||
-      !(now.getUTCHours() === 6 && now.getUTCMinutes() >= 30 &&
-        now.getUTCMinutes() < 50)) throw Error("RELEASE_OR_APPROVAL_INVALID");
+      !(now.getUTCHours() === 6 && now.getUTCMinutes() < 20)) throw Error("RELEASE_OR_APPROVAL_INVALID");
   if (identity.username !== "saytwist" || identity.uid === 0 ||
       identity.cwd !== APP || identity.node !== NODE) throw Error("IDENTITY_INVALID");
   for (const flag of ["GROWTH_WORKER_RUN_ENABLED",
@@ -77,6 +80,23 @@ export function planContentOpportunities(rows: Array<{
     ...translators.map(r => ({ id: r.id, kind: "TRANSLATOR" as const })),
     ...ideas.map(r => ({ id: r.id, kind: "IDEA" as const })),
   ];
+}
+
+export function selectResearchTranslatorSignal(signals: unknown[]) {
+  return signals.flatMap(raw => {
+    if (!raw || typeof raw !== "object") return [];
+    const item = raw as Record<string, unknown>;
+    const keyword = typeof item.keyword === "string" ? item.keyword.trim() : "";
+    const score = Number(item.evidenceScore);
+    const growth = [item.marketGrowthWeek, item.marketGrowthMonth, item.marketGrowthYear]
+      .map(value => typeof value === "number" ? value : Number.NEGATIVE_INFINITY)
+      .find(value => Number.isFinite(value) && value > 0) ?? Number.NEGATIVE_INFINITY;
+    if (item.suggestedKind !== "TRANSLATOR" || item.source !== "PINTEREST_TRENDS" ||
+        !/^[A-Za-z0-9][A-Za-z0-9 '&-]{2,89}$/.test(keyword) ||
+        /ignore|instructions|prompt|system|script/i.test(keyword) ||
+        !Number.isInteger(score) || score < 65 || !Number.isFinite(growth)) return [];
+    return [{ keyword, score, growth }];
+  }).sort((a, b) => b.score - a.score || b.growth - a.growth || a.keyword.localeCompare(b.keyword))[0] ?? null;
 }
 
 /**
@@ -168,6 +188,79 @@ async function runScopedContentJob(input: {
     throw Error("CONTENT_JOB_POSTCONDITION_FAILED");
   }
   return jobId!;
+}
+
+async function prepareResearchBackedTranslator(day: string, desired: number) {
+  if (desired <= 0) return { selected: 0, prepared: 0, status: "OWNER_DISABLED" as const };
+  const dayStart = new Date(day + "T00:00:00.000Z");
+  const research = await prisma.growthActivity.findFirst({
+    where: {
+      entityType: "GrowthMarketResearch",
+      entityId: "US:growing",
+      action: "MARKET_DISCOVERY_REVIEW_READY",
+      createdAt: { gte: new Date(dayStart.getTime() - 24 * 60 * 60_000), lt: new Date(dayStart.getTime() + 86_400_000) },
+    },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    select: { id: true, createdAt: true, summary: true },
+  });
+  if (!research) return { selected: 0, prepared: 0, status: "RESEARCH_MISSING" as const };
+  const summary = research.summary as { signals?: unknown } | null;
+  const signals = Array.isArray(summary?.signals) ? summary.signals : [];
+  const candidate = selectResearchTranslatorSignal(signals);
+  if (candidate) {
+    const idempotencyKey = "market-gap-translator:" + day + ":" + candidate.keyword.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 60);
+    const prior = await prisma.growthDecision.findUnique({ where: { idempotencyKey } });
+    if (prior) {
+      if (prior.status !== GrowthDecisionStatus.PROPOSED) return { selected: 0, prepared: 0, status: "ALREADY_ATTEMPTED" as const };
+      await runScopedContentJob({ type: GrowthJobType.TRANSLATOR_AUTOPILOT_EXECUTE,
+        key: idempotencyKey + ":execute", payload: { decisionId: prior.id } });
+      const final = await prisma.growthDecision.findUnique({ where: { id: prior.id }, select: { status: true } });
+      const complete = final?.status === GrowthDecisionStatus.COMPLETED;
+      return { selected: 1, prepared: complete ? 1 : 0, status: complete ? "REUSED" as const : "QUALITY_OR_BUDGET_BLOCKED" as const };
+    }
+    const decision = await prisma.growthDecision.create({ data: {
+      opportunityId: null,
+      type: "CREATE_TRANSLATOR",
+      status: GrowthDecisionStatus.PROPOSED,
+      decisionModelVersion: TRANSLATOR_AUTOPILOT_VERSION,
+      qualityModelVersion: TRANSLATOR_QUALITY_VERSION,
+      dedupeModelVersion: TRANSLATOR_DEDUPE_VERSION,
+      confidence: Math.min(95, candidate.score),
+      reasonCodes: ["PINTEREST_TREND_MARKET_GAP", "ORIGINAL_TRANSLATOR_REQUIRED"],
+      idempotencyKey,
+      evidence: {
+        opportunityType: "PIN_TREND_MARKET_GAP",
+        score: candidate.score,
+        confidence: Math.min(95, candidate.score),
+        evidenceQuality: "KNOWN",
+        clusterName: candidate.keyword,
+        marketResearch: {
+          activityId: research.id,
+          source: "PINTEREST_TRENDS",
+          observedAt: research.createdAt.toISOString(),
+          positiveGrowthWindow: candidate.growth,
+        },
+        intendedNeed: `Research-backed topic from current Pinterest Trends demand: ${candidate.keyword} (${candidate.growth}% growth in a recent observed window). Create an original SayTwist Translator with a distinct, practical transformation, useful controls, original examples and FAQs. Do not copy competitor or source prompts.`,
+        sourceReasonCodes: ["PINTEREST_TREND_MARKET_GAP", "EDITORIAL_QUALITY_AND_DEDUPE_REQUIRED"],
+        representativePins: [],
+        mappedTranslatorIds: [],
+      } as Prisma.InputJsonValue,
+    } });
+    await recordGrowthActivity({
+      actorKind: GrowthActivityActorKind.WORKER,
+      entityType: "GrowthDecision", entityId: decision.id,
+      action: "RESEARCHED_TRANSLATOR_DECISION_CREATED",
+      toState: decision.status,
+      correlationKey: idempotencyKey,
+      summary: { marketResearchId: research.id, source: "PINTEREST_TRENDS", keyword: candidate.keyword, evidenceScore: candidate.score },
+    });
+    await runScopedContentJob({ type: GrowthJobType.TRANSLATOR_AUTOPILOT_EXECUTE,
+      key: idempotencyKey + ":execute", payload: { decisionId: decision.id } });
+    const final = await prisma.growthDecision.findUnique({ where: { id: decision.id }, select: { status: true } });
+    const complete = final?.status === GrowthDecisionStatus.COMPLETED;
+    return { selected: 1, prepared: complete ? 1 : 0, status: complete ? "PREPARED" as const : "QUALITY_OR_BUDGET_BLOCKED" as const };
+  }
+  return { selected: 0, prepared: 0, status: "NO_QUALIFIED_RESEARCH" as const };
 }
 
 export async function runAutonomousPreparation(day: string) {
@@ -302,7 +395,15 @@ export async function runAutonomousPreparation(day: string) {
     // permission to publish. Publishing still requires per-Pin ADMIN approval.
     if (!decisionJob) throw Error("DECISION_JOB_MISSING");
   }
-  return { selected: selected.length + viralPrepared, prepared: prepared + viralPrepared };
+  let researchedTranslator = { selected: 0, prepared: 0, status: "NOT_NEEDED" as string };
+  if (policy.dailyPlan.newTranslatorPins > 0 && qualifiedTranslators.length === 0 &&
+      qualifiedViralCount === 0 && remainingTranslatorCap > 0 &&
+      policy.translatorCreates.mode !== "PAUSED") {
+    researchedTranslator = await prepareResearchBackedTranslator(day, policy.dailyPlan.newTranslatorPins);
+  }
+  return { selected: selected.length + viralPrepared + researchedTranslator.selected,
+    prepared: prepared + viralPrepared + researchedTranslator.prepared,
+    researchedTranslator: researchedTranslator.status };
 }
 
 async function main() {
@@ -316,6 +417,7 @@ async function main() {
     console.log("GROWTH_AUTONOMOUS_CONTENT=PASSED");
     console.log("GROWTH_AUTONOMOUS_DECISIONS=" + result.selected);
     console.log("GROWTH_AUTONOMOUS_CONTENT_PREPARED=" + result.prepared);
+    console.log("GROWTH_AUTONOMOUS_RESEARCH_TRANSLATOR=" + result.researchedTranslator);
     console.log("GROWTH_AUTONOMOUS_PIN_CANDIDATES=0");
     console.log("GROWTH_AUTONOMOUS_PUBLICATIONS=0");
   } catch {

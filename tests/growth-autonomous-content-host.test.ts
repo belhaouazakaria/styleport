@@ -12,7 +12,7 @@ describe("bounded automated content generation host", () => {
     execFileSync("bash", ["-n", "workers/install-growth-autonomous-content-systemd.sh"]);
     execFileSync("node", ["--check", "workers/growth-autonomous-content-launch.cjs"]);
     execFileSync("node", ["--check", "workers/growth-autonomous-content-alert.cjs"]);
-    expect(installer).toContain("OnCalendar=*-*-* 06:30:00 UTC");
+    expect(installer).toContain("OnCalendar=*-*-* 06:00:00 UTC");
     expect(installer).toContain("OnFailure=$ALERT");
     expect(installer).toContain("EnvironmentFile=$AI_ENV");
     expect(installer).toContain("0:0:600");

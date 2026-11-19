@@ -62,10 +62,10 @@ UMask=0077
 EOF
 cat > "$STAGE/$TIMER" <<EOF
 [Unit]
-Description=SayTwist review-only viral concept discovery 08:15 UTC
+Description=SayTwist review-only viral concept discovery 05:30 UTC
 
 [Timer]
-OnCalendar=*-*-* 08:15:00 UTC
+OnCalendar=*-*-* 05:30:00 UTC
 Persistent=false
 RandomizedDelaySec=0
 AccuracySec=1s

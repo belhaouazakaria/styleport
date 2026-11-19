@@ -356,7 +356,9 @@ async function loadGenerationRequest(decisionId: string): Promise<{ decision: Aw
       score: Number(evidence.score || 0),
       confidence: Number(evidence.confidence || decision.confidence),
       reasonCodes: Array.isArray(evidence.sourceReasonCodes) ? evidence.sourceReasonCodes.map(String).slice(0, 24) : [],
-      intendedNeed: `Produce a distinct, useful Translator grounded in the supplied cluster and representative evidence. ${decision.type === GrowthDecisionType.IMPROVE_TRANSLATOR ? "Improve the mapped Translator without changing its identity or operational fields." : "Do not create a generic category clone."}`,
+      intendedNeed: typeof evidence.intendedNeed === "string" && evidence.intendedNeed.trim().length >= 20
+        ? evidence.intendedNeed.trim().slice(0, 1000)
+        : `Produce a distinct, useful Translator grounded in the supplied cluster and representative evidence. ${decision.type === GrowthDecisionType.IMPROVE_TRANSLATOR ? "Improve the mapped Translator without changing its identity or operational fields." : "Do not create a generic category clone."}`,
       categoryOptions: categories,
       relatedTranslators: related.map((item) => ({ name: item.name, slug: item.slug, categories: item.categories.map((entry) => entry.category.slug) })),
       representativePins: Array.isArray(evidence.representativePins) ? (evidence.representativePins as TranslatorGenerationRequest["representativePins"]).slice(0, 12) : [],

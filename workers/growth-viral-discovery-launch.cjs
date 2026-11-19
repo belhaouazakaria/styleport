@@ -27,8 +27,8 @@ function run() {
       process.env.GROWTH_VIRAL_DISCOVERY_ENABLED !== "true" ||
       process.env.GROWTH_VIRAL_DISCOVERY_OWNER_APPROVAL !==
         "SAYTWIST_VIRAL_DISCOVERY:" + sha ||
-      now.getUTCHours() !== 8 || now.getUTCMinutes() < 15 ||
-      now.getUTCMinutes() >= 30 ||
+      now.getUTCHours() !== 5 || now.getUTCMinutes() < 30 ||
+      now.getUTCMinutes() >= 45 ||
       fs.readFileSync(APP + "/.deployed-release", "utf8").trim() !== sha ||
       process.cwd() !== APP || os.userInfo().username !== "saytwist" ||
       process.getuid?.() === 0 || process.execPath !== NODE ||

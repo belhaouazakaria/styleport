@@ -89,8 +89,8 @@ describe("Phase14M daily budgeted AI Pinterest drafts", () => {
       verifiedRecentOpportunityEvidence: true,
     })).toThrow();
   });
-  it("allows only the exact owner-approved SHA, private DB and 07:02-07:15 UTC window", () => {
-    const at = new Date("2026-11-07T07:02:00Z");
+  it("allows only the exact owner-approved SHA, private DB and 06:45-06:58 UTC window", () => {
+    const at = new Date("2026-11-07T06:45:00Z");
     expect(assertDailyFreshRuntime(env, sha, identity, at))
       .toEqual({ sha, day: "2026-11-07", mode: "SCHEDULED" });
     expect(() => assertDailyFreshRuntime(env, "b".repeat(40), identity, at)).toThrow();

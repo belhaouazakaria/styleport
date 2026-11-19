@@ -29,6 +29,14 @@ export const dailyCadenceChannelSchema = z.object({
 export const dailyCadencePolicySchema = z.object({
   pinCreatives: dailyCadenceChannelSchema,
   translatorCreates: dailyCadenceChannelSchema,
+  dailyPlan: z.object({
+    newTranslatorPins: z.number().int().min(0).max(5),
+    existingTranslatorPins: z.number().int().min(0).max(5),
+    anythingTranslatePins: z.number().int().min(0).max(5),
+  }).strict().superRefine((v, ctx) => {
+    if (v.newTranslatorPins + v.existingTranslatorPins + v.anythingTranslatePins > 10)
+      ctx.addIssue({ code: "custom", message: "The daily Pin plan cannot exceed ten Pins." });
+  }),
 }).strict();
 
 export type DailyCadencePolicy = z.infer<typeof dailyCadencePolicySchema>;
@@ -38,6 +46,7 @@ export type CadencePerformance = "WEAK" | "NORMAL" | "STRONG" | "UNKNOWN";
 export const DEFAULT_DAILY_CADENCE_POLICY: DailyCadencePolicy = {
   pinCreatives: { mode: "AUTO", minimum: 1, maximum: 10, fixed: null },
   translatorCreates: { mode: "AUTO", minimum: 1, maximum: 10, fixed: null },
+  dailyPlan: { newTranslatorPins: 1, existingTranslatorPins: 2, anythingTranslatePins: 2 },
 };
 
 export type CadenceResources = {

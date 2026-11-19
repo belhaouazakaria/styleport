@@ -12,9 +12,9 @@ describe("daily discovery rollout remains separately opt-in", () => {
     expect(() => execFileSync("bash", ["-n", "workers/install-growth-viral-discovery-systemd.sh"])).not.toThrow();
     expect(() => execFileSync("bash", ["-n", "workers/coordinate-growth-nine-timer-multi-account-preview-release.sh"])).not.toThrow();
   });
-  it("installs disabled-only review-only discovery at 08:15 UTC", () => {
+  it("installs disabled-only review-only discovery at 05:30 UTC", () => {
     expect(installer).toContain('GROWTH_VIRAL_DISCOVERY_INSTALL=INSTALLED_DISABLED');
-    expect(installer).toContain('OnCalendar=*-*-* 08:15:00 UTC');
+    expect(installer).toContain('OnCalendar=*-*-* 05:30:00 UTC');
     expect(installer).toContain("User=saytwist");
     expect(installer).toContain("0:0:700");
     expect(installer).toContain("NoNewPrivileges=true");

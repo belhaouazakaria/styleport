@@ -7,6 +7,10 @@ const migration = readFileSync(
   "prisma/migrations/20261105150000_growth_daily_cadence_controls/migration.sql",
   "utf8",
 );
+const planMigration = readFileSync(
+  "prisma/migrations/20261119090000_growth_daily_plan_targets/migration.sql",
+  "utf8",
+);
 const route = readFileSync(
   "app/api/admin/growth/cadence/route.ts", "utf8",
 );
@@ -23,6 +27,7 @@ describe("Phase14K cadence preference storage boundaries", () => {
       .toEqual({
         pinCreatives: { mode: "AUTO", minimum: 1, maximum: 10, fixed: null },
         translatorCreates: { mode: "AUTO", minimum: 1, maximum: 10, fixed: null },
+        dailyPlan: { newTranslatorPins: 1, existingTranslatorPins: 2, anythingTranslatePins: 2 },
       });
     expect(service).not.toContain("workerActivationExpiresAt:");
     expect(service).not.toContain("GROWTH_WORKER_RUN_ENABLED");
@@ -35,6 +40,8 @@ describe("Phase14K cadence preference storage boundaries", () => {
     expect(route).toContain("getSessionOrNull()");
     expect(route).toContain("planningOnly: true, publishingEnabled: false");
     expect(page).toContain("requireAdminRoute()");
+    expect(planMigration).toContain('"anythingTranslatePins" INTEGER NOT NULL DEFAULT 2');
+    expect(planMigration).toContain('"GrowthDailyCadencePreference_daily_plan_check"');
   });
 
   it("keeps database enums and fixed-value safeguards fail-closed", () => {

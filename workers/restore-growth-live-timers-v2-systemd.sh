@@ -82,7 +82,7 @@ files=(
   "rotate-growth-daily-observe-systemd.sh:889343978f28fd1c6b0a4357de647651b8d9ea09"
   "rotate-growth-autonomous-cycle-systemd.sh:29b411f8ce527841b48fff148cf55cd21ebb250c"
   "rotate-growth-approved-publisher-release-systemd.sh:351ca5e10d3ffa50dbd74e86e6ba5cbc49c4e6ec"
-  "rotate-growth-daily-fresh-release-systemd.sh:d9b7f9683a57d8d5cdc171510bea747af2d4af98"
+  "rotate-growth-daily-fresh-release-systemd.sh:47aedf819410a20de0ca89385706f58229452c4c"
   "rotate-growth-private-report-release-systemd.sh:418d888f5a3a810dcaf5c4df63e7b3e19bbc21a3"
 )
 dir=$(mktemp -d /root/saytwist-live-restore.XXXXXXXX)

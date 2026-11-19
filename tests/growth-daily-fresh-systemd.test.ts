@@ -10,7 +10,7 @@ const targets = readFileSync("lib/growth/viral/native-creative-targets.ts", "utf
 const alert = readFileSync("workers/growth-daily-fresh-alert.cjs", "utf8");
 
 describe("Phase14M daily isolated AI creative production safety", () => {
-  it("installs a root-owned disabled 07:02 UTC timer and separate private alert", () => {
+  it("installs a root-owned disabled 06:45 UTC timer and separate private alert", () => {
     expect(() => execFileSync("bash", ["-n", "workers/install-growth-daily-fresh-systemd.sh"]))
       .not.toThrow();
     expect(install).toContain("0:0:700");
@@ -19,7 +19,7 @@ describe("Phase14M daily isolated AI creative production safety", () => {
     expect(install).toContain("EnvironmentFile=$AI_ENV");
     expect(install).toContain("GROWTH_OPENAI_API_KEY=sk-");
     expect(install).toContain("GROWTH_OPENAI_PROJECT_ID=proj_");
-    expect(install).toContain("OnCalendar=*-*-* 07:02:00 UTC");
+    expect(install).toContain("OnCalendar=*-*-* 06:45:00 UTC");
     expect(install).toContain("Persistent=false");
     expect(install).toContain("User=saytwist");
     expect(install).toContain("NoNewPrivileges=true");
@@ -53,6 +53,8 @@ describe("Phase14M daily isolated AI creative production safety", () => {
     expect(launch).not.toContain("loadEnvConfig(APP");
     expect(launch).toContain('GROWTH_WORKER_RUN_ENABLED: "false"');
     expect(launch).toContain('GROWTH_DAILY_FRESH_PINS_PUBLISHED=0');
+    expect(launch).toContain('lines.length !== 10');
+    expect(launch).toContain('GROWTH_DAILY_FRESH_QUOTA=(FILLED|GAP_REQUIRES_REVIEW)');
     expect(launch).not.toContain("PINTEREST_APP_SECRET");
   });
   it("selects only distinct active translators with useful saved examples", () => {
@@ -69,6 +71,8 @@ describe("Phase14M daily isolated AI creative production safety", () => {
     expect(worker).toContain("GrowthAssetGenerationKind.AI");
     expect(worker).toContain('candidate.asset.aiModel !== "gpt-image-2"');
     expect(worker).toContain("aiCalls: created");
+    expect(worker).toContain("newTranslatorPins");
+    expect(worker).toContain("GAP_REQUIRES_REVIEW");
     expect(worker).toContain("jobId, limit: 1");
     expect(worker).toContain("await revokeGrowthWorkerActivation(deadline)");
     expect(worker).toContain("GrowthPinCandidateStatus.READY");

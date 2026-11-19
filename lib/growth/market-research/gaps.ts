@@ -10,6 +10,8 @@ export type MarketGap = {
   role: ResearchRole;
   suggestedKind: "TRANSLATOR" | "IDEA";
   marketGrowthWeek: number | null;
+  marketGrowthMonth: number | null;
+  marketGrowthYear: number | null;
   evidenceScore: number;
   source: "PINTEREST_TRENDS";
   status: "PROPOSED_FOR_EDITORIAL_REVIEW";
@@ -122,6 +124,8 @@ export function evaluateMarketGaps(input: {
     signals.push({
       keyword, topicKey: key, role: rule.role, suggestedKind: rule.kind,
       marketGrowthWeek: trend.weekOverWeek,
+      marketGrowthMonth: trend.monthOverMonth,
+      marketGrowthYear: trend.yearOverYear,
       evidenceScore: score,
       source: "PINTEREST_TRENDS",
       status: "PROPOSED_FOR_EDITORIAL_REVIEW",
@@ -177,8 +181,12 @@ export async function evaluateAndArchiveMarketTrends(
         keyword: x.keyword.slice(0, 75), role: x.role,
         suggestedKind: x.suggestedKind,
         evidenceScore: x.evidenceScore,
+        marketGrowthWeek: x.marketGrowthWeek,
+        marketGrowthMonth: x.marketGrowthMonth,
+        marketGrowthYear: x.marketGrowthYear,
+        source: x.source,
       })),
-      autonomousContentCreation: false,
+      autonomousTranslatorPreparationRequiresQualityAndDedupe: true,
       publicationAllowed: false,
     },
   });

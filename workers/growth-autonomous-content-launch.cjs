@@ -17,7 +17,7 @@ function run() {
   const now = new Date();
   if (!/^[a-f0-9]{40}$/.test(sha) ||
       process.env.GROWTH_AUTONOMOUS_CONTENT_LAUNCH !== "true" ||
-      !(now.getUTCHours() === 6 && now.getUTCMinutes() >= 30 && now.getUTCMinutes() < 50) ||
+      !(now.getUTCHours() === 6 && now.getUTCMinutes() < 20) ||
       fs.readFileSync(APP + "/.deployed-release", "utf8").trim() !== sha ||
       process.cwd() !== APP || os.userInfo().username !== "saytwist" ||
       process.getuid?.() === 0 || process.execPath !== NODE) throw Error("RUNTIME_INVALID");
@@ -80,12 +80,13 @@ function run() {
       },
     });
   const lines = (child.stdout || "").trim().split("\n");
-  if (child.error || child.status !== 0 || lines.length !== 5 ||
+  if (child.error || child.status !== 0 || lines.length !== 6 ||
       lines[0] !== "GROWTH_AUTONOMOUS_CONTENT=PASSED" ||
       !/^GROWTH_AUTONOMOUS_DECISIONS=[0-2]$/.test(lines[1] || "") ||
       !/^GROWTH_AUTONOMOUS_CONTENT_PREPARED=[0-2]$/.test(lines[2] || "") ||
       !/^GROWTH_AUTONOMOUS_PIN_CANDIDATES=[0-2]$/.test(lines[3] || "") ||
-      lines[4] !== "GROWTH_AUTONOMOUS_PUBLICATIONS=0") {
+      !/^GROWTH_AUTONOMOUS_RESEARCH_TRANSLATOR=(NOT_NEEDED|OWNER_DISABLED|RESEARCH_MISSING|NO_QUALIFIED_RESEARCH|REUSED|PREPARED|ALREADY_ATTEMPTED|QUALITY_OR_BUDGET_BLOCKED)$/.test(lines[4] || "") ||
+      lines[5] !== "GROWTH_AUTONOMOUS_PUBLICATIONS=0") {
     throw Error("CONTENT_CYCLE_FAILED");
   }
   process.stdout.write(lines.join("\n") + "\n");

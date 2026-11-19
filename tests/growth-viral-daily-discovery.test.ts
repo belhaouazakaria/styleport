@@ -21,7 +21,7 @@ const env = {
   TELEGRAM_REPORTS_ENABLED: "false",
   GROWTH_DAILY_REPORT_SCHEDULE_ENABLED: "false",
 };
-const now = new Date("2026-11-10T08:15:05Z");
+const now = new Date("2026-11-10T05:30:05Z");
 
 describe("scheduled viral review-only catalog discovery", () => {
   it("requires the reviewed SHA, dedicated approval, identity and UTC window", () => {

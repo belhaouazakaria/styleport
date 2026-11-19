@@ -28,7 +28,7 @@ export async function prepareDailySourceCreativeDrafts(
   if (!Number.isFinite(now.getTime())) throw Error("SOURCE_DAILY_DATE_INVALID");
   const policy = await prisma.growthViralProgramSettings.findUnique({
     where: { id: "global" },
-    select: { mode: true, sourceSharePercent: true },
+    select: { mode: true },
   });
   if (policy?.mode !== "ACTIVE")
     return {
@@ -38,9 +38,6 @@ export async function prepareDailySourceCreativeDrafts(
       pinterestWrites: 0,
       aiCalls: 0,
     };
-  if (policy.sourceSharePercent !== 50) {
-    throw Error("SOURCE_DAILY_ALLOCATION_NOT_APPROVED");
-  }
   const rotation = await readDailyRotation(now);
   if (!rotation.accountId)
     return {
