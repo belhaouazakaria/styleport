@@ -15,9 +15,11 @@ describe("daily Growth plan production migration gate", () => {
     expect(migration).toContain('/home/saytwist/.local/share/saytwist/growth-daily-plan-migrations');
     expect(migration).toContain('applied.length===41');
     expect(migration).toContain('names.length!==42||names[41]!==expected');
-    expect(migration).toContain('status IN (\'CLAIMED\',\'RUNNING\',\'FAILED_RETRYABLE\')');
+    expect(migration).toContain('status IN ($1,$2,$3)');
+    expect(migration).toContain('WHERE id=$1');
+    expect(migration).toContain('WHERE status=$1 ORDER BY id');
     expect(migration).toContain("PENDING_QUEUE_SHA256=");
-    expect(migration).toContain('SELECT id FROM "GrowthDailyCadencePreference" WHERE id=\'global\'');
+    expect(migration).toContain('SELECT id FROM "GrowthDailyCadencePreference" WHERE id=$1');
     expect(migration).toContain('[[ "$pending_after" == "$pending_before" ]]');
     expect(migration).toContain('migrate deploy --schema');
     expect(migration).toContain('POST_MIGRATION_SCHEMA');
