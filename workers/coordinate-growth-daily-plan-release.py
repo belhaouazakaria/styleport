@@ -11,7 +11,7 @@ import sys
 import tarfile
 import tempfile
 
-OLD = "610b55e0ee0a36ce2ba67245dc34ed8d195030b2"
+OLD = "35b5585b267f244f82157528789f92f955493cb9"
 APP = pathlib.Path("/home/saytwist/htdocs/saytwist.com")
 BASE = pathlib.Path("/etc/systemd/system")
 STATE = pathlib.Path("/etc/saytwist-growth-daily-plan-release-state.json")
@@ -136,7 +136,7 @@ def main():
     if mode in {"audit", "hold"}:
         if APP.joinpath(".deployed-release").read_text().strip() != OLD:
             raise RuntimeError("OLD_RELEASE_MISMATCH")
-        queue_hash = database(41)
+        queue_hash = database(42)
         config_state(OLD, True)
         if mode == "audit":
             print("DAILY_PLAN_AUDIT=PASSED_41_MIGRATIONS_14_TIMERS")
@@ -152,7 +152,7 @@ def main():
                 tar.add(path, arcname=str(path).lstrip("/"))
         os.chown(archive, 0, 0)
         os.chmod(archive, 0o600)
-        state = {"old": OLD, "new": new, "migrations": 41, "archive": str(archive), "digests": digests(), "enabled": enabled_state, "pendingQueueSha256": queue_hash, "status": "HOLDING"}
+        state = {"old": OLD, "new": new, "migrations": 42, "archive": str(archive), "digests": digests(), "enabled": enabled_state, "pendingQueueSha256": queue_hash, "status": "HOLDING"}
         save_state(state)
         mutating = True
         run(["systemctl", "stop", *WORK_TIMERS])
@@ -162,7 +162,7 @@ def main():
         for timer in WORK_TIMERS:
             if active(timer):
                 raise RuntimeError("TIMER_STILL_ACTIVE")
-        if database(41) != queue_hash:
+        if database(42) != queue_hash:
             raise RuntimeError("PENDING_QUEUE_CHANGED_DURING_HOLD")
         state["status"] = "HELD"
         save_state(state)
@@ -178,7 +178,7 @@ def main():
     if mode == "recover":
         if APP.joinpath(".deployed-release").read_text().strip() != OLD:
             raise RuntimeError("RECOVER_REQUIRES_OLD_APP")
-        if database(41) != state.get("pendingQueueSha256"):
+        if database(42) != state.get("pendingQueueSha256"):
             raise RuntimeError("PENDING_QUEUE_CHANGED_DURING_RECOVERY")
         with tarfile.open(archive, "r:gz") as tar:
             expected = {str(path).lstrip("/") for path in FILES}
