@@ -56,10 +56,10 @@ validate_database() {
       const rows=await client.$queryRawUnsafe(`SELECT migration_name,checksum,finished_at,rolled_back_at FROM "_prisma_migrations" ORDER BY started_at`);
       if(rows.some(r=>!r.finished_at&&!r.rolled_back_at)) throw Error("UNFINISHED_MIGRATION");
       const applied=rows.filter(r=>r.finished_at&&!r.rolled_back_at);
-      const settings=await client.$queryRawUnsafe(`SELECT "enabled","attributionEnabled" FROM "GrowthSettings" WHERE id='global'`);
-      const lease=await client.$queryRawUnsafe(`SELECT count(*)::int AS count FROM "GrowthSettings" WHERE id='global' AND "workerActivationExpiresAt" IS NULL`);
-      const jobs=await client.$queryRawUnsafe(`SELECT count(*)::int AS count FROM "GrowthJob" WHERE status IN ('CLAIMED','RUNNING','FAILED_RETRYABLE')`);
-      const pending=await client.$queryRawUnsafe(`SELECT id,type,status,"runAfter","attemptCount","maxAttempts","idempotencyKey",payload FROM "GrowthJob" WHERE status='PENDING' ORDER BY id`);
+      const settings=await client.$queryRawUnsafe(`SELECT "enabled","attributionEnabled" FROM "GrowthSettings" WHERE id=$1`,"global");
+      const lease=await client.$queryRawUnsafe(`SELECT count(*)::int AS count FROM "GrowthSettings" WHERE id=$1 AND "workerActivationExpiresAt" IS NULL`,"global");
+      const jobs=await client.$queryRawUnsafe(`SELECT count(*)::int AS count FROM "GrowthJob" WHERE status IN ($1,$2,$3)`,"CLAIMED","RUNNING","FAILED_RETRYABLE");
+      const pending=await client.$queryRawUnsafe(`SELECT id,type,status,"runAfter","attemptCount","maxAttempts","idempotencyKey",payload FROM "GrowthJob" WHERE status=$1 ORDER BY id`,"PENDING");
       if(settings.length!==1||settings[0].enabled||settings[0].attributionEnabled||lease[0]?.count!==1||jobs[0]?.count!==0) throw Error("GROWTH_NOT_IDLE");
       const names=fs.readdirSync(path.join(root,"prisma/migrations"),{withFileTypes:true}).filter(x=>x.isDirectory()).map(x=>x.name).sort();
       if(applied.length===41){
@@ -70,15 +70,15 @@ validate_database() {
       } else if(applied.length===42&&applied.at(-1).migration_name===expected){
         const bytes=fs.readFileSync(path.join(root,"prisma/migrations",expected,"migration.sql"));
         if(digest.createHash("sha256").update(bytes).digest("hex")!==applied.at(-1).checksum) throw Error("APPLIED_CHECKSUM");
-        const columns=await client.$queryRawUnsafe(`SELECT count(*)::int AS count FROM information_schema.columns WHERE table_schema='public' AND table_name='GrowthDailyCadencePreference' AND column_name IN ('newTranslatorPins','existingTranslatorPins','anythingTranslatePins')`);
-        const plan=await client.$queryRawUnsafe(`SELECT "newTranslatorPins","existingTranslatorPins","anythingTranslatePins" FROM "GrowthDailyCadencePreference" WHERE id='global'`);
-        const cap=await client.$queryRawUnsafe(`SELECT "aiImagesPerDayCap" FROM "GrowthSettings" WHERE id='global'`);
+        const columns=await client.$queryRawUnsafe(`SELECT count(*)::int AS count FROM information_schema.columns WHERE table_schema=$1 AND table_name=$2 AND column_name IN ($3,$4,$5)`,"public","GrowthDailyCadencePreference","newTranslatorPins","existingTranslatorPins","anythingTranslatePins");
+        const plan=await client.$queryRawUnsafe(`SELECT "newTranslatorPins","existingTranslatorPins","anythingTranslatePins" FROM "GrowthDailyCadencePreference" WHERE id=$1`,"global");
+        const cap=await client.$queryRawUnsafe(`SELECT "aiImagesPerDayCap" FROM "GrowthSettings" WHERE id=$1`,"global");
         if(columns[0]?.count!==3||plan.length!==1||plan[0].newTranslatorPins!==1||plan[0].existingTranslatorPins!==2||plan[0].anythingTranslatePins!==2||cap[0]?.aiImagesPerDayCap!==5) throw Error("POST_MIGRATION_SCHEMA");
         console.log("ALREADY_APPLIED");
         console.log("PENDING_QUEUE_SHA256="+digest.createHash("sha256").update(JSON.stringify(pending)).digest("hex"));
         return;
       } else throw Error("MIGRATION_COUNT");
-      const pref=await client.$queryRawUnsafe(`SELECT id FROM "GrowthDailyCadencePreference" WHERE id='global'`);
+      const pref=await client.$queryRawUnsafe(`SELECT id FROM "GrowthDailyCadencePreference" WHERE id=$1`,"global");
       if(pref.length!==1) throw Error("CADENCE_ROW_MISSING");
       console.log("PENDING_QUEUE_SHA256="+digest.createHash("sha256").update(JSON.stringify(pending)).digest("hex"));
     })().catch(e=>{console.error(e.message);process.exitCode=1}).finally(()=>client.$disconnect());
