@@ -17,6 +17,7 @@ BASE = pathlib.Path("/etc/systemd/system")
 STATE = pathlib.Path("/etc/saytwist-growth-daily-plan-release-state.json")
 NAMES = "lease-watchdog daily-observe autonomous-cycle approved-publisher daily-fresh private-report autonomous-content daily-account-analytics auto-translator-publish viral-discovery viral-source pin-maintenance v2-courier v2-intelligence".split()
 TIMERS = ["saytwist-growth-" + name + ".timer" for name in NAMES]
+WORK_TIMERS = [timer for timer in TIMERS if timer != "saytwist-growth-lease-watchdog.timer"]
 PRIVATE = [pathlib.Path(p) for p in (
     "/etc/saytwist-growth-viral-source-approval.env",
     "/etc/saytwist/growth-v2-courier.env",
@@ -52,9 +53,12 @@ def database(migrations):
     if count != str(migrations):
         raise RuntimeError("MIGRATION_COUNT")
     state, _ = run(["runuser", "-u", "postgres", "--", "/usr/lib/postgresql/18/bin/psql", "-X", "-qAt", "-v", "ON_ERROR_STOP=1", "-p", "5433", "-d", "saytwist", "-c", 'SELECT CASE WHEN count(*)=1 AND bool_and(NOT "enabled" AND NOT "attributionEnabled") THEN \'OFF\' ELSE \'BLOCKED\' END FROM "GrowthSettings" WHERE id=\'global\';'])
-    jobs, _ = run(["runuser", "-u", "postgres", "--", "/usr/lib/postgresql/18/bin/psql", "-X", "-qAt", "-v", "ON_ERROR_STOP=1", "-p", "5433", "-d", "saytwist", "-c", 'SELECT count(*) FROM "GrowthJob" WHERE status IN (\'PENDING\',\'CLAIMED\',\'RUNNING\',\'FAILED_RETRYABLE\');'])
-    if state != "OFF" or jobs != "0":
+    lease, _ = run(["runuser", "-u", "postgres", "--", "/usr/lib/postgresql/18/bin/psql", "-X", "-qAt", "-v", "ON_ERROR_STOP=1", "-p", "5433", "-d", "saytwist", "-c", 'SELECT CASE WHEN count(*)=1 AND bool_and("workerActivationExpiresAt" IS NULL) THEN \'CLEAR\' ELSE \'BLOCKED\' END FROM "GrowthSettings" WHERE id=\'global\';'])
+    jobs, _ = run(["runuser", "-u", "postgres", "--", "/usr/lib/postgresql/18/bin/psql", "-X", "-qAt", "-v", "ON_ERROR_STOP=1", "-p", "5433", "-d", "saytwist", "-c", 'SELECT count(*) FROM "GrowthJob" WHERE status IN (\'CLAIMED\',\'RUNNING\',\'FAILED_RETRYABLE\');'])
+    pending, _ = run(["runuser", "-u", "postgres", "--", "/usr/lib/postgresql/18/bin/psql", "-X", "-qAt", "-v", "ON_ERROR_STOP=1", "-p", "5433", "-d", "saytwist", "-c", 'SELECT COALESCE(json_agg(json_build_array(id,type,status,"runAfter","attemptCount","maxAttempts","idempotencyKey",payload) ORDER BY id),\'[]\'::json)::text FROM "GrowthJob" WHERE status=\'PENDING\';'])
+    if state != "OFF" or lease != "CLEAR" or jobs != "0":
         raise RuntimeError("GROWTH_NOT_IDLE")
+    return hashlib.sha256(pending.encode()).hexdigest()
 
 
 def enabled(timer):
@@ -84,9 +88,12 @@ def config_state(sha, should_be_active):
             raise RuntimeError("SERVICE_USER")
         if run(["systemctl", "show", "-P", "DropInPaths", service])[0] or run(["systemctl", "show", "-P", "DropInPaths", timer])[0]:
             raise RuntimeError("UNIT_DROPIN")
-        if active(service):
+        if active(service) and name != "lease-watchdog":
             raise RuntimeError("SERVICE_RUNNING")
-        if active(timer) != should_be_active:
+        if name == "lease-watchdog":
+            if not active(timer) or not enabled(timer).startswith("enabled"):
+                raise RuntimeError("WATCHDOG_NOT_ACTIVE_AND_ENABLED")
+        elif active(timer) != should_be_active:
             raise RuntimeError("TIMER_ACTIVE_STATE")
         if timer in CALENDARS:
             expected_time = CALENDARS[timer][1 if sha != OLD else 0]
@@ -129,7 +136,7 @@ def main():
     if mode in {"audit", "hold"}:
         if APP.joinpath(".deployed-release").read_text().strip() != OLD:
             raise RuntimeError("OLD_RELEASE_MISMATCH")
-        database(41)
+        queue_hash = database(41)
         config_state(OLD, True)
         if mode == "audit":
             print("DAILY_PLAN_AUDIT=PASSED_41_MIGRATIONS_14_TIMERS")
@@ -145,19 +152,21 @@ def main():
                 tar.add(path, arcname=str(path).lstrip("/"))
         os.chown(archive, 0, 0)
         os.chmod(archive, 0o600)
-        state = {"old": OLD, "new": new, "migrations": 41, "archive": str(archive), "digests": digests(), "enabled": enabled_state, "status": "HOLDING"}
+        state = {"old": OLD, "new": new, "migrations": 41, "archive": str(archive), "digests": digests(), "enabled": enabled_state, "pendingQueueSha256": queue_hash, "status": "HOLDING"}
         save_state(state)
         mutating = True
-        run(["systemctl", "stop", *TIMERS])
-        disable = [timer for timer, value in enabled_state.items() if value.startswith("enabled")]
+        run(["systemctl", "stop", *WORK_TIMERS])
+        disable = [timer for timer, value in enabled_state.items() if timer != "saytwist-growth-lease-watchdog.timer" and value.startswith("enabled")]
         if disable:
             run(["systemctl", "disable", *disable])
-        for timer in TIMERS:
+        for timer in WORK_TIMERS:
             if active(timer):
                 raise RuntimeError("TIMER_STILL_ACTIVE")
+        if database(41) != queue_hash:
+            raise RuntimeError("PENDING_QUEUE_CHANGED_DURING_HOLD")
         state["status"] = "HELD"
         save_state(state)
-        print("DAILY_PLAN_HOLD=PASSED_14_TIMERS_STOPPED")
+        print("DAILY_PLAN_HOLD=PASSED_13_WORK_TIMERS_STOPPED_WATCHDOG_ACTIVE")
         return
 
     trusted(STATE, 0o600)
@@ -169,7 +178,8 @@ def main():
     if mode == "recover":
         if APP.joinpath(".deployed-release").read_text().strip() != OLD:
             raise RuntimeError("RECOVER_REQUIRES_OLD_APP")
-        database(41)
+        if database(41) != state.get("pendingQueueSha256"):
+            raise RuntimeError("PENDING_QUEUE_CHANGED_DURING_RECOVERY")
         with tarfile.open(archive, "r:gz") as tar:
             expected = {str(path).lstrip("/") for path in FILES}
             members = tar.getmembers()
@@ -191,9 +201,12 @@ def main():
             raise RuntimeError("EXACT_RESTORE_APPROVAL")
         if APP.joinpath(".deployed-release").read_text().strip() != new:
             raise RuntimeError("NEW_RELEASE_MISMATCH")
-        database(42)
-        if any(active(timer) for timer in TIMERS):
+        if database(42) != state.get("pendingQueueSha256"):
+            raise RuntimeError("PENDING_QUEUE_CHANGED_DURING_DEPLOY")
+        if any(active(timer) for timer in WORK_TIMERS):
             raise RuntimeError("TIMERS_NOT_HELD")
+        if not active("saytwist-growth-lease-watchdog.timer"):
+            raise RuntimeError("WATCHDOG_TIMER_NOT_ACTIVE")
         if digests() != state["digests"]:
             raise RuntimeError("UNIT_FILES_CHANGED_DURING_HOLD")
         for path in FILES:
@@ -237,10 +250,17 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except Exception:
+    except Exception as error:
         if mutating:
-            subprocess.run(["systemctl", "stop", *TIMERS], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            print("DAILY_PLAN_RELEASE=PARTIAL_TIMERS_STOPPED", file=sys.stderr)
+            subprocess.run(["systemctl", "stop", *WORK_TIMERS], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            try:
+                if STATE.exists():
+                    partial = json.loads(STATE.read_text())
+                    partial["status"] = "PARTIAL"
+                    save_state(partial)
+            except Exception:
+                pass
+            print("DAILY_PLAN_RELEASE=PARTIAL_TIMERS_STOPPED " + type(error).__name__ + ": " + str(error), file=sys.stderr)
         else:
-            print("DAILY_PLAN_RELEASE=BLOCKED", file=sys.stderr)
+            print("DAILY_PLAN_RELEASE=BLOCKED " + type(error).__name__ + ": " + str(error), file=sys.stderr)
         sys.exit(1)
