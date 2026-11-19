@@ -8,7 +8,7 @@ const coordinator = readFileSync("workers/coordinate-growth-daily-plan-release.p
 
 describe("daily Growth plan production migration gate", () => {
   it("pins the old and target releases, exact single migration, private bundle and backup", () => {
-    expect(migration).toContain('OLD_RELEASE_SHA="610b55e0ee0a36ce2ba67245dc34ed8d195030b2"');
+    expect(migration).toContain('OLD_RELEASE_SHA="35b5585b267f244f82157528789f92f955493cb9"');
     expect(migration).toContain('APPROVED_MIGRATION="20261119090000_growth_daily_plan_targets"');
     expect(migration).toContain('[[ "$APPROVAL" == "APPLY $APPROVED_MIGRATION" ]]');
     expect(migration).toContain('/home/saytwist/.local/share/saytwist/growth-daily-plan/$RELEASE_SHA');
@@ -46,6 +46,11 @@ describe("daily Growth plan production migration gate", () => {
   });
 
   it("preserves scheduled pending pins while keeping the lease watchdog active", () => {
+    expect(coordinator).toContain('OLD = "35b5585b267f244f82157528789f92f955493cb9"');
+    expect(coordinator.match(/database\(42\)/g)).not.toBeNull();
+    expect(coordinator).toContain('"saytwist-growth-autonomous-content.timer": ("06:30:00", "06:00:00")');
+    expect(coordinator).toContain('"saytwist-growth-auto-translator-publish.timer": ("06:57:00", "06:30:00")');
+    expect(coordinator).toContain('"saytwist-growth-daily-fresh.timer": ("07:02:00", "06:45:00")');
     expect(coordinator).toContain("WORK_TIMERS = [timer for timer in TIMERS if timer != \"saytwist-growth-lease-watchdog.timer\"]");
     expect(coordinator).toContain("pendingQueueSha256");
     expect(coordinator).toContain("PENDING_QUEUE_CHANGED_DURING_DEPLOY");
