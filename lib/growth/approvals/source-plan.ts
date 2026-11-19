@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { readDailyRotation } from "@/lib/growth/portfolio/daily-rotation-store";
 import { recommendReviewSchedule } from "./scheduling";
 import { createSourcePinReview } from "./service";
+import { choosePinApprovalBoard } from "@/lib/growth/publishing/board-plan";
 
 export async function prepareSourceReviewAutomatically(
   draftId: string,
@@ -26,33 +27,13 @@ export async function prepareSourceReviewAutomatically(
       take: 101,
     });
     if (!boards.length || boards.length > 100) continue;
-    const words = new Set(
-      (draft.title.toLowerCase().match(/[a-z]{3,}/g) || []).filter(
-        (w) => !["translator", "saytwist", "the", "and"].includes(w),
-      ),
-    );
-    const ranked = boards
-      .map((board) => ({
-        board,
-        score: [...words].filter((w) =>
-          (board.name + " " + board.description)
-            .toLowerCase()
-            .split(/[^a-z]+/)
-            .includes(w),
-        ).length,
-      }))
-      .sort(
-        (a, b) => b.score - a.score || a.board.id.localeCompare(b.board.id),
-      );
-    // This is only a proposed review, never approval. Prefer a unique board
-    // explicitly named for Translators for main-account Translator spotlights.
-    const translatorBoards = mainOnly ? ranked.filter(r => /^translators$/i.test(r.board.name.trim())) : [];
-    if (translatorBoards.length === 1) { const preferred = translatorBoards[0]; ranked.splice(ranked.indexOf(preferred), 1); ranked.unshift(preferred); }
-    if (
-      translatorBoards.length !== 1 && boards.length > 1 &&
-      (ranked[0].score === 0 || ranked[0].score === ranked[1].score)
-    )
-      continue;
+    // Source concepts are all translator destinations. Prefer the account's
+    // unique canonical Translator board before falling back to text relevance;
+    // otherwise a generic source title can push the Pin to a later rotation day.
+    const chosen = choosePinApprovalBoard({ boards, originalBoardId: null,
+      destinationKind: "TRANSLATOR",
+      candidateText: draft.title + " " + draft.description + " " + draft.destinationUrl });
+    if (!chosen) continue;
     const scheduledAt = await recommendReviewSchedule(
       rotation.accountId,
       draft.id,
@@ -63,7 +44,7 @@ export async function prepareSourceReviewAutomatically(
       {
         draftId,
         accountId: rotation.accountId,
-        boardId: ranked[0].board.id,
+        boardId: chosen.id,
         scheduledAt: scheduledAt.toISOString(),
       },
       ownerUserId,
