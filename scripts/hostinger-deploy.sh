@@ -489,6 +489,103 @@ finalize_release() {
   log "Recorded deployed release $RELEASE_SHA and removed the uploaded archive."
 }
 
+remove_historical_release_dir() {
+  rm -rf -- "$1"
+}
+
+prune_release_history() {
+  local expected_root canonical_app canonical_root candidate name pm2_processes in_use
+  local removed=0
+  expected_root="$APP_PATH/.deploy-releases"
+
+  if [[ "$ROLLBACK_ROOT" != "$expected_root" || "$APP_PATH" != /* || "$APP_PATH" == "/" \
+    || ! -d "$APP_PATH" || -L "$APP_PATH" || ! -d "$ROLLBACK_ROOT" || -L "$ROLLBACK_ROOT" \
+    || ! -d "$LOCK_DIR" || -L "$LOCK_DIR" ]]; then
+    warn "Release history cleanup skipped: application, rollback root, or deployment lock is unsafe."
+    return 0
+  fi
+
+  canonical_app="$(cd -P -- "$APP_PATH" && pwd -P)" || {
+    warn "Release history cleanup skipped: could not resolve the application path."
+    return 0
+  }
+  canonical_root="$(cd -P -- "$ROLLBACK_ROOT" && pwd -P)" || {
+    warn "Release history cleanup skipped: could not resolve the rollback root."
+    return 0
+  }
+  if [[ "$canonical_root" != "$canonical_app/.deploy-releases" ]]; then
+    warn "Release history cleanup skipped: rollback root does not resolve directly under the application."
+    return 0
+  fi
+
+  if ! pm2_processes="$(run_pm2 jlist 2>/dev/null)"; then
+    warn "Release history cleanup skipped: active PM2 working directories could not be inspected."
+    return 0
+  fi
+  if ! node -e 'JSON.parse(require("node:fs").readFileSync(0, "utf8"))' <<<"$pm2_processes" >/dev/null 2>&1; then
+    warn "Release history cleanup skipped: PM2 returned an unreadable process list."
+    return 0
+  fi
+
+  shopt -s nullglob
+  for candidate in "$ROLLBACK_ROOT"/*; do
+    [[ -d "$candidate" || -L "$candidate" ]] || continue
+    name="${candidate##*/}"
+    if [[ ! "$name" =~ ^[0-9]{14}-[[:xdigit:]]{12}$ ]]; then
+      warn "Preserving unexpected rollback-root entry: $name"
+      continue
+    fi
+    if [[ -L "$candidate" ]]; then
+      warn "Preserving symlinked release entry: $name"
+      continue
+    fi
+
+    in_use=0
+    if node -e '
+      const fs = require("node:fs");
+      const path = require("node:path");
+      const candidate = path.resolve(process.argv[1]);
+      const processes = JSON.parse(fs.readFileSync(0, "utf8"));
+      if (!Array.isArray(processes)) process.exit(2);
+      for (const proc of processes) {
+        const env = proc?.pm2_env ?? {};
+        for (const value of [env.pm_cwd, env.pm_exec_path, proc?.pm_exec_path]) {
+          if (typeof value !== "string" || !path.isAbsolute(value)) continue;
+          const resolved = path.resolve(value);
+          if (resolved === candidate || resolved.startsWith(candidate + path.sep)) process.exit(10);
+        }
+      }
+    ' "$candidate" <<<"$pm2_processes"; then
+      :
+    else
+      local node_status=$?
+      if [[ "$node_status" == "10" ]]; then
+        in_use=1
+      else
+        warn "Preserving release $name: unable to establish that no PM2 process depends on it."
+        continue
+      fi
+    fi
+    if [[ "$in_use" == "1" ]]; then
+      warn "Preserving release $name because an active PM2 process uses it."
+      continue
+    fi
+
+    if remove_historical_release_dir "$candidate"; then
+      if [[ ! -e "$candidate" && ! -L "$candidate" ]]; then
+        removed=$((removed + 1))
+      else
+        warn "Could not fully remove historical release directory: $name"
+      fi
+    else
+      warn "Could not remove historical release directory: $name"
+    fi
+  done
+  shopt -u nullglob
+  log "Removed $removed historical rollback release director$( [[ "$removed" == "1" ]] && printf 'y' || printf 'ies' )."
+  return 0
+}
+
 cleanup() {
   local exit_code="$?"
   rm -rf "$STAGING_DIR" >/dev/null 2>&1 || true
@@ -533,6 +630,7 @@ main() {
   finalize_release
 
   DEPLOY_STATUS="success"
+  prune_release_history || warn "Release history cleanup encountered an unexpected error; deployment remains successful."
   step "done"
   log "Deployment complete."
 }
