@@ -15,11 +15,12 @@ OLD = "35b5585b267f244f82157528789f92f955493cb9"
 APP = pathlib.Path("/home/saytwist/htdocs/saytwist.com")
 BASE = pathlib.Path("/etc/systemd/system")
 STATE = pathlib.Path("/etc/saytwist-growth-daily-plan-release-state.json")
-NAMES = "lease-watchdog daily-observe autonomous-cycle approved-publisher daily-fresh private-report autonomous-content daily-account-analytics auto-translator-publish viral-discovery viral-source pin-maintenance v2-courier v2-intelligence".split()
+NAMES = "lease-watchdog daily-observe autonomous-cycle approved-publisher daily-fresh private-report autonomous-content daily-account-analytics auto-translator-publish viral-discovery viral-source market-research pin-maintenance v2-courier v2-intelligence".split()
 TIMERS = ["saytwist-growth-" + name + ".timer" for name in NAMES]
 WORK_TIMERS = [timer for timer in TIMERS if timer != "saytwist-growth-lease-watchdog.timer"]
 PRIVATE = [pathlib.Path(p) for p in (
     "/etc/saytwist-growth-viral-source-approval.env",
+    "/etc/saytwist-growth-market-research-approval.env",
     "/etc/saytwist/growth-v2-courier.env",
     "/etc/saytwist/growth-v2-intelligence.env",
     "/etc/saytwist-growth-private-report.env",
@@ -31,6 +32,7 @@ CALENDARS = {
     "saytwist-growth-autonomous-content.timer": ("06:30:00", "06:00:00"),
     "saytwist-growth-daily-fresh.timer": ("07:02:00", "06:45:00"),
     "saytwist-growth-viral-discovery.timer": ("08:15:00", "05:30:00"),
+    "saytwist-growth-market-research.timer": ("05:10:00", "05:10:00"),
 }
 mutating = False
 
@@ -103,7 +105,7 @@ def config_state(sha, should_be_active):
     alert = (BASE / "saytwist-growth-v2-alert@.service").read_text()
     if f"EXPECTED_RELEASE={sha}" not in alert:
         raise RuntimeError("ALERT_SHA_PIN")
-    for text, path in (("SAYTWIST_VIRAL_SOURCE:" + sha, PRIVATE[0]), ("SAYTWIST_V2:courier:" + sha, PRIVATE[1]), ("SAYTWIST_V2:intelligence:" + sha, PRIVATE[2])):
+    for text, path in (("SAYTWIST_VIRAL_SOURCE:" + sha, PRIVATE[0]), ("SAYTWIST_MARKET_RESEARCH:" + sha, PRIVATE[1]), ("SAYTWIST_V2:courier:" + sha, PRIVATE[2]), ("SAYTWIST_V2:intelligence:" + sha, PRIVATE[3])):
         if text not in path.read_text():
             raise RuntimeError("PRIVATE_APPROVAL_SHA")
 
@@ -166,7 +168,7 @@ def main():
             raise RuntimeError("PENDING_QUEUE_CHANGED_DURING_HOLD")
         state["status"] = "HELD"
         save_state(state)
-        print("DAILY_PLAN_HOLD=PASSED_13_WORK_TIMERS_STOPPED_WATCHDOG_ACTIVE")
+        print("DAILY_PLAN_HOLD=PASSED_14_WORK_TIMERS_STOPPED_WATCHDOG_ACTIVE")
         return
 
     trusted(STATE, 0o600)
