@@ -51,6 +51,9 @@ describe("daily Growth plan production migration gate", () => {
     expect(coordinator).toContain('"saytwist-growth-autonomous-content.timer": ("06:30:00", "06:00:00")');
     expect(coordinator).toContain('"saytwist-growth-auto-translator-publish.timer": ("06:57:00", "06:30:00")');
     expect(coordinator).toContain('"saytwist-growth-daily-fresh.timer": ("07:02:00", "06:45:00")');
+    expect(coordinator).toContain('"saytwist-growth-market-research.timer": ("05:10:00", "05:10:00")');
+    expect(coordinator).toContain('"SAYTWIST_MARKET_RESEARCH:" + sha');
+    expect(coordinator).toContain("market-research pin-maintenance");
     expect(coordinator).toContain("WORK_TIMERS = [timer for timer in TIMERS if timer != \"saytwist-growth-lease-watchdog.timer\"]");
     expect(coordinator).toContain("pendingQueueSha256");
     expect(coordinator).toContain("PENDING_QUEUE_CHANGED_DURING_DEPLOY");
