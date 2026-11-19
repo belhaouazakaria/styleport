@@ -58,7 +58,7 @@ validate_database() {
       const applied=rows.filter(r=>r.finished_at&&!r.rolled_back_at);
       const settings=await client.$queryRawUnsafe(`SELECT "enabled","attributionEnabled" FROM "GrowthSettings" WHERE id=$1`,"global");
       const lease=await client.$queryRawUnsafe(`SELECT count(*)::int AS count FROM "GrowthSettings" WHERE id=$1 AND "workerActivationExpiresAt" IS NULL`,"global");
-      const jobs=await client.$queryRawUnsafe(`SELECT count(*)::int AS count FROM "GrowthJob" WHERE status IN ($1,$2,$3)`,"CLAIMED","RUNNING","FAILED_RETRYABLE");
+      const jobs=await client.$queryRawUnsafe(`SELECT count(*)::int AS count FROM "GrowthJob" WHERE status IN ($1::"GrowthJobStatus",$2::"GrowthJobStatus",$3::"GrowthJobStatus")`,"CLAIMED","RUNNING","FAILED_RETRYABLE");
       const pending=await client.$queryRawUnsafe(`SELECT id,type,status,"runAfter","attemptCount","maxAttempts","idempotencyKey",payload FROM "GrowthJob" WHERE status=$1 ORDER BY id`,"PENDING");
       if(settings.length!==1||settings[0].enabled||settings[0].attributionEnabled||lease[0]?.count!==1||jobs[0]?.count!==0) throw Error("GROWTH_NOT_IDLE");
       const names=fs.readdirSync(path.join(root,"prisma/migrations"),{withFileTypes:true}).filter(x=>x.isDirectory()).map(x=>x.name).sort();
@@ -85,7 +85,7 @@ validate_database() {
   ' "$APP_PATH" || fail "Production database preflight failed."
 }
 
-db_state="$(validate_database 2>&1)" || fail "Production database preflight failed."
+db_state="$(validate_database 2>&1)" || fail "Production database preflight failed: $db_state"
 pending_before="$(sed -n 's/^PENDING_QUEUE_SHA256=//p' <<< "$db_state")"
 [[ "$pending_before" =~ ^[a-f0-9]{64}$ ]] || fail "Pending Growth queue fingerprint is missing."
 mkdir -p "$BACKUP_ROOT"
@@ -111,7 +111,7 @@ fi
   "$NODE_BIN" --env-file="$ENV_FILE" "$PRISMA_CLI" migrate deploy --schema "$MIGRATION_ROOT/prisma/schema.prisma"
   "$NODE_BIN" --env-file="$ENV_FILE" "$PRISMA_CLI" migrate status --schema "$MIGRATION_ROOT/prisma/schema.prisma"
 )
-post_state="$(validate_database 2>&1)" || fail "Post-migration database verification failed."
+post_state="$(validate_database 2>&1)" || fail "Post-migration database verification failed: $post_state"
 pending_after="$(sed -n 's/^PENDING_QUEUE_SHA256=//p' <<< "$post_state")"
 [[ "$pending_after" == "$pending_before" ]] || fail "Pending Growth queue changed during migration."
 curl -fsS --max-time 5 http://127.0.0.1:3001/api/readyz >/dev/null || fail "App readiness failed after migration."
