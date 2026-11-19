@@ -13,9 +13,18 @@ MIGRATION="prisma/migrations/20261105150000_growth_daily_cadence_controls/migrat
 psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 <<'SQL'
 CREATE TABLE "User" ("id" TEXT PRIMARY KEY);
 INSERT INTO "User" ("id") VALUES ('test-admin');
+CREATE TABLE "GrowthSettings" (
+  "id" TEXT PRIMARY KEY,
+  "aiImagesPerDayCap" INTEGER NOT NULL DEFAULT 3
+);
+INSERT INTO "GrowthSettings" ("id", "aiImagesPerDayCap") VALUES
+  ('global', 3), ('custom', 4);
 SQL
 
 psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f "$MIGRATION"
+PLAN_MIGRATION="prisma/migrations/20261119090000_growth_daily_plan_targets/migration.sql"
+[[ -f "$PLAN_MIGRATION" ]] || exit 1
+psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f "$PLAN_MIGRATION"
 
 psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 <<'SQL'
 DO $check$
@@ -28,6 +37,14 @@ BEGIN
     AND "translatorMode" = 'AUTO' AND "translatorMinimum" = 1
     AND "translatorMaximum" = 10 AND "translatorFixed" IS NULL;
   IF row_count <> 1 THEN RAISE EXCEPTION 'INVALID_DEFAULT_CADENCE'; END IF;
+  SELECT COUNT(*) INTO row_count FROM "GrowthDailyCadencePreference"
+  WHERE "id" = 'global' AND "newTranslatorPins" = 1
+    AND "existingTranslatorPins" = 2 AND "anythingTranslatePins" = 2;
+  IF row_count <> 1 THEN RAISE EXCEPTION 'INVALID_DEFAULT_DAILY_PLAN'; END IF;
+  IF (SELECT "aiImagesPerDayCap" FROM "GrowthSettings" WHERE "id"='global') <> 5
+     OR (SELECT "aiImagesPerDayCap" FROM "GrowthSettings" WHERE "id"='custom') <> 4 THEN
+    RAISE EXCEPTION 'INVALID_IMAGE_CAP_MIGRATION';
+  END IF;
 END $check$;
 
 CREATE FUNCTION pg_temp.must_reject_check(sqltext TEXT)
@@ -73,6 +90,12 @@ SELECT pg_temp.must_reject_check(
 );
 SELECT pg_temp.must_reject_check(
   'UPDATE "GrowthDailyCadencePreference" SET "translatorFixed"=5'
+);
+SELECT pg_temp.must_reject_check(
+  'UPDATE "GrowthDailyCadencePreference" SET "newTranslatorPins"=6'
+);
+SELECT pg_temp.must_reject_check(
+  'UPDATE "GrowthDailyCadencePreference" SET "newTranslatorPins"=5, "existingTranslatorPins"=5, "anythingTranslatePins"=1'
 );
 
 UPDATE "GrowthDailyCadencePreference"

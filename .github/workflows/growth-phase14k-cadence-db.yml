@@ -5,6 +5,7 @@ on:
     paths:
       - 'prisma/schema.prisma'
       - 'prisma/migrations/20261105150000_growth_daily_cadence_controls/**'
+      - 'prisma/migrations/20261119090000_growth_daily_plan_targets/**'
       - 'scripts/qualify-growth-cadence-sql.sh'
       - 'lib/growth/portfolio/**'
       - 'tests/growth-daily-cadence.test.ts'
