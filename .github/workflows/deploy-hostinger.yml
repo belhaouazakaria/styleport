@@ -12,8 +12,10 @@ on:
         required: true
         type: string
   # Protected release only. Never auto-deploy merely because a PR merges.
-  # A root-level three-timer hold and explicit exact-SHA approval are required
-  # before the owner dispatches this workflow.
+  # Exact-SHA owner approval and manual dispatch remain required. The deploy
+  # script uses the root-owned coordinator to hold all 14 Growth timers before
+  # replacing app files, then repins and restores their prior states on success
+  # or rolls back their release pins with the application on failure.
 
 jobs:
   ci:
@@ -78,6 +80,8 @@ jobs:
         run: |
           bash -n scripts/hostinger-deploy.sh
           bash -n scripts/hostinger-prepare-migration.sh
+          bash -n workers/install-growth-deploy-release-coordinator.sh
+          python3 -c 'import ast, pathlib; ast.parse(pathlib.Path("workers/growth-deploy-release-coordinator.py").read_text())'
           bash -n scripts/hostinger-prepare-growth-daily-plan-migration.sh
           bash -n workers/install-growth-manual-gap-fill-systemd.sh
           node --check workers/growth-manual-gap-fill-launch.cjs
@@ -132,6 +136,8 @@ jobs:
             workers/growth-worker.ts \
             workers/growth-lease-watchdog-launch.cjs \
             workers/growth-lease-watchdog-alert.cjs \
+            workers/growth-deploy-release-coordinator.py \
+            workers/install-growth-deploy-release-coordinator.sh \
             workers/provision-growth-lease-watchdog-alert-env.py \
             workers/install-growth-lease-watchdog-systemd.sh \
             node_modules/.bin/tsx \

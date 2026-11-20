@@ -194,6 +194,14 @@ At deployment time, the script checks the configured CLI is an executable absolu
 13. Verify public health/readiness, robots, sitemap, representative canonical/noindex behavior, ads.txt, admin authentication, and generated assets. Confirm the approved 355 translator URLs remain present.
 14. Keep Growth and attribution disabled. Run only non-publishing Pinterest/admin smoke checks. Do not queue analytics recovery during the application rollback observation window.
 
+### Growth timer release coordination
+
+The first rollout requires the root-owned `/usr/local/sbin/saytwist-growth-deploy-coordinator` and its limited sudoers rule. Install it once from the deployed release with `workers/install-growth-deploy-release-coordinator.sh` as root. The installer does not start, enable, or change any timer.
+
+Every subsequent `hostinger-deploy.sh` run verifies coordinator access before taking a database backup. After app and database preflight pass, it holds all 14 Growth timers and freezes the pending-job queue fingerprint before replacing application files. It repins service units and SHA-bound owner approvals only after the new release passes health and readiness checks, then restores each timer’s previous enabled and active state. On application rollback, it restores the old service files and pins. If any safety check fails, deployment stops and leaves timers held instead of leaving stale release pins active.
+
+The coordinator preserves pending jobs and never claims, cancels, or executes them. It requires Growth and attribution OFF, a clear activation lease, no claimed/running/retryable jobs, stable queue contents, healthy app endpoints, and root-owned unchanged systemd and private approval files. Each rotation retains a root-only configuration backup and release record.
+
 ## Application rollback
 
 1. Stop or pause the rollout if health, readiness, sitemap, authentication, asset, or worker checks fail. The deployment script automatically restores the immediately previous application paths when restart or local health validation fails.
