@@ -72,7 +72,7 @@ saytwist ALL=(root) NOPASSWD: $HELPER
 EOF
 
 chown root:root "$TEMP/saytwist-growth-manual-gap-fill@.service" "$TEMP/helper" "$TEMP/sudoers"
-chmod 0644 "$TEMP/unit"
+chmod 0644 "$TEMP/saytwist-growth-manual-gap-fill@.service"
 chmod 0755 "$TEMP/helper"
 chmod 0440 "$TEMP/sudoers"
 systemd-analyze verify "$TEMP/saytwist-growth-manual-gap-fill@.service" || fail
