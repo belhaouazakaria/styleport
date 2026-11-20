@@ -34,6 +34,7 @@ describe("Growth timer release coordination", () => {
 
   it("installs only the root coordinator and its limited saytwist sudo rule", () => {
     expect(installer).toContain("saytwist-growth-deploy-coordinator");
+    expect(installer).toContain('install -o root -g root -m 0755 "$SOURCE" "$TARGET"');
     expect(installer).toContain("visudo -cf");
     expect(installer).not.toContain("systemctl enable");
     expect(installer).not.toContain("systemctl start");

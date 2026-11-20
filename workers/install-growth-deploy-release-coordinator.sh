@@ -14,7 +14,9 @@ SUDOERS=/etc/sudoers.d/saytwist-growth-deploy-coordinator
 [[ -f "$SOURCE" && ! -L "$SOURCE" ]] || fail
 [[ ! -e "$TARGET" && ! -L "$TARGET" && ! -e "$SUDOERS" && ! -L "$SUDOERS" ]] || fail
 
-install -o root -g root -m 0700 "$SOURCE" "$TARGET"
+# The deploy account checks that this launcher is executable before asking
+# sudo to run it. Its root-only guard prevents unprivileged direct execution.
+install -o root -g root -m 0755 "$SOURCE" "$TARGET"
 tmp="$(mktemp /etc/sudoers.d/.saytwist-growth-deploy-coordinator.XXXXXXXX)"
 cat > "$tmp" <<'EOF'
 saytwist ALL=(root) NOPASSWD: /usr/local/sbin/saytwist-growth-deploy-coordinator hold *, /usr/local/sbin/saytwist-growth-deploy-coordinator restore *, /usr/local/sbin/saytwist-growth-deploy-coordinator recover *
