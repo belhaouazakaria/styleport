@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import {
   GrowthJobStatus,
   GrowthJobType,
@@ -7,119 +8,15 @@ import {
 
 import { enqueueCreativeGeneration } from "@/lib/growth/creative/candidates";
 import { CREATIVE_LAB_VERSION } from "@/lib/growth/creative/constants";
-import { dispatchGrowthJob } from "@/lib/growth/handlers";
-import {
-  claimGrowthJobs,
-  completeGrowthJob,
-  failGrowthJob,
-  markGrowthJobRunning,
-} from "@/lib/growth/jobs";
-import { countBlockingGrowthJobs } from "@/lib/growth/operations/approved-publication-queue";
 import { getGrowthPublishingOverview } from "@/lib/growth/overview";
+import {
+  isManualGapFillWorkerAvailable,
+  triggerManualGapFillWorker,
+} from "@/lib/growth/portfolio/manual-gap-fill-launcher";
 import { readDailyRotation } from "@/lib/growth/portfolio/daily-rotation-store";
-import { revokeGrowthWorkerActivation } from "@/lib/growth/settings";
-import { getServerEnv } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
 
 const MIN_DESCRIPTION_LENGTH = 40;
-const LEASE_MS = 270_000;
-
-async function generateExactDraft(jobId: string, translatorId: string) {
-  const env = getServerEnv();
-  if (
-    env.GROWTH_AI_IMAGE_ENABLED !== true ||
-    env.GROWTH_GENZ_AI_IMAGE_ENABLED !== true ||
-    env.GROWTH_OPENAI_IMAGE_MODEL !== "gpt-image-2" ||
-    !/^sk-[A-Za-z0-9_-]{12,}$/.test(env.GROWTH_OPENAI_API_KEY || "") ||
-    !/^proj_[A-Za-z0-9_-]{3,128}$/.test(env.GROWTH_OPENAI_PROJECT_ID || "")
-  ) {
-    throw new Error(
-      "Growth image generation is not configured for a real draft run.",
-    );
-  }
-  const [settings, blockers] = await Promise.all([
-    prisma.growthSettings.findUnique({
-      where: { id: "global" },
-      select: {
-        enabled: true,
-        attributionEnabled: true,
-        workerActivationExpiresAt: true,
-      },
-    }),
-    countBlockingGrowthJobs(prisma, [jobId]),
-  ]);
-  if (
-    !settings ||
-    settings.enabled ||
-    settings.attributionEnabled ||
-    settings.workerActivationExpiresAt ||
-    blockers !== 0
-  ) {
-    throw new Error(
-      "Growth is busy; retry the gap fill after its current work finishes.",
-    );
-  }
-  const leaseUntil = new Date(Date.now() + LEASE_MS);
-  const admitted = await prisma.growthSettings.updateMany({
-    where: {
-      id: "global",
-      enabled: false,
-      attributionEnabled: false,
-      workerActivationExpiresAt: null,
-    },
-    data: {
-      enabled: true,
-      workerActivationExpiresAt: leaseUntil,
-      configVersion: { increment: 1 },
-    },
-  });
-  if (admitted.count !== 1)
-    throw new Error("Growth activation changed before draft generation.");
-  try {
-    const workerId = `manual-gap-fill:${jobId}`;
-    const jobs = await claimGrowthJobs({
-      workerId,
-      jobId,
-      limit: 1,
-      allowedTypes: [GrowthJobType.CREATIVE_LAB_GENERATE],
-    });
-    if (
-      jobs.length !== 1 ||
-      jobs[0].id !== jobId ||
-      jobs[0].type !== GrowthJobType.CREATIVE_LAB_GENERATE
-    ) {
-      throw new Error("Could not claim the exact Pin draft job.");
-    }
-    const job = jobs[0];
-    await markGrowthJobRunning(job, workerId);
-    try {
-      await completeGrowthJob(job, workerId, await dispatchGrowthJob(job));
-    } catch (error) {
-      await failGrowthJob(job, workerId, error);
-      throw error;
-    }
-  } finally {
-    await revokeGrowthWorkerActivation(leaseUntil);
-  }
-  const [job, candidate] = await Promise.all([
-    prisma.growthJob.findUnique({
-      where: { id: jobId },
-      select: { status: true },
-    }),
-    prisma.growthPinCandidate.findUnique({
-      where: { generationJobId: jobId },
-      select: { status: true, translatorId: true },
-    }),
-  ]);
-  if (
-    job?.status !== GrowthJobStatus.SUCCEEDED ||
-    candidate?.status !== "READY" ||
-    candidate.translatorId !== translatorId
-  ) {
-    throw new Error("Draft generation did not produce a ready Pin for review.");
-  }
-}
-
 /**
  * Queue only today's missing SayTwist creative drafts. Every result remains a
  * draft for owner review; this function never approves or publishes a Pin.
@@ -152,21 +49,14 @@ export async function requestDailyPinGapFill(now = new Date()) {
     };
   }
 
-  const imageEnv = getServerEnv();
-  if (
-    imageEnv.GROWTH_AI_IMAGE_ENABLED !== true ||
-    imageEnv.GROWTH_GENZ_AI_IMAGE_ENABLED !== true ||
-    imageEnv.GROWTH_OPENAI_IMAGE_MODEL !== "gpt-image-2" ||
-    !/^sk-[A-Za-z0-9_-]{12,}$/.test(imageEnv.GROWTH_OPENAI_API_KEY || "") ||
-    !/^proj_[A-Za-z0-9_-]{3,128}$/.test(imageEnv.GROWTH_OPENAI_PROJECT_ID || "")
-  ) {
+  if (!(await isManualGapFillWorkerAvailable())) {
     return {
       status: "GENERATION_FAILED" as const,
       created: 0,
       gap: scheduledGap,
       available: 0,
       errors: [
-        "Growth image generation is not configured for a real draft run.",
+        "The isolated Growth worker is not installed or is out of date.",
       ],
     };
   }
@@ -307,7 +197,9 @@ export async function requestDailyPinGapFill(now = new Date()) {
     ...existingTargets.slice(0, existingTargetCount),
   ];
 
-  let created = 0;
+  const requestId = randomUUID();
+  const dayKey = day.toISOString().slice(0, 10);
+  const jobIds: string[] = [];
   const errors: string[] = [];
   for (const target of selected) {
     const result = await enqueueCreativeGeneration(
@@ -329,8 +221,12 @@ export async function requestDailyPinGapFill(now = new Date()) {
         where: { generationJobId: result.job.id },
         select: { status: true, translatorId: true },
       });
-      if (candidate?.status === "READY" && candidate.translatorId === target.id)
-        created++;
+      if (
+        candidate?.status !== "READY" ||
+        candidate.translatorId !== target.id
+      ) {
+        errors.push("An existing Pin job has no matching ready design.");
+      }
       continue;
     }
     if (result.job.status !== GrowthJobStatus.PENDING) {
@@ -342,31 +238,64 @@ export async function requestDailyPinGapFill(now = new Date()) {
     if (result.created) {
       await prisma.growthJob.updateMany({
         where: { id: result.job.id, status: GrowthJobStatus.PENDING },
-        data: { maxAttempts: 1 },
+        data: {
+          maxAttempts: 1,
+          payload: {
+            ...(result.job.payload as Record<string, unknown>),
+            manualGapFillRequestId: requestId,
+            manualGapFillDay: dayKey,
+          },
+        },
+      });
+    } else {
+      await prisma.growthJob.updateMany({
+        where: { id: result.job.id, status: GrowthJobStatus.PENDING },
+        data: {
+          payload: {
+            ...(result.job.payload as Record<string, unknown>),
+            manualGapFillRequestId: requestId,
+            manualGapFillDay: dayKey,
+          },
+        },
       });
     }
-    try {
-      await generateExactDraft(result.job.id, target.id);
-      created++;
-    } catch (error) {
-      errors.push(
-        error instanceof Error ? error.message : "Pin draft generation failed.",
-      );
-      break;
-    }
+    jobIds.push(result.job.id);
+  }
+
+  if (!jobIds.length) {
+    return {
+      status: errors.length
+        ? ("GENERATION_FAILED" as const)
+        : ("NO_QUALIFIED_TARGET" as const),
+      created: 0,
+      gap: scheduledGap,
+      available: readyForReview + inFlight,
+      errors,
+    };
+  }
+
+  try {
+    await triggerManualGapFillWorker(requestId);
+  } catch {
+    return {
+      status: "GENERATION_FAILED" as const,
+      created: 0,
+      gap: scheduledGap,
+      available: readyForReview + inFlight,
+      errors: [
+        "The isolated Growth worker is unavailable; no designs were sent for generation.",
+      ],
+    };
   }
 
   const remainingGap = Math.max(
     0,
-    scheduledGap - readyForReview - inFlight - created,
+    scheduledGap - readyForReview - inFlight - jobIds.length,
   );
   return {
-    status: created
-      ? ("READY_FOR_REVIEW" as const)
-      : errors.length
-        ? ("GENERATION_FAILED" as const)
-        : ("NO_QUALIFIED_TARGET" as const),
-    created,
+    status: "PROCESSING" as const,
+    requestId,
+    jobIds,
     gap: remainingGap,
     available: readyForReview + inFlight,
     errors,

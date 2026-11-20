@@ -79,6 +79,8 @@ jobs:
           bash -n scripts/hostinger-deploy.sh
           bash -n scripts/hostinger-prepare-migration.sh
           bash -n scripts/hostinger-prepare-growth-daily-plan-migration.sh
+          bash -n workers/install-growth-manual-gap-fill-systemd.sh
+          node --check workers/growth-manual-gap-fill-launch.cjs
           node --check scripts/pm2-process-contract.mjs
 
       - name: Build
