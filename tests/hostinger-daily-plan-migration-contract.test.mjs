@@ -25,6 +25,14 @@ describe("daily Growth plan production migration gate", () => {
     expect(migration).toContain('[[ "$pending_after" == "$pending_before" ]]');
     expect(migration).toContain('migrate deploy --schema');
     expect(migration).toContain('POST_MIGRATION_SCHEMA');
+    const verifiedDatabase = migration.indexOf('db_state="$(validate_database 2>&1)"');
+    const alreadyApplied = migration.indexOf('if [[ "$db_state" == *ALREADY_APPLIED* ]]');
+    const pendingMigrationGuard = migration.indexOf('Live application SHA changed before pending migration.');
+    expect(verifiedDatabase).toBeGreaterThan(-1);
+    expect(alreadyApplied).toBeGreaterThan(verifiedDatabase);
+    expect(pendingMigrationGuard).toBeGreaterThan(alreadyApplied);
+    expect(migration).toContain('names.length===42&&names[41]===expected');
+    expect(migration).toContain('throw Error("BASELINE_CHECKSUM")');
   });
 
   it("runs the exact migration after verified artifact fetch and before the application deployment", () => {
