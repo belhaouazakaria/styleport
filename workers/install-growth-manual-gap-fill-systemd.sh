@@ -71,7 +71,7 @@ cat > "$TEMP/sudoers" <<EOF
 saytwist ALL=(root) NOPASSWD: $HELPER
 EOF
 
-chown root:root "$TEMP/unit" "$TEMP/helper" "$TEMP/sudoers"
+chown root:root "$TEMP/saytwist-growth-manual-gap-fill@.service" "$TEMP/helper" "$TEMP/sudoers"
 chmod 0644 "$TEMP/unit"
 chmod 0755 "$TEMP/helper"
 chmod 0440 "$TEMP/sudoers"
