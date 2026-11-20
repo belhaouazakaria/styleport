@@ -37,9 +37,10 @@ PENDING_SQL = "SELECT COALESCE(json_agg(json_build_array(id,type,status,\"runAft
 
 
 def run(args, *, check=True, capture=True):
-    return subprocess.run(args, check=check, text=True,
-                          stdout=subprocess.PIPE if capture else subprocess.DEVNULL,
-                          stderr=subprocess.PIPE if capture else subprocess.DEVNULL).stdout.strip() if capture else ""
+    completed = subprocess.run(args, check=check, text=True,
+                               stdout=subprocess.PIPE if capture else subprocess.DEVNULL,
+                               stderr=subprocess.PIPE if capture else subprocess.DEVNULL)
+    return completed.stdout.strip() if capture else ""
 
 
 def psql(query):
