@@ -18,6 +18,9 @@ HEALTH_BASE_URL=""
 PRODUCTION_ENV_FILE="${HOSTINGER_ENV_FILE:-$APP_PATH/.env}"
 EXPECT_NO_PENDING_MIGRATIONS="${HOSTINGER_EXPECT_NO_PENDING_MIGRATIONS:-1}"
 RELEASE_SHA="${HOSTINGER_RELEASE_SHA:-unknown}"
+OLD_RELEASE_SHA=""
+GROWTH_TIMER_COORDINATOR_STARTED=0
+GROWTH_TIMER_COORDINATOR="/usr/local/sbin/saytwist-growth-deploy-coordinator"
 LOCK_DIR="$APP_PATH/.deploy-lock"
 RELEASE_ID="$(date +%Y%m%d%H%M%S)-${RELEASE_SHA:0:12}"
 STAGING_DIR="$APP_PATH/.deploy-stage-$RELEASE_ID"
@@ -67,6 +70,7 @@ fail() {
   trap - ERR
   set +e
   rollback_application
+  recover_growth_timers
   exit 1
 }
 
@@ -188,6 +192,19 @@ validate_environment() {
   [[ "$EXPECT_NO_PENDING_MIGRATIONS" == "1" ]] || fail "This release only permits an already up-to-date migration state."
   [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] || fail "HOSTINGER_RELEASE_SHA must be the full Git commit SHA."
   cd "$APP_PATH"
+
+  ensure_file_exists "$APP_PATH/.deployed-release"
+  OLD_RELEASE_SHA="$(tr -d '[:space:]' < "$APP_PATH/.deployed-release")"
+  [[ "$OLD_RELEASE_SHA" =~ ^[0-9a-f]{40}$ && "$OLD_RELEASE_SHA" != "$RELEASE_SHA" ]] \
+    || fail "The currently deployed release identity is missing, invalid, or already equals this release."
+  [[ -x "$GROWTH_TIMER_COORDINATOR" ]] \
+    || fail "The root-owned Growth timer release coordinator is not installed."
+  sudo -n -l "$GROWTH_TIMER_COORDINATOR" hold "$RELEASE_SHA" >/dev/null 2>&1 \
+    || fail "The deployment account is not authorized to hold Growth timers."
+  sudo -n -l "$GROWTH_TIMER_COORDINATOR" restore "$RELEASE_SHA" >/dev/null 2>&1 \
+    || fail "The deployment account is not authorized to restore Growth timers."
+  sudo -n -l "$GROWTH_TIMER_COORDINATOR" recover "$OLD_RELEASE_SHA" >/dev/null 2>&1 \
+    || fail "The deployment account is not authorized to recover Growth timers on rollback."
 
   if [[ ! -f "$PRODUCTION_ENV_FILE" ]]; then
     PRODUCTION_ENV_FILE="$STAGING_DIR/.production-runtime.env"
@@ -400,6 +417,15 @@ backup_current_release() {
   log "Saved the previous application release at $ROLLBACK_DIR"
 }
 
+hold_growth_timers() {
+  step "growth-timer-hold"
+  ensure_command_exists sudo
+  GROWTH_TIMER_COORDINATOR_STARTED=1
+  sudo -n "$GROWTH_TIMER_COORDINATOR" hold "$RELEASE_SHA" \
+    || fail "Could not safely hold the Growth timers for the exact release."
+  log "Held the existing Growth timers before replacing the application release."
+}
+
 publish_release() {
   step "publish"
   local rel_path source_path target_path
@@ -479,13 +505,33 @@ rollback_application() {
     warn "The restored process no longer matches the original npm start runtime contract."
   fi
   wait_for_health || warn "The restored release did not become healthy; operator intervention is required."
+  if [[ -n "$OLD_RELEASE_SHA" ]]; then
+    local marker_tmp="$APP_PATH/.deployed-release.rollback.$$"
+    printf '%s\n' "$OLD_RELEASE_SHA" > "$marker_tmp" \
+      && chmod 0644 "$marker_tmp" \
+      && mv -f -- "$marker_tmp" "$APP_PATH/.deployed-release" \
+      || warn "Could not restore the previous deployed-release marker."
+  fi
+}
+
+recover_growth_timers() {
+  [[ "$GROWTH_TIMER_COORDINATOR_STARTED" == "1" ]] || return 0
+  if sudo -n "$GROWTH_TIMER_COORDINATOR" recover "$OLD_RELEASE_SHA"; then
+    GROWTH_TIMER_COORDINATOR_STARTED=0
+    log "Restored the previous Growth timer release after application rollback."
+  else
+    warn "Growth timer recovery did not complete; timers remain held for safe operator recovery."
+  fi
 }
 
 finalize_release() {
   step "finalize"
   printf '%s\n' "$RELEASE_SHA" > "$APP_PATH/.deployed-release"
-  rm -f "$DEPLOY_ARCHIVE"
+  sudo -n "$GROWTH_TIMER_COORDINATOR" restore "$RELEASE_SHA" \
+    || fail "The new release is healthy, but Growth timer pins could not be restored. Application rollback will be attempted."
+  GROWTH_TIMER_COORDINATOR_STARTED=0
   PUBLISH_STARTED=0
+  rm -f "$DEPLOY_ARCHIVE"
   log "Recorded deployed release $RELEASE_SHA and removed the uploaded archive."
 }
 
@@ -602,6 +648,7 @@ on_error() {
   set +e
   echo "[hostinger][$(timestamp)][${CURRENT_STEP}][ERROR] Command failed with exit ${exit_code} at line ${line_no}: ${cmd}" >&2
   rollback_application
+  recover_growth_timers
   exit "$exit_code"
 }
 
@@ -623,6 +670,7 @@ main() {
   create_database_backup
   validate_no_pending_migrations
   preserve_generated_assets
+  hold_growth_timers
   backup_current_release
   publish_release
   configure_genz_generation
