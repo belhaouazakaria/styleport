@@ -123,6 +123,8 @@ export function GrowthOverviewPanels({
   const [state, setState] = useState("all");
   const [metric, setMetric] = useState<"clicks" | "impressions">("clicks");
   const [ranking, setRanking] = useState<"clicks" | "impressions">("clicks");
+  const [gapFillBusy, setGapFillBusy] = useState(false);
+  const [gapFillMessage, setGapFillMessage] = useState("");
   const rows = data.schedule.filter(
     (p) =>
       (account === "all" || p.accountId === account) &&
@@ -138,6 +140,51 @@ export function GrowthOverviewPanels({
   const trending = [...data.trending].sort(
     (a, b) => b[ranking] - a[ranking] || b.clicks - a.clicks,
   );
+  async function requestGapFill() {
+    setGapFillBusy(true);
+    setGapFillMessage("");
+    try {
+      const response = await fetch("/api/admin/growth/daily-pin-gap-fill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) {
+        throw new Error(
+          result.error?.message || "Pin drafts could not be requested.",
+        );
+      }
+      if (result.status === "READY_FOR_REVIEW") {
+        setGapFillMessage(
+          `${result.created} Pin ${result.created === 1 ? "draft is" : "drafts are"} ready for review${result.gap ? `; ${result.gap} slot${result.gap === 1 ? " remains" : "s remain"} still needs an eligible design` : ""}. Approve designs before scheduling.`,
+        );
+      } else if (result.status === "ALREADY_IN_REVIEW_OR_PREPARATION") {
+        setGapFillMessage(
+          `${result.available} Pin design${result.available === 1 ? " is" : "s are"} already awaiting review or generation. Open reviews to schedule ready designs.`,
+        );
+      } else if (result.status === "ALREADY_FULL") {
+        setGapFillMessage("Today's SayTwist allocation is already full.");
+      } else if (result.status === "GENERATION_FAILED") {
+        setGapFillMessage(
+          result.errors?.[0] ||
+            "Pin draft generation failed. Check Growth status and try again.",
+        );
+      } else {
+        setGapFillMessage(
+          "No eligible translator is available for a new Pin draft today.",
+        );
+      }
+    } catch (error) {
+      setGapFillMessage(
+        error instanceof Error
+          ? error.message
+          : "Pin drafts could not be requested.",
+      );
+    } finally {
+      setGapFillBusy(false);
+    }
+  }
   return (
     <>
       <section
@@ -226,6 +273,46 @@ export function GrowthOverviewPanels({
             day. Quotas reset at 00:00 UTC.
           </p>
         </div>
+        {data.nativeAllocated < data.nativeCap && (
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#d9e5dc] bg-[#f1f7f1] px-5 py-4">
+            <div className="max-w-2xl">
+              <p className="text-sm font-semibold text-[#173e35]">
+                SayTwist Pins are missing from today&apos;s plan?
+              </p>
+              <p className="mt-1 text-xs text-[#51675a]">
+                Request eligible Pin drafts for today&apos;s gap. Drafts still
+                need your review and approval before they can be scheduled.
+              </p>
+              {gapFillMessage && (
+                <p
+                  role="status"
+                  aria-live="polite"
+                  className="mt-2 text-xs font-medium text-[#173e35]"
+                >
+                  {gapFillMessage}
+                </p>
+              )}
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={requestGapFill}
+                disabled={gapFillBusy}
+                className="rounded-full bg-[#173e35] px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[#235448] disabled:cursor-wait disabled:opacity-60"
+              >
+                {gapFillBusy ? "Requesting…" : "Request gap fill"}
+              </button>
+              {gapFillMessage && (
+                <Link
+                  href="/admin/growth/approvals"
+                  className="text-xs font-semibold text-[#173e35] underline underline-offset-4"
+                >
+                  Open reviews
+                </Link>
+              )}
+            </div>
+          </div>
+        )}
         <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
           <h3 className="font-semibold">Today&apos;s publishing ledger</h3>
           <div className="flex flex-wrap gap-2">
