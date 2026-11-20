@@ -121,7 +121,11 @@ describe("manual daily SayTwist Pin gap fill", () => {
       new Date("2026-11-20T12:00:00Z"),
     );
 
-    expect(result).toMatchObject({ status: "REQUESTED", queued: 1, gap: 0 });
+    expect(result).toMatchObject({
+      status: "READY_FOR_REVIEW",
+      created: 1,
+      gap: 0,
+    });
     expect(mocks.claimGrowthJobs).toHaveBeenCalledWith({
       workerId: "manual-gap-fill:creative-job-1",
       jobId: "creative-job-1",

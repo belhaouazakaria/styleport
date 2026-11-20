@@ -132,7 +132,7 @@ export async function requestDailyPinGapFill(now = new Date()) {
   if (!rotation.accountId || rotation.original <= 0) {
     return {
       status: "NO_NATIVE_ALLOCATION" as const,
-      queued: 0,
+      created: 0,
       gap: 0,
       available: 0,
     };
@@ -144,7 +144,12 @@ export async function requestDailyPinGapFill(now = new Date()) {
     overview.nativeCap - overview.nativeAllocated,
   );
   if (!scheduledGap) {
-    return { status: "ALREADY_FULL" as const, queued: 0, gap: 0, available: 0 };
+    return {
+      status: "ALREADY_FULL" as const,
+      created: 0,
+      gap: 0,
+      available: 0,
+    };
   }
 
   const imageEnv = getServerEnv();
@@ -157,7 +162,7 @@ export async function requestDailyPinGapFill(now = new Date()) {
   ) {
     return {
       status: "GENERATION_FAILED" as const,
-      queued: 0,
+      created: 0,
       gap: scheduledGap,
       available: 0,
       errors: [
@@ -229,7 +234,7 @@ export async function requestDailyPinGapFill(now = new Date()) {
   if (!remaining) {
     return {
       status: "ALREADY_IN_REVIEW_OR_PREPARATION" as const,
-      queued: 0,
+      created: 0,
       gap: scheduledGap,
       available: readyForReview + inFlight,
     };
@@ -357,11 +362,11 @@ export async function requestDailyPinGapFill(now = new Date()) {
   );
   return {
     status: created
-      ? ("REQUESTED" as const)
+      ? ("READY_FOR_REVIEW" as const)
       : errors.length
         ? ("GENERATION_FAILED" as const)
         : ("NO_QUALIFIED_TARGET" as const),
-    queued: created,
+    created,
     gap: remainingGap,
     available: readyForReview + inFlight,
     errors,

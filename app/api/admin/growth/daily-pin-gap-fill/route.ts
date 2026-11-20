@@ -22,7 +22,7 @@ export async function POST(request: Request) {
         "There is no active SayTwist allocation for today.",
       );
     }
-    return apiOk(result, result.queued ? 202 : 200);
+    return apiOk(result);
   } catch {
     return apiError(
       409,

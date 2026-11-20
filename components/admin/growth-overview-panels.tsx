@@ -155,9 +155,9 @@ export function GrowthOverviewPanels({
           result.error?.message || "Pin drafts could not be requested.",
         );
       }
-      if (result.status === "REQUESTED") {
+      if (result.status === "READY_FOR_REVIEW") {
         setGapFillMessage(
-          `${result.queued} Pin ${result.queued === 1 ? "draft is" : "drafts are"} ready for review${result.gap ? `; ${result.gap} slot${result.gap === 1 ? " remains" : "s remain"} still needs an eligible design` : ""}. Approve designs before scheduling.`,
+          `${result.created} Pin ${result.created === 1 ? "draft is" : "drafts are"} ready for review${result.gap ? `; ${result.gap} slot${result.gap === 1 ? " remains" : "s remain"} still needs an eligible design` : ""}. Approve designs before scheduling.`,
         );
       } else if (result.status === "ALREADY_IN_REVIEW_OR_PREPARATION") {
         setGapFillMessage(
