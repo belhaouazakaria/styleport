@@ -17,6 +17,8 @@ describe("manual Gap Fill production runtime contract", () => {
     expect(installer).toContain("User=saytwist");
     expect(installer).toContain("EnvironmentFile=$AI_ENV");
     expect(installer).toContain('chown root:root "$TEMP/saytwist-growth-manual-gap-fill@.service"');
+    expect(installer).toContain('chmod 0644 "$TEMP/saytwist-growth-manual-gap-fill@.service"');
+    expect(installer).not.toContain('$TEMP/unit');
     expect(installer).toContain("systemctl daemon-reload");
     expect(installer).not.toMatch(/systemctl\s+enable\s+/);
     expect(installer).not.toContain("saytwist-growth-manual-gap-fill.timer");
