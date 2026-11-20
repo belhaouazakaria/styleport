@@ -36,7 +36,6 @@ for binary in "$PG_DUMP_BIN" "$PG_RESTORE_BIN"; do
   version="$("$binary" --version)"
   [[ "$version" =~ PostgreSQL\)\ 18(\.|$) ]] || fail "PostgreSQL backup tools must be major 18."
 done
-[[ "$(tr -d '[:space:]' < "$APP_PATH/.deployed-release")" == "$OLD_RELEASE_SHA" ]] || fail "Live application SHA changed."
 curl -fsS --max-time 5 http://127.0.0.1:3001/api/healthz >/dev/null || fail "Live app health check failed."
 curl -fsS --max-time 5 http://127.0.0.1:3001/api/readyz >/dev/null || fail "Live app readiness check failed."
 mkdir "$LOCK_DIR" 2>/dev/null || fail "Another deployment or migration holds the lock."
@@ -67,7 +66,9 @@ validate_database() {
         for(let i=0;i<applied.length;i++){if(applied[i].migration_name!==names[i]) throw Error("BASELINE_ORDER");}
         for(const row of applied){const bytes=fs.readFileSync(path.join(root,"prisma/migrations",row.migration_name,"migration.sql")); if(digest.createHash("sha256").update(bytes).digest("hex")!==row.checksum) throw Error("BASELINE_CHECKSUM");}
         if(names.filter(n=>!applied.some(r=>r.migration_name===n)).join(",")!==expected) throw Error("PENDING_SET");
-      } else if(applied.length===42&&applied.at(-1).migration_name===expected){
+      } else if(applied.length===42&&names.length===42&&names[41]===expected&&applied.at(-1).migration_name===expected){
+        for(let i=0;i<applied.length;i++){if(applied[i].migration_name!==names[i]) throw Error("BASELINE_ORDER");}
+        for(const row of applied){const bytes=fs.readFileSync(path.join(root,"prisma/migrations",row.migration_name,"migration.sql")); if(digest.createHash("sha256").update(bytes).digest("hex")!==row.checksum) throw Error("BASELINE_CHECKSUM");}
         const bytes=fs.readFileSync(path.join(root,"prisma/migrations",expected,"migration.sql"));
         if(digest.createHash("sha256").update(bytes).digest("hex")!==applied.at(-1).checksum) throw Error("APPLIED_CHECKSUM");
         const columns=await client.$queryRawUnsafe(`SELECT count(*)::int AS count FROM information_schema.columns WHERE table_schema=$1 AND table_name=$2 AND column_name IN ($3,$4,$5)`,"public","GrowthDailyCadencePreference","newTranslatorPins","existingTranslatorPins","anythingTranslatePins");
@@ -88,6 +89,11 @@ validate_database() {
 db_state="$(validate_database 2>&1)" || fail "Production database preflight failed: $db_state"
 pending_before="$(sed -n 's/^PENDING_QUEUE_SHA256=//p' <<< "$db_state")"
 [[ "$pending_before" =~ ^[a-f0-9]{64}$ ]] || fail "Pending Growth queue fingerprint is missing."
+if [[ "$db_state" == *ALREADY_APPLIED* ]]; then
+  echo "[hostinger-daily-plan-migration] Already applied and fully verified; no migration work needed."
+  exit 0
+fi
+[[ "$(tr -d '[:space:]' < "$APP_PATH/.deployed-release")" == "$OLD_RELEASE_SHA" ]] || fail "Live application SHA changed before pending migration."
 mkdir -p "$BACKUP_ROOT"
 chmod 700 "$BACKUP_ROOT"
 BACKUP="$BACKUP_ROOT/pre-${APPROVED_MIGRATION}-${RELEASE_SHA:0:12}.dump"
@@ -102,10 +108,6 @@ fi
 [[ -s "$BACKUP" ]] || fail "Database backup is empty."
 "$PG_RESTORE_BIN" --list "$BACKUP" >/dev/null || fail "Database backup could not be verified."
 
-if [[ "$db_state" == *ALREADY_APPLIED* ]]; then
-  echo "[hostinger-daily-plan-migration] Already applied for this release."
-  exit 0
-fi
 (
   cd "$MIGRATION_ROOT"
   "$NODE_BIN" --env-file="$ENV_FILE" "$PRISMA_CLI" migrate deploy --schema "$MIGRATION_ROOT/prisma/schema.prisma"
