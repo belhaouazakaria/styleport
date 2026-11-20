@@ -32,6 +32,13 @@ describe("Growth timer release coordination", () => {
     expect(coordinator).toContain("assert_safe_database(state[\"pendingSha256\"])");
   });
 
+  it("executes coordinator commands when output capture is disabled", () => {
+    expect(coordinator.indexOf("completed = subprocess.run(args, check=check, text=True,")).toBeGreaterThan(-1);
+    expect(coordinator.indexOf('return completed.stdout.strip() if capture else ""')).toBeGreaterThan(
+      coordinator.indexOf("completed = subprocess.run(args, check=check, text=True,"),
+    );
+  });
+
   it("installs only the root coordinator and its limited saytwist sudo rule", () => {
     expect(installer).toContain("saytwist-growth-deploy-coordinator");
     expect(installer).toContain('install -o root -g root -m 0755 "$SOURCE" "$TARGET"');
