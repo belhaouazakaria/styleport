@@ -42,6 +42,16 @@ Do not rerun the cancelled release without the reviewed workflow fix, and do not
 
 The Growth worker remains bounded and explicitly invoked. This release does not add a recurring Growth process, enable Growth, change attribution gates, or relax Pinterest approval/publishing restrictions.
 
+### Owner-requested daily Pin gap-fill worker
+
+The admin dashboard's manual SayTwist gap-fill action uses the existing root-owned `/etc/saytwist-growth-ai.env` credentials without exposing them to the PM2 web process. After the exact-SHA application deployment passes its health checks, install the disabled-by-default, one-shot systemd template as root:
+
+Copy the reviewed installer from the exact release commit to a root-owned, mode-0700 staging file, verify its checksum against the release commit, and run it with the full deployed SHA. Do not execute the installer directly from the saytwist-owned application directory.
+
+The installer requires the deployed SHA, the existing root-owned mode-0600 two-variable Growth AI environment, the pinned PM2 runtime, and systemd/sudoers validation. It installs only `saytwist-growth-manual-gap-fill@.service`, a root-owned UUID-validating launcher, and a sudoers rule for that launcher. It does not enable a timer or start a worker. The authenticated admin request tags at most three exact Creative Lab jobs with a random request ID and today's UTC date; the helper can start only that request's isolated worker. The worker validates the current SayTwist allocation, Growth/attribution kill switches, exact job type and IDs, and a short activation lease; it verifies each result is READY for review. It never approves or publishes a Pin.
+
+If this install is absent or fails, the dashboard must report that generation could not start; it must not claim that queued work is ready. To roll back this capability, first confirm no matching unit instance is active, then remove `/etc/sudoers.d/saytwist-growth-gap-fill`, `/usr/local/sbin/saytwist-growth-gap-fill`, and `/etc/systemd/system/saytwist-growth-manual-gap-fill@.service`, then run `systemctl daemon-reload`. Keep the isolated AI environment file and all existing Growth services unchanged.
+
 The sitemap is rendered dynamically in production. CI deliberately uses a non-production loopback database placeholder and cannot snapshot translator membership into the artifact; `/sitemap.xml` reads the VPS-local database at request time and must retain the approved 355 translator URLs.
 
 ## Migration safety
@@ -157,6 +167,7 @@ At deployment time, the script checks the configured CLI is an executable absolu
    ssh -p <ssh-port> saytwist@<host> \
      "tar -xzf /home/saytwist/migration-staging/$release_sha/release.tar.gz -C /home/saytwist/migration-staging/$release_sha"
    ```
+
 6. Record the current production SHA, PM2 application PID/restart count, PM2 daemon PID, health/readiness, disk space, migration state, Growth/attribution disabled state, and intentionally active workers.
 7. On the VPS as `saytwist`, invoke the migration preparation explicitly:
 

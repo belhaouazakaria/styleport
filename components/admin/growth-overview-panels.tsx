@@ -155,7 +155,52 @@ export function GrowthOverviewPanels({
           result.error?.message || "Pin drafts could not be requested.",
         );
       }
-      if (result.status === "READY_FOR_REVIEW") {
+      if (result.status === "PROCESSING") {
+        setGapFillMessage(
+          `Generating ${result.jobIds.length} Pin ${result.jobIds.length === 1 ? "design" : "designs"} for review…`,
+        );
+        const deadline = Date.now() + 12 * 60_000;
+        let ready = false;
+        while (!ready && Date.now() < deadline) {
+          await new Promise((resolve) => setTimeout(resolve, 5000));
+          const params = new URLSearchParams({
+            requestId: result.requestId,
+            jobIds: result.jobIds.join(","),
+          });
+          const statusResponse = await fetch(
+            `/api/admin/growth/daily-pin-gap-fill?${params.toString()}`,
+            { cache: "no-store" },
+          );
+          const statusResult = await statusResponse.json();
+          if (!statusResponse.ok || !statusResult.ok) {
+            throw new Error(
+              statusResult.error?.message ||
+                "Could not check Pin draft progress.",
+            );
+          }
+          const failed = statusResult.jobs.some((job: { status: string }) =>
+            ["FAILED_RETRYABLE", "FAILED_TERMINAL", "CANCELLED"].includes(
+              job.status,
+            ),
+          );
+          if (failed)
+            throw new Error(
+              "Pin design generation failed. Check Growth reviews and try again.",
+            );
+          ready = statusResult.jobs.every(
+            (job: { status: string; candidateStatus: string | null }) =>
+              job.status === "SUCCEEDED" && job.candidateStatus === "READY",
+          );
+        }
+        if (!ready) {
+          throw new Error(
+            "Pin designs are taking longer than expected. Check Growth reviews for their latest status.",
+          );
+        }
+        setGapFillMessage(
+          `${result.jobIds.length} Pin ${result.jobIds.length === 1 ? "design is" : "designs are"} ready for review${result.gap ? `; ${result.gap} slot${result.gap === 1 ? " remains" : "s remain"} still needs an eligible design` : ""}. Approve designs before scheduling.`,
+        );
+      } else if (result.status === "READY_FOR_REVIEW") {
         setGapFillMessage(
           `${result.created} Pin ${result.created === 1 ? "draft is" : "drafts are"} ready for review${result.gap ? `; ${result.gap} slot${result.gap === 1 ? " remains" : "s remain"} still needs an eligible design` : ""}. Approve designs before scheduling.`,
         );
