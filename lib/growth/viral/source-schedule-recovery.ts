@@ -206,7 +206,11 @@ export async function recoverApprovedSourceSchedules(now = new Date()) {
         const sameDay =
           pin.scheduledAt >= interval.gte && pin.scheduledAt < interval.lt;
         const broken =
-          pin.scheduledAt < now || !isSourceDispatchSlot(pin.scheduledAt);
+          pin.scheduledAt < now ||
+          !isSourceDispatchSlot(pin.scheduledAt) ||
+          occupied(pin.id).some(
+            (date) => Math.abs(+date - +pin.scheduledAt!) < 90 * 60_000,
+          );
         // Valid future commitments only move forward to fill today's deficit.
         if (sameDay && !broken) continue;
         if (
@@ -278,7 +282,7 @@ export async function recoverApprovedSourceSchedules(now = new Date()) {
               previousScheduledAt: pin.scheduledAt.toISOString(),
               scheduledAt: slot.toISOString(),
               reason: broken
-                ? "MISSED_OR_UNREACHABLE_SLOT"
+                ? "MISSED_UNREACHABLE_OR_CONFLICTING_SLOT"
                 : "FILL_APPROVED_DAILY_SOURCE_SLOT",
               automatic: true,
               consentId: policy.id,

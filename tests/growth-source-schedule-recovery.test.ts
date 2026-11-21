@@ -278,3 +278,24 @@ it("honors deferred approval waiting periods and leaves no-slot cases visible", 
       .status,
   ).toBe("WAITING");
 });
+
+it("repairs a valid clock time if a late confirmed native publication breaks actual spacing", async () => {
+  pins = [pin("patrick", "2026-11-21T16:17:00Z")];
+  todaySources = [...pins];
+  m.native.mockResolvedValue([
+    {
+      scheduledAt: new Date("2026-11-21T14:00:00Z"),
+      publishedAt: new Date("2026-11-21T15:00:00Z"),
+    },
+    { scheduledAt: new Date("2026-11-21T18:00:00Z"), publishedAt: null },
+    { scheduledAt: new Date("2026-11-21T23:00:00Z"), publishedAt: null },
+  ]);
+  expect((await recoverApprovedSourceSchedules(now)).repaired).toBe(1);
+  expect(m.create).toHaveBeenCalledWith(
+    expect.objectContaining({
+      data: expect.objectContaining({
+        scheduledAt: new Date("2026-11-21T20:17:00Z"),
+      }),
+    }),
+  );
+});
