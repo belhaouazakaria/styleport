@@ -1,9 +1,13 @@
 // @vitest-environment node
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const m = vi.hoisted(() => ({
+  recovery: vi.fn(),
   count: vi.fn(),
   outbox: vi.fn(),
   expire: vi.fn(),
+}));
+vi.mock("@/lib/growth/viral/source-schedule-recovery", () => ({
+  recoverApprovedSourceSchedules: m.recovery,
 }));
 vi.mock("node:fs", () => ({ readFileSync: () => "a".repeat(40) }));
 vi.mock("@/lib/prisma", () => ({
@@ -23,6 +27,7 @@ vi.mock("@/lib/growth/discord/outbox", () => ({ runDiscordOutbox: m.outbox }));
 import { runGrowthDiscordCourier } from "@/workers/growth-discord-courier";
 beforeEach(() => {
   vi.clearAllMocks();
+  m.recovery.mockResolvedValue({ status: "DISABLED", repaired: 0 });
   vi.stubEnv("EXPECTED_RELEASE", "a".repeat(40));
   vi.stubEnv("GROWTH_DISCORD_COURIER_ENABLED", "true");
   vi.stubEnv("GROWTH_DISCORD_COURIER_ENTRYPOINT", "false");
@@ -53,4 +58,13 @@ it("surfaces unresolved delivery failures after independent actions have progres
   );
   expect(m.outbox).toHaveBeenCalledOnce();
   expect(m.expire).toHaveBeenCalledOnce();
+});
+
+it("keeps decisions and delivery flowing when a recovery check fails", async () => {
+  m.recovery.mockRejectedValue(new Error("SERIALIZATION_FAILURE"));
+  await expect(runGrowthDiscordCourier()).rejects.toThrow(
+    "SOURCE_SCHEDULE_RECOVERY_FAILED",
+  );
+  expect(m.expire).toHaveBeenCalledOnce();
+  expect(m.outbox).toHaveBeenCalledOnce();
 });

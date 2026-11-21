@@ -251,7 +251,7 @@ export function GrowthOverviewPanels({
             </h2>
             <p className="text-muted-ink mt-2 max-w-xl text-sm">
               {data.rotationActive
-                ? "Today's account for new approvals. Previously approved Pins keep their committed account and time."
+                ? "Today's account for new approvals. Approved source Pins can move to safe slots when automatic recovery is on."
                 : "Account rotation is inactive. Existing approved schedules are shown below."}
             </p>
           </div>
@@ -358,6 +358,30 @@ export function GrowthOverviewPanels({
             </div>
           </div>
         )}
+        {data.recovery.enabled && (
+          <div
+            className="mx-5 mb-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950"
+            role="status"
+          >
+            <p className="font-semibold">Automatic schedule recovery is on</p>
+            <p className="mt-1">
+              {data.recovery.repairedToday > 0
+                ? `${data.recovery.repairedToday} source Pin schedule${data.recovery.repairedToday === 1 ? "" : "s"} fixed today. `
+                : "Approved source Pins are checked for missed times and available daily slots. "}
+              Fixed Pins remain scheduled until Pinterest confirms publication.
+            </p>
+            <p className="mt-1 text-xs">
+              {data.recovery.checkedAt
+                ? `Last checked ${time(data.recovery.checkedAt, zone)}. `
+                : "Waiting for the first automatic check. "}
+              {data.recovery.checkOverdue &&
+                "Automatic recovery has not completed a recent check. Inspect Operations. "}
+              {data.recovery.status ===
+                "WAITING_FOR_APPROVED_PIN_OR_SAFE_SLOT" &&
+                "Waiting for an approved Pin or a safe slot; no new content is approved automatically."}
+            </p>
+          </div>
+        )}
         <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
           <h3 className="font-semibold">Today&apos;s publishing ledger</h3>
           <div className="flex flex-wrap gap-2">
@@ -461,6 +485,21 @@ export function GrowthOverviewPanels({
                       >
                         {p.state}
                       </span>
+                      {p.recovery && (
+                        <p className="mt-2 max-w-64 text-xs whitespace-normal text-emerald-800">
+                          {p.recovery.replaced
+                            ? "Replaced by corrected schedule"
+                            : "Schedule fixed"}
+                          {p.recovery.automatic
+                            ? " automatically"
+                            : " with your approval"}
+                          . Was {time(p.recovery.previousScheduledAt, zone)};
+                          now {time(p.recovery.scheduledAt, zone)}.
+                          {!p.recovery.replaced &&
+                            p.state === "Scheduled" &&
+                            " Awaiting publication."}
+                        </p>
+                      )}
                       {p.overdue && (
                         <p className="mt-2 text-xs text-amber-800">
                           Past scheduled time

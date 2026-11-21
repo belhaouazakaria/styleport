@@ -1,3 +1,4 @@
+import { recoverApprovedSourceSchedules } from "@/lib/growth/viral/source-schedule-recovery";
 import { readFileSync } from "node:fs";
 import { prisma } from "@/lib/prisma";
 import { getDiscordConfig } from "@/lib/growth/discord/config";
@@ -21,6 +22,12 @@ export async function runGrowthDiscordCourier() {
     select: { role: true },
   });
   if (owner?.role !== "ADMIN") throw Error("DISCORD_OWNER_NOT_ADMIN");
+  let recoveryFailed = false;
+  try {
+    await recoverApprovedSourceSchedules();
+  } catch {
+    recoveryFailed = true;
+  }
   await expireGrowthReviews();
   if (process.env.GROWTH_AUTOMATIC_REVIEW_PREPARATION_ENABLED === "true")
     await preparePendingOwnerReviews(config.ownerUserId);
@@ -38,6 +45,7 @@ export async function runGrowthDiscordCourier() {
     },
   });
   if (incidents) throw Error("DISCORD_DELIVERY_REQUIRES_RECONCILIATION");
+  if (recoveryFailed) throw Error("SOURCE_SCHEDULE_RECOVERY_FAILED");
   return result;
 }
 if (process.env.GROWTH_DISCORD_COURIER_ENTRYPOINT === "true") {
