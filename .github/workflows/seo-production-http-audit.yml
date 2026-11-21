@@ -1,0 +1,85 @@
+name: SayTwist read-only public SEO audit
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/seo-production-http-audit.yml"
+      - "scripts/verify-production-seo.ts"
+  workflow_dispatch:
+    inputs:
+      deployed_sha:
+        description: "Exact release SHA currently deployed on saytwist.com"
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  production-public-seo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      SEO_VERIFY_BASE_URL: https://saytwist.com
+      SEO_VERIFY_ENVIRONMENT: production
+      # The PR path verifies the current, previously confirmed production release.
+      SEO_APPROVED_BASELINE: 748fd6dde0d5dc38aac4584111c93c38f7663237
+      SEO_OPERATOR_SHA: ${{ inputs.deployed_sha }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20.20.2
+          cache: npm
+      - name: Install read-only audit dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Verify all public sitemap URLs, robots and redirects without modifying the site
+        id: audit
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            export SEO_VERIFY_DEPLOYED_VERSION="$SEO_OPERATOR_SHA"
+          else
+            export SEO_VERIFY_DEPLOYED_VERSION="$SEO_APPROVED_BASELINE"
+          fi
+          if [[ ! "$SEO_VERIFY_DEPLOYED_VERSION" =~ ^[a-f0-9]{40}$ ]]; then
+            echo "An exact release SHA is required."
+            exit 2
+          fi
+          set +e
+          npm run --silent seo:verify-production > production-seo-audit.json 2> production-seo-stderr.log
+          exit_code=$?
+          set -e
+          node <<'NODE'
+          const fs = require("node:fs");
+          try {
+            const x = JSON.parse(fs.readFileSync("production-seo-audit.json", "utf8"));
+            console.log(JSON.stringify({
+              readOnly: x.readOnly,
+              checkedOrigin: x.checkedOrigin,
+              deployedVersion: x.deployedVersion,
+              robotsStatus: x.robotsStatus,
+              sitemapStatus: x.sitemapStatus,
+              sitemapUrlCount: x.sitemapUrlCount,
+              missingUrlStatus: x.missingUrlStatus,
+              failureCount: (x.failures || []).length,
+              failuresByKind: (x.failures || []).reduce((a, f) => {
+                a[f.kind] = (a[f.kind] || 0) + 1; return a;
+              }, {}),
+              firstFailures: (x.failures || []).slice(0, 8)
+            }, null, 2));
+          } catch {
+            console.error("The verification did not emit parseable JSON; see audit artifacts.");
+          }
+          NODE
+          exit "$exit_code"
+      - name: Preserve read-only audit results even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: saytwist-production-seo-http-audit
+          path: |
+            production-seo-audit.json
+            production-seo-stderr.log
+          retention-days: 14
+          if-no-files-found: warn
