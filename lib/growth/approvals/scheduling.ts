@@ -1,3 +1,4 @@
+import { sourceDispatchSlots } from "@/lib/growth/viral/source-schedule";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { readDailyRotation } from "@/lib/growth/portfolio/daily-rotation-store";
@@ -14,14 +15,22 @@ export async function recommendReviewSchedule(
   notBeforeDate = now,
 ) {
   const pending = await db.growthApprovalRequest.findMany({
-    where: { kind: { in: ["NATIVE_PIN", "SOURCE_PIN"] }, status: "PENDING", expiresAt: { gt: now }, subjectId: { not: subjectId } },
-    select: { kind: true, snapshot: true }, take: 201,
+    where: {
+      kind: { in: ["NATIVE_PIN", "SOURCE_PIN"] },
+      status: "PENDING",
+      expiresAt: { gt: now },
+      subjectId: { not: subjectId },
+    },
+    select: { kind: true, snapshot: true },
+    take: 201,
   });
   if (pending.length > 200) throw Error("REVIEW_QUEUE_TOO_LARGE");
-  const reservations = pending.flatMap(r => {
+  const reservations = pending.flatMap((r) => {
     const snapshot = r.snapshot as { scheduledAt?: string } | null;
     const scheduledAt = new Date(snapshot?.scheduledAt || "");
-    return Number.isFinite(scheduledAt.getTime()) ? [{ scheduledAt, kind: r.kind }] : [];
+    return Number.isFinite(scheduledAt.getTime())
+      ? [{ scheduledAt, kind: r.kind }]
+      : [];
   });
   const policy = await db.growthViralProgramSettings.findUnique({
     where: { id: "global" },
@@ -58,9 +67,19 @@ export async function recommendReviewSchedule(
         take: 101,
       }),
     ]);
-    const reserved = reservations.filter(r => r.scheduledAt >= day && r.scheduledAt < end);
-    native.push(...reserved.filter(r => r.kind === "NATIVE_PIN").map(r => ({ scheduledAt: r.scheduledAt })));
-    sources.push(...reserved.filter(r => r.kind === "SOURCE_PIN").map(r => ({ scheduledAt: r.scheduledAt })));
+    const reserved = reservations.filter(
+      (r) => r.scheduledAt >= day && r.scheduledAt < end,
+    );
+    native.push(
+      ...reserved
+        .filter((r) => r.kind === "NATIVE_PIN")
+        .map((r) => ({ scheduledAt: r.scheduledAt })),
+    );
+    sources.push(
+      ...reserved
+        .filter((r) => r.kind === "SOURCE_PIN")
+        .map((r) => ({ scheduledAt: r.scheduledAt })),
+    );
     const cap = Math.min(
       5,
       policy?.maxPinsPerDay ?? 5,
@@ -76,22 +95,54 @@ export async function recommendReviewSchedule(
     if (native.length + sources.length >= cap || channelCount >= channelCap)
       continue;
     const notBefore = new Date(
-      Math.max(now.getTime() + 15 * 60000, notBeforeDate.getTime(), day.getTime()),
+      Math.max(
+        now.getTime() + 15 * 60000,
+        notBeforeDate.getTime(),
+        day.getTime(),
+      ),
     );
+    if (channel === "SOURCE") {
+      // The isolated source publisher runs hourly at 15:17–23:17 UTC.
+      // Native audience windows include 02:00 UTC, which this publisher
+      // cannot execute. Reserve actual dispatch slots on this UTC day.
+      for (const slot of sourceDispatchSlots(day, notBefore)) {
+        if (
+          ![...native, ...sources].some(
+            (p) =>
+              p.scheduledAt &&
+              Math.abs(p.scheduledAt.getTime() - slot.getTime()) < 90 * 60000,
+          )
+        ) {
+          return slot;
+        }
+      }
+      continue;
+    }
     let timing = await recommendPublicationTiming(
       accountId,
       subjectId,
       notBefore,
-      [...native, ...sources].flatMap(p => p.scheduledAt ? [{ scheduledAt: p.scheduledAt }] : []),
+      [...native, ...sources].flatMap((p) =>
+        p.scheduledAt ? [{ scheduledAt: p.scheduledAt }] : [],
+      ),
     );
     // Try another controlled window on the SAME day before skipping it.
     for (let attempt = 0; attempt < 8 && timing.scheduledAt < end; attempt++) {
-      if (![...native, ...sources].some(p => p.scheduledAt &&
-          Math.abs(p.scheduledAt.getTime() - timing.scheduledAt.getTime()) < 90 * 60000)) {
+      if (
+        ![...native, ...sources].some(
+          (p) =>
+            p.scheduledAt &&
+            Math.abs(p.scheduledAt.getTime() - timing.scheduledAt.getTime()) <
+              90 * 60000,
+        )
+      ) {
         if (timing.scheduledAt >= day) return timing.scheduledAt;
       }
-      timing = await recommendPublicationTiming(accountId, subjectId,
-        new Date(timing.scheduledAt.getTime() + 90 * 60000));
+      timing = await recommendPublicationTiming(
+        accountId,
+        subjectId,
+        new Date(timing.scheduledAt.getTime() + 90 * 60000),
+      );
     }
     continue;
   }

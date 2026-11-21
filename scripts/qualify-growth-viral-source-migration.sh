@@ -137,8 +137,58 @@ BEGIN
   END;
   IF NOT blocked THEN RAISE EXCEPTION 'Ambiguous provider outcome was replayable'; END IF;
 END $$;
+
+-- Timing recovery uses cancellation plus replacement; immutable originals and
+-- the one-open-source-concept index remain active throughout the transaction.
+INSERT INTO "GrowthViralConcept" ("id","title","normalizedKey","sourceUrl")
+VALUES ('ci-recovery-concept','Funny Random Translator','ci-recovery-topic',
+  'https://anythingtranslate.com/translators/funny-random-translator/');
+INSERT INTO "GrowthViralPinTest"
+  ("id","conceptId","channel","destinationUrl","status","title","description",
+   "assetChecksum","assetPublicPath","accountId","boardId","scheduledAt",
+   "rightsVerified","approvedAt","approvedById","publicationAttemptKey")
+SELECT 'ci-recovery-original','ci-recovery-concept','SOURCE',
+  'https://anythingtranslate.com/translators/funny-random-translator/',
+  'APPROVED',"title","description","assetChecksum","assetPublicPath", "accountId",
+  "boardId",TIMESTAMP '2026-11-21 02:00:00',"rightsVerified","approvedAt",
+  "approvedById",'ci-recovery-original-once'
+FROM "GrowthViralPinTest" WHERE id='ci-new-source-draft';
+DO $$
+DECLARE changed integer; blocked boolean:=false;
+BEGIN
+  UPDATE "GrowthViralPinTest" SET "status"='CANCELLED'
+    WHERE id='ci-recovery-original' AND "status"='APPROVED'
+      AND "publishClaimAt" IS NULL AND "pinterestPinId" IS NULL;
+  GET DIAGNOSTICS changed = ROW_COUNT;
+  IF changed <> 1 THEN RAISE EXCEPTION 'Recovery original was not safely cancelled'; END IF;
+  INSERT INTO "GrowthViralPinTest"
+    ("id","conceptId","channel","destinationUrl","status","title","description",
+     "assetChecksum","assetPublicPath","accountId","boardId","scheduledAt",
+     "rightsVerified","approvedAt","approvedById","publicationAttemptKey")
+  SELECT 'ci-recovery-replacement',"conceptId","channel","destinationUrl",'APPROVED',
+    "title","description","assetChecksum","assetPublicPath","accountId","boardId",
+    TIMESTAMP '2026-11-21 16:17:00',"rightsVerified","approvedAt","approvedById",
+    'ci-recovery-replacement-once'
+  FROM "GrowthViralPinTest" WHERE id='ci-recovery-original';
+  IF (SELECT "scheduledAt" FROM "GrowthViralPinTest" WHERE id='ci-recovery-original')
+      <> TIMESTAMP '2026-11-21 02:00:00'
+  THEN RAISE EXCEPTION 'Recovery rewrote the original approval'; END IF;
+  UPDATE "GrowthViralPinTest" SET "status"='PUBLISHING', "publishClaimAt"=CURRENT_TIMESTAMP
+    WHERE id='ci-recovery-original' AND "status"='APPROVED' AND "publishClaimAt" IS NULL;
+  GET DIAGNOSTICS changed = ROW_COUNT;
+  IF changed <> 0 THEN RAISE EXCEPTION 'Stale publisher claimed a replaced original'; END IF;
+  BEGIN
+    INSERT INTO "GrowthViralPinTest" ("id","conceptId","channel","destinationUrl","status")
+    VALUES ('ci-recovery-duplicate','ci-recovery-concept','SOURCE',
+      'https://anythingtranslate.com/translators/funny-random-translator/','PLANNED');
+  EXCEPTION WHEN unique_violation THEN blocked:=true;
+  END;
+  IF NOT blocked THEN RAISE EXCEPTION 'Recovery allowed duplicate active experiments'; END IF;
+END $$;
+
 SQL
 echo "VIRAL_CI_PRISMA_UPGRADE=PASSED"
 echo "VIRAL_CI_EXISTING_ROWS_PRESERVED=true"
 echo "VIRAL_CI_APPROVAL_SNAPSHOT_IMMUTABLE=true"
 echo "VIRAL_CI_UNKNOWN_WRITE_NO_REPLAY=true"
+echo "VIRAL_CI_TIMING_RECOVERY_PRESERVES_APPROVALS=true"

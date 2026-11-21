@@ -95,6 +95,9 @@ export async function getGrowthPublishingOverview(now = new Date()) {
     deliveryIssues,
     blocked,
     pinGroups,
+    recoveryPolicy,
+    recoveryCheck,
+    repairs,
   ] = await Promise.all([
     readDailyRotation(today),
     prisma.growthViralProgramSettings.findUnique({
@@ -245,6 +248,30 @@ export async function getGrowthPublishingOverview(now = new Date()) {
       ],
       take: 12,
     }),
+    prisma.growthActivity.findFirst({
+      where: {
+        entityType: "GrowthSourceScheduleRecovery",
+        entityId: "global",
+        action: "SOURCE_SCHEDULE_RECOVERY_POLICY_UPDATED",
+      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      select: { summary: true },
+    }),
+    prisma.growthActivity.findFirst({
+      where: {
+        entityType: "GrowthSourceScheduleRecovery",
+        entityId: "global",
+        action: "SOURCE_SCHEDULE_RECOVERY_CHECKED",
+      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      select: { summary: true, createdAt: true },
+    }),
+    prisma.growthActivity.findMany({
+      where: { action: "SOURCE_SCHEDULE_REPAIRED", createdAt: { gte: today } },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      select: { entityId: true, summary: true, createdAt: true },
+      take: 100,
+    }),
   ]);
   const pinIds = pinGroups.map((row) => row.pinId);
   const [pins, previous] = pinIds.length
@@ -276,6 +303,43 @@ export async function getGrowthPublishingOverview(now = new Date()) {
   const byId = new Map(accounts.map((a) => [a.id, a.username]));
   const accountName = (id: string | null) =>
     id ? (byId.get(id) ?? "Unknown account") : "Unassigned";
+  const repairById = new Map<
+    string,
+    {
+      previousScheduledAt: string;
+      scheduledAt: string;
+      repairedAt: string;
+      automatic: boolean;
+      replaced: boolean;
+    }
+  >(
+    [...repairs].reverse().flatMap((row) => {
+      const summary = row.summary as {
+        originalId?: string;
+        previousScheduledAt?: string;
+        scheduledAt?: string;
+        automatic?: boolean;
+      } | null;
+      if (
+        !summary?.originalId ||
+        !summary.previousScheduledAt ||
+        !summary.scheduledAt ||
+        !Number.isFinite(Date.parse(summary.previousScheduledAt)) ||
+        !Number.isFinite(Date.parse(summary.scheduledAt))
+      )
+        return [];
+      const repair = {
+        previousScheduledAt: summary.previousScheduledAt,
+        scheduledAt: summary.scheduledAt,
+        repairedAt: row.createdAt.toISOString(),
+        automatic: summary.automatic === true,
+      };
+      return [
+        [row.entityId, { ...repair, replaced: false }],
+        [summary.originalId, { ...repair, replaced: true }],
+      ] as const;
+    }),
+  );
   const schedule = [
     ...native.map((p) => ({
       ...p,
@@ -298,6 +362,7 @@ export async function getGrowthPublishingOverview(now = new Date()) {
       accountId: p.accountId,
       account: accountName(p.accountId),
       channel: p.channel,
+      recovery: repairById.get(p.id) ?? null,
       scheduledAt: p.scheduledAt?.toISOString() ?? null,
       publishedAt: p.publishedAt?.toISOString() ?? null,
       state: publicationState(p.status, p.pinterestPinId),
@@ -315,6 +380,17 @@ export async function getGrowthPublishingOverview(now = new Date()) {
   return {
     day: today.toISOString().slice(0, 10),
     generatedAt: now.toISOString(),
+    recovery: {
+      enabled:
+        (recoveryPolicy?.summary as { enabled?: boolean } | null)?.enabled ===
+        true,
+      checkedAt: recoveryCheck?.createdAt.toISOString() ?? null,
+      checkOverdue:
+        !!recoveryCheck && +recoveryCheck.createdAt < +now - 10 * 60_000,
+      status:
+        (recoveryCheck?.summary as { status?: string } | null)?.status ?? null,
+      repairedToday: repairs.length,
+    },
     rotationAccount: accountName(rotation.accountId),
     rotationAccountId: rotation.accountId,
     rotationActive: active,

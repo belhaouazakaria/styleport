@@ -16,6 +16,8 @@ const db = vi.hoisted(() => ({
   pins: vi.fn(),
   rotation: vi.fn(),
   policy: vi.fn(),
+  activity: vi.fn(),
+  activityOne: vi.fn(),
 }));
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -26,7 +28,7 @@ vi.mock("@/lib/prisma", () => ({
     growthApprovalRequest: { count: vi.fn().mockResolvedValue(3) },
     growthPinCandidate: { count: vi.fn().mockResolvedValue(5) },
     growthNotification: { count: vi.fn().mockResolvedValue(0) },
-    growthActivity: { findMany: vi.fn().mockResolvedValue([]) },
+    growthActivity: { findMany: db.activity, findFirst: db.activityOne },
     growthPinterestPinMetricDaily: { groupBy: db.groups },
     growthPinterestPin: { findMany: db.pins },
   },
@@ -48,6 +50,8 @@ import {
 const now = new Date("2026-11-18T12:30:00Z");
 beforeEach(() => {
   vi.clearAllMocks();
+  db.activity.mockResolvedValue([]);
+  db.activityOne.mockResolvedValue(null);
   db.policy.mockResolvedValue({ mode: "ACTIVE", maxPinsPerDay: 5 });
   db.rotation.mockResolvedValue({
     accountId: "main",
@@ -282,5 +286,60 @@ it("breaks chart lines across gaps and exposes missing dates in the chart", () =
   expect(container.querySelectorAll("line")).toHaveLength(3);
   expect(
     within(screen.getByRole("img")).getByText("2026-11-16: unavailable"),
+  ).toBeInTheDocument();
+});
+
+it("shows an audited schedule repair without claiming the Pin has been published", async () => {
+  db.activityOne.mockImplementation(async ({ where }) =>
+    where.action === "SOURCE_SCHEDULE_RECOVERY_POLICY_UPDATED"
+      ? { summary: { enabled: true } }
+      : { createdAt: now, summary: { status: "HEALTHY" } },
+  );
+  db.activity.mockImplementation(async ({ where }) =>
+    where.action === "SOURCE_SCHEDULE_REPAIRED"
+      ? [
+          {
+            entityId: "source-fixed",
+            createdAt: now,
+            summary: {
+              originalId: "source-old",
+              previousScheduledAt: "2026-11-18T02:00:00.000Z",
+              scheduledAt: "2026-11-18T16:17:00.000Z",
+              automatic: true,
+            },
+          },
+        ]
+      : [],
+  );
+  db.sources.mockImplementation(async ({ take }) =>
+    take === 10
+      ? []
+      : [
+          {
+            id: "source-fixed",
+            title: "Corrected source Pin",
+            accountId: "main",
+            status: "APPROVED",
+            scheduledAt: new Date("2026-11-18T16:17:00Z"),
+            publishedAt: null,
+            pinterestPinId: null,
+          },
+        ],
+  );
+  const data = await getGrowthPublishingOverview(now);
+  expect(data.schedule.find((row) => row.id === "source-fixed")).toMatchObject({
+    state: "Scheduled",
+    overdue: false,
+    recovery: { automatic: true, replaced: false },
+  });
+  render(<GrowthOverviewPanels data={data} />);
+  expect(
+    screen.getByText("Automatic schedule recovery is on"),
+  ).toBeInTheDocument();
+  expect(screen.getByText(/Schedule fixed automatically/)).toHaveTextContent(
+    "Awaiting publication",
+  );
+  expect(
+    screen.getByText(/1 source Pin schedule fixed today/),
   ).toBeInTheDocument();
 });
