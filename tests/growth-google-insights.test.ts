@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { readGa4Insights, readSearchConsoleInsights } from "@/lib/growth/google/insights";
+import { insightStorage, readGa4Insights, readSearchConsoleInsights } from "@/lib/growth/google/insights";
 
 const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
 
@@ -39,5 +39,15 @@ describe("Google insight readers", () => {
   it("rejects malformed provider output", async () => {
     const fetcher = vi.fn(async () => json({ rows: [{ keys: ["x"], clicks: "bad" }] }));
     await expect(readSearchConsoleInsights("sc-domain:saytwist.com", "t", "2026-11-19", fetcher as unknown as typeof fetch)).rejects.toThrow();
+  });
+});
+
+describe("insight storage", () => {
+  it("uses only provider sources allowed by the database and keeps rows apart from the basic sync", () => {
+    expect(insightStorage("GA4_SOURCES", "553797535")).toEqual({ source: "GA4", accountId: "553797535#sources" });
+    expect(insightStorage("GA4_EVENTS", "553797535")).toEqual({ source: "GA4", accountId: "553797535#events" });
+    expect(insightStorage("GSC_QUERIES", "sc-domain:saytwist.com")).toEqual({ source: "SEARCH_CONSOLE", accountId: "sc-domain:saytwist.com#queries" });
+    for (const kind of ["GA4_SOURCES", "GA4_EVENTS", "GA4_PAGES", "GSC_QUERIES", "GSC_PAGES"] as const)
+      expect(["GA4", "SEARCH_CONSOLE"]).toContain(insightStorage(kind, "x").source);
   });
 });

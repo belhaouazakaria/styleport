@@ -33,6 +33,7 @@ export default async function GrowthIntelligencePage() {
         select: { id: true, action: true, entityId: true, createdAt: true },
       }),
       prisma.growthExternalAnalyticsDaily.findMany({
+        where: { NOT: { accountId: { contains: "#" } } },
         orderBy: [{ metricDate: "desc" }, { source: "asc" }],
         take: 20,
       }),
