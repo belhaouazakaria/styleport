@@ -1,3 +1,4 @@
+import { assessDistinctness } from "@/lib/editorial-distinctness";
 import { Prisma, TranslatorEditorialDraftStatus, TranslatorEditorialJobItemStatus, TranslatorEditorialJobType } from "@prisma/client";
 
 import { getAdminTranslatorIdsForBulk, type AdminTranslatorFilters } from "@/lib/translator-editorial-data";
@@ -580,6 +581,29 @@ async function recoverStaleItems() {
   }
 }
 
+/** Plain text of every other translator's published editorial copy, for similarity checks. */
+async function loadEditorialCorpus(excludeTranslatorId: string) {
+  const rows = await prisma.translator.findMany({
+    where: { id: { not: excludeTranslatorId }, archivedAt: null },
+    select: {
+      slug: true,
+      editorialContent: { select: { about: true, whatItDoes: true, differenceDescription: true } },
+      editorialLists: { select: { content: true } },
+      editorialExamples: { select: { contextTitle: true, originalText: true, transformedText: true } },
+      editorialFaqs: { select: { question: true, answer: true } },
+    },
+  });
+  return rows.map((row) => ({
+    slug: row.slug,
+    text: [
+      row.editorialContent?.about, row.editorialContent?.whatItDoes, row.editorialContent?.differenceDescription,
+      ...row.editorialLists.map((item) => item.content),
+      ...row.editorialExamples.flatMap((item) => [item.contextTitle, item.originalText, item.transformedText]),
+      ...row.editorialFaqs.flatMap((item) => [item.question, item.answer]),
+    ].filter(Boolean).join("\n"),
+  }));
+}
+
 export async function processEditorialJobItem(
   itemId: string,
   options: { generate?: typeof generateTranslatorEditorialContent } = {},
@@ -624,7 +648,7 @@ export async function processEditorialJobItem(
         style: item.translator.promptInstructions,
         promptSystem: item.translator.promptSystem,
         promptInstructions: item.translator.promptInstructions,
-        existingAbout: current.about || item.translator.shortDescription,
+        existingAbout: item.operation === "REGENERATE_FULL" ? undefined : current.about || item.translator.shortDescription,
         focus: item.operation === "GENERATE_MISSING" ? "the missing sections only" : item.operation.toLowerCase().replaceAll("_", " "),
       },
     }));
@@ -648,11 +672,14 @@ export async function processEditorialJobItem(
       );
     }
 
+    const distinctness = assessDistinctness(merged, await loadEditorialCorpus(item.translatorId));
+    const validationWithDistinctness = { ...validation, distinctness };
+
     const persistedDraft = await prisma.$transaction(async (tx) => {
       const saved = await tx.translatorEditorialDraft.upsert({
         where: { jobItemId: item.id },
-        create: { jobItemId: item.id, translatorId: item.translatorId, payload: toJson(merged), validation: toJson(validation), status: TranslatorEditorialDraftStatus.NEEDS_REVIEW },
-        update: { payload: toJson(merged), validation: toJson(validation), status: TranslatorEditorialDraftStatus.NEEDS_REVIEW, generatedAt: new Date(), reviewedAt: null, publishedAt: null, discardedAt: null },
+        create: { jobItemId: item.id, translatorId: item.translatorId, payload: toJson(merged), validation: toJson(validationWithDistinctness), status: TranslatorEditorialDraftStatus.NEEDS_REVIEW },
+        update: { payload: toJson(merged), validation: toJson(validationWithDistinctness), status: TranslatorEditorialDraftStatus.NEEDS_REVIEW, generatedAt: new Date(), reviewedAt: null, publishedAt: null, discardedAt: null },
       });
       const readBack = await tx.translatorEditorialDraft.findUnique({ where: { id: saved.id }, select: { id: true, payload: true, validation: true } });
       const parsedPayload = translatorEditorialCandidateSchema.safeParse(readBack?.payload);

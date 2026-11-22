@@ -12,7 +12,9 @@ export function truncateAtWord(value: string, limit: number) {
   const slice = text.slice(0, limit + 1);
   const lastSpace = slice.lastIndexOf(" ");
   const base = lastSpace > limit * 0.6 ? slice.slice(0, lastSpace) : text.slice(0, limit);
-  return base.replace(/[\s,;:\-–—&|(]+$/u, "").trim();
+  const trimmed = base.replace(/[\s,;:\-–—&|(]+$/u, "").trim();
+  // Never end on a dangling connector word such as "for", "and" or "to".
+  return trimmed.replace(/(?:\s+(?:for|and|to|of|with|in|a|an|the|or|into|your|on|at|by))+$/iu, "").trim();
 }
 
 /**
