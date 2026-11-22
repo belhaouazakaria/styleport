@@ -118,3 +118,11 @@ describe("structured data", () => {
     expect(JSON.stringify(crumbs)).not.toContain("whattypeof");
   });
 });
+
+describe("title trimming", () => {
+  it("does not end on a dangling connector word", () => {
+    const title = buildTranslatorTitle({ seoTitle: "Error Message Translator - Witty AI Text Converter for Snarky Computer Alerts", name: "x", brand: "SayTwist" });
+    expect(title).not.toMatch(/\b(for|and|to|of|with|in|a|an|the)$/i);
+    expect(title.length).toBeLessThanOrEqual(60);
+  });
+});
