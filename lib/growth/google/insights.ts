@@ -62,7 +62,7 @@ async function post(url: string, body: unknown, token: string, fetcher: typeof f
 
 const ga4Report = z.object({
   rows: z
-    .array(z.object({ dimensionValues: z.array(z.object({ value: z.string() })), metricValues: z.array(z.object({ value: num })) }))
+    .array(z.object({ dimensionValues: z.array(z.object({ value: z.string() })).default([]), metricValues: z.array(z.object({ value: num })) }))
     .optional(),
 });
 
@@ -96,7 +96,8 @@ async function ga4(
 }
 
 export async function readGa4Insights(property: string, token: string, date: string, fetcher: typeof fetch = fetch) {
-  const [sources, hosts, events, pages] = await Promise.all([
+  const [totals, sources, hosts, events, pages] = await Promise.all([
+    ga4(property, token, date, [], ["sessions", "activeUsers", "keyEvents"], fetcher),
     ga4(property, token, date, ["sessionSource", "sessionMedium"], ["sessions", "activeUsers"], fetcher, {
       orderBys: [{ metric: { metricName: "sessions" }, desc: true }],
       limit: "15",
@@ -116,6 +117,7 @@ export async function readGa4Insights(property: string, token: string, date: str
   ]);
   return {
     GA4_SOURCES: {
+      totals: { sessions: totals[0]?.vals[0] ?? 0, users: totals[0]?.vals[1] ?? 0, keyEvents: totals[0]?.vals[2] ?? 0 },
       sources: sources.map((r) => ({ source: r.dims[0], medium: r.dims[1], sessions: r.vals[0], users: r.vals[1] })),
       hosts: hosts.map((r) => ({ host: r.dims[0], sessions: r.vals[0], users: r.vals[1] })),
     },
