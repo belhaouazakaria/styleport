@@ -1,4 +1,6 @@
 import { z } from "zod";
+
+import { translatorPageSchema } from "@/lib/translator-page";
 import {
   CommentModerationStatus,
   TranslatorRequestStatus,
@@ -350,6 +352,7 @@ export const translatorEditorialCandidateSchema = z.object({
     question: z.string().trim().max(240),
     answer: z.string().trim().max(1000),
   })).max(5),
+  page: translatorPageSchema.optional(),
 });
 
 export const aiDraftInputSchema = z.object({

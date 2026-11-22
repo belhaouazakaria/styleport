@@ -405,6 +405,8 @@ export interface TranslatorEditorialDraft {
   tips: string[];
   examples: Array<{ contextTitle?: string; originalText: string; transformedText: string }>;
   faq: Array<{ question: string; answer: string }>;
+  /** Optional structured page blocks (archetype layout, glossary, real-output ladders). */
+  page?: import("@/lib/translator-page").TranslatorPage;
 }
 
 export interface TranslatorDraft {
