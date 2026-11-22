@@ -903,54 +903,73 @@ export async function getTranslatorIndexingImpactReport(
   });
 }
 
+/**
+ * Deterministic "ring" of neighbours: translators in the same category are
+ * ordered by slug and each page links to the next `limit` entries, wrapping
+ * around. Every translator therefore receives the same number of internal
+ * links, instead of the same few "featured" pages being linked from everywhere.
+ */
+export function pickRingNeighbourIds(orderedIds: string[], currentId: string, limit: number): string[] {
+  const index = orderedIds.indexOf(currentId);
+  if (index < 0 || orderedIds.length < 2) return [];
+  const count = Math.min(limit, orderedIds.length - 1);
+  const result: string[] = [];
+  for (let step = 1; step <= count; step += 1) {
+    result.push(orderedIds[(index + step) % orderedIds.length]);
+  }
+  return result;
+}
+
 export async function getRelatedPublicTranslators(params: {
   currentTranslatorId: string;
   categorySlug?: string | null;
   limit?: number;
 }): Promise<PublicTranslator[]> {
   const limit = Math.max(1, params.limit || 3);
-  const where: Prisma.TranslatorWhereInput = {
-    id: { not: params.currentTranslatorId },
-    isActive: true,
-    archivedAt: null,
-  };
-
-  if (params.categorySlug) {
-    where.categories = {
-      some: {
-        category: {
-          slug: params.categorySlug,
-          isActive: true,
-          archivedAt: null,
+  const categoryFilter: Prisma.TranslatorWhereInput = params.categorySlug
+    ? {
+        categories: {
+          some: { category: { slug: params.categorySlug, isActive: true, archivedAt: null } },
         },
-      },
-    };
+      }
+    : {};
+
+  const ring = await prisma.translator.findMany({
+    where: { isActive: true, archivedAt: null, slug: { not: "" }, ...categoryFilter },
+    select: { id: true },
+    orderBy: [{ slug: "asc" }],
+  });
+  const neighbourIds = pickRingNeighbourIds(
+    ring.map((row) => row.id),
+    params.currentTranslatorId,
+    limit,
+  );
+
+  if (neighbourIds.length >= limit) {
+    const rows = await prisma.translator.findMany({
+      where: { id: { in: neighbourIds }, isActive: true, archivedAt: null },
+      include: publicTranslatorInclude,
+    });
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    const ordered = neighbourIds.map((id) => byId.get(id)).filter((row): row is NonNullable<typeof row> => Boolean(row));
+    if (ordered.length >= limit) return ordered.map(mapPublicTranslator);
   }
 
-  const relatedRows = await prisma.translator.findMany({
-    where,
+  const existingIds = new Set<string>([params.currentTranslatorId, ...neighbourIds]);
+  const fallbackRows = await prisma.translator.findMany({
+    where: { id: { notIn: Array.from(existingIds) }, isActive: true, archivedAt: null },
     include: publicTranslatorInclude,
     orderBy: [{ isFeatured: "desc" }, { sortOrder: "asc" }, { updatedAt: "desc" }],
     take: limit,
   });
+  const neighbourRows = neighbourIds.length
+    ? await prisma.translator.findMany({
+        where: { id: { in: neighbourIds }, isActive: true, archivedAt: null },
+        include: publicTranslatorInclude,
+      })
+    : [];
 
-  if (relatedRows.length >= limit) {
-    return relatedRows.map(mapPublicTranslator);
-  }
-
-  const existingIds = new Set<string>([params.currentTranslatorId, ...relatedRows.map((item) => item.id)]);
-  const fallbackRows = await prisma.translator.findMany({
-    where: {
-      id: { notIn: Array.from(existingIds) },
-      isActive: true,
-      archivedAt: null,
-    },
-    include: publicTranslatorInclude,
-    orderBy: [{ isFeatured: "desc" }, { sortOrder: "asc" }, { updatedAt: "desc" }],
-    take: limit - relatedRows.length,
-  });
-
-  return [...relatedRows, ...fallbackRows].map(mapPublicTranslator);
+  return [...neighbourRows, ...fallbackRows].slice(0, limit).map(mapPublicTranslator);
 }
 
 export async function getPublicTranslatorBySlug(slug: string): Promise<PublicTranslator | null> {
@@ -2088,4 +2107,47 @@ export async function getAdminOverviewStats(days = 30) {
       createdAt: item.createdAt.toISOString(),
     })),
   };
+}
+
+
+export interface PublicTranslatorDirectoryGroup {
+  category: { name: string; slug: string } | null;
+  translators: Array<{ name: string; slug: string; shortDescription: string }>;
+}
+
+/** Every publicly indexable translator, grouped by primary category, for the /translators directory. */
+export async function getPublicTranslatorDirectory(): Promise<PublicTranslatorDirectoryGroup[]> {
+  const rows = await prisma.translator.findMany({
+    where: { isActive: true, archivedAt: null, slug: { not: "" } },
+    select: {
+      name: true,
+      slug: true,
+      shortDescription: true,
+      primaryCategory: { select: { name: true, slug: true, isActive: true, archivedAt: true, sortOrder: true } },
+      categories: {
+        select: { category: { select: { name: true, slug: true, isActive: true, archivedAt: true, sortOrder: true } } },
+        orderBy: { sortOrder: "asc" },
+      },
+    },
+    orderBy: [{ name: "asc" }],
+  });
+
+  const groups = new Map<string, PublicTranslatorDirectoryGroup & { sortOrder: number }>();
+  for (const row of rows) {
+    const direct = row.primaryCategory && row.primaryCategory.isActive && !row.primaryCategory.archivedAt ? row.primaryCategory : null;
+    const primary = direct || row.categories.map((link) => link.category).find((c) => c.isActive && !c.archivedAt) || null;
+    const key = primary?.slug || "__none__";
+    if (!groups.has(key)) {
+      groups.set(key, {
+        category: primary ? { name: primary.name, slug: primary.slug } : null,
+        translators: [],
+        sortOrder: primary?.sortOrder ?? 9999,
+      });
+    }
+    groups.get(key)!.translators.push({ name: row.name, slug: row.slug, shortDescription: row.shortDescription });
+  }
+
+  return [...groups.values()]
+    .sort((a, b) => a.sortOrder - b.sortOrder || (a.category?.name || "~").localeCompare(b.category?.name || "~"))
+    .map((group) => ({ category: group.category, translators: group.translators }));
 }

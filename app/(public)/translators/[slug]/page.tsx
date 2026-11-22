@@ -17,6 +17,11 @@ import { getPublicTranslatorBySlug, getRelatedPublicTranslators } from "@/lib/da
 import { getAppBaseUrl } from "@/lib/env";
 import { getAppSettings } from "@/lib/settings";
 import { getAttributionCollectionStatus } from "@/lib/growth/attribution/config";
+import { JsonLdScript } from "@/components/seo/json-ld";
+import { LanguageAccuracyNotice } from "@/components/public/language-accuracy-notice";
+import { needsLanguageAccuracyNotice } from "@/lib/seo/index-policy";
+import { buildTranslatorDescription, buildTranslatorTitle } from "@/lib/seo/translator-metadata";
+import { buildTranslatorJsonLd } from "@/lib/seo/structured-data";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -49,15 +54,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const baseUrl = getAppBaseUrl();
   const settings = await getAppSettings();
   const platformName = settings.platformName?.trim() || "SayTwist";
-  const cleanDescription = (translator.seoDescription || translator.shortDescription || "")
-    .replace(/\s+/g, " ")
-    .trim();
-  const descriptionBase =
-    cleanDescription ||
-    `Use ${translator.name} to rewrite text in a new tone with SayTwist.`;
-  const description =
-    descriptionBase.length > 190 ? `${descriptionBase.slice(0, 189).trimEnd()}…` : descriptionBase;
-  const title = translator.name;
+  const description = buildTranslatorDescription({
+    seoDescription: translator.seoDescription,
+    shortDescription: translator.shortDescription,
+    fallback: `Use ${translator.name} to rewrite text in a new tone with ${platformName}.`,
+  });
+  const title = buildTranslatorTitle({ seoTitle: translator.seoTitle, name: translator.name, brand: platformName });
   const translatorUrl = new URL(`/translators/${translator.slug}`, baseUrl).toString();
   const fallbackImageUrl = new URL("/og-image.png", baseUrl).toString();
   const imageUrl = translator.shareImagePath
@@ -72,7 +74,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     : fallbackImageUrl;
 
   return {
-    title,
+    title: { absolute: title },
     description,
     alternates: {
       canonical: `/translators/${translator.slug}`,
@@ -129,9 +131,22 @@ export default async function TranslatorSlugPage({ params }: PageProps) {
   const baseUrl = getAppBaseUrl();
   const shareUrl = new URL(`/translators/${translator.slug}`, baseUrl).toString();
   const pinImageUrl = new URL(`/translators/${translator.slug}/pin-image`, baseUrl).toString();
+  const platformName = settings.platformName?.trim() || "SayTwist";
+  const jsonLd = buildTranslatorJsonLd({
+    baseUrl: baseUrl.toString(),
+    platformName,
+    name: translator.name,
+    slug: translator.slug,
+    description: buildTranslatorDescription({
+      seoDescription: translator.seoDescription,
+      shortDescription: translator.shortDescription,
+      fallback: `Use ${translator.name} to rewrite text in a new tone.`,
+    }),
+  });
 
   return (
     <div className="relative overflow-x-hidden">
+      <JsonLdScript data={jsonLd} />
       <Navbar logoUrl={settings.logoUrl} logoDesktopHeight={settings.logoDesktopHeight} logoMobileHeight={settings.logoMobileHeight} />
       <main className="pb-10">
         <section className="relative mx-auto w-full max-w-7xl overflow-hidden px-4 pb-7 pt-7 sm:px-6 sm:pt-12 lg:px-8">
@@ -157,6 +172,8 @@ export default async function TranslatorSlugPage({ params }: PageProps) {
             <AdSlot placement={ads[0]} adSenseClientId={settings.adSenseClientId} />
           </section>
         ) : null}
+
+        {needsLanguageAccuracyNotice(translator.slug) ? <LanguageAccuracyNotice name={translator.name} /> : null}
 
         <TranslatorCard translator={translator} shareUrl={shareUrl} pinImageUrl={pinImageUrl} attributionEnabled={attributionEnabled} />
 

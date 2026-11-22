@@ -8,6 +8,7 @@ export const dynamic = "force-dynamic";
 
 const STATIC_INDEXABLE_ROUTES = [
   "/",
+  "/translators",
   "/about",
   "/contact",
   "/privacy",

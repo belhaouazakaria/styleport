@@ -13,7 +13,7 @@ export interface EditorialQualityAssessment {
 }
 
 const GENERIC_FILLER =
-  /\b(?:in today'?s fast-paced world|delve into|unlock the power|game[- ]changer|elevate your|whether you'?re|it is important to note)\b/i;
+  /\b(?:in today['\u2019]?s fast-paced world|delve into|unlock the power|game[- ]changer|elevate your|whether you(?:['\u2019]re| are)|it is important to note)\b/i;
 
 function normalize(value: string) {
   return value
