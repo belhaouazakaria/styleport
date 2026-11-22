@@ -1,5 +1,7 @@
 import type { NextConfig } from "next";
 
+import { RETIRED_TRANSLATOR_REDIRECTS } from "./lib/seo/retired-translators";
+
 const isProduction = process.env.NODE_ENV === "production";
 
 // Google ad resources can change over time. This targeted compatibility list
@@ -72,7 +74,8 @@ const nextConfig: NextConfig = {
       },
     ]);
 
-    return redirects;
+    // Host-agnostic: relative destinations keep every hostname on its own domain.
+    return [...RETIRED_TRANSLATOR_REDIRECTS, ...redirects];
   },
   async headers() {
     return [
