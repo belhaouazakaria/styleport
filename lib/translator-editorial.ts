@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { TEMPLATE_PHRASES } from "@/lib/editorial-distinctness";
 import { generateOpenAIText } from "@/lib/openai";
 import { translatorDraftSchema } from "@/lib/validators";
 import type { TranslatorEditorialDraft } from "@/lib/types";
@@ -59,6 +60,11 @@ function buildSystemPrompt() {
     "Examples must use varied source sentences that fit this translator's actual tone; do not reuse stock examples across translators.",
     "Explain where the style is a poor fit or needs extra human judgment; do not present every rewrite style as universally appropriate.",
     "Avoid generic openings such as 'In today's fast-paced world', 'Whether you're', 'unlock the power', and 'elevate your'.",
+    `Never use these overused phrases or close variants: ${TEMPLATE_PHRASES.map((phrase) => `"${phrase}"`).join(", ")}.`,
+    "Every sentence must be specific to this translator: name concrete vocabulary, devices, situations, or constraints it actually uses. If a sentence would fit any other translator unchanged, rewrite it.",
+    "Vary sentence openings and structure across sections. Do not start the About text with 'The <name> is an AI'. Do not open the difference section with 'Unlike'.",
+    "Never claim authenticity, accuracy, or native-speaker quality. For real languages and dialects, say plainly that output is AI-generated and unverified, and name what it is likely to get wrong.",
+    "Do not invent facts about real people, cultures, groups, or languages. If the topic is a real person or a group, keep descriptions neutral and avoid stereotypes.",
     "Generated copy is always a draft. A human editor must verify accuracy, distinctiveness, examples, limitations, and usefulness before publication or indexing.",
     "Return JSON only. Do not include markdown fences.",
   ].join("\n");
@@ -71,8 +77,16 @@ const fullPackShape = {
   bestUses: ["", "", ""],
   howToUse: ["", "", ""],
   tips: ["", "", ""],
-  examples: [{ contextTitle: "", originalText: "", transformedText: "" }],
-  faq: [{ question: "", answer: "" }],
+  examples: [
+    { contextTitle: "", originalText: "", transformedText: "" },
+    { contextTitle: "", originalText: "", transformedText: "" },
+    { contextTitle: "", originalText: "", transformedText: "" },
+  ],
+  faq: [
+    { question: "", answer: "" },
+    { question: "", answer: "" },
+    { question: "", answer: "" },
+  ],
 };
 
 export async function generateTranslatorEditorialContent(params: {
