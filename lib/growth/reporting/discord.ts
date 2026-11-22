@@ -1,7 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { archiveGrowthDailyReport } from "./archive";
 import { dueGrowthReportDate } from "./daily-runner";
-import { formatBriefing, loadBriefingData } from "./briefing";
+import { loadBriefingData } from "./briefing";
+import { briefingEmbed } from "./briefing-embed";
 
 /** Reuses immutable archived evidence. Discord receives a bounded digest and a
  * link to the full report; no Telegram credential or delivery state is needed. */
@@ -69,20 +70,23 @@ export async function queueDiscordDailyReport(now = new Date()) {
     pending;
   // The briefing is computed live from final data and does not depend on the
   // immutable archive, which may have been frozen before late data arrived.
-  let content: string;
+  let payload: Record<string, unknown>;
   let dedupePrefix = "discord-report:";
   let dedupeId = report.id;
   try {
-    const briefing = formatBriefing(await loadBriefingData(date));
-    content = (briefing.slice(0, 1800) + "\n\nFull report: https://saytwist.com/admin/growth/reports/" + report.id).slice(0, 1990);
+    payload = briefingEmbed(await loadBriefingData(date), "https://saytwist.com/admin/growth/reports/" + report.id) as unknown as Record<string, unknown>;
     dedupePrefix = "discord-brief:";
     dedupeId = date.replaceAll("-", "");
   } catch {
-    content =
-      report.digestText.slice(0, Math.max(0, 1800 - extra.length)) +
-      extra +
-      "\n\nFull report: https://saytwist.com/admin/growth/reports/" +
-      report.id;
+    payload = {
+      content: (
+        report.digestText.slice(0, Math.max(0, 1800 - extra.length)) +
+        extra +
+        "\n\nFull report: https://saytwist.com/admin/growth/reports/" +
+        report.id
+      ).slice(0, 1990),
+      allowed_mentions: { parse: [] },
+    };
   }
   const dedupeKey = dedupePrefix + dedupeId;
   await prisma.growthNotification.upsert({
@@ -90,10 +94,7 @@ export async function queueDiscordDailyReport(now = new Date()) {
     update: {},
     create: {
       dedupeKey,
-      payload: {
-        content: content,
-        allowed_mentions: { parse: [] },
-      },
+      payload: payload as object,
     },
   });
   return { status: "QUEUED" as const, reportId: report.id };
