@@ -12,6 +12,8 @@ export interface BriefingData {
     outboundClicks: number | null;
     previousOutboundClicks: number | null;
     avg7OutboundClicks: number | null;
+    /** Last 7 days ending on the report date, oldest first; null where data is missing. */
+    clicksSeries?: Array<number | null>;
   };
   site: {
     sessions: number | null;
@@ -19,6 +21,7 @@ export interface BriefingData {
     keyEvents: number | null;
     previousSessions: number | null;
     avg7Sessions: number | null;
+    sessionsSeries?: Array<number | null>;
     pinterestSessions: number | null;
     translations: number | null;
     translationsTrackingSince: string | null;
@@ -195,6 +198,10 @@ export async function loadBriefingData(date: string): Promise<BriefingData> {
   ]);
 
   const weekClicks = weekRows.map((r) => Number(r._sum.outboundClicks ?? 0));
+  const clicksByDay = new Map(weekRows.map((r) => [r.metricDate.getTime(), Number(r._sum.outboundClicks ?? 0)]));
+  const dayClicks = complete ? sum(dayRows as never, "outboundClicks") : null;
+  const clicksSeries = [6, 5, 4, 3, 2, 1, 0].map((i) => (i === 0 ? dayClicks : (clicksByDay.get(start.getTime() - i * DAY) ?? null)));
+  const sessionsSeries = [6, 5, 4, 3, 2, 1, 0].map((i) => totalsFor(new Date(start.getTime() - i * DAY))?.sessions ?? null);
   return {
     date,
     pinterest: {
@@ -205,18 +212,20 @@ export async function loadBriefingData(date: string): Promise<BriefingData> {
       outboundClicks: complete ? sum(dayRows as never, "outboundClicks") : null,
       previousOutboundClicks: prevRows.length === accounts && accounts > 0 ? sum(prevRows as never, "outboundClicks") : null,
       avg7OutboundClicks: weekClicks.length ? weekClicks.reduce((a, b) => a + b, 0) / weekClicks.length : null,
+      clicksSeries,
     },
     site: {
       sessions: dayTotals ? dayTotals.sessions : null,
       users: dayTotals ? dayTotals.users : null,
       keyEvents: dayTotals ? dayTotals.keyEvents : null,
       previousSessions: prevTotals ? prevTotals.sessions : null,
+      sessionsSeries,
       avg7Sessions: weekSessions.length ? weekSessions.reduce((a, b) => a + b, 0) / weekSessions.length : null,
       pinterestSessions,
       translations: translationsSeen && evJson?.translations !== undefined ? evJson.translations : null,
       translationsTrackingSince: TRANSLATION_TRACKING_START,
       hosts: srcJson?.hosts ?? [],
-      topPages: ((pages?.metrics as { pages?: Array<{ page: string; sessions: number }> } | undefined)?.pages ?? []).filter((p) => p.page && p.page !== "(not set)").slice(0, 3),
+      topPages: ((pages?.metrics as { pages?: Array<{ page: string; sessions: number }> } | undefined)?.pages ?? []).filter((p) => p.page && p.page !== "(not set)" && !/^\/(admin|api|login)(\/|$)/.test(p.page)).slice(0, 3),
     },
     search: {
       clicks: gscToday ? gscToday.clicks : null,

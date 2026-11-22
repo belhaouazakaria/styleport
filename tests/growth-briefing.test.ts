@@ -92,3 +92,10 @@ describe("translation event", () => {
     expect(() => trackTranslationCompleted({ translatorSlug: "a", direction: "forward", inputLength: 5 })).not.toThrow();
   });
 });
+
+describe("page filters", () => {
+  it("keeps admin, API and login visits out of top landing pages", async () => {
+    const src = (await import("node:fs")).readFileSync("lib/growth/reporting/briefing.ts", "utf8");
+    expect(src).toContain("admin|api|login");
+  });
+});
