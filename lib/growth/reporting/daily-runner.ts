@@ -3,14 +3,16 @@ import { GrowthReportDeliveryBlocked, submitArchivedDailyReport } from "@/lib/gr
 import { getTelegramReportSettings } from "@/lib/growth/reporting/telegram";
 
 /**
- * Daily reports cover the last fully elapsed UTC day. Waiting until 04:00 UTC
- * leaves room for daily analytics collection but is not a freshness guarantee.
+ * Daily reports cover the most recent UTC day whose data is FINAL, which is two
+ * days back. Pinterest publishes a day's metrics as PROCESSING on the next
+ * morning and READY the morning after, and Search Console finalizes about two
+ * days late. Reporting "yesterday" froze every report before its data existed.
  */
 export function dueGrowthReportDate(now: Date): string | null {
   if (!Number.isFinite(now.getTime())) throw new Error("Invalid report scheduling clock");
   if (now.getUTCHours() < 4) return null;
-  const yesterday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1));
-  return yesterday.toISOString().slice(0, 10);
+  const target = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 2));
+  return target.toISOString().slice(0, 10);
 }
 
 /**
