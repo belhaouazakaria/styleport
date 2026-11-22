@@ -31,6 +31,9 @@ export interface PageGenerationResult {
   checks: { backTranslation: BackTranslationCheck[]; lowOverlap: number };
 }
 
+/** Archetypes whose pages show a word-by-word map. Others must not carry filler glossaries. */
+export const GLOSSARY_ARCHETYPES: ReadonlySet<string> = new Set(["historical", "code", "emoji", "fandom", "comprehension"]);
+
 const designSchema = z.object({
   about: z.string().trim().min(40).max(2400),
   whatItDoes: z.string().trim().min(40).max(1800),
@@ -88,7 +91,8 @@ function designSystemPrompt() {
     "Never claim authenticity, accuracy, or native-speaker quality. Be honest about limits. For real languages and dialects say the output is AI-generated and unverified and name what it will likely get wrong.",
     "Do not invent facts about real people, cultures, groups or languages, and avoid stereotypes. Keep descriptions neutral and respectful.",
     "Do not use em dashes. Use commas, colons or full stops instead.",
-    "seo.title must be at most 60 characters and match what a person would type into Google to find this tool; seo.description must be 120 to 155 characters, specific and honest.",
+    "seo.title must be at most 60 characters and contain the phrase a person would type into Google to find this tool plus one differentiator, never just the bare name. For a real language use the form 'English to <Language> Translator: <differentiator>'. seo.description must be 120 to 155 characters, specific and honest.",
+    "Only include a glossary for historical, code, emoji, fandom or comprehension tools, and only with real term-to-term mappings (never 'Classic -> Steady phrasing'). Omit it for every other archetype. Omit any optional block you cannot fill with specific, useful content.",
     "quickFacts: 3 to 5 short label/value pairs that are true for this tool (for example Output length, Tone intensity, Best input, Not for).",
     "exampleInputs and situationInputs and ladderInput are SOURCE sentences only. Write natural, varied inputs people really paste in. Do NOT write transformed outputs: the real translator will be run on them afterwards.",
     "Return JSON only, with no markdown fences.",
@@ -130,6 +134,40 @@ function designUserPrompt(context: PageGenerationContext, retryIssue?: string) {
     "Use this exact JSON shape (remove optional blocks you do not need):",
     JSON.stringify(shape, null, 2),
   ].filter(Boolean).join("\n\n");
+}
+
+/** Removes empty template rows and under-filled optional blocks the model left in its JSON. */
+export function cleanDesign(raw: unknown): unknown {
+  if (!raw || typeof raw !== "object") return raw;
+  const root = raw as Record<string, unknown>;
+  const page = root.page as Record<string, unknown> | undefined;
+  if (page && typeof page === "object") {
+    const filled = (value: unknown) => typeof value === "string" && value.trim().length > 0;
+    if (Array.isArray(page.glossary)) {
+      const rows = page.glossary.filter((r) => r && filled((r as { from?: unknown }).from) && filled((r as { to?: unknown }).to));
+      if (rows.length >= 4) page.glossary = rows; else delete page.glossary;
+    }
+    if (Array.isArray(page.situationInputs)) {
+      const rows = page.situationInputs.filter((r) => r && filled((r as { title?: unknown }).title) && filled((r as { input?: unknown }).input));
+      if (rows.length >= 3) page.situationInputs = rows; else delete page.situationInputs;
+    }
+    if (!filled(page.ladderInput)) delete page.ladderInput;
+    if (!filled(page.origin)) delete page.origin;
+    if (!filled(page.kicker)) delete page.kicker;
+    const fit = page.fitCheck as { goodFor?: unknown[]; avoidFor?: unknown[] } | undefined;
+    if (fit) {
+      fit.goodFor = (fit.goodFor || []).filter(filled);
+      fit.avoidFor = (fit.avoidFor || []).filter(filled);
+      if (fit.goodFor.length < 2 || fit.avoidFor.length < 2) delete page.fitCheck;
+    }
+    const script = page.script as { englishPhrases?: unknown[]; notes?: unknown[] } | undefined;
+    if (script) {
+      script.englishPhrases = (script.englishPhrases || []).filter(filled);
+      script.notes = (script.notes || []).filter(filled);
+      if (script.englishPhrases.length < 5 || script.notes.length < 2) delete page.script;
+    }
+  }
+  return root;
 }
 
 async function runTranslator(runtime: RuntimeTranslator, text: string, modeKey: string | undefined, model?: string) {
@@ -182,7 +220,7 @@ export async function generateTranslatorPage(params: {
       maxOutputTokens: 7000,
     });
     try {
-      const parsed = designSchema.parse(extractJson(generated.text));
+      const parsed = designSchema.parse(cleanDesign(extractJson(generated.text)));
       const missing = missingRequiredBlocks(
         { ...parsed.page, situations: parsed.page.situationInputs?.map((s) => ({ ...s, output: "pending" })), ladder: parsed.page.ladderInput ? { input: parsed.page.ladderInput, steps: [{ label: "a", output: "pending" }, { label: "b", output: "pending" }] } : undefined, script: parsed.page.script ? { ...parsed.page.script, phrases: parsed.page.script.englishPhrases.map((english) => ({ english, target: "pending" })) } : undefined } as TranslatorPage,
         { modeCount },
@@ -254,7 +292,11 @@ export async function generateTranslatorPage(params: {
 
   const { situationInputs: _si, ladderInput: _li, script: _script, ...pageRest } = design.page;
   void _si; void _li; void _script;
-  const page = translatorPageSchema.parse({ ...pageRest, situations, ladder, script });
+  // A word map only makes sense where there are real term-to-term mappings.
+  const glossary = GLOSSARY_ARCHETYPES.has(pageRest.archetype)
+    ? pageRest.glossary?.filter((row) => row.from.trim().toLowerCase() !== row.to.trim().toLowerCase())
+    : undefined;
+  const page = translatorPageSchema.parse({ ...pageRest, glossary: glossary && glossary.length >= 4 ? glossary : undefined, situations, ladder, script });
 
   const editorial: TranslatorEditorialDraft = {
     about: design.about,
