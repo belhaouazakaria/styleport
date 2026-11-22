@@ -131,30 +131,34 @@ export async function readGa4Insights(property: string, token: string, date: str
 
 const gscRows = z.object({
   rows: z
-    .array(z.object({ keys: z.array(z.string()), clicks: z.number(), impressions: z.number(), ctr: z.number(), position: z.number() }))
+    .array(z.object({ keys: z.array(z.string()).default([]), clicks: z.number(), impressions: z.number(), ctr: z.number(), position: z.number() }))
     .optional(),
 });
 
 export async function readSearchConsoleInsights(site: string, token: string, date: string, fetcher: typeof fetch = fetch) {
   const url = "https://www.googleapis.com/webmasters/v3/sites/" + encodeURIComponent(site) + "/searchAnalytics/query";
-  const query = async (dimension: "query" | "page") => {
+  const query = async (dimension: "query" | "page" | null) => {
     const raw = await post(
       url,
-      { startDate: date, endDate: date, dimensions: [dimension], type: "web", dataState: "final", rowLimit: 15 },
+      { startDate: date, endDate: date, ...(dimension ? { dimensions: [dimension] } : {}), type: "web", dataState: "final", rowLimit: 15 },
       token,
       fetcher,
     );
     const parsed = gscRows.safeParse(raw);
     if (!parsed.success) throw new GoogleAnalyticsError("INVALID_DATA");
     return (parsed.data.rows ?? []).map((r) => ({
-      key: r.keys[0].slice(0, 160),
+      key: (r.keys[0] ?? "").slice(0, 160),
       clicks: r.clicks,
       impressions: r.impressions,
       position: Math.round(r.position * 10) / 10,
     }));
   };
-  const [queries, pages] = await Promise.all([query("query"), query("page")]);
-  return { GSC_QUERIES: { rows: queries }, GSC_PAGES: { rows: pages } };
+  const [queries, pages, totalRows] = await Promise.all([query("query"), query("page"), query(null)]);
+  const total = totalRows[0];
+  return {
+    GSC_QUERIES: { totals: { clicks: total?.clicks ?? 0, impressions: total?.impressions ?? 0, position: total?.position ?? 0 }, rows: queries },
+    GSC_PAGES: { rows: pages },
+  };
 }
 
 function isoDay(offsetDays: number, now: Date) {
