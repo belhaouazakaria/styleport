@@ -24,8 +24,27 @@ const RETIRED_SLUGS = [
   "worlds-longest-english-translator-2",
 ] as const;
 
-export const RETIRED_TRANSLATOR_REDIRECTS = RETIRED_SLUGS.map((slug) => ({
-  source: `/translators/${slug}`,
-  destination: `/translators/${slug.replace(/-2$/, "")}`,
-  permanent: true,
-}));
+/** Retired slugs whose replacement is not simply the slug without "-2". */
+const DESTINATION_OVERRIDES: Record<string, string> = {
+  // Kept as its own tool under a distinct name and slug.
+  "error-message-translator-2": "snarky-error-message-translator",
+};
+
+/** Slugs that were replaced by another translator taking over the canonical URL. */
+const REPLACED_BY: Array<{ from: string; to: string }> = [
+  // "Russian 2.0" now lives at /translators/russian-translator.
+  { from: "russian-2-0-translator", to: "russian-translator" },
+];
+
+export const RETIRED_TRANSLATOR_REDIRECTS = [
+  ...RETIRED_SLUGS.map((slug) => ({
+    source: `/translators/${slug}`,
+    destination: `/translators/${DESTINATION_OVERRIDES[slug] ?? slug.replace(/-2$/, "")}`,
+    permanent: true,
+  })),
+  ...REPLACED_BY.map(({ from, to }) => ({
+    source: `/translators/${from}`,
+    destination: `/translators/${to}`,
+    permanent: true,
+  })),
+];
