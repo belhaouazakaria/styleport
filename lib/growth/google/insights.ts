@@ -16,7 +16,21 @@ import { prisma } from "@/lib/prisma";
 export const INSIGHT_SOURCES = ["GA4_SOURCES", "GA4_EVENTS", "GA4_PAGES", "GSC_QUERIES", "GSC_PAGES"] as const;
 export type InsightSource = (typeof INSIGHT_SOURCES)[number];
 
+/**
+ * The table only accepts the provider sources GA4 and SEARCH_CONSOLE (database
+ * check constraint), and the basic sync owns the plain account ids. Insight rows
+ * therefore live under the same provider source with a suffixed account id, so
+ * the basic sync never overwrites or flags them.
+ */
+export function insightStorage(kind: InsightSource, baseAccountId: string) {
+  const provider = kind.startsWith("GA4") ? "GA4" : "SEARCH_CONSOLE";
+  return { source: provider, accountId: baseAccountId + "#" + kind.split("_")[1].toLowerCase() };
+}
+
 export const TRANSLATION_EVENT_NAME = "translation_completed";
+
+/** First full UTC day on which the site sends the translation event. Earlier days have no tracking, so they must show "n/a", not zero. */
+export const TRANSLATION_TRACKING_START = "2026-11-23";
 
 const num = z.string().regex(/^\d{1,16}(?:\.\d{1,8})?$/);
 
@@ -157,14 +171,15 @@ export async function collectGoogleInsights(
   const stored: Record<string, number> = {};
   const errors: string[] = [];
 
-  const save = async (source: InsightSource, accountId: string, date: string, tz: string, metrics: unknown) => {
+  const save = async (kind: InsightSource, baseAccountId: string, date: string, tz: string, metrics: unknown) => {
     const metricDate = new Date(date + "T00:00:00.000Z");
+    const { source, accountId } = insightStorage(kind, baseAccountId);
     await prisma.growthExternalAnalyticsDaily.upsert({
       where: { source_accountId_metricDate: { source, accountId, metricDate } },
       create: { source, accountId, metricDate, providerTimeZone: tz, metrics: metrics as object, qualityFlags: ["PROVIDER_DATE_LABEL"] },
       update: { metrics: metrics as object, providerTimeZone: tz, fetchedAt: new Date() },
     });
-    stored[source] = (stored[source] ?? 0) + 1;
+    stored[kind] = (stored[kind] ?? 0) + 1;
   };
 
   if (config.propertyId) {

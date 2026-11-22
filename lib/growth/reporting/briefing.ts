@@ -1,3 +1,4 @@
+import { insightStorage, TRANSLATION_TRACKING_START, type InsightSource } from "@/lib/growth/google/insights";
 import { prisma } from "@/lib/prisma";
 
 /** Everything the daily briefing needs for one UTC date. Null means "not available", never zero. */
@@ -37,7 +38,6 @@ export interface BriefingData {
 
 const DAY = 86_400_000;
 const utc = (date: string) => new Date(date + "T00:00:00.000Z");
-const iso = (d: Date) => d.toISOString().slice(0, 10);
 
 export function percentChange(current: number | null, previous: number | null): string {
   if (current === null || previous === null) return "n/a";
@@ -141,16 +141,13 @@ export async function loadBriefingData(date: string): Promise<BriefingData> {
   const complete = accounts > 0 && dayRows.length === accounts;
   const sum = (rows: Array<{ [k: string]: bigint }>, key: string) => rows.reduce((a, r) => a + Number(r[key]), 0);
 
-  const ga = await prisma.growthExternalAnalyticsDaily.findFirst({ where: { source: "GA4", metricDate: start } });
-  const property = ga?.accountId ?? (await prisma.growthExternalAnalyticsDaily.findFirst({ where: { source: "GA4" }, select: { accountId: true } }))?.accountId ?? null;
+  const ga = await prisma.growthExternalAnalyticsDaily.findFirst({ where: { source: "GA4", metricDate: start, NOT: { accountId: { contains: "#" } } } });
+  const property = ga?.accountId ?? (await prisma.growthExternalAnalyticsDaily.findFirst({ where: { source: "GA4", NOT: { accountId: { contains: "#" } } }, select: { accountId: true } }))?.accountId ?? null;
   const gaPrev = property ? await prisma.growthExternalAnalyticsDaily.findFirst({ where: { source: "GA4", accountId: property, metricDate: prev } }) : null;
-  const sources = property ? await prisma.growthExternalAnalyticsDaily.findFirst({ where: { source: "GA4_SOURCES", accountId: property, metricDate: start } }) : null;
-  const events = property ? await prisma.growthExternalAnalyticsDaily.findFirst({ where: { source: "GA4_EVENTS", accountId: property, metricDate: start } }) : null;
-  const pages = property ? await prisma.growthExternalAnalyticsDaily.findFirst({ where: { source: "GA4_PAGES", accountId: property, metricDate: start } }) : null;
-  const firstTranslation = property
-    ? await prisma.growthExternalAnalyticsDaily.findFirst({ where: { source: "GA4_EVENTS", accountId: property }, orderBy: { metricDate: "asc" }, select: { metricDate: true } })
-    : null;
-
+  const insight = (kind: InsightSource) => ({ ...insightStorage(kind, property ?? "") });
+  const sources = property ? await prisma.growthExternalAnalyticsDaily.findFirst({ where: { ...insight("GA4_SOURCES"), metricDate: start } }) : null;
+  const events = property ? await prisma.growthExternalAnalyticsDaily.findFirst({ where: { ...insight("GA4_EVENTS"), metricDate: start } }) : null;
+  const pages = property ? await prisma.growthExternalAnalyticsDaily.findFirst({ where: { ...insight("GA4_PAGES"), metricDate: start } }) : null;
   const metric = (row: { metrics: unknown } | null, key: string) => {
     const v = row ? Number((row.metrics as Record<string, string>)[key]) : NaN;
     return Number.isFinite(v) ? v : null;
@@ -158,11 +155,12 @@ export async function loadBriefingData(date: string): Promise<BriefingData> {
   const srcJson = sources?.metrics as { sources?: Array<{ source: string; sessions: number }>; hosts?: Array<{ host: string; sessions: number }> } | undefined;
   const pinterestSessions = srcJson?.sources ? srcJson.sources.filter((x) => /pinterest/i.test(x.source)).reduce((a, x) => a + x.sessions, 0) : null;
   const evJson = events?.metrics as { translations?: number } | undefined;
-  const translationsSeen = Boolean(firstTranslation && firstTranslation.metricDate <= start);
+  const translationsSeen = date >= TRANSLATION_TRACKING_START;
 
-  const gsc = await prisma.growthExternalAnalyticsDaily.findFirst({ where: { source: "SEARCH_CONSOLE", metricDate: start } });
-  const gscWeek = await prisma.growthExternalAnalyticsDaily.findMany({ where: { source: "SEARCH_CONSOLE", metricDate: { gte: new Date(start.getTime() - 6 * DAY), lt: end } } });
-  const queryRows = await prisma.growthExternalAnalyticsDaily.findMany({ where: { source: "GSC_QUERIES", metricDate: { gte: new Date(start.getTime() - 6 * DAY), lt: end } }, select: { metrics: true } });
+  const site = (await prisma.growthExternalAnalyticsDaily.findFirst({ where: { source: "SEARCH_CONSOLE", NOT: { accountId: { contains: "#" } } }, select: { accountId: true } }))?.accountId ?? null;
+  const gsc = site ? await prisma.growthExternalAnalyticsDaily.findFirst({ where: { source: "SEARCH_CONSOLE", accountId: site, metricDate: start } }) : null;
+  const gscWeek = site ? await prisma.growthExternalAnalyticsDaily.findMany({ where: { source: "SEARCH_CONSOLE", accountId: site, metricDate: { gte: new Date(start.getTime() - 6 * DAY), lt: end } } }) : [];
+  const queryRows = site ? await prisma.growthExternalAnalyticsDaily.findMany({ where: { ...insightStorage("GSC_QUERIES", site), metricDate: { gte: new Date(start.getTime() - 6 * DAY), lt: end } }, select: { metrics: true } }) : [];
   const agg = new Map<string, { clicks: number; impressions: number; posWeighted: number }>();
   for (const row of queryRows)
     for (const r of ((row.metrics as { rows?: Array<{ key: string; clicks: number; impressions: number; position: number }> }).rows ?? [])) {
@@ -201,7 +199,7 @@ export async function loadBriefingData(date: string): Promise<BriefingData> {
       avg7Sessions: property ? await sumSessions(property, week, start) : null,
       pinterestSessions,
       translations: translationsSeen && evJson?.translations !== undefined ? evJson.translations : null,
-      translationsTrackingSince: firstTranslation ? iso(firstTranslation.metricDate) : null,
+      translationsTrackingSince: TRANSLATION_TRACKING_START,
       hosts: srcJson?.hosts ?? [],
       topPages: ((pages?.metrics as { pages?: Array<{ page: string; sessions: number }> } | undefined)?.pages ?? []).slice(0, 3),
     },
