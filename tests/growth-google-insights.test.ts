@@ -9,12 +9,14 @@ describe("Google insight readers", () => {
     const fetcher = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body));
       const dims = body.dimensions.map((d: { name: string }) => d.name).join(",");
+      if (dims === "") return json({ rows: [{ metricValues: [{ value: "61" }, { value: "53" }, { value: "0" }] }] });
       if (dims === "sessionSource,sessionMedium") return json({ rows: [{ dimensionValues: [{ value: "pinterest" }, { value: "referral" }], metricValues: [{ value: "30" }, { value: "28" }] }] });
       if (dims === "hostName") return json({ rows: [{ dimensionValues: [{ value: "saytwist.com" }], metricValues: [{ value: "40" }, { value: "35" }] }] });
       if (dims === "eventName,sessionSource") return json({ rows: [{ dimensionValues: [{ value: "translation_completed" }, { value: "pinterest" }], metricValues: [{ value: "7" }] }, { dimensionValues: [{ value: "translation_completed" }, { value: "google" }], metricValues: [{ value: "2" }] }] });
       return json({ rows: [{ dimensionValues: [{ value: "/translators/jester-translator" }], metricValues: [{ value: "12" }, { value: "10" }] }] });
     });
     const result = await readGa4Insights("553797535", "token", "2026-11-21", fetcher as unknown as typeof fetch);
+    expect(result.GA4_SOURCES.totals).toEqual({ sessions: 61, users: 53, keyEvents: 0 });
     expect(result.GA4_SOURCES.sources[0]).toEqual({ source: "pinterest", medium: "referral", sessions: 30, users: 28 });
     expect(result.GA4_SOURCES.hosts[0].host).toBe("saytwist.com");
     expect(result.GA4_EVENTS.translations).toBe(9);

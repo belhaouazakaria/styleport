@@ -109,15 +109,6 @@ export function nextAction(data: BriefingData): string | null {
   return null;
 }
 
-async function sumSessions(property: string, from: Date, to: Date) {
-  const rows = await prisma.growthExternalAnalyticsDaily.findMany({
-    where: { source: "GA4", accountId: property, metricDate: { gte: from, lt: to } },
-    select: { metrics: true },
-  });
-  const values = rows.map((r) => Number((r.metrics as { sessions?: string }).sessions)).filter((n) => Number.isFinite(n));
-  return values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
-}
-
 export async function loadBriefingData(date: string): Promise<BriefingData> {
   const start = utc(date);
   const end = new Date(start.getTime() + DAY);
@@ -141,13 +132,32 @@ export async function loadBriefingData(date: string): Promise<BriefingData> {
   const complete = accounts > 0 && dayRows.length === accounts;
   const sum = (rows: Array<{ [k: string]: bigint }>, key: string) => rows.reduce((a, r) => a + Number(r[key]), 0);
 
-  const ga = await prisma.growthExternalAnalyticsDaily.findFirst({ where: { source: "GA4", metricDate: start, NOT: { accountId: { contains: "#" } } } });
-  const property = ga?.accountId ?? (await prisma.growthExternalAnalyticsDaily.findFirst({ where: { source: "GA4", NOT: { accountId: { contains: "#" } } }, select: { accountId: true } }))?.accountId ?? null;
-  const gaPrev = property ? await prisma.growthExternalAnalyticsDaily.findFirst({ where: { source: "GA4", accountId: property, metricDate: prev } }) : null;
+  const property =
+    (await prisma.growthExternalAnalyticsDaily.findFirst({ where: { source: "GA4", NOT: { accountId: { contains: "#" } } }, select: { accountId: true } }))?.accountId ?? null;
   const insight = (kind: InsightSource) => ({ ...insightStorage(kind, property ?? "") });
   const sources = property ? await prisma.growthExternalAnalyticsDaily.findFirst({ where: { ...insight("GA4_SOURCES"), metricDate: start } }) : null;
   const events = property ? await prisma.growthExternalAnalyticsDaily.findFirst({ where: { ...insight("GA4_EVENTS"), metricDate: start } }) : null;
   const pages = property ? await prisma.growthExternalAnalyticsDaily.findFirst({ where: { ...insight("GA4_PAGES"), metricDate: start } }) : null;
+  // Daily GA4 totals come from the collector's own rows (fresh), falling back to the basic sync.
+  const totalsRows = property
+    ? await prisma.growthExternalAnalyticsDaily.findMany({
+        where: { ...insight("GA4_SOURCES"), metricDate: { gte: week, lt: end } },
+        select: { metricDate: true, metrics: true },
+      })
+    : [];
+  const basicRows = property
+    ? await prisma.growthExternalAnalyticsDaily.findMany({ where: { source: "GA4", accountId: property, metricDate: { gte: week, lt: end } }, select: { metricDate: true, metrics: true } })
+    : [];
+  const totalsFor = (day: Date) => {
+    const t = totalsRows.find((r) => r.metricDate.getTime() === day.getTime())?.metrics as { totals?: { sessions: number; users: number; keyEvents: number } } | undefined;
+    if (t?.totals) return t.totals;
+    const b = basicRows.find((r) => r.metricDate.getTime() === day.getTime())?.metrics as Record<string, string> | undefined;
+    return b ? { sessions: Number(b.sessions), users: Number(b.activeUsers), keyEvents: Number(b.keyEvents) } : null;
+  };
+  const dayTotals = totalsFor(start);
+  const prevTotals = totalsFor(prev);
+  const weekSessions = [1, 2, 3, 4, 5, 6, 7].map((i) => totalsFor(new Date(start.getTime() - i * DAY))?.sessions).filter((n): n is number => typeof n === "number" && Number.isFinite(n));
+
   const metric = (row: { metrics: unknown } | null, key: string) => {
     const v = row ? Number((row.metrics as Record<string, string>)[key]) : NaN;
     return Number.isFinite(v) ? v : null;
@@ -192,11 +202,11 @@ export async function loadBriefingData(date: string): Promise<BriefingData> {
       avg7OutboundClicks: weekClicks.length ? weekClicks.reduce((a, b) => a + b, 0) / weekClicks.length : null,
     },
     site: {
-      sessions: metric(ga, "sessions"),
-      users: metric(ga, "activeUsers"),
-      keyEvents: metric(ga, "keyEvents"),
-      previousSessions: metric(gaPrev, "sessions"),
-      avg7Sessions: property ? await sumSessions(property, week, start) : null,
+      sessions: dayTotals ? dayTotals.sessions : null,
+      users: dayTotals ? dayTotals.users : null,
+      keyEvents: dayTotals ? dayTotals.keyEvents : null,
+      previousSessions: prevTotals ? prevTotals.sessions : null,
+      avg7Sessions: weekSessions.length ? weekSessions.reduce((a, b) => a + b, 0) / weekSessions.length : null,
       pinterestSessions,
       translations: translationsSeen && evJson?.translations !== undefined ? evJson.translations : null,
       translationsTrackingSince: TRANSLATION_TRACKING_START,
