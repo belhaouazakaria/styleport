@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AdSlot } from "@/components/shared/ad-slot";
 
@@ -11,8 +11,17 @@ const placement = {
   codeSnippet: null,
 };
 
+function mockSlotWidth(width: number) {
+  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
+    () => ({ width, height: 0, top: 0, left: 0, right: width, bottom: 0, x: 0, y: 0, toJSON() {} }) as DOMRect,
+  );
+}
+
+afterEach(() => vi.restoreAllMocks());
+
 describe("AdSlot", () => {
   it("renders and initializes the responsive AdSense unit without exposing the slot ID as text", () => {
+    mockSlotWidth(320);
     window.adsbygoogle = [];
     const { container } = render(<AdSlot placement={placement} adSenseClientId="ca-pub-1234567890123456" />);
 
