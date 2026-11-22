@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ArrowUpRight } from "lucide-react";
 import Link from "next/link";
 
 import { Breadcrumbs } from "@/components/public/breadcrumbs";
@@ -64,15 +65,36 @@ export default async function TranslatorsDirectoryPage() {
           ))}
         </nav>
         {visibleGroups.map((group) => (
-          <section key={group.category?.slug || "other"} id={group.category?.slug || "other"} className="mt-10 scroll-mt-24">
-            <h2 className="font-display text-2xl font-bold text-ink">{group.category?.name || "Other"}</h2>
-            <ul className="mt-4 grid gap-x-8 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
-              {group.translators.map((item) => (
-                <li key={item.slug}>
-                  <Link href={`/translators/${item.slug}`} className="font-semibold text-brand-800 hover:underline">
-                    {item.name}
+          <section key={group.category?.slug || "other"} id={group.category?.slug || "other"} className="mt-12 scroll-mt-24">
+            <div className="flex items-end justify-between gap-3 border-b border-dashed border-border pb-3">
+              <h2 className="font-display text-3xl font-bold tracking-tight text-ink">{group.category?.name || "Other"}</h2>
+              <span className="rounded-full bg-brand-100 px-3 py-1 text-xs font-bold text-brand-800">{group.translators.length} translators</span>
+            </div>
+            <ul className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {group.translators.map((item, index) => (
+                <li key={item.slug} className="group relative flex flex-col rounded-[1.25rem] border border-border bg-white/80 p-5 shadow-[var(--shadow-soft)] transition hover:-translate-y-1 hover:bg-white">
+                  <span
+                    aria-hidden="true"
+                    className={`mb-4 flex h-11 w-11 -rotate-3 items-center justify-center rounded-[1rem] text-xl font-black ${
+                      index % 4 === 0 ? "bg-[#ffe079]" : index % 4 === 1 ? "bg-accent-100 text-accent-700" : index % 4 === 2 ? "bg-brand-100 text-brand-800" : "bg-supporting-100 text-supporting-800"
+                    }`}
+                  >
+                    {item.name.slice(0, 1).toUpperCase()}
+                  </span>
+                  <h3 className="font-display text-xl font-bold leading-tight text-ink">
+                    <Link href={`/translators/${item.slug}`} className="hover:text-brand-700 focus-visible:ring-2 focus-visible:ring-brand-500/60 focus-visible:outline-none">
+                      {item.name}
+                    </Link>
+                  </h3>
+                  <p className="mt-2 line-clamp-3 flex-1 text-sm leading-6 text-muted-ink">{item.shortDescription}</p>
+                  <Link
+                    href={`/translators/${item.slug}`}
+                    aria-label={`Try ${item.name}`}
+                    className="mt-4 inline-flex h-10 items-center justify-between gap-2 self-start rounded-full bg-brand-500 px-4 text-sm font-extrabold text-white shadow-[0_4px_0_#0d9488] transition hover:bg-brand-600 active:translate-y-1 active:shadow-none"
+                  >
+                    Try this twist
+                    <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
                   </Link>
-                  <p className="line-clamp-2 text-sm leading-5 text-muted-ink">{item.shortDescription}</p>
                 </li>
               ))}
             </ul>
