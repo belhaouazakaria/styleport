@@ -18,6 +18,9 @@ import { getAppBaseUrl } from "@/lib/env";
 import { getAppSettings } from "@/lib/settings";
 import { getAttributionCollectionStatus } from "@/lib/growth/attribution/config";
 import { JsonLdScript } from "@/components/seo/json-ld";
+import { TranslatorPageSections } from "@/components/public/translator-page-sections";
+import { getPublishedTranslatorPage } from "@/lib/data/translator-page";
+import { composeLayout } from "@/lib/translator-page-layout";
 import { LanguageAccuracyNotice } from "@/components/public/language-accuracy-notice";
 import { needsLanguageAccuracyNotice } from "@/lib/seo/index-policy";
 import { buildTranslatorDescription, buildTranslatorTitle } from "@/lib/seo/translator-metadata";
@@ -30,6 +33,7 @@ interface PageProps {
 export const dynamic = "force-dynamic";
 
 const loadPublicTranslatorBySlug = cache(async (slug: string) => getPublicTranslatorBySlug(slug));
+const loadTranslatorPage = cache(async (translatorId: string) => getPublishedTranslatorPage(translatorId));
 
 function deriveUseCaseTitle(content: string, index: number) {
   const normalized = content.replace(/^[\s•*-]+/, "").trim();
@@ -54,12 +58,13 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const baseUrl = getAppBaseUrl();
   const settings = await getAppSettings();
   const platformName = settings.platformName?.trim() || "SayTwist";
+  const pageBlocks = await loadTranslatorPage(translator.id);
   const description = buildTranslatorDescription({
-    seoDescription: translator.seoDescription,
+    seoDescription: pageBlocks?.seo?.description || translator.seoDescription,
     shortDescription: translator.shortDescription,
     fallback: `Use ${translator.name} to rewrite text in a new tone with ${platformName}.`,
   });
-  const title = buildTranslatorTitle({ seoTitle: translator.seoTitle, name: translator.name, brand: platformName });
+  const title = buildTranslatorTitle({ seoTitle: pageBlocks?.seo?.title || translator.seoTitle, name: translator.name, brand: platformName });
   const translatorUrl = new URL(`/translators/${translator.slug}`, baseUrl).toString();
   const fallbackImageUrl = new URL("/og-image.png", baseUrl).toString();
   const imageUrl = translator.shareImagePath
@@ -114,6 +119,18 @@ export default async function TranslatorSlugPage({ params }: PageProps) {
     notFound();
   }
 
+  const pageBlocks = await loadTranslatorPage(translator.id);
+  const pageLayout = pageBlocks
+    ? composeLayout(pageBlocks, translator.slug, {
+        hasExamples: translator.editorial.examples.length > 0,
+        hasUses: translator.editorial.bestUses.length > 0,
+        hasSteps: translator.editorial.howToUse.length > 0,
+        hasTips: translator.editorial.tips.length > 0,
+        hasAbout: Boolean(translator.editorial.about),
+        hasDifference: Boolean(translator.editorial.differenceDescription),
+        hasFaq: translator.editorial.faq.length > 0,
+      })
+    : null;
   const [settings, ads, relatedTranslators, attributionEnabled] = await Promise.all([
     getAppSettings(),
     getRenderableAdPlacements({
@@ -158,7 +175,7 @@ export default async function TranslatorSlugPage({ params }: PageProps) {
               { label: translator.name },
             ]}
           />
-          <p className="section-kicker mt-5">Ready for a fresh voice?</p>
+          <p className="section-kicker mt-5">{pageBlocks?.kicker || "Ready for a fresh voice?"}</p>
           <h1 className="font-display mt-2 max-w-4xl text-balance text-[clamp(2.45rem,8vw,4.8rem)] font-bold leading-[0.98] tracking-[-0.04em] text-ink">
             {translator.title}
           </h1>
@@ -177,6 +194,10 @@ export default async function TranslatorSlugPage({ params }: PageProps) {
 
         <TranslatorCard translator={translator} shareUrl={shareUrl} pinImageUrl={pinImageUrl} attributionEnabled={attributionEnabled} />
 
+        {pageBlocks && pageLayout ? (
+          <TranslatorPageSections page={pageBlocks} layout={pageLayout} editorial={translator.editorial} />
+        ) : (
+          <>
         <section className="mx-auto mt-8 w-full max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="border-y border-dashed border-border py-7 sm:py-9">
             <p className="section-kicker">The quick take</p>
@@ -259,6 +280,9 @@ export default async function TranslatorSlugPage({ params }: PageProps) {
         ) : null}
 
         {translator.editorial.faq.length ? <section className="mx-auto mt-10 w-full max-w-4xl px-4 sm:px-6 lg:px-8"><div className="border-t border-dashed border-border pt-8"><p className="section-kicker">Questions, answered</p><h2 className="font-display mt-1 text-3xl font-bold tracking-tight text-ink">FAQ</h2><div className="mt-4"><TranslatorFaq faq={translator.editorial.faq} /></div></div></section> : null}
+
+          </>
+        )}
 
         <TranslatorComments translatorId={translator.id} translatorSlug={translator.slug} />
 

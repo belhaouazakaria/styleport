@@ -1,3 +1,4 @@
+import { generateTranslatorPage } from "@/lib/translator-page-generation";
 import { assessDistinctness } from "@/lib/editorial-distinctness";
 import { Prisma, TranslatorEditorialDraftStatus, TranslatorEditorialJobItemStatus, TranslatorEditorialJobType } from "@prisma/client";
 
@@ -606,7 +607,7 @@ async function loadEditorialCorpus(excludeTranslatorId: string) {
 
 export async function processEditorialJobItem(
   itemId: string,
-  options: { generate?: typeof generateTranslatorEditorialContent } = {},
+  options: { generate?: typeof generateTranslatorEditorialContent; generatePage?: typeof generateTranslatorPage } = {},
 ) {
   const item = await prisma.translatorEditorialJobItem.findUnique({
     where: { id: itemId },
@@ -614,7 +615,8 @@ export async function processEditorialJobItem(
       job: true,
       translator: {
         select: {
-          id: true, name: true, title: true, subtitle: true, shortDescription: true, promptSystem: true, promptInstructions: true, modelOverride: true, primaryCategoryId: true,
+          id: true, slug: true, name: true, title: true, subtitle: true, shortDescription: true, promptSystem: true, promptInstructions: true, modelOverride: true, primaryCategoryId: true, showModeSelector: true,
+          modes: { select: { key: true, label: true, instruction: true }, orderBy: { sortOrder: "asc" } },
           categories: { select: { category: { select: { name: true } } } },
           editorialContent: { select: { about: true, whatItDoes: true, differenceDescription: true } },
           editorialLists: { select: { kind: true, content: true } },
@@ -638,7 +640,33 @@ export async function processEditorialJobItem(
       return { status: "SKIPPED" as const };
     }
 
-    const generated = sanitizeGeneratedText(await (options.generate || generateTranslatorEditorialContent)({
+    let pageChecks: unknown = null;
+    const model = settings.defaultModelOverride || item.translator.modelOverride || undefined;
+    // Full regeneration builds a unique page (archetype layout, glossary, real outputs).
+    const generatedRaw = item.operation === "REGENERATE_FULL"
+      ? await (async () => {
+          const result = await (options.generatePage || generateTranslatorPage)({
+            model,
+            context: {
+              name: item.translator.name,
+              slug: item.translator.slug,
+              description: `${item.translator.title}. ${item.translator.subtitle} ${item.translator.shortDescription}`,
+              category: item.translator.categories[0]?.category.name || null,
+              runtime: {
+                id: item.translator.id,
+                slug: item.translator.slug,
+                promptSystem: item.translator.promptSystem,
+                promptInstructions: item.translator.promptInstructions,
+                modelOverride: item.translator.modelOverride,
+                showModeSelector: item.translator.showModeSelector,
+                modes: item.translator.modes,
+              },
+            },
+          });
+          pageChecks = result.checks;
+          return result.editorial;
+        })()
+      : await (options.generate || generateTranslatorEditorialContent)({
       model: settings.defaultModelOverride || item.translator.modelOverride || undefined,
       context: {
         name: item.translator.name,
@@ -648,10 +676,11 @@ export async function processEditorialJobItem(
         style: item.translator.promptInstructions,
         promptSystem: item.translator.promptSystem,
         promptInstructions: item.translator.promptInstructions,
-        existingAbout: item.operation === "REGENERATE_FULL" ? undefined : current.about || item.translator.shortDescription,
+        existingAbout: current.about || item.translator.shortDescription,
         focus: item.operation === "GENERATE_MISSING" ? "the missing sections only" : item.operation.toLowerCase().replaceAll("_", " "),
       },
-    }));
+    });
+    const generated = sanitizeGeneratedText(generatedRaw);
     assertNoEmDash(generated, "Generated editorial content");
     const generatedValidation = validateEditorialDraft(generated, expectedSections);
     if (!generatedValidation.valid) {
@@ -662,6 +691,7 @@ export async function processEditorialJobItem(
       );
     }
     const merged = sanitizeGeneratedText(mergeEditorialDraft(current, generated, item.operation));
+    if (generated.page) merged.page = generated.page;
     assertNoEmDash(merged, "Merged editorial draft");
     const validation = validateEditorialDraft(merged, expectedSections);
     if (!validation.valid) {
@@ -673,7 +703,7 @@ export async function processEditorialJobItem(
     }
 
     const distinctness = assessDistinctness(merged, await loadEditorialCorpus(item.translatorId));
-    const validationWithDistinctness = { ...validation, distinctness };
+    const validationWithDistinctness = { ...validation, distinctness, pageChecks, archetype: merged.page?.archetype ?? null };
 
     const persistedDraft = await prisma.$transaction(async (tx) => {
       const saved = await tx.translatorEditorialDraft.upsert({

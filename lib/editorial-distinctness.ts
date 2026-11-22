@@ -1,3 +1,4 @@
+import { flattenPageText } from "@/lib/translator-page";
 import type { TranslatorEditorialDraft } from "@/lib/types";
 
 /**
@@ -47,6 +48,7 @@ function flatten(draft: TranslatorEditorialDraft) {
     ...draft.tips,
     ...draft.examples.flatMap((item) => [item.contextTitle || "", item.originalText, item.transformedText]),
     ...draft.faq.flatMap((item) => [item.question, item.answer]),
+    ...flattenPageText(draft.page),
   ]
     .filter(Boolean)
     .join("\n");
