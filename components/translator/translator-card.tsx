@@ -1,5 +1,6 @@
 "use client";
 
+import { trackTranslationCompleted } from "@/lib/analytics-events";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRightLeft,
@@ -715,6 +716,12 @@ export function TranslatorCard({
       revealNextResultRef.current = true;
       setTranslatedSourceText(sourceText);
       setOutputText(payload.result);
+      trackTranslationCompleted({
+        translatorSlug: translator.slug,
+        modeKey: translator.showModeSelector ? modeKey : undefined,
+        direction,
+        inputLength: sourceText.length,
+      });
     } catch {
       setError("We couldn't refine that text just now.");
     } finally {
