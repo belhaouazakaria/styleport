@@ -44,7 +44,7 @@ export function RelatedTranslators({ translators }: RelatedTranslatorsProps) {
             href={`/translators/${translator.slug}`}
             className="bg-brand-500 group-hover:bg-brand-600 mt-5 inline-flex h-11 items-center justify-between gap-2 rounded-full px-4 text-sm font-extrabold text-white shadow-[0_4px_0_#0d9488] transition active:translate-y-1 active:shadow-none"
           >
-            Try this twist
+            Try {translator.name}
             <ArrowUpRight className="h-4 w-4 transition group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
           </Link>
         </article>

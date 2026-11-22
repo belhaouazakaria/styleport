@@ -1,3 +1,5 @@
+import { JsonLdScript } from "@/components/seo/json-ld";
+import { buildWebsiteJsonLd } from "@/lib/seo/structured-data";
 import type { Metadata } from "next";
 import { AdDeviceType, AdPageType } from "@prisma/client";
 
@@ -208,6 +210,12 @@ export default async function HomePage({ searchParams }: PageProps) {
 
   return (
     <div className="relative overflow-x-hidden">
+      <JsonLdScript
+        data={buildWebsiteJsonLd({
+          baseUrl: getAppBaseUrl().toString(),
+          platformName: settings.platformName?.trim() || "SayTwist",
+        })}
+      />
       <Navbar
         logoUrl={settings.logoUrl}
         logoDesktopHeight={settings.logoDesktopHeight}

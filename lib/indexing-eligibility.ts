@@ -1,4 +1,5 @@
 import { assessEditorialQuality } from "@/lib/editorial-quality";
+import { isPolicyNoindex } from "@/lib/seo/index-policy";
 import type { TranslatorEditorialDraft } from "@/lib/types";
 
 export const CURRENT_REVIEW_ENFORCEMENT_ENABLED = false;
@@ -10,6 +11,7 @@ export const INDEXING_EXCLUSION_REASON_CODES = {
   technicalEditorialIncomplete: "TECHNICAL_EDITORIAL_INCOMPLETE",
   currentEditorialNotReviewed: "CURRENT_EDITORIAL_NOT_REVIEWED",
   editorialQualityRequirementsNotMet: "EDITORIAL_QUALITY_REQUIREMENTS_NOT_MET",
+  policyNoindex: "POLICY_NOINDEX",
 } as const;
 
 export type IndexingExclusionReasonCode =
@@ -85,13 +87,16 @@ export function assessTranslatorIndexingEligibility(
   const publiclyAvailable = hasPublicSlug && input.isActive && !input.archivedAt;
   const deployedBaselineIndexable = publiclyAvailable;
   const deployedBaselineRobotsIndexable = publiclyAvailable && quality.technicallyComplete;
-  const strictReviewIndexable = publiclyAvailable && quality.eligibleForIndexing;
-  const newVersionIndexable = publiclyAvailable && quality.technicallyComplete &&
+  const policyNoindex = isPolicyNoindex(input.slug);
+  const strictReviewIndexable = publiclyAvailable && quality.eligibleForIndexing && !policyNoindex;
+  const newVersionIndexable = publiclyAvailable && quality.technicallyComplete && !policyNoindex &&
     (!reviewEnforcementEnabled || currentVersionReviewed);
   const availabilityReasonCodes: IndexingExclusionReasonCode[] = [];
   if (!hasPublicSlug) availabilityReasonCodes.push(INDEXING_EXCLUSION_REASON_CODES.missingPublicSlug);
   if (!input.isActive) availabilityReasonCodes.push(INDEXING_EXCLUSION_REASON_CODES.inactive);
   if (input.archivedAt) availabilityReasonCodes.push(INDEXING_EXCLUSION_REASON_CODES.archived);
+
+  if (policyNoindex) availabilityReasonCodes.push(INDEXING_EXCLUSION_REASON_CODES.policyNoindex);
 
   const newVersionExclusionReasonCodes = [...availabilityReasonCodes];
   if (!quality.technicallyComplete) {
@@ -116,6 +121,7 @@ export function assessTranslatorIndexingEligibility(
   if (!input.slug.trim()) reasons.push("A public slug is required");
   if (!input.isActive) reasons.push("Translator is inactive");
   if (input.archivedAt) reasons.push("Translator is archived");
+  if (policyNoindex) reasons.push("Kept out of search indexing by editorial policy (see lib/seo/index-policy.ts)");
   reasons.push(...quality.issues);
 
   return {
