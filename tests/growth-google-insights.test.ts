@@ -31,9 +31,14 @@ describe("Google insight readers", () => {
     expect(result.GA4_PAGES.pages).toEqual([]);
   });
 
-  it("parses Search Console queries and pages", async () => {
-    const fetcher = vi.fn(async () => json({ rows: [{ keys: ["jester translator"], clicks: 3, impressions: 120, ctr: 0.025, position: 7.46 }] }));
+  it("parses Search Console queries, pages and daily totals", async () => {
+    const fetcher = vi.fn(async (_u: string | URL | Request, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      if (!body.dimensions) return json({ rows: [{ clicks: 5, impressions: 400, ctr: 0.0125, position: 9.04 }] });
+      return json({ rows: [{ keys: ["jester translator"], clicks: 3, impressions: 120, ctr: 0.025, position: 7.46 }] });
+    });
     const result = await readSearchConsoleInsights("sc-domain:saytwist.com", "token", "2026-11-19", fetcher as unknown as typeof fetch);
+    expect(result.GSC_QUERIES.totals).toEqual({ clicks: 5, impressions: 400, position: 9 });
     expect(result.GSC_QUERIES.rows[0]).toEqual({ key: "jester translator", clicks: 3, impressions: 120, position: 7.5 });
     expect(result.GSC_PAGES.rows).toHaveLength(1);
   });

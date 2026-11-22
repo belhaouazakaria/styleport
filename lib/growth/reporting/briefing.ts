@@ -158,19 +158,24 @@ export async function loadBriefingData(date: string): Promise<BriefingData> {
   const prevTotals = totalsFor(prev);
   const weekSessions = [1, 2, 3, 4, 5, 6, 7].map((i) => totalsFor(new Date(start.getTime() - i * DAY))?.sessions).filter((n): n is number => typeof n === "number" && Number.isFinite(n));
 
-  const metric = (row: { metrics: unknown } | null, key: string) => {
-    const v = row ? Number((row.metrics as Record<string, string>)[key]) : NaN;
-    return Number.isFinite(v) ? v : null;
-  };
   const srcJson = sources?.metrics as { sources?: Array<{ source: string; sessions: number }>; hosts?: Array<{ host: string; sessions: number }> } | undefined;
   const pinterestSessions = srcJson?.sources ? srcJson.sources.filter((x) => /pinterest/i.test(x.source)).reduce((a, x) => a + x.sessions, 0) : null;
   const evJson = events?.metrics as { translations?: number } | undefined;
   const translationsSeen = date >= TRANSLATION_TRACKING_START;
 
   const site = (await prisma.growthExternalAnalyticsDaily.findFirst({ where: { source: "SEARCH_CONSOLE", NOT: { accountId: { contains: "#" } } }, select: { accountId: true } }))?.accountId ?? null;
-  const gsc = site ? await prisma.growthExternalAnalyticsDaily.findFirst({ where: { source: "SEARCH_CONSOLE", accountId: site, metricDate: start } }) : null;
-  const gscWeek = site ? await prisma.growthExternalAnalyticsDaily.findMany({ where: { source: "SEARCH_CONSOLE", accountId: site, metricDate: { gte: new Date(start.getTime() - 6 * DAY), lt: end } } }) : [];
-  const queryRows = site ? await prisma.growthExternalAnalyticsDaily.findMany({ where: { ...insightStorage("GSC_QUERIES", site), metricDate: { gte: new Date(start.getTime() - 6 * DAY), lt: end } }, select: { metrics: true } }) : [];
+  const weekStart = new Date(start.getTime() - 6 * DAY);
+  const gscBasic = site ? await prisma.growthExternalAnalyticsDaily.findMany({ where: { source: "SEARCH_CONSOLE", accountId: site, metricDate: { gte: weekStart, lt: end } }, select: { metricDate: true, metrics: true } }) : [];
+  const queryRows = site ? await prisma.growthExternalAnalyticsDaily.findMany({ where: { ...insightStorage("GSC_QUERIES", site), metricDate: { gte: weekStart, lt: end } }, select: { metricDate: true, metrics: true } }) : [];
+  // Per-day Search Console totals: prefer the collector's own totals, fall back to the basic sync.
+  const gscDay = (day: Date): { clicks: number; impressions: number; position: number } | null => {
+    const q = queryRows.find((r) => r.metricDate.getTime() === day.getTime())?.metrics as { totals?: { clicks: number; impressions: number; position: number } } | undefined;
+    if (q?.totals) return q.totals;
+    const b = gscBasic.find((r) => r.metricDate.getTime() === day.getTime())?.metrics as Record<string, string> | undefined;
+    return b ? { clicks: Number(b.clicks), impressions: Number(b.impressions), position: Number(b.position) } : null;
+  };
+  const gscDays = [0, 1, 2, 3, 4, 5, 6].map((i) => gscDay(new Date(start.getTime() - i * DAY))).filter((x): x is NonNullable<typeof x> => x !== null);
+  const gscToday = gscDay(start);
   const agg = new Map<string, { clicks: number; impressions: number; posWeighted: number }>();
   for (const row of queryRows)
     for (const r of ((row.metrics as { rows?: Array<{ key: string; clicks: number; impressions: number; position: number }> }).rows ?? [])) {
@@ -211,14 +216,14 @@ export async function loadBriefingData(date: string): Promise<BriefingData> {
       translations: translationsSeen && evJson?.translations !== undefined ? evJson.translations : null,
       translationsTrackingSince: TRANSLATION_TRACKING_START,
       hosts: srcJson?.hosts ?? [],
-      topPages: ((pages?.metrics as { pages?: Array<{ page: string; sessions: number }> } | undefined)?.pages ?? []).slice(0, 3),
+      topPages: ((pages?.metrics as { pages?: Array<{ page: string; sessions: number }> } | undefined)?.pages ?? []).filter((p) => p.page && p.page !== "(not set)").slice(0, 3),
     },
     search: {
-      clicks: metric(gsc, "clicks"),
-      impressions: metric(gsc, "impressions"),
-      position: metric(gsc, "position"),
-      clicks7: gscWeek.length ? gscWeek.reduce((a, r) => a + (Number((r.metrics as Record<string, string>).clicks) || 0), 0) : null,
-      impressions7: gscWeek.length ? gscWeek.reduce((a, r) => a + (Number((r.metrics as Record<string, string>).impressions) || 0), 0) : null,
+      clicks: gscToday ? gscToday.clicks : null,
+      impressions: gscToday ? gscToday.impressions : null,
+      position: gscToday && gscToday.position > 0 ? gscToday.position : null,
+      clicks7: gscDays.length ? gscDays.reduce((a, r) => a + r.clicks, 0) : null,
+      impressions7: gscDays.length ? gscDays.reduce((a, r) => a + r.impressions, 0) : null,
       topQueries7,
     },
     ops: { pinsPublished, translatorsCreated, ideasCreated },
