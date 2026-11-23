@@ -92,3 +92,25 @@ describe("wordOverlap", () => {
     expect(wordOverlap("please send the report", "completely different words here")).toBe(0);
   });
 });
+
+import { GLOSSARY_ARCHETYPES, cleanDesign } from "@/lib/translator-page-generation";
+
+describe("design cleanup and glossary policy", () => {
+  it("drops empty template rows and under-filled optional blocks", () => {
+    const cleaned = cleanDesign({ page: { glossary: [{ from: "", to: "", note: "" }], situationInputs: [{ title: "", input: "" }], ladderInput: "", origin: " ", fitCheck: { goodFor: ["", ""], avoidFor: ["a thing", "b thing"] }, script: { englishPhrases: ["", "", "", "", ""], notes: ["", ""] } } }) as { page: Record<string, unknown> };
+    for (const key of ["glossary", "situationInputs", "ladderInput", "origin", "fitCheck", "script"]) expect(cleaned.page[key]).toBeUndefined();
+  });
+  it("keeps filled rows", () => {
+    const rows = [1, 2, 3, 4].map((n) => ({ from: `a${n}`, to: `b${n}`, note: "" }));
+    const cleaned = cleanDesign({ page: { glossary: [...rows, { from: "", to: "" }] } }) as { page: { glossary: unknown[] } };
+    expect(cleaned.page.glossary).toHaveLength(4);
+  });
+  it("only historical, code, emoji, fandom and comprehension carry a word map", () => {
+    expect([...GLOSSARY_ARCHETYPES].sort()).toEqual(["code", "comprehension", "emoji", "fandom", "historical"]);
+  });
+  it("strips a filler glossary from a persona page", async () => {
+    designOverride = () => baseDesign("persona", { glossary: [1, 2, 3, 4].map((n) => ({ from: `Classic ${n}`, to: `Steady ${n}` })), situationInputs: [1, 2, 3].map((n) => ({ title: `Scene ${n}`, input: `Say thing ${n} please` })), ladderInput: "Please send the report today", fitCheck: { goodFor: ["x one", "x two"], avoidFor: ["y one", "y two"] } });
+    const result = await generateTranslatorPage({ context });
+    expect(result.editorial.page?.glossary).toBeUndefined();
+  });
+});
