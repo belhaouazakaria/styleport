@@ -10,6 +10,7 @@ import { logWarn } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
 import { assessTranslatorIndexingEligibility } from "@/lib/indexing-eligibility";
 import { getAppBaseUrl } from "@/lib/env";
+import { isSitemapWorthy } from "@/lib/seo/sitemap-keep";
 import { deleteStoredShareImage, ensureTranslatorShareImageById } from "@/lib/share-images";
 import { ensureUniqueTranslatorSlug } from "@/lib/slug";
 import { getAppSettings } from "@/lib/settings";
@@ -870,10 +871,33 @@ export async function getIndexableTranslatorSlugsForSitemap() {
     orderBy: [{ updatedAt: "desc" }],
   });
 
+  const withUniquePage = await getTranslatorIdsWithUniquePage();
+
   return rows
     .map((row) => ({ row, eligibility: mapPublicTranslator(row).indexingEligibility }))
     .filter(({ eligibility }) => eligibility.newVersionIndexable)
+    .filter(({ row }) => isSitemapWorthy(row.slug, withUniquePage.has(row.id)))
     .map(({ row }) => ({ slug: row.slug, updatedAt: row.updatedAt }));
+}
+
+/**
+ * Translators whose published editorial draft carries structured unique page
+ * blocks. Only these (plus the proven keep-list) are offered to Google in the
+ * sitemap until the rest get unique content.
+ */
+async function getTranslatorIdsWithUniquePage(): Promise<Set<string>> {
+  try {
+    const rows = await prisma.$queryRaw<Array<{ translatorId: string }>>(Prisma.sql`
+      SELECT DISTINCT "translatorId"
+      FROM "TranslatorEditorialDraft"
+      WHERE status = 'PUBLISHED'
+        AND jsonb_typeof(payload->'page') = 'object'
+    `);
+    return new Set(rows.map((row) => row.translatorId));
+  } catch (error) {
+    console.error("[sitemap] Could not load unique-page translators.", error);
+    return new Set();
+  }
 }
 
 export async function getTranslatorIndexingImpactReport(
