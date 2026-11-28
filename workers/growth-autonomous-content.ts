@@ -420,8 +420,16 @@ async function main() {
     console.log("GROWTH_AUTONOMOUS_RESEARCH_TRANSLATOR=" + result.researchedTranslator);
     console.log("GROWTH_AUTONOMOUS_PIN_CANDIDATES=0");
     console.log("GROWTH_AUTONOMOUS_PUBLICATIONS=0");
-  } catch {
-    console.error("GROWTH_AUTONOMOUS_CONTENT=BLOCKED");
+  } catch (error) {
+    // Only a fixed upper-case reason code (or the error class) is ever printed,
+    // never a message that could carry provider or credential text.
+    const message = error instanceof Error ? error.message : "";
+    const reason = /^[A-Z][A-Z0-9_]{2,60}$/.test(message)
+      ? message
+      : error instanceof Error
+        ? error.name.replace(/[^A-Za-z0-9_]/g, "").slice(0, 60)
+        : "UNKNOWN";
+    console.error("GROWTH_AUTONOMOUS_CONTENT=BLOCKED:" + (reason || "UNKNOWN"));
     process.exitCode = 1;
   } finally {
     await prisma.$disconnect().catch(() => { process.exitCode = 1; });
