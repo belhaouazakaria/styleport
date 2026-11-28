@@ -2136,7 +2136,7 @@ export async function getAdminOverviewStats(days = 30) {
 
 export interface PublicTranslatorDirectoryGroup {
   category: { name: string; slug: string } | null;
-  translators: Array<{ name: string; slug: string; shortDescription: string }>;
+  translators: Array<{ name: string; slug: string; shortDescription: string; isNew: boolean }>;
 }
 
 /** Every publicly indexable translator, grouped by primary category, for the /translators directory. */
@@ -2147,6 +2147,7 @@ export async function getPublicTranslatorDirectory(): Promise<PublicTranslatorDi
       name: true,
       slug: true,
       shortDescription: true,
+      createdAt: true,
       primaryCategory: { select: { name: true, slug: true, isActive: true, archivedAt: true, sortOrder: true } },
       categories: {
         select: { category: { select: { name: true, slug: true, isActive: true, archivedAt: true, sortOrder: true } } },
@@ -2155,6 +2156,7 @@ export async function getPublicTranslatorDirectory(): Promise<PublicTranslatorDi
     },
     orderBy: [{ name: "asc" }],
   });
+  const newSince = Date.now() - 7 * 86_400_000;
 
   const groups = new Map<string, PublicTranslatorDirectoryGroup & { sortOrder: number }>();
   for (const row of rows) {
@@ -2168,7 +2170,7 @@ export async function getPublicTranslatorDirectory(): Promise<PublicTranslatorDi
         sortOrder: primary?.sortOrder ?? 9999,
       });
     }
-    groups.get(key)!.translators.push({ name: row.name, slug: row.slug, shortDescription: row.shortDescription });
+    groups.get(key)!.translators.push({ name: row.name, slug: row.slug, shortDescription: row.shortDescription, isNew: row.createdAt.getTime() >= newSince });
   }
 
   return [...groups.values()]

@@ -9,7 +9,7 @@ vi.mock("@/lib/growth/reporting/delivery", () => ({
 }));
 import { runControlledGrowthTelegramAcceptance } from "@/lib/growth/reporting/acceptance";
 
-const now = new Date("2026-10-26T13:04:00.000Z");
+const now = new Date("2026-10-27T13:04:00.000Z");
 const permitted = {
   GROWTH_TELEGRAM_ACCEPTANCE_ENABLED: "true",
   GROWTH_TELEGRAM_ACCEPTANCE_ENVIRONMENT: "isolated-staging",
@@ -49,7 +49,7 @@ describe("Controlled one-shot Telegram staging acceptance — never send in CI",
       await expect(runControlledGrowthTelegramAcceptance(now, configuration)).rejects.toThrow();
     }
     await expect(runControlledGrowthTelegramAcceptance(
-      new Date("2026-10-26T03:59:00Z"), permitted,
+      new Date("2026-10-27T03:59:00Z"), permitted,
     )).rejects.toThrow("NOT_DUE");
     expect(mocks.archive).not.toHaveBeenCalled();
     expect(mocks.send).not.toHaveBeenCalled();

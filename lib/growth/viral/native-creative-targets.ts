@@ -1,9 +1,14 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { diversifyTargets } from "@/lib/growth/viral/target-diversity";
 
 type Reader = Pick<
   Prisma.TransactionClient,
-  "translator" | "growthViralConversion" | "growthViralProgramSettings"
+  | "translator"
+  | "growthViralConversion"
+  | "growthViralProgramSettings"
+  | "growthPinCandidate"
+  | "$queryRaw"
 >;
 
 /** The budgeted daily worker may revisit an old Translator only for a new,
@@ -107,12 +112,47 @@ export async function readFreshCreativeTargets(
         take: 100,
       })),
     );
-  return targets
+  const prioritized = targets
     .map((t) => ({ ...t, conversionId: byTranslator.get(t.id)?.id }))
     .sort(
       (a, b) =>
         Number(Boolean(b.conversionId)) - Number(Boolean(a.conversionId)),
     );
+  return diversifyFreshTargets(prioritized, db);
+}
+
+/** Conversion targets keep their priority. Everything else is spread across
+ * themes, favours pages with unique content and lets a recently promoted theme
+ * wait, instead of walking the catalogue alphabetically. */
+async function diversifyFreshTargets<
+  T extends { id: string; slug: string; conversionId?: string },
+>(targets: T[], db: Reader): Promise<T[]> {
+  const converted = targets.filter((t) => t.conversionId);
+  const rest = targets.filter((t) => !t.conversionId);
+  if (rest.length < 2) return targets;
+  try {
+    const since = new Date(Date.now() - 14 * 86_400_000);
+    const [recent, withPage] = await Promise.all([
+      db.growthPinCandidate.findMany({
+        where: { createdAt: { gte: since }, translatorId: { not: null } },
+        select: { translator: { select: { slug: true } } },
+        take: 200,
+      }),
+      db.$queryRaw<Array<{ translatorId: string }>>(Prisma.sql`
+        SELECT DISTINCT "translatorId" FROM "TranslatorEditorialDraft"
+        WHERE status = 'PUBLISHED' AND jsonb_typeof(payload->'page') = 'object'
+      `),
+    ]);
+    const uniqueIds = new Set(withPage.map((row) => row.translatorId));
+    const bySlug = new Map(rest.map((t) => [t.slug, t]));
+    const ordered = diversifyTargets(
+      rest.map((t) => ({ slug: t.slug, hasUniquePage: uniqueIds.has(t.id) })),
+      recent.map((row) => row.translator?.slug).filter((s): s is string => Boolean(s)),
+    ).map((t) => bySlug.get(t.slug)!);
+    return [...converted, ...ordered];
+  } catch {
+    return targets;
+  }
 }
 
 /** Persist the conversion/job link before any paid dispatch. A crash after

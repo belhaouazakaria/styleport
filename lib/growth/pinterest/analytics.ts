@@ -35,7 +35,7 @@ import { toSafeGrowthError } from "@/lib/growth/safe-data";
 import { getGrowthSettings } from "@/lib/growth/settings";
 import { prisma } from "@/lib/prisma";
 import { recordUnavailablePinterestAnalytics } from "./analytics-access";
-import { PinterestPinAnalyticsUnavailableError } from "./api";
+import { PinterestPinAnalyticsUnavailableError, PinterestPinGoneError } from "./api";
 import { PinterestGlobalBudgetBlocked } from "./global-budget";
 
 function continuationKey(parts: string[]) {
@@ -426,7 +426,7 @@ export async function syncPinterestPinAnalytics(params: {
       try { response = await getPinterestPinAnalytics({ ...params, pinterestPinId: pin.pinterestPinId }); }
       catch (error) {
         if (!(error instanceof PinterestPinAnalyticsUnavailableError)) throw error;
-        await recordUnavailablePinterestAnalytics(params.accountId, pin.id);
+        await recordUnavailablePinterestAnalytics(params.accountId, pin.id, { gone: error instanceof PinterestPinGoneError });
         continue;
       }
       lastRateLimit = response.rateLimit;

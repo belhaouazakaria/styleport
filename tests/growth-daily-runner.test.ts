@@ -23,7 +23,7 @@ const valid = {
   TELEGRAM_BOT_TOKEN: "123456789:" + "A".repeat(35),
   TELEGRAM_REPORT_CHAT_ID: "123456789",
 };
-const clock = new Date("2026-10-26T06:15:00Z");
+const clock = new Date("2026-10-27T06:15:00Z");
 describe("Disabled-by-default UTC daily report runner", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -50,12 +50,12 @@ describe("Disabled-by-default UTC daily report runner", () => {
   });
   it("does not send before 04:00 UTC or for an incomplete calendar day", async () => {
     expect(dueGrowthReportDate(new Date("2027-01-01T03:59:59Z"))).toBeNull();
-    expect(dueGrowthReportDate(new Date("2027-01-01T04:00:00Z"))).toBe("2026-12-30");
-    expect(await runScheduledGrowthDailyReport(new Date("2026-10-25T03:59:59Z"), valid))
+    expect(dueGrowthReportDate(new Date("2027-01-01T04:00:00Z"))).toBe("2026-12-29");
+    expect(await runScheduledGrowthDailyReport(new Date("2026-10-26T03:59:59Z"), valid))
       .toEqual({ status: "NOT_DUE" });
     expect(mocks.archive).not.toHaveBeenCalled();
   });
-  it("archives the last final UTC day (two days back) and attempts exactly one immutable delivery", async () => {
+  it("archives the last final UTC day (three days back) and attempts exactly one immutable delivery", async () => {
     await expect(runScheduledGrowthDailyReport(clock, valid)).resolves.toMatchObject({
       status: "SUBMITTED", date: "2026-10-24", reportId: "growth-20261024",
     });
