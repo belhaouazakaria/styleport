@@ -11,6 +11,8 @@ const mocks = vi.hoisted(() => ({
     growthJob: { findMany: vi.fn(), updateMany: vi.fn(), findUnique: vi.fn() },
     growthDailyCadencePreference: { findUnique: vi.fn() },
     translator: { findMany: vi.fn() },
+    growthSettings: { findUnique: vi.fn() },
+    growthAiBudgetReservation: { count: vi.fn() },
   },
 }));
 
@@ -45,6 +47,8 @@ describe("manual daily SayTwist Pin gap fill", () => {
       nativeCap: 1,
       nativeAllocated: 0,
     });
+    mocks.prisma.growthSettings.findUnique.mockResolvedValue({ aiImagesPerDayCap: 5 });
+    mocks.prisma.growthAiBudgetReservation.count.mockResolvedValue(0);
     mocks.prisma.growthPinCandidate.findMany.mockResolvedValue([]);
     mocks.prisma.growthJob.findMany.mockResolvedValue([]);
     mocks.prisma.growthDailyCadencePreference.findUnique.mockResolvedValue({
@@ -124,5 +128,14 @@ describe("manual daily SayTwist Pin gap fill", () => {
 
     expect(result.status).toBe("GENERATION_FAILED");
     expect(mocks.enqueueCreativeGeneration).not.toHaveBeenCalled();
+  });
+
+  it("explains a reached AI image limit instead of queueing a doomed job", async () => {
+    mocks.prisma.growthAiBudgetReservation.count.mockResolvedValue(5);
+    const result = await requestDailyPinGapFill(new Date("2026-11-28T14:00:00Z"));
+    expect(result.status).toBe("GENERATION_FAILED");
+    expect(result.errors?.[0]).toContain("AI image limit is reached (5 of 5");
+    expect(mocks.enqueueCreativeGeneration).not.toHaveBeenCalled();
+    expect(mocks.triggerManualGapFillWorker).not.toHaveBeenCalled();
   });
 });
