@@ -5,6 +5,7 @@ import { LEARNED_SCHEDULER_VERSION } from "@/lib/growth/learning/constants";
 export const CONTROLLED_LOCAL_HOURS = [9, 13, 18, 21] as const;
 export const PUBLISHING_TIME_ZONE = "America/New_York";
 const MIN_SLOT_PINS = 3;
+const TODAY_FILL_MIN_LEAD_MS = 10 * 60_000;
 const MIN_SLOT_IMPRESSIONS = BigInt(300);
 
 type HistoricalPin = {
@@ -62,6 +63,19 @@ function hashNumber(key: string) {
     createHash("sha256").update(key).digest("hex").slice(0, 8),
     16,
   );
+}
+
+/** Controlled publishing instants (publishing time zone) inside [from, to), in time order. */
+export function controlledSlotsBetween(from: Date, to: Date): Date[] {
+  const base = localParts(from);
+  const slots = new Map<number, Date>();
+  for (let dayOffset = -1; dayOffset <= 2; dayOffset += 1) {
+    for (const hour of CONTROLLED_LOCAL_HOURS) {
+      const at = localToUtc(base.year, base.month, base.day + dayOffset, hour);
+      if (at >= from && at < to) slots.set(at.getTime(), at);
+    }
+  }
+  return [...slots.values()].sort((a, b) => a.getTime() - b.getTime());
 }
 
 export function planPublicationTiming(input: {
@@ -148,6 +162,30 @@ export function planPublicationTiming(input: {
     scheduledAt = nextSlot(selectedHour, new Date(scheduledAt.getTime() + 1));
     collisionMoves += 1;
   }
+  // Fill today's quota first. A single preferred hour taken by an earlier Pin
+  // used to push every extra Pin to the same hour on later days. If the chosen
+  // time is not today (publishing time zone) and a controlled slot is still
+  // free later today, use the free slot closest to the preferred hour.
+  let filledToday = false;
+  const todayLocal = localParts(input.now);
+  const sameLocalDay = (date: Date) => {
+    const p = localParts(date);
+    return p.year === todayLocal.year && p.month === todayLocal.month && p.day === todayLocal.day;
+  };
+  if (!sameLocalDay(scheduledAt)) {
+    const earliest = new Date(input.now.getTime() + TODAY_FILL_MIN_LEAD_MS);
+    const freeToday = CONTROLLED_LOCAL_HOURS.map((hour) => ({ hour, at: nextSlot(hour, earliest) }))
+      .filter(({ at }) => sameLocalDay(at))
+      .filter(({ at }) => !(input.collisions || []).some(
+        (row) => Math.abs(row.scheduledAt.getTime() - at.getTime()) < 90 * 60_000,
+      ))
+      .sort((a, b) => Math.abs(a.hour - selectedHour) - Math.abs(b.hour - selectedHour) || a.hour - b.hour);
+    if (freeToday.length) {
+      scheduledAt = freeToday[0].at;
+      selectedHour = freeToday[0].hour;
+      filledToday = true;
+    }
+  }
   return {
     scheduledAt,
     mode,
@@ -166,6 +204,7 @@ export function planPublicationTiming(input: {
         saveRate: Number(slot.saveRate.toFixed(6)),
       })),
       collisionMoves,
+      filledToday,
       learned: input.learned
         ? { runId: input.learned.runId, confidence: input.learned.confidence }
         : null,
