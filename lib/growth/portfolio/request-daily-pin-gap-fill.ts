@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import {
+  GrowthAiOperationKind,
   GrowthJobStatus,
   GrowthJobType,
   GrowthCreativeArchetype,
@@ -15,6 +16,7 @@ import {
 } from "@/lib/growth/portfolio/manual-gap-fill-launcher";
 import { readDailyRotation } from "@/lib/growth/portfolio/daily-rotation-store";
 import { prisma } from "@/lib/prisma";
+import { growthBudgetUtcWindows } from "@/lib/growth/economics/budget-policy";
 import { diversifyTargets } from "@/lib/growth/viral/target-diversity";
 
 const MIN_DESCRIPTION_LENGTH = 40;
@@ -60,6 +62,34 @@ export async function requestDailyPinGapFill(now = new Date()) {
         "The isolated Growth worker is not installed or is out of date.",
       ],
     };
+  }
+
+  // Say plainly when today's AI image allowance is used up, instead of
+  // queueing a job that can only fail on the spending limit.
+  try {
+    const { dayStart } = growthBudgetUtcWindows(now);
+    const [settings, usedImages] = await Promise.all([
+      prisma.growthSettings.findUnique({
+        where: { id: "global" },
+        select: { aiImagesPerDayCap: true },
+      }),
+      prisma.growthAiBudgetReservation.count({
+        where: { createdAt: { gte: dayStart }, kind: GrowthAiOperationKind.IMAGE },
+      }),
+    ]);
+    if (settings && usedImages >= settings.aiImagesPerDayCap) {
+      return {
+        status: "GENERATION_FAILED" as const,
+        created: 0,
+        gap: scheduledGap,
+        available: 0,
+        errors: [
+          `Today's AI image limit is reached (${usedImages} of ${settings.aiImagesPerDayCap}, resets at 00:00 UTC). Approve the ready designs, or raise the limit in Growth settings.`,
+        ],
+      };
+    }
+  } catch {
+    // Never let this advisory check block a normal request.
   }
 
   const [
