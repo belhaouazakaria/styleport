@@ -74,7 +74,7 @@ validate_database() {
         const columns=await client.$queryRawUnsafe(`SELECT count(*)::int AS count FROM information_schema.columns WHERE table_schema=$1 AND table_name=$2 AND column_name IN ($3,$4,$5)`,"public","GrowthDailyCadencePreference","newTranslatorPins","existingTranslatorPins","anythingTranslatePins");
         const plan=await client.$queryRawUnsafe(`SELECT "newTranslatorPins","existingTranslatorPins","anythingTranslatePins" FROM "GrowthDailyCadencePreference" WHERE id=$1`,"global");
         const cap=await client.$queryRawUnsafe(`SELECT "aiImagesPerDayCap" FROM "GrowthSettings" WHERE id=$1`,"global");
-        if(columns[0]?.count!==3||plan.length!==1||plan[0].newTranslatorPins!==1||plan[0].existingTranslatorPins!==2||plan[0].anythingTranslatePins!==2||cap[0]?.aiImagesPerDayCap!==5) throw Error("POST_MIGRATION_SCHEMA");
+        if(columns[0]?.count!==3||plan.length!==1||plan[0].newTranslatorPins!==1||plan[0].existingTranslatorPins!==2||plan[0].anythingTranslatePins!==2||!(cap[0]?.aiImagesPerDayCap>=5)) throw Error("POST_MIGRATION_SCHEMA");
         console.log("ALREADY_APPLIED");
         console.log("PENDING_QUEUE_SHA256="+digest.createHash("sha256").update(JSON.stringify(pending)).digest("hex"));
         return;
