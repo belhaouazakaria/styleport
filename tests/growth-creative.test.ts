@@ -136,6 +136,11 @@ describe("Phase 10 Creative Lab contracts", () => {
   it("accepts only controlled identifiers and bounded experiment definitions", () => {
     expect(creativeGenerationJobPayloadSchema.safeParse({ targetKind: GrowthCreativeDestinationKind.TRANSLATOR, targetId: "translator_1", archetype: GrowthCreativeArchetype.MINIMAL_STATEMENT, creativeModelVersion: "creative_lab_v1" }).success).toBe(true);
     expect(creativeGenerationJobPayloadSchema.safeParse({ targetKind: GrowthCreativeDestinationKind.TRANSLATOR, targetId: "translator_1", archetype: GrowthCreativeArchetype.BEFORE_AFTER, useAiExample: true, creativeModelVersion: "creative_lab_v1" }).success).toBe(true);
+    const gapFill = { targetKind: GrowthCreativeDestinationKind.TRANSLATOR, targetId: "translator_1", archetype: GrowthCreativeArchetype.BEFORE_AFTER, creativeModelVersion: "creative_lab_v1",
+      manualGapFillRequestId: "e9da18a2-8afc-48f4-b70b-ee76e544be6e", manualGapFillDay: "2026-11-28" };
+    expect(creativeGenerationJobPayloadSchema.safeParse(gapFill).success).toBe(true);
+    expect(creativeGenerationJobPayloadSchema.safeParse({ ...gapFill, manualGapFillDay: "today" }).success).toBe(false);
+    expect(creativeGenerationJobPayloadSchema.safeParse({ ...gapFill, surprise: 1 }).success).toBe(false);
     expect(creativeGenerationRequestSchema.safeParse({ targetKind: GrowthCreativeDestinationKind.TRANSLATOR, targetId: "translator_1", archetype: GrowthCreativeArchetype.TYPOGRAPHY_LED, creativeModelVersion: "creative_lab_v1" }).success).toBe(false);
     expect(creativeGenerationRequestSchema.safeParse({ targetKind: GrowthCreativeDestinationKind.IDEA, targetId: "idea_1", archetype: GrowthCreativeArchetype.BEFORE_AFTER, creativeModelVersion: "creative_lab_v1" }).success).toBe(false);
     expect(creativeGenerationRequestSchema.safeParse({ targetKind: GrowthCreativeDestinationKind.TRANSLATOR, targetId: "translator_1", archetype: GrowthCreativeArchetype.MINIMAL_STATEMENT, useAiExample: true, creativeModelVersion: "creative_lab_v1" }).success).toBe(false);
