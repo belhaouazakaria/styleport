@@ -611,38 +611,62 @@ describe("Phase 12 performance, experiments, and learned scheduling", () => {
     expect(hour).toBe(18);
   });
 
-  it("preserves a learned non-default local hour across collisions and DST", () => {
-    const first = planPublicationTiming({
-      stableKey: "learned-17",
-      now: new Date("2026-11-01T04:30:00Z"),
-      history: [],
-      learned: {
-        localHour: 17,
-        mode: GrowthPublicationTimingMode.EXPLOIT,
-        confidence: 80,
-        runId: "run-1",
-      },
-    });
-    const moved = planPublicationTiming({
-      stableKey: "learned-17",
-      now: new Date("2026-11-01T04:30:00Z"),
-      history: [],
-      collisions: [{ scheduledAt: first.scheduledAt }],
-      learned: {
-        localHour: 17,
-        mode: GrowthPublicationTimingMode.EXPLOIT,
-        confidence: 80,
-        runId: "run-1",
-      },
-    });
-    const parts = new Intl.DateTimeFormat("en-US", {
-      timeZone: "America/New_York",
-      hour: "2-digit",
-      hourCycle: "h23",
-    }).format(moved.scheduledAt);
-    expect(Number(parts)).toBe(17);
-    expect(moved.scheduledAt.getTime()).toBeGreaterThan(
-      first.scheduledAt.getTime(),
+  const learnedAt17 = {
+    localHour: 17,
+    mode: GrowthPublicationTimingMode.EXPLOIT,
+    confidence: 80,
+    runId: "run-1",
+  };
+  const localHour = (date: Date) =>
+    Number(
+      new Intl.DateTimeFormat("en-US", {
+        timeZone: "America/New_York",
+        hour: "2-digit",
+        hourCycle: "h23",
+      }).format(date),
     );
+
+  it("fills another free slot today when the learned hour is taken", () => {
+    const now = new Date("2026-11-01T04:30:00Z");
+    const first = planPublicationTiming({ stableKey: "learned-17", now, history: [], learned: learnedAt17 });
+    const moved = planPublicationTiming({
+      stableKey: "learned-17b", now, history: [],
+      collisions: [{ scheduledAt: first.scheduledAt }], learned: learnedAt17,
+    });
+    expect(localHour(first.scheduledAt)).toBe(17);
+    expect([9, 13, 18, 21]).toContain(localHour(moved.scheduledAt));
+    expect(moved.scheduledAt.getTime() - now.getTime()).toBeLessThan(24 * 3_600_000);
+    expect(moved.evidence.filledToday).toBe(true);
+  });
+
+  it("keeps the learned hour on a later day when every slot today is taken", () => {
+    const now = new Date("2026-11-01T04:30:00Z");
+    const first = planPublicationTiming({ stableKey: "learned-17", now, history: [], learned: learnedAt17 });
+    const busy = [9, 13, 17, 18, 21].map((hour) => ({
+      scheduledAt: new Date(first.scheduledAt.getTime() + (hour - 17) * 3_600_000),
+    }));
+    const moved = planPublicationTiming({
+      stableKey: "learned-17", now, history: [], collisions: busy, learned: learnedAt17,
+    });
+    expect(localHour(moved.scheduledAt)).toBe(17);
+    expect(moved.scheduledAt.getTime()).toBeGreaterThan(first.scheduledAt.getTime());
+  });
+
+});
+
+describe("controlled publishing slots", () => {
+  it("lists today's remaining slots in time order", async () => {
+    const { controlledSlotsBetween } = await import("@/lib/growth/publishing/timing");
+    // 2026-11-28 14:12 UTC is 09:12 in New York: 9am has passed, 13, 18 and 21 remain.
+    const slots = controlledSlotsBetween(new Date("2026-11-28T14:12:00Z"), new Date("2026-11-29T00:00:00Z"));
+    expect(slots.map((s) => s.toISOString())).toEqual([
+      "2026-11-28T18:00:00.000Z",
+      "2026-11-28T23:00:00.000Z",
+    ]);
+  });
+
+  it("returns nothing when the window has no slot", async () => {
+    const { controlledSlotsBetween } = await import("@/lib/growth/publishing/timing");
+    expect(controlledSlotsBetween(new Date("2026-11-28T23:30:00Z"), new Date("2026-11-29T00:00:00Z"))).toEqual([]);
   });
 });

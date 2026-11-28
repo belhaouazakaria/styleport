@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { readDailyRotation } from "@/lib/growth/portfolio/daily-rotation-store";
 import { recommendPublicationTiming } from "@/lib/growth/publishing/service";
+import { controlledSlotsBetween } from "@/lib/growth/publishing/timing";
 
 /** Recommendations consume no quota. Approval atomically rechecks all caps.
  * Account and destination are fixed before offering the review. */
@@ -126,6 +127,19 @@ export async function recommendReviewSchedule(
         p.scheduledAt ? [{ scheduledAt: p.scheduledAt }] : [],
       ),
     );
+    // The preferred hour may already be behind us today. That must not skip the
+    // whole day: use any controlled window still free before the day ends.
+    if (timing.scheduledAt >= end) {
+      const free = controlledSlotsBetween(notBefore, end).find(
+        (slot) =>
+          ![...native, ...sources].some(
+            (p) =>
+              p.scheduledAt &&
+              Math.abs(p.scheduledAt.getTime() - slot.getTime()) < 90 * 60000,
+          ),
+      );
+      if (free) return free;
+    }
     // Try another controlled window on the SAME day before skipping it.
     for (let attempt = 0; attempt < 8 && timing.scheduledAt < end; attempt++) {
       if (
