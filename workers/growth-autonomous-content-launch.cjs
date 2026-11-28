@@ -87,13 +87,18 @@ function run() {
       !/^GROWTH_AUTONOMOUS_PIN_CANDIDATES=[0-2]$/.test(lines[3] || "") ||
       !/^GROWTH_AUTONOMOUS_RESEARCH_TRANSLATOR=(NOT_NEEDED|OWNER_DISABLED|RESEARCH_MISSING|NO_QUALIFIED_RESEARCH|REUSED|PREPARED|ALREADY_ATTEMPTED|QUALITY_OR_BUDGET_BLOCKED)$/.test(lines[4] || "") ||
       lines[5] !== "GROWTH_AUTONOMOUS_PUBLICATIONS=0") {
-    throw Error("CONTENT_CYCLE_FAILED");
+    const reported = (child.stderr || "").trim().split("\n").pop() || "";
+    const match = /^GROWTH_AUTONOMOUS_CONTENT=BLOCKED:([A-Za-z0-9_]{1,60})$/.exec(reported);
+    throw Error("CONTENT_CYCLE_FAILED" + (match ? "_" + match[1] : ""));
   }
   process.stdout.write(lines.join("\n") + "\n");
 }
 if (require.main === module) {
-  try { run(); } catch {
-    process.stderr.write("GROWTH_AUTONOMOUS_CONTENT_LAUNCH=BLOCKED\n");
+  try { run(); } catch (error) {
+    // Reason codes are fixed upper-case identifiers; anything else is omitted.
+    const code = error instanceof Error && /^[A-Z][A-Za-z0-9_]{2,100}$/.test(error.message)
+      ? error.message : "";
+    process.stderr.write("GROWTH_AUTONOMOUS_CONTENT_LAUNCH=BLOCKED" + (code ? ":" + code : "") + "\n");
     process.exitCode = 1;
   }
 }
