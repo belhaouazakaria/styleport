@@ -97,6 +97,10 @@ export const creativeGenerationJobPayloadSchema = z
     archetype: creativeGenerationFields.archetype.unwrap(),
     fontChecksum: z.string().regex(/^[a-f0-9]{64}$/).optional(),
     regenerationNonce: identifier.optional(),
+    // Tracking written by the owner-requested daily Pin gap fill so its
+    // isolated worker can find and wait for exactly its own jobs.
+    manualGapFillRequestId: z.string().uuid().optional(),
+    manualGapFillDay: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     evergreenRecommendationId: identifier.optional(),
     visualVariation: z.number().int().min(0).max(2).optional(),
     creativeDirection: z.enum(CREATIVE_DIRECTIONS).optional(),

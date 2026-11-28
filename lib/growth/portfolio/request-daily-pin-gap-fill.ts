@@ -15,6 +15,7 @@ import {
 } from "@/lib/growth/portfolio/manual-gap-fill-launcher";
 import { readDailyRotation } from "@/lib/growth/portfolio/daily-rotation-store";
 import { prisma } from "@/lib/prisma";
+import { diversifyTargets } from "@/lib/growth/viral/target-diversity";
 
 const MIN_DESCRIPTION_LENGTH = 40;
 /**
@@ -181,6 +182,25 @@ export async function requestDailyPinGapFill(now = new Date()) {
         (a.growthPinCandidates[0]?.createdAt.getTime() ?? 0) -
         (b.growthPinCandidates[0]?.createdAt.getTime() ?? 0),
     );
+  // Spread themes: a theme promoted in the last two weeks waits, and no theme
+  // repeats until the others had a turn.
+  let spreadExisting = existingTargets;
+  try {
+    const recent = await prisma.growthPinCandidate.findMany({
+      where: {
+        createdAt: { gte: new Date(day.getTime() - 14 * 86_400_000) },
+        translatorId: { not: null },
+      },
+      select: { translator: { select: { slug: true } } },
+      take: 200,
+    });
+    spreadExisting = diversifyTargets(
+      existingTargets,
+      recent.flatMap((row) => (row.translator?.slug ? [row.translator.slug] : [])),
+    );
+  } catch {
+    spreadExisting = existingTargets;
+  }
   const newTargetCount = Math.min(
     dailyPreference?.newTranslatorPins ?? 1,
     remaining,
@@ -194,7 +214,7 @@ export async function requestDailyPinGapFill(now = new Date()) {
   // substituted with an unrelated translator.
   const selected = [
     ...newTargets.slice(0, newTargetCount),
-    ...existingTargets.slice(0, existingTargetCount),
+    ...spreadExisting.slice(0, existingTargetCount),
   ];
 
   const requestId = randomUUID();
