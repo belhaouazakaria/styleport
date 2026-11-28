@@ -46,6 +46,9 @@ export class PinterestPinAnalyticsUnavailableError extends NonRetryableGrowthJob
   readonly code = "PINTEREST_PIN_ANALYTICS_UNAVAILABLE";
 }
 
+/** The Pin was deleted on Pinterest (404, provider code 50). */
+export class PinterestPinGoneError extends PinterestPinAnalyticsUnavailableError {}
+
 export class PinterestAuthorizationError extends NonRetryableGrowthJobError {
   constructor(readonly code: "PINTEREST_INVALID_CREDENTIAL" | "PINTEREST_INSUFFICIENT_SCOPES" | "PINTEREST_AUTHORIZATION_REJECTED", message: string) { super(message); }
 }
@@ -146,6 +149,9 @@ async function authenticatedPinterestGet<T>(params: {
     return await pinterestFetch({ path: params.path, responseName: params.responseName, schema: params.schema, accessToken, fetchImpl: params.fetchImpl });
   } catch (error) {
     if (error instanceof PinterestApiError) {
+      if (error.status === 404 && error.providerCode === "50" && /^\/pins\/[^/]+\/analytics(?:\?|$)/.test(params.path)) {
+        throw new PinterestPinGoneError("Pinterest Pin no longer exists.");
+      }
       if (error.status === 403 && error.providerCode === "29" && /^\/pins\/[^/]+\/analytics(?:\?|$)/.test(params.path)) {
         throw new PinterestPinAnalyticsUnavailableError("Pinterest does not permit analytics for this Pin.");
       }

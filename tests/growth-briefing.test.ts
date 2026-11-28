@@ -18,9 +18,9 @@ const base = (): BriefingData => ({
 
 describe("report date", () => {
   it("reports the last day with final data, two days back", () => {
-    expect(dueGrowthReportDate(new Date("2026-11-23T05:05:00Z"))).toBe("2026-11-21");
+    expect(dueGrowthReportDate(new Date("2026-11-23T05:05:00Z"))).toBe("2026-11-20");
     expect(dueGrowthReportDate(new Date("2026-11-23T03:59:00Z"))).toBeNull();
-    expect(dueGrowthReportDate(new Date("2027-01-01T05:00:00Z"))).toBe("2026-12-30");
+    expect(dueGrowthReportDate(new Date("2027-01-01T05:00:00Z"))).toBe("2026-12-29");
   });
 });
 

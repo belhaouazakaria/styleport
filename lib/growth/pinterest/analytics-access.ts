@@ -18,7 +18,25 @@ export async function unavailablePinterestAnalyticsPins(
   return new Set(rows.map(row => row.id));
 }
 
-export async function recordUnavailablePinterestAnalytics(accountId: string, pinId: string) {
+export async function recordUnavailablePinterestAnalytics(
+  accountId: string, pinId: string, options: { gone?: boolean } = {},
+) {
+  if (options.gone) {
+    // Deleted on Pinterest: retire it from the inventory so analytics and
+    // recovery stop requesting it. Nothing is zero-filled.
+    await prisma.$transaction(async tx => {
+      const pin = await tx.growthPinterestPin.updateMany({
+        where: { id: pinId, accountId }, data: { isActive: false, analyticsEligible: false },
+      });
+      if (pin.count !== 1) throw Error("PIN_ANALYTICS_ACCOUNT_MISMATCH");
+      await recordGrowthActivity({
+        actorKind: GrowthActivityActorKind.SYSTEM, entityType: "GrowthPinterestPin", entityId: pinId,
+        action: "PINTEREST_PIN_REMOVED",
+        summary: { accountId, providerStatus: 404, providerCode: "50", reason: "PIN_NOT_FOUND" },
+      }, tx);
+    });
+    return;
+  }
   await prisma.$transaction(async tx => {
     const account = await tx.growthPinterestAccount.findUniqueOrThrow({
       where: { id: accountId }, select: { credentialVersion: true },

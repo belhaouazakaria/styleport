@@ -13,6 +13,7 @@ import {
   getPinterestTopPinsAnalytics,
   PinterestApiError,
   PinterestPinAnalyticsUnavailableError,
+  PinterestPinGoneError,
 } from "@/lib/growth/pinterest/api";
 import { defaultRefreshRange } from "@/lib/growth/pinterest/analytics-contract";
 
@@ -160,4 +161,13 @@ describe("Pinterest API adapter", () => {
     expect(mocks.accountUpdate).toHaveBeenCalledOnce();
   });
 
+  it("treats a deleted Pin (404/50) as gone, not as a failed batch", async () => {
+    vi.stubEnv("PINTEREST_API_ENVIRONMENT", "production");
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ code: 50, message: "Pin not found." }), { status: 404 }));
+    const error = await getPinterestPinAnalytics({ accountId: "account", pinterestPinId: "123",
+      ...defaultRefreshRange(), fetchImpl: fetcher }).catch((value) => value);
+    expect(error).toBeInstanceOf(PinterestPinGoneError);
+    expect(error).toBeInstanceOf(PinterestPinAnalyticsUnavailableError);
+    expect(mocks.accountUpdate).not.toHaveBeenCalled();
+  });
 });

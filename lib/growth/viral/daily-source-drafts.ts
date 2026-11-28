@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { readDailyRotation } from "@/lib/growth/portfolio/daily-rotation-store";
 import { rateSourceTranslator } from "@/lib/growth/viral/rating";
 import { prepareOriginalSourcePinDraft } from "@/lib/growth/viral/source-publishing";
+import { isNearDuplicateTopic, topicTokens } from "@/lib/growth/viral/target-diversity";
 
 /**
  * PREPARE ONLY. The isolated AI runner generates truthful source-linked art for the
@@ -72,7 +73,15 @@ export async function prepareDailySourceCreativeDrafts(
     orderBy: [{ lastSeenAt: "desc" }, { id: "asc" }],
     take: 250,
   });
+  // Skip topics we already cover, even under a different name.
+  const ownTopics = (
+    await prisma.translator.findMany({
+      where: { isActive: true, archivedAt: null },
+      select: { name: true, slug: true },
+    })
+  ).flatMap((t) => [topicTokens(t.name), topicTokens(t.slug)]);
   const ranked = concepts
+    .filter((concept) => !isNearDuplicateTopic(concept.title, ownTopics))
     .map((concept) => ({
       ...concept,
       rating: rateSourceTranslator(concept.title, concept.sourceUrl),

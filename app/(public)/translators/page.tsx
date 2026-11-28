@@ -81,6 +81,9 @@ export default async function TranslatorsDirectoryPage() {
                   >
                     {item.name.slice(0, 1).toUpperCase()}
                   </span>
+                  {item.isNew ? (
+                    <span className="absolute right-4 top-4 rounded-full bg-accent-100 px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-wide text-accent-700">New</span>
+                  ) : null}
                   <h3 className="font-display text-xl font-bold leading-tight text-ink">
                     <Link href={`/translators/${item.slug}`} className="hover:text-brand-700 focus-visible:ring-2 focus-visible:ring-brand-500/60 focus-visible:outline-none">
                       {item.name}
